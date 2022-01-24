@@ -14,5 +14,29 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-pub mod atomic;
-pub mod params;
+use atomic_float::AtomicF32;
+use std::sync::atomic::AtomicI32;
+
+// Type families galore!
+pub trait AtomicType {
+    /// An atomic version of this type with interior mutability.
+    type AtomicType;
+
+    fn new_atomic(self) -> Self::AtomicType;
+}
+
+impl AtomicType for f32 {
+    type AtomicType = AtomicF32;
+
+    fn new_atomic(self) -> AtomicF32 {
+        AtomicF32::new(self)
+    }
+}
+
+impl AtomicType for i32 {
+    type AtomicType = AtomicI32;
+
+    fn new_atomic(self) -> AtomicI32 {
+        AtomicI32::new(self)
+    }
+}
