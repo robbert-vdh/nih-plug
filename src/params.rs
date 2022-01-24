@@ -29,7 +29,9 @@ pub enum Range<T> {
     Linear { min: T, max: T },
 }
 
-trait Normalize<T> {
+/// A normalizable range for type `T`, where `self` is expected to be a type `R<T>`. Higher kinded
+/// types would have made this trait definition a lot clearer.
+trait NormalizebleRange<T> {
     /// Normalize an unnormalized value. Will be clamped to the bounds of the range if the
     /// normalized value exceeds `[0, 1]`.
     fn normalize(&self, unnormalized: T) -> f32;
@@ -58,7 +60,7 @@ pub struct PlainParam<T: AtomicType> {
     pub string_to_value: Option<Box<dyn Fn(&str) -> T>>,
 }
 
-impl Normalize<f32> for Range<f32> {
+impl NormalizebleRange<f32> for Range<f32> {
     fn normalize(&self, unnormalized: f32) -> f32 {
         match &self {
             Range::Linear { min, max } => (unnormalized - min) / (max - min),
@@ -72,7 +74,7 @@ impl Normalize<f32> for Range<f32> {
     }
 }
 
-impl Normalize<i32> for Range<i32> {
+impl NormalizebleRange<i32> for Range<i32> {
     fn normalize(&self, unnormalized: i32) -> f32 {
         match &self {
             Range::Linear { min, max } => (unnormalized - min) as f32 / (max - min) as f32,
@@ -123,14 +125,5 @@ mod tests {
     fn range_unnormalize_linear_int() {
         let range = make_linear_int_range();
         assert_eq!(range.unnormalize(0.75), 5);
-    }
-}
-
-fn foo(param: &Param) -> f32 {
-    match param {
-        Param::FloatParam(p) => p
-            .range
-            .normalize(p.value.load(std::sync::atomic::Ordering::Relaxed)),
-        Param::IntParam(_) => todo!(),
     }
 }
