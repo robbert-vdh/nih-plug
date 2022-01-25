@@ -6,4 +6,3 @@ authors = ["Robbert van der Helm <mail@robbertvanderhelm.nl>"]
 license = "GPL-3.0-or-later"
 
 [dependencies]
-atomic_float = "0.1.0"

@@ -14,15 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use std::{fmt::Display, sync::atomic::Ordering};
+use std::collections::HashMap;
+use std::fmt::Display;
+use std::pin::Pin;
 
-use crate::atomic::AtomicType;
-
-/// Describes a single normalized parameter and also stores its value.
-pub enum Param {
-    FloatParam(PlainParam<f32>),
-    IntParam(PlainParam<i32>),
-}
+pub type FloatParam = PlainParam<f32>;
+pub type IntParam = PlainParam<i32>;
 
 /// A distribution for a parameter's range. Probably need to add some forms of skewed ranges and
 /// maybe a callback based implementation at some point.
@@ -45,12 +42,11 @@ trait NormalizebleRange<T> {
 
 /// A numerical parameter that's stored unnormalized. The range is used for the normalization
 /// process.
-pub struct PlainParam<T: AtomicType> {
-    /// The field's current, normalized value. Should be initialized with the default value using
-    /// `T::new_atomic(...)` ([AtomicType::new_atomic]). Storing parameter values like this instead
-    /// of in a single contiguous array is bad for cache locality, but it does allow for a much
-    /// nicer declarative API.
-    pub value: <T as AtomicType>::AtomicType,
+pub struct PlainParam<T> {
+    /// The field's current, normalized value. Should be initialized with the default value. Storing
+    /// parameter values like this instead of in a single contiguous array is bad for cache
+    /// locality, but it does allow for a much nicer declarative API.
+    pub value: T,
 
     /// The distribution of the parameter's values.
     pub range: Range<T>,
@@ -66,24 +62,97 @@ pub struct PlainParam<T: AtomicType> {
     pub string_to_value: Option<Box<dyn Fn(&str) -> Option<T>>>,
 }
 
-impl Param {
+/// Describes a single normalized parameter and also stores its value.
+///
+/// TODO: This is an implementation detail, maybe hide this somewhere else
+pub enum ParamPtr {
+    FloatParam(*mut FloatParam),
+    IntParam(*mut IntParam),
+}
+
+/// Describes a struct containing parameters. The idea is that we can have a normal struct
+/// containing [FloatParam] and other parameter types with attributes describing a unique identifier
+/// for each parameter. We can then build a mapping from those parameter IDs to the parameters using
+/// the [param_map] function. That way we can have easy to work with JUCE-style parameter objects in
+/// the plugin without needing to manually register each parameter, like you would in JUCE.
+///
+/// # Safety
+///
+/// This implementation is safe when using from the wrapper because the plugin object needs to be
+/// pinned, and it can never outlive the wrapper.
+///
+/// TODO: Create a derive macro for this
+pub trait Params {
+    /// Create a mapping from unique parameter IDs to parameters. Dereferencing the pointers stored
+    /// in the values is only valid as long as this pinned object is valid.
+    fn param_map(self: Pin<&Self>) -> HashMap<&'static str, ParamPtr>;
+}
+
+impl ParamPtr {
     /// Get the human readable name for this parameter.
-    pub fn name(&self) -> &'static str {
+    ///
+    /// # Safety
+    ///
+    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
+    /// still alive.
+    pub unsafe fn name(&self) -> &'static str {
         match &self {
-            Param::FloatParam(p) => p.name,
-            Param::IntParam(p) => p.name,
+            ParamPtr::FloatParam(p) => (**p).name,
+            ParamPtr::IntParam(p) => (**p).name,
         }
     }
 
     /// Set this parameter based on a string. Returns whether the updating succeeded. That can fail
     /// if the string cannot be parsed.
     ///
-    /// TODO: After implementing VST3, check if we handle parsing failures correctly
-    pub fn from_string(&self, string: &str) -> bool {
-        // TODO: Debug asserts on failures
+    /// # Safety
+    ///
+    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
+    /// still alive.
+    pub unsafe fn from_string(&mut self, string: &str) -> bool {
         match &self {
-            Param::FloatParam(p) => {
-                let value = match &p.string_to_value {
+            ParamPtr::FloatParam(p) => (**p).from_string(string),
+            ParamPtr::IntParam(p) => (**p).from_string(string),
+        }
+    }
+
+    /// Get the normalized `[0, 1]` value for this parameter.
+    ///
+    /// # Safety
+    ///
+    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
+    /// still alive.
+    pub unsafe fn normalized_value(&self) -> f32 {
+        match &self {
+            ParamPtr::FloatParam(p) => (**p).normalized_value(),
+            ParamPtr::IntParam(p) => (**p).normalized_value(),
+        }
+    }
+
+    /// Set this parameter based on a normalized value.
+    ///
+    /// # Safety
+    ///
+    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
+    /// still alive.
+    pub unsafe fn set_normalized_value(&self, normalized: f32) {
+        match &self {
+            ParamPtr::FloatParam(p) => (**p).set_normalized_value(normalized),
+            ParamPtr::IntParam(p) => (**p).set_normalized_value(normalized),
+        }
+    }
+}
+
+macro_rules! impl_plainparam {
+    ($ty:ty) => {
+        impl $ty {
+            /// Set this parameter based on a string. Returns whether the updating succeeded. That
+            /// can fail if the string cannot be parsed.
+            ///
+            /// TODO: After implementing VST3, check if we handle parsing failures correctly
+            pub fn from_string(&mut self, string: &str) -> bool {
+                // TODO: Debug asserts on failures
+                let value = match &self.string_to_value {
                     Some(f) => f(string),
                     // TODO: Check how Rust's parse function handles trailing garbage
                     None => string.parse().ok(),
@@ -91,67 +160,34 @@ impl Param {
 
                 match value {
                     Some(unnormalized) => {
-                        p.value.store(unnormalized, Ordering::Relaxed);
+                        self.value = unnormalized;
                         true
                     }
                     None => false,
                 }
             }
-            Param::IntParam(p) => {
-                let value = match &p.string_to_value {
-                    Some(f) => f(string),
-                    None => string.parse().ok(),
-                };
 
-                match value {
-                    Some(unnormalized) => {
-                        p.value.store(unnormalized, Ordering::Relaxed);
-                        true
-                    }
-                    None => false,
-                }
+            /// Get the normalized `[0, 1]` value for this parameter.
+            pub fn normalized_value(&self) -> f32 {
+                self.range.normalize(self.value)
+            }
+
+            /// Set this parameter based on a normalized value.
+            pub fn set_normalized_value(&mut self, normalized: f32) {
+                self.value = self.range.unnormalize(normalized);
             }
         }
-    }
-
-    /// Get the normalized `[0, 1]` value for this parameter.
-    pub fn normalized_value(&self) -> f32 {
-        match &self {
-            Param::FloatParam(p) => p.range.normalize(p.value.load(Ordering::Relaxed)),
-            Param::IntParam(p) => p.range.normalize(p.value.load(Ordering::Relaxed)),
-        }
-    }
-
-    /// Set this parameter based on a normalized value.
-    pub fn set_normalized_value(&self, normalized: f32) {
-        match &self {
-            Param::FloatParam(p) => p
-                .value
-                .store(p.range.unnormalize(normalized), Ordering::Relaxed),
-            Param::IntParam(p) => p
-                .value
-                .store(p.range.unnormalize(normalized), Ordering::Relaxed),
-        }
-    }
+    };
 }
 
-impl Display for Param {
+impl_plainparam!(FloatParam);
+impl_plainparam!(IntParam);
+
+impl<T: Display + Copy> Display for PlainParam<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self {
-            Param::FloatParam(p) => {
-                let unnormalized = p.value.load(Ordering::Relaxed);
-                match &p.value_to_string {
-                    Some(func) => write!(f, "{}{}", func(unnormalized), p.unit),
-                    None => write!(f, "{}{}", unnormalized, p.unit),
-                }
-            }
-            Param::IntParam(p) => {
-                let unnormalized = p.value.load(Ordering::Relaxed);
-                match &p.value_to_string {
-                    Some(func) => write!(f, "{}{}", func(unnormalized), p.unit),
-                    None => write!(f, "{}{}", unnormalized, p.unit),
-                }
-            }
+        match &self.value_to_string {
+            Some(func) => write!(f, "{}{}", func(self.value), self.unit),
+            None => write!(f, "{}{}", self.value, self.unit),
         }
     }
 }
