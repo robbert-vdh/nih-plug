@@ -34,6 +34,8 @@ use crate::params::Params;
 /// - Parameter hierarchies/groups
 /// - Outputting parameter changes from the plugin
 /// - GUIs
+/// - Suspension and tail processing. This will be handled soon in a similar way to how CLAP
+///   handnles it.
 pub trait Plugin: Default + Sync {
     /// The default number of inputs. Some hosts like, like Bitwig and Ardour, use the defaults
     /// instead of setting up the busses properly.
@@ -69,10 +71,12 @@ pub trait Plugin: Default + Sync {
     /// been copied to the output buffers if they are not handling buffers in place (most hosts do
     /// however).
     ///
-    /// TODO: &[mut &[f32]] may not be the correct type here
+    /// TODO: &mut [&mut [f32]] may not be the correct type here
     /// TODO: Provide a way to access auxiliary input channels if the IO configuration is
     ///       assymetric
-    fn process(&mut self, samples: &mut &[f32]);
+    /// TODO: Add a process result to handle tails
+    /// TODO: Handle FTZ stuff on the wrapper side and mention that this has been handled
+    fn process(&mut self, samples: &mut [&mut [f32]]);
 }
 
 /// We only support a single main input and output bus at the moment.
