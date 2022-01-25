@@ -144,7 +144,7 @@ impl ParamPtr {
 }
 
 macro_rules! impl_plainparam {
-    ($ty:ty) => {
+    ($ty:ident) => {
         impl $ty {
             /// Set this parameter based on a string. Returns whether the updating succeeded. That
             /// can fail if the string cannot be parsed.
@@ -175,6 +175,11 @@ macro_rules! impl_plainparam {
             /// Set this parameter based on a normalized value.
             pub fn set_normalized_value(&mut self, normalized: f32) {
                 self.value = self.range.unnormalize(normalized);
+            }
+
+            /// Implementation detail for implementing [Params]. This should not be used directly.
+            pub fn as_ptr(&self) -> ParamPtr {
+                ParamPtr::$ty(self as *const $ty as *mut $ty)
             }
         }
     };
