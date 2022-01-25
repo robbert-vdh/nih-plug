@@ -116,15 +116,16 @@ impl<T: Display + Copy> Display for PlainParam<T> {
     }
 }
 
-// TODO: Clamping
 impl NormalizebleRange<f32> for Range<f32> {
     fn normalize(&self, unnormalized: f32) -> f32 {
         match &self {
             Range::Linear { min, max } => (unnormalized - min) / (max - min),
         }
+        .clamp(0.0, 1.0)
     }
 
     fn unnormalize(&self, normalized: f32) -> f32 {
+        let normalized = normalized.clamp(0.0, 1.0);
         match &self {
             Range::Linear { min, max } => (normalized * (max - min)) + min,
         }
@@ -136,9 +137,11 @@ impl NormalizebleRange<i32> for Range<i32> {
         match &self {
             Range::Linear { min, max } => (unnormalized - min) as f32 / (max - min) as f32,
         }
+        .clamp(0.0, 1.0)
     }
 
     fn unnormalize(&self, normalized: f32) -> i32 {
+        let normalized = normalized.clamp(0.0, 1.0);
         match &self {
             Range::Linear { min, max } => (normalized * (max - min) as f32).round() as i32 + min,
         }
