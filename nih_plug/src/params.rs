@@ -140,7 +140,7 @@ impl NormalizebleRange<i32> for Range<i32> {
 
     fn unnormalize(&self, normalized: f32) -> i32 {
         match &self {
-            Range::Linear { min, max } => (normalized * (max - min) as f32) as i32 + min,
+            Range::Linear { min, max } => (normalized * (max - min) as f32).round() as i32 + min,
         }
     }
 }
@@ -262,5 +262,11 @@ mod tests {
     fn range_unnormalize_linear_int() {
         let range = make_linear_int_range();
         assert_eq!(range.unnormalize(0.75), 5);
+    }
+
+    #[test]
+    fn range_unnormalize_linear_int_rounding() {
+        let range = make_linear_int_range();
+        assert_eq!(range.unnormalize(0.73), 5);
     }
 }
