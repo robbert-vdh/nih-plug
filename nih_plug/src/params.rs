@@ -65,6 +65,7 @@ pub struct PlainParam<T> {
 /// Describes a single normalized parameter and also stores its value.
 ///
 /// TODO: This is an implementation detail, maybe hide this somewhere else
+#[derive(Debug)]
 pub enum ParamPtr {
     FloatParam(*mut FloatParam),
     IntParam(*mut IntParam),
