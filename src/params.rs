@@ -1,4 +1,4 @@
-// nih-plugs: plugins, but rewritten in Rust
+// nih-plug: plugins, but rewritten in Rust
 // Copyright (C) 2022 Robbert van der Helm
 //
 // This program is free software: you can redistribute it and/or modify
