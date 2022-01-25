@@ -62,88 +62,6 @@ pub struct PlainParam<T> {
     pub string_to_value: Option<Box<dyn Fn(&str) -> Option<T>>>,
 }
 
-/// Describes a single normalized parameter and also stores its value.
-///
-/// TODO: This is an implementation detail, maybe hide this somewhere else
-#[derive(Debug)]
-pub enum ParamPtr {
-    FloatParam(*mut FloatParam),
-    IntParam(*mut IntParam),
-}
-
-/// Describes a struct containing parameters. The idea is that we can have a normal struct
-/// containing [FloatParam] and other parameter types with attributes describing a unique identifier
-/// for each parameter. We can then build a mapping from those parameter IDs to the parameters using
-/// the [param_map] function. That way we can have easy to work with JUCE-style parameter objects in
-/// the plugin without needing to manually register each parameter, like you would in JUCE.
-///
-/// # Safety
-///
-/// This implementation is safe when using from the wrapper because the plugin object needs to be
-/// pinned, and it can never outlive the wrapper.
-///
-/// TODO: Create a derive macro for this
-pub trait Params {
-    /// Create a mapping from unique parameter IDs to parameters. Dereferencing the pointers stored
-    /// in the values is only valid as long as this pinned object is valid.
-    fn param_map(self: Pin<&Self>) -> HashMap<&'static str, ParamPtr>;
-}
-
-impl ParamPtr {
-    /// Get the human readable name for this parameter.
-    ///
-    /// # Safety
-    ///
-    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
-    /// still alive.
-    pub unsafe fn name(&self) -> &'static str {
-        match &self {
-            ParamPtr::FloatParam(p) => (**p).name,
-            ParamPtr::IntParam(p) => (**p).name,
-        }
-    }
-
-    /// Set this parameter based on a string. Returns whether the updating succeeded. That can fail
-    /// if the string cannot be parsed.
-    ///
-    /// # Safety
-    ///
-    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
-    /// still alive.
-    pub unsafe fn from_string(&mut self, string: &str) -> bool {
-        match &self {
-            ParamPtr::FloatParam(p) => (**p).from_string(string),
-            ParamPtr::IntParam(p) => (**p).from_string(string),
-        }
-    }
-
-    /// Get the normalized `[0, 1]` value for this parameter.
-    ///
-    /// # Safety
-    ///
-    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
-    /// still alive.
-    pub unsafe fn normalized_value(&self) -> f32 {
-        match &self {
-            ParamPtr::FloatParam(p) => (**p).normalized_value(),
-            ParamPtr::IntParam(p) => (**p).normalized_value(),
-        }
-    }
-
-    /// Set this parameter based on a normalized value.
-    ///
-    /// # Safety
-    ///
-    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
-    /// still alive.
-    pub unsafe fn set_normalized_value(&self, normalized: f32) {
-        match &self {
-            ParamPtr::FloatParam(p) => (**p).set_normalized_value(normalized),
-            ParamPtr::IntParam(p) => (**p).set_normalized_value(normalized),
-        }
-    }
-}
-
 macro_rules! impl_plainparam {
     ($ty:ident) => {
         impl $ty {
@@ -223,6 +141,86 @@ impl NormalizebleRange<i32> for Range<i32> {
     fn unnormalize(&self, normalized: f32) -> i32 {
         match &self {
             Range::Linear { min, max } => (normalized * (max - min) as f32) as i32 + min,
+        }
+    }
+}
+
+/// Describes a struct containing parameters. The idea is that we can have a normal struct
+/// containing [FloatParam] and other parameter types with attributes describing a unique identifier
+/// for each parameter. We can then build a mapping from those parameter IDs to the parameters using
+/// the [param_map] function. That way we can have easy to work with JUCE-style parameter objects in
+/// the plugin without needing to manually register each parameter, like you would in JUCE.
+///
+/// # Safety
+///
+/// This implementation is safe when using from the wrapper because the plugin object needs to be
+/// pinned, and it can never outlive the wrapper.
+///
+/// TODO: Create a derive macro for this
+pub trait Params {
+    /// Create a mapping from unique parameter IDs to parameters. Dereferencing the pointers stored
+    /// in the values is only valid as long as this pinned object is valid.
+    fn param_map(self: Pin<&Self>) -> HashMap<&'static str, ParamPtr>;
+}
+
+/// Internal pointers to parameters. This is an implementation detail used by the wrappers.
+#[derive(Debug)]
+pub enum ParamPtr {
+    FloatParam(*mut FloatParam),
+    IntParam(*mut IntParam),
+}
+
+impl ParamPtr {
+    /// Get the human readable name for this parameter.
+    ///
+    /// # Safety
+    ///
+    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
+    /// still alive.
+    pub unsafe fn name(&self) -> &'static str {
+        match &self {
+            ParamPtr::FloatParam(p) => (**p).name,
+            ParamPtr::IntParam(p) => (**p).name,
+        }
+    }
+
+    /// Set this parameter based on a string. Returns whether the updating succeeded. That can fail
+    /// if the string cannot be parsed.
+    ///
+    /// # Safety
+    ///
+    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
+    /// still alive.
+    pub unsafe fn from_string(&mut self, string: &str) -> bool {
+        match &self {
+            ParamPtr::FloatParam(p) => (**p).from_string(string),
+            ParamPtr::IntParam(p) => (**p).from_string(string),
+        }
+    }
+
+    /// Get the normalized `[0, 1]` value for this parameter.
+    ///
+    /// # Safety
+    ///
+    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
+    /// still alive.
+    pub unsafe fn normalized_value(&self) -> f32 {
+        match &self {
+            ParamPtr::FloatParam(p) => (**p).normalized_value(),
+            ParamPtr::IntParam(p) => (**p).normalized_value(),
+        }
+    }
+
+    /// Set this parameter based on a normalized value.
+    ///
+    /// # Safety
+    ///
+    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
+    /// still alive.
+    pub unsafe fn set_normalized_value(&self, normalized: f32) {
+        match &self {
+            ParamPtr::FloatParam(p) => (**p).set_normalized_value(normalized),
+            ParamPtr::IntParam(p) => (**p).set_normalized_value(normalized),
         }
     }
 }
