@@ -1,2 +1,2 @@
 [workspace]
-members = ["nih-plug"]
+members = ["nih-plug", "nih-plug-derive"]

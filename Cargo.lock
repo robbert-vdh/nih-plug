@@ -5,3 +5,7 @@ version = 3
 [[package]]
 name = "nih-plug"
 version = "0.1.0"
+
+[[package]]
+name = "nih-plug-derive"
+version = "0.1.0"
