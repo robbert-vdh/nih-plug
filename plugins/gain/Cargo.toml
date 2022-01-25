@@ -1,0 +1,15 @@
+[package]
+name = "gain"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+
+[dependencies.nih_plug]
+path = "../../nih_plug"
+
+[dependencies.nih_plug_derive]
+path = "../../nih_plug_derive"

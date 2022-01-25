@@ -3,6 +3,14 @@
 version = 3
 
 [[package]]
+name = "gain"
+version = "0.1.0"
+dependencies = [
+ "nih_plug",
+ "nih_plug_derive",
+]
+
+[[package]]
 name = "nih_plug"
 version = "0.1.0"
 
