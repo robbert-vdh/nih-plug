@@ -8,6 +8,7 @@ use syn::spanned::Spanned;
 pub fn derive_params(input: TokenStream) -> TokenStream {
     let ast = syn::parse_macro_input!(input as syn::DeriveInput);
 
+    let struct_name = &ast.ident;
     let fields = match ast.data {
         syn::Data::Struct(syn::DataStruct {
             fields: syn::Fields::Named(named_fields),
@@ -27,12 +28,12 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
     // containing pointers to those parmaeters.
     let mut param_insert_tokens = Vec::new();
     for field in fields.named {
-        let name = match &field.ident {
+        let field_name = match &field.ident {
             Some(ident) => ident,
             _ => continue,
         };
 
-        for attr in &field.attrs {
+        for attr in field.attrs {
             let list = match attr.parse_meta() {
                 Ok(syn::Meta::List(list)) if list.path.is_ident("id") => list,
                 _ => continue,
@@ -51,12 +52,13 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
 
             // The specific parameter types know how to convert themselves into the correct ParamPtr
             // variant
-            param_insert_tokens.push(quote! { param_map.insert(#param_id, self.#name.as_ptr()); });
+            param_insert_tokens
+                .push(quote! { param_map.insert(#param_id, self.#field_name.as_ptr()); });
         }
     }
 
     quote! {
-        impl Params for Foo {
+        impl Params for #struct_name {
             fn param_map(
                 self: std::pin::Pin<&Self>,
             ) -> std::collections::HashMap<&'static str, nih_plug::params::ParamPtr> {
