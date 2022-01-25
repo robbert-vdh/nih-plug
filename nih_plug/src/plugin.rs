@@ -31,6 +31,7 @@ use crate::params::Params;
 /// - Sample accurate automation (this would be great, but sadly few hosts even support it so until
 ///   they do we'll ignore that it's a thing)
 /// - Parameter update callbacks
+/// - Parameter hierarchies/groups
 /// - Outputting parameter changes from the plugin
 /// - GUIs
 pub trait Plugin: Sync {
