@@ -55,11 +55,11 @@ pub struct PlainParam<T> {
     /// The parameter value's unit, added after `value_to_string` if that is set.
     pub unit: &'static str,
     /// Optional custom conversion function from an **unnormalized** value to a string.
-    pub value_to_string: Option<Box<dyn Fn(T) -> String>>,
+    pub value_to_string: Option<Box<dyn Send + Sync + Fn(T) -> String>>,
     /// Optional custom conversion function from a string to an **unnormalized** value. If the
     /// string cannot be parsed, then this should return a `None`. If this happens while the
     /// parameter is being updated then the update will be canceled.
-    pub string_to_value: Option<Box<dyn Fn(&str) -> Option<T>>>,
+    pub string_to_value: Option<Box<dyn Send + Sync + Fn(&str) -> Option<T>>>,
 }
 
 macro_rules! impl_plainparam {
