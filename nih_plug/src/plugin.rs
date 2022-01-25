@@ -34,7 +34,7 @@ use crate::params::Params;
 /// - Parameter hierarchies/groups
 /// - Outputting parameter changes from the plugin
 /// - GUIs
-pub trait Plugin: Sync {
+pub trait Plugin: Default + Sync {
     /// The default number of inputs. Some hosts like, like Bitwig and Ardour, use the defaults
     /// instead of setting up the busses properly.
     const DEFAULT_NUM_INPUTS: u32;
