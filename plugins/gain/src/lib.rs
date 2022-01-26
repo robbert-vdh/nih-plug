@@ -65,7 +65,7 @@ impl Plugin for Gain {
     const DEFAULT_NUM_OUTPUTS: u32 = 2;
 
     fn params(&self) -> Pin<&dyn Params> {
-        todo!()
+        self.params.as_ref()
     }
 
     fn accepts_bus_config(&self, config: &BusConfig) -> bool {
