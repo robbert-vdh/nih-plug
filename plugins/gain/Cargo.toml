@@ -7,4 +7,4 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-nih_plug = { path = "../../nih_plug" }
+nih_plug = { path = "../../" }
