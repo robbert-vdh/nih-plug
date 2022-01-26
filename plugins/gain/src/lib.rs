@@ -20,6 +20,7 @@ extern crate nih_plug;
 use nih_plug::{
     params::{FloatParam, Params, Range},
     plugin::{BufferConfig, BusConfig, Plugin},
+    util,
 };
 use nih_plug_derive::Params;
 use std::pin::Pin;
@@ -105,8 +106,7 @@ impl Plugin for Gain {
                 };
 
                 // TODO: Smoothing
-                // TODO: Gain to decibel function in a separate module, add a minus infinity check when I do
-                *sample *= 10.0f32.powf(self.params.gain.value * 0.05);
+                *sample *= util::db_to_gain(self.params.gain.value);
             }
         }
     }
