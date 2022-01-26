@@ -26,8 +26,8 @@ macro_rules! nih_log {
     );
 }
 
-/// A `debug_assert!()` analogue that prints the error instead with line number information instead
-/// of panicking.
+/// A `debug_assert!()` analogue that prints the error with line number information instead of
+/// panicking.
 ///
 /// TODO: Detect if we're running under a debugger, and trigger a break if we are
 macro_rules! nih_debug_assert {
@@ -39,6 +39,36 @@ macro_rules! nih_debug_assert {
     ($cond:expr, $format:expr $(, $arg:tt)*) => (
         if cfg!(debug_assertions) && !$cond {
             nih_log!(concat!("Debug assertion failed: ", stringify!($cond), ", ", $format) $(, $arg)*);
+        }
+    );
+}
+
+/// A `debug_assert_eq!()` analogue that prints the error with line number information instead of
+/// panicking.
+macro_rules! nih_debug_assert_eq {
+    ($left:expr, $right:expr) => (
+        if cfg!(debug_assertions) && $left != $right {
+            nih_log!(concat!("Debug assertion failed: ", stringify!($left), " != ", stringify!($right)));
+        }
+    );
+    (left:expr, $right:expr, $format:expr $(, $arg:tt)*) => (
+        if cfg!(debug_assertions) && $left != $right  {
+            nih_log!(concat!("Debug assertion failed: ", stringify!($left), " != ", stringify!($right), ", ", $format) $(, $arg)*);
+        }
+    );
+}
+
+/// A `debug_assert_neq!()` analogue that prints the error with line number information instead of
+/// panicking.
+macro_rules! nih_debug_assert_neq {
+    ($left:expr, $right:expr) => (
+        if cfg!(debug_assertions) && $left == $right {
+            nih_log!(concat!("Debug assertion failed: ", stringify!($left), " == ", stringify!($right)));
+        }
+    );
+    (left:expr, $right:expr, $format:expr $(, $arg:tt)*) => (
+        if cfg!(debug_assertions) && $left == $right  {
+            nih_log!(concat!("Debug assertion failed: ", stringify!($left), " == ", stringify!($right), ", ", $format) $(, $arg)*);
         }
     );
 }
