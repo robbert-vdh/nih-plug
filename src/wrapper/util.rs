@@ -16,6 +16,8 @@
 
 use std::cmp;
 use std::os::raw::c_char;
+use vst3_sys::vst::TChar;
+use widestring::U16CString;
 
 /// The equivalent of the `strlcpy()` C function. Copy `src` to `dest` as a null-terminated
 /// C-string. If `dest` does not have enough capacity, add a null terminator at the end to prevent
@@ -31,5 +33,28 @@ pub fn strlcpy(dest: &mut [c_char], src: &str) {
     // Make sure there's always room for a null terminator
     let copy_len = cmp::min(dest.len() - 1, src.len());
     dest[..copy_len].copy_from_slice(&src_bytes_signed[..copy_len]);
+    dest[copy_len] = 0;
+}
+
+/// The same as [strlcpy], but for VST3's fun UTF-16 strings instead.
+pub fn u16strlcpy(dest: &mut [TChar], src: &str) {
+    if dest.is_empty() {
+        return;
+    }
+
+    let src_utf16 = match U16CString::from_str(src) {
+        Ok(s) => s,
+        Err(err) => {
+            nih_debug_assert_failure!("Invalid UTF-16 string: {}", err);
+            return;
+        }
+    };
+    let src_utf16_chars = src_utf16.as_slice();
+    let src_utf16_chars_signed: &[TChar] =
+        unsafe { &*(src_utf16_chars as *const [u16] as *const [TChar]) };
+
+    // Make sure there's always room for a null terminator
+    let copy_len = cmp::min(dest.len() - 1, src_utf16_chars_signed.len());
+    dest[..copy_len].copy_from_slice(&src_utf16_chars_signed[..copy_len]);
     dest[copy_len] = 0;
 }
