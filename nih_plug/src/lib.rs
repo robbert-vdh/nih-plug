@@ -19,3 +19,6 @@ pub mod params;
 pub mod plugin;
 pub mod util;
 pub mod wrapper;
+
+// Re-export our derive macros to make this a bit easier to use
+pub use nih_plug_derive::Params;

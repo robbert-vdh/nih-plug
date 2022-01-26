@@ -22,7 +22,6 @@ use nih_plug::{
     plugin::{BufferConfig, BusConfig, Plugin},
     util,
 };
-use nih_plug_derive::Params;
 use std::pin::Pin;
 
 struct Gain {
