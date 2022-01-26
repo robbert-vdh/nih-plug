@@ -66,6 +66,7 @@ impl Plugin for Gain {
     const URL: &'static str = "https://youtu.be/dQw4w9WgXcQ";
     const EMAIL: &'static str = "info@example.com";
 
+    const VERSION: &'static str = "0.0.1";
     const VST3_CATEGORIES: &'static str = "Fx|Dynamics";
 
     const DEFAULT_NUM_INPUTS: u32 = 2;

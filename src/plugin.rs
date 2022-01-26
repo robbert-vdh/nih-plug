@@ -42,6 +42,9 @@ pub trait Plugin: Default + Sync {
     const URL: &'static str;
     const EMAIL: &'static str;
 
+    /// Semver compatible version string (e.g. `0.0.1`). Hosts likely won't do anything with this,
+    /// but just in case they do this should only contain decimals values and dots.
+    const VERSION: &'static str;
     /// One or more categories, separated by pipe characters (`|`), up to 127 characters. Anything
     /// logner than that will be truncated. See the VST3 SDK for examples of common categories:
     /// https://github.com/steinbergmedia/vst3_pluginterfaces/blob/2ad397ade5b51007860bedb3b01b8afd2c5f6fba/vst/ivstaudioprocessor.h#L49-L90
