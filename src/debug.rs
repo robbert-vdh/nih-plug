@@ -45,6 +45,22 @@ macro_rules! nih_debug_assert {
     );
 }
 
+/// An unconditional debug assertion failure, for if the condition has already been checked
+/// elsewhere.
+#[macro_export]
+macro_rules! nih_debug_assert_failure {
+    () => (
+        if cfg!(debug_assertions) {
+            nih_log!("Debug assertion failed");
+        }
+    );
+    ($format:expr $(, $arg:tt)*) => (
+        if cfg!(debug_assertions) {
+            nih_log!(concat!("Debug assertion failed: ", $format) $(, $arg)*);
+        }
+    );
+}
+
 /// A `debug_assert_eq!()` analogue that prints the error with line number information instead of
 /// panicking.
 #[macro_export]
