@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+#[macro_use]
+extern crate nih_plug;
+
 use nih_plug::{
     params::{FloatParam, Params, Range},
     plugin::{BufferConfig, BusConfig, Plugin},
@@ -87,9 +90,8 @@ impl Plugin for Gain {
         let num_channels = samples.len();
         let num_samples = samples[0].len();
         for channel in &samples[1..] {
+            nih_debug_assert_eq!(channel.len(), num_samples);
             if channel.len() != num_samples {
-                // TODO: Debug assert
-                eprintln!("Mismatched channel lengths, aborting");
                 return;
             }
         }

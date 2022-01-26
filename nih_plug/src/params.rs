@@ -70,7 +70,6 @@ macro_rules! impl_plainparam {
             ///
             /// TODO: After implementing VST3, check if we handle parsing failures correctly
             pub fn from_string(&mut self, string: &str) -> bool {
-                // TODO: Debug asserts on failures
                 let value = match &self.string_to_value {
                     Some(f) => f(string),
                     // TODO: Check how Rust's parse function handles trailing garbage
