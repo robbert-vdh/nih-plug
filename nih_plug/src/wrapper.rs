@@ -14,8 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-pub mod debug;
-pub mod params;
-pub mod plugin;
-pub mod util;
-pub mod wrapper;
+//! Wrappers for different plugin types. Each wrapper has an entry point macro that you can pass the
+//! name of a type that implements `Plugin` to. The macro will handle the rest.
+
+pub mod vst3;

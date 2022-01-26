@@ -6,3 +6,4 @@ authors = ["Robbert van der Helm <mail@robbertvanderhelm.nl>"]
 license = "GPL-3.0-or-later"
 
 [dependencies]
+vst3-sys = { git = "https://github.com/RustAudio/vst3-sys.git" }

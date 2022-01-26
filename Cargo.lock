@@ -13,6 +13,9 @@ dependencies = [
 [[package]]
 name = "nih_plug"
 version = "0.1.0"
+dependencies = [
+ "vst3-sys",
+]
 
 [[package]]
 name = "nih_plug_derive"
@@ -56,3 +59,40 @@ name = "unicode-xid"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ccb82d61f80a663efe1f787a51b16b5a51e3314d6ac365b08639f52387b33f3"
+
+[[package]]
+name = "vst3-com"
+version = "0.1.0"
+source = "git+https://github.com/RustAudio/vst3-sys.git#6ab2b43928588cdedcf499eecfc5a022e007dd76"
+dependencies = [
+ "vst3-com-macros",
+]
+
+[[package]]
+name = "vst3-com-macros"
+version = "0.2.0"
+source = "git+https://github.com/RustAudio/vst3-sys.git#6ab2b43928588cdedcf499eecfc5a022e007dd76"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+ "vst3-com-macros-support",
+]
+
+[[package]]
+name = "vst3-com-macros-support"
+version = "0.2.0"
+source = "git+https://github.com/RustAudio/vst3-sys.git#6ab2b43928588cdedcf499eecfc5a022e007dd76"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "vst3-sys"
+version = "0.1.0"
+source = "git+https://github.com/RustAudio/vst3-sys.git#6ab2b43928588cdedcf499eecfc5a022e007dd76"
+dependencies = [
+ "vst3-com",
+]
