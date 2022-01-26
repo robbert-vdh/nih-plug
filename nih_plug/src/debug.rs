@@ -20,6 +20,7 @@
 ///      integrating some other crate with this function if we need to log to some other place than
 ///      STDERR or if it needs to be done in release builds and we should thus try to avoid
 ///      allocations.
+#[macro_export]
 macro_rules! nih_log {
     ($format:expr $(, $arg:tt)*) => (
         eprintln!(concat!("[", file!(), ":", line!(), "] ", $format), $($arg)*)
@@ -30,6 +31,7 @@ macro_rules! nih_log {
 /// panicking.
 ///
 /// TODO: Detect if we're running under a debugger, and trigger a break if we are
+#[macro_export]
 macro_rules! nih_debug_assert {
     ($cond:expr) => (
         if cfg!(debug_assertions) && !$cond {
@@ -45,6 +47,7 @@ macro_rules! nih_debug_assert {
 
 /// A `debug_assert_eq!()` analogue that prints the error with line number information instead of
 /// panicking.
+#[macro_export]
 macro_rules! nih_debug_assert_eq {
     ($left:expr, $right:expr) => (
         if cfg!(debug_assertions) && $left != $right {
@@ -60,6 +63,7 @@ macro_rules! nih_debug_assert_eq {
 
 /// A `debug_assert_neq!()` analogue that prints the error with line number information instead of
 /// panicking.
+#[macro_export]
 macro_rules! nih_debug_assert_neq {
     ($left:expr, $right:expr) => (
         if cfg!(debug_assertions) && $left == $right {
