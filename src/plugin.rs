@@ -37,6 +37,11 @@ use crate::params::Params;
 /// - Suspension and tail processing. This will be handled soon in a similar way to how CLAP
 ///   handnles it.
 pub trait Plugin: Default + Sync {
+    const NAME: &'static str;
+    const VENDOR: &'static str;
+    const URL: &'static str;
+    const EMAIL: &'static str;
+
     /// The default number of inputs. Some hosts like, like Bitwig and Ardour, use the defaults
     /// instead of setting up the busses properly.
     const DEFAULT_NUM_INPUTS: u32;

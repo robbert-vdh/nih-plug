@@ -61,6 +61,11 @@ impl Default for GainParams {
 }
 
 impl Plugin for Gain {
+    const NAME: &'static str = "Gain";
+    const VENDOR: &'static str = "Moist Plugins GmbH";
+    const URL: &'static str = "https://youtu.be/dQw4w9WgXcQ";
+    const EMAIL: &'static str = "info@example.com";
+
     const DEFAULT_NUM_INPUTS: u32 = 2;
     const DEFAULT_NUM_OUTPUTS: u32 = 2;
 
