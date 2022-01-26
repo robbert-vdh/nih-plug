@@ -185,6 +185,19 @@ impl ParamPtr {
         }
     }
 
+    /// Get the unit label for this parameter.
+    ///
+    /// # Safety
+    ///
+    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
+    /// still alive.
+    pub unsafe fn unit(&self) -> &'static str {
+        match &self {
+            ParamPtr::FloatParam(p) => (**p).unit,
+            ParamPtr::IntParam(p) => (**p).unit,
+        }
+    }
+
     /// Set this parameter based on a string. Returns whether the updating succeeded. That can fail
     /// if the string cannot be parsed.
     ///
