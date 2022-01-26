@@ -95,6 +95,26 @@ macro_rules! impl_plainparam {
                 self.value = self.range.unnormalize(normalized);
             }
 
+            /// Get the string representation for a normalized value. Used as part of the wrappers.
+            pub fn normalized_value_to_string(&self, normalized: f32) -> String {
+                let value = self.range.unnormalize(normalized);
+                match &self.value_to_string {
+                    Some(f) => format!("{}{}", f(value), self.unit),
+                    None => format!("{}{}", value, self.unit),
+                }
+            }
+
+            /// Get the string representation for a normalized value. Used as part of the wrappers.
+            pub fn string_to_normalized_value(&self, string: &str) -> Option<f32> {
+                let value = match &self.string_to_value {
+                    Some(f) => f(string),
+                    // TODO: Check how Rust's parse function handles trailing garbage
+                    None => string.parse().ok(),
+                }?;
+
+                Some(self.range.normalize(value))
+            }
+
             /// Implementation detail for implementing [Params]. This should not be used directly.
             pub fn as_ptr(&self) -> ParamPtr {
                 ParamPtr::$ty(self as *const $ty as *mut $ty)
@@ -235,6 +255,32 @@ impl ParamPtr {
         match &self {
             ParamPtr::FloatParam(p) => (**p).set_normalized_value(normalized),
             ParamPtr::IntParam(p) => (**p).set_normalized_value(normalized),
+        }
+    }
+
+    /// Get the string representation for a normalized value. Used as part of the wrappers.
+    ///
+    /// # Safety
+    ///
+    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
+    /// still alive.
+    pub unsafe fn normalized_value_to_string(&self, normalized: f32) -> String {
+        match &self {
+            ParamPtr::FloatParam(p) => (**p).normalized_value_to_string(normalized),
+            ParamPtr::IntParam(p) => (**p).normalized_value_to_string(normalized),
+        }
+    }
+
+    /// Get the string representation for a normalized value. Used as part of the wrappers.
+    ///
+    /// # Safety
+    ///
+    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
+    /// still alive.
+    pub unsafe fn string_to_normalized_value(&self, string: &str) -> Option<f32> {
+        match &self {
+            ParamPtr::FloatParam(p) => (**p).string_to_normalized_value(string),
+            ParamPtr::IntParam(p) => (**p).string_to_normalized_value(string),
         }
     }
 }
