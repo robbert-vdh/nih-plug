@@ -14,8 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-//! Wrappers for different plugin types. Each wrapper has an entry point macro that you can pass the
-//! name of a type that implements `Plugin` to. The macro will handle the rest.
+use std::cmp;
+use std::os::raw::c_char;
 
-pub mod util;
-pub mod vst3;
+/// The equivalent of the `strlcpy()` C function. Copy `src` to `dest` as a null-terminated
+/// C-string. If `dest` does not have enough capacity, add a null terminator at the end to prevent
+/// buffer overflows.
+pub fn strlcpy(dest: &mut [c_char], src: &str) {
+    if dest.is_empty() {
+        return;
+    }
+
+    let src_bytes: &[u8] = src.as_bytes();
+    let src_bytes_signed: &[i8] = unsafe { &*(src_bytes as *const [u8] as *const [i8]) };
+
+    // Make sure there's always room for a null terminator
+    let copy_len = cmp::min(dest.len() - 1, src.len());
+    dest[..copy_len].copy_from_slice(&src_bytes_signed[..copy_len]);
+    dest[copy_len] = 0;
+}
