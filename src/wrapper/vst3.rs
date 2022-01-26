@@ -17,12 +17,57 @@
 //! Wrappers for different plugin types. Each wrapper has an entry point macro that you can pass the
 //! name of a type that implements `Plugin` to. The macro will handle the rest.
 
+use std::marker::PhantomData;
+use std::mem;
 use std::pin::Pin;
+
+// Alias needed for the VST3 attribute macro
+use vst3_sys as vst3_com;
+use vst3_sys::base::tresult;
+use vst3_sys::base::{IPluginFactory, IPluginFactory2, IPluginFactory3};
+use vst3_sys::VST3;
 
 use crate::plugin::Plugin;
 
-pub struct Vst3Wrapper<P: Plugin> {
+pub struct Wrapper<P: Plugin> {
     plugin: Pin<Box<P>>,
+}
+
+// TODO: Implement the rest
+// #[VST3(implements(IPluginFactory, IPluginFactory2, IPluginFactory3))]
+#[VST3(implements(IPluginFactory))]
+pub struct Factory<P: Plugin> {
+    /// The type will be used for constructing plugin instances later.
+    _phantom: PhantomData<P>,
+}
+
+impl<P: Plugin> Factory<P> {
+    pub fn new() -> Box<Self> {
+        Self::allocate(PhantomData::default())
+    }
+}
+
+impl<P: Plugin> IPluginFactory for Factory<P> {
+    unsafe fn get_factory_info(&self, info: *mut vst3_sys::base::PFactoryInfo) -> tresult {
+        todo!()
+    }
+
+    unsafe fn count_classes(&self) -> i32 {
+        todo!()
+    }
+
+    unsafe fn get_class_info(&self, index: i32, info: *mut vst3_sys::base::PClassInfo) -> tresult {
+        todo!()
+    }
+
+    unsafe fn create_instance(
+        &self,
+        cid: *const vst3_com::IID,
+        _iid: *const vst3_com::IID,
+        obj: *mut *mut vst3_com::c_void,
+    ) -> tresult {
+        todo!()
+    }
 }
 
 // TODO: Come up with some way to hae Cargo spit out a VST3 module. Is that possible without a
@@ -30,12 +75,22 @@ pub struct Vst3Wrapper<P: Plugin> {
 #[macro_export]
 macro_rules! nih_export_vst3 {
     ($plugin_ty:ty) => {
+        #[no_mangle]
+        pub extern "system" fn GetPluginFactory() -> *mut ::std::ffi::c_void {
+            let factory = ::nih_plug::wrapper::vst3::Factory::<$plugin_ty>::new();
+
+            Box::into_raw(factory) as *mut ::std::ffi::c_void
+        }
+
+        // We don't need any special initialization logic, so all of these module entry point
+        // functions just return true all the time
+
         // These two entry points are used on Linux, and they would theoretically also be used on
         // the BSDs:
         // https://github.com/steinbergmedia/vst3_public_sdk/blob/c3948deb407bdbff89de8fb6ab8500ea4df9d6d9/source/main/linuxmain.cpp#L47-L52
         #[no_mangle]
         #[cfg(all(target_family = "unix", not(target_os = "macos")))]
-        pub extern "C" fn ModuleEntry(_lib_handle: *mut std::ffi::c_void) -> bool {
+        pub extern "C" fn ModuleEntry(_lib_handle: *mut ::std::ffi::c_void) -> bool {
             true
         }
 
@@ -49,7 +104,7 @@ macro_rules! nih_export_vst3 {
         // https://github.com/steinbergmedia/vst3_public_sdk/blob/bc459feee68803346737901471441fd4829ec3f9/source/main/macmain.cpp#L60-L61
         #[no_mangle]
         #[cfg(target_os = "macos")]
-        pub extern "C" fn bundleEntry(_lib_handle: *mut std::ffi::c_void) -> bool {
+        pub extern "C" fn bundleEntry(_lib_handle: *mut ::std::ffi::c_void) -> bool {
             true
         }
 
