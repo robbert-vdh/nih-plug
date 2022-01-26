@@ -10,4 +10,5 @@ members = ["nih_plug_derive", "plugins/gain"]
 
 [dependencies]
 nih_plug_derive = { path = "nih_plug_derive" }
-vst3-sys = { git = "https://github.com/RustAudio/vst3-sys.git" }
+# Upstream currently does not support structs with generics and comments
+vst3-sys = { git = "https://github.com/robbert-vdh/vst3-sys.git", branch = "fix/vst3-macro-generics" }
