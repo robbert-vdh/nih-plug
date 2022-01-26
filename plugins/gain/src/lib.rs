@@ -46,10 +46,10 @@ impl Default for GainParams {
     fn default() -> Self {
         Self {
             gain: FloatParam {
-                value: 0.00,
+                value: 0.0,
                 range: Range::Linear {
                     min: -30.0,
-                    max: 300.0,
+                    max: 30.0,
                 },
                 name: "Gain",
                 unit: " dB",
