@@ -14,9 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-//! Wrappers for different plugin types. Each wrapper has an entry point macro that you can pass the
-//! name of a type that implements `Plugin` to. The macro will handle the rest.
-
 use std::marker::PhantomData;
 use std::mem;
 use std::pin::Pin;
@@ -29,6 +26,9 @@ use vst3_sys::VST3;
 
 use crate::plugin::Plugin;
 
+/// Re-export for the wrapper.
+pub use vst3_sys::sys::GUID;
+
 pub struct Wrapper<P: Plugin> {
     plugin: Pin<Box<P>>,
 }
@@ -37,13 +37,16 @@ pub struct Wrapper<P: Plugin> {
 // #[VST3(implements(IPluginFactory, IPluginFactory2, IPluginFactory3))]
 #[VST3(implements(IPluginFactory))]
 pub struct Factory<P: Plugin> {
+    /// The exposed plugin's GUID. Instead of generating this, we'll just let the programmer decide
+    /// on their own.
+    cid: GUID,
     /// The type will be used for constructing plugin instances later.
     _phantom: PhantomData<P>,
 }
 
 impl<P: Plugin> Factory<P> {
-    pub fn new() -> Box<Self> {
-        Self::allocate(PhantomData::default())
+    pub fn new(guid: GUID) -> Box<Self> {
+        Self::allocate(guid, PhantomData::default())
     }
 }
 
@@ -70,14 +73,19 @@ impl<P: Plugin> IPluginFactory for Factory<P> {
     }
 }
 
-// TODO: Come up with some way to hae Cargo spit out a VST3 module. Is that possible without a
-//       custom per-plugin build script?
+/// Export a VST3 plugin from this library using the provided plugin type and a 4x4 character class
+/// ID. This CID should be a `[u8; 16]`. You can use the `*b"fooofooofooofooo"` syntax for this.
+///
+/// TODO: Come up with some way to hae Cargo spit out a VST3 module. Is that possible without a
+///       custom per-plugin build script?
 #[macro_export]
 macro_rules! nih_export_vst3 {
-    ($plugin_ty:ty) => {
+    ($plugin_ty:ty, $cid:expr) => {
         #[no_mangle]
         pub extern "system" fn GetPluginFactory() -> *mut ::std::ffi::c_void {
-            let factory = ::nih_plug::wrapper::vst3::Factory::<$plugin_ty>::new();
+            let factory = ::nih_plug::wrapper::vst3::Factory::<$plugin_ty>::new(
+                ::nih_plug::wrapper::vst3::GUID { data: $cid },
+            );
 
             Box::into_raw(factory) as *mut ::std::ffi::c_void
         }

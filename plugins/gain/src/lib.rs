@@ -116,4 +116,4 @@ impl Plugin for Gain {
     }
 }
 
-nih_export_vst3!(Gain);
+nih_export_vst3!(Gain, *b"GainMoistestPlug");
