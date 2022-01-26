@@ -157,8 +157,6 @@ impl NormalizebleRange<i32> for Range<i32> {
 ///
 /// This implementation is safe when using from the wrapper because the plugin object needs to be
 /// pinned, and it can never outlive the wrapper.
-///
-/// TODO: Create a derive macro for this
 pub trait Params {
     /// Create a mapping from unique parameter IDs to parameters. Dereferencing the pointers stored
     /// in the values is only valid as long as this pinned object is valid.
