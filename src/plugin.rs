@@ -42,6 +42,11 @@ pub trait Plugin: Default + Sync {
     const URL: &'static str;
     const EMAIL: &'static str;
 
+    /// One or more categories, separated by pipe characters (`|`), up to 31 characters. Anything
+    /// logner than that will be truncated. See the VST3 SDK for examples of common categories:
+    /// https://github.com/steinbergmedia/vst3_pluginterfaces/blob/2ad397ade5b51007860bedb3b01b8afd2c5f6fba/vst/ivstaudioprocessor.h#L49-L90
+    const VST3_CATEGORIES: &'static str;
+
     /// The default number of inputs. Some hosts like, like Bitwig and Ardour, use the defaults
     /// instead of setting up the busses properly.
     const DEFAULT_NUM_INPUTS: u32;
