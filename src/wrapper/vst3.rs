@@ -18,6 +18,7 @@ use std::marker::PhantomData;
 use std::mem;
 use std::pin::Pin;
 
+use vst3_com::base::{kInvalidArgument, kResultFalse, kResultOk};
 // Alias needed for the VST3 attribute macro
 use vst3_sys as vst3_com;
 use vst3_sys::base::tresult;
@@ -25,6 +26,7 @@ use vst3_sys::base::{IPluginFactory, IPluginFactory2, IPluginFactory3};
 use vst3_sys::VST3;
 
 use crate::plugin::Plugin;
+use crate::wrapper::util::strlcpy;
 
 /// Re-export for the wrapper.
 pub use vst3_sys::sys::GUID;
@@ -52,15 +54,38 @@ impl<P: Plugin> Factory<P> {
 
 impl<P: Plugin> IPluginFactory for Factory<P> {
     unsafe fn get_factory_info(&self, info: *mut vst3_sys::base::PFactoryInfo) -> tresult {
-        todo!()
+        *info = mem::zeroed();
+
+        let info = &mut *info;
+        strlcpy(&mut info.vendor, P::NAME);
+        strlcpy(&mut info.url, P::URL);
+        strlcpy(&mut info.email, P::EMAIL);
+        info.flags = vst3_sys::base::FactoryFlags::kUnicode as i32;
+
+        kResultOk
     }
 
     unsafe fn count_classes(&self) -> i32 {
-        todo!()
+        // We don't do shell plugins, and good of an idea having separated components and edit
+        // controllers in theory is, few software can use it, and doing that would make our simple
+        // microframework a lot less simple
+        1
     }
 
     unsafe fn get_class_info(&self, index: i32, info: *mut vst3_sys::base::PClassInfo) -> tresult {
-        todo!()
+        if index != 0 {
+            return kInvalidArgument;
+        }
+
+        *info = mem::zeroed();
+
+        let info = &mut *info;
+        info.cid = self.cid;
+        info.cardinality = vst3_sys::base::ClassCardinality::kManyInstances as i32;
+        strlcpy(&mut info.category, "Audio Module Class");
+        strlcpy(&mut info.name, P::NAME);
+
+        kResultOk
     }
 
     unsafe fn create_instance(
@@ -69,6 +94,7 @@ impl<P: Plugin> IPluginFactory for Factory<P> {
         _iid: *const vst3_com::IID,
         obj: *mut *mut vst3_com::c_void,
     ) -> tresult {
+        return kResultFalse;
         todo!()
     }
 }
