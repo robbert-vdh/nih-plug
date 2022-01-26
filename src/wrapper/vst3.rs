@@ -14,35 +14,73 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use lazy_static::lazy_static;
+use std::collections::HashMap;
 use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::mem;
-// Alias needed for the VST3 attribute macro
-use vst3_sys as vst3_com;
 use vst3_sys::base::{kInvalidArgument, kNoInterface, kResultFalse, kResultOk, tresult, TBool};
 use vst3_sys::base::{IPluginBase, IPluginFactory, IPluginFactory2, IPluginFactory3};
-use vst3_sys::vst::IComponent;
+use vst3_sys::vst::TChar;
+use vst3_sys::vst::{IComponent, IEditController};
 use vst3_sys::VST3;
 
+use crate::params::{ParamPtr, Params};
 use crate::plugin::{BusConfig, Plugin};
-use crate::wrapper::util::{strlcpy, u16strlcpy};
+use crate::wrapper::util::{hash_param_id, strlcpy, u16strlcpy};
+
+// Alias needed for the VST3 attribute macro
+use vst3_sys as vst3_com;
 
 /// Re-export for the wrapper.
 pub use vst3_sys::sys::GUID;
 
 /// The VST3 SDK version this is roughtly based on.
-const VST3_SDK_VERSION: &'static str = "VST 3.6.14";
+const VST3_SDK_VERSION: &str = "VST 3.6.14";
+/// Right now the wrapper adds its own bypass parameter.
+///
+/// TODO: Actually use this parameter.
+const BYPASS_PARAM_ID: &str = "bypass";
+lazy_static! {
+    static ref BYPASS_PARAM_HASH: u32 = hash_param_id(BYPASS_PARAM_ID);
+}
 
-#[VST3(implements(IComponent))]
+#[VST3(implements(IComponent, IEditController))]
 pub struct Wrapper<P: Plugin> {
+    /// The wrapped plugin instance.
     plugin: P,
+    /// Whether the plugin is currently bypassed. This is not yet integrated with the `Plugin`
+    /// trait.
+    bypass_state: bool,
+
+    /// A mapping from parameter IDs to pointers to parameters belonging to the plugin. As long as
+    /// `plugin` does not get recreated, these addresses will remain stable, as they are obtained
+    /// from a pinned object.
+    param_map: HashMap<&'static str, ParamPtr>,
+    /// The keys from `param_map` in a stable order.
+    param_ids: Vec<&'static str>,
+    /// Mappings from parameter hashes back to string parameter indentifiers.
+    ///
+    /// TODO: To avoid needing two pointer dereferences each time, maybe restructure `param_map` in
+    ///       this wrapper to be indexed by the numerical hash.
+    param_id_hashes: HashMap<u32, &'static str>,
+    /// The default normalized parameter value for every parameter in `param_ids`. We need to store
+    /// this in case the host requeries the parmaeter later.
+    param_defaults_normalized: Vec<f32>,
+
+    /// The current bus configuration, modified through `IAudioProcessor::setBusArrangements()`.
     current_bus_config: BusConfig,
 }
 
 impl<P: Plugin> Wrapper<P> {
     pub fn new() -> Box<Self> {
-        Self::allocate(
-            P::default(),
+        let mut wrapper = Self::allocate(
+            P::default(),   // plugin
+            false,          // bypass_state
+            HashMap::new(), // param_map
+            Vec::new(),     // param_ids
+            HashMap::new(), // param_id_hashes
+            Vec::new(),     // param_defaults_normalized
             // Some hosts, like the current version of Bitwig and Ardour at the time of writing,
             // will try using the plugin's default not yet initialized bus arrangement. Because of
             // that, we'll always initialize this configuration even before the host requests a
@@ -51,7 +89,30 @@ impl<P: Plugin> Wrapper<P> {
                 num_input_channels: P::DEFAULT_NUM_INPUTS,
                 num_output_channels: P::DEFAULT_NUM_OUTPUTS,
             },
-        )
+        );
+
+        // This is a mapping from the parameter IDs specified by the plugin to pointers to thsoe
+        // parameters. Since the object returned by `params()` is pinned, these pointers are safe to
+        // dereference as long as `wrapper.plugin` is alive
+        wrapper.param_map = wrapper.plugin.params().param_map();
+        wrapper.param_ids = wrapper.param_map.keys().copied().collect();
+        wrapper.param_defaults_normalized = wrapper
+            .param_ids
+            .iter()
+            .map(|id| unsafe { wrapper.param_map[id].normalized_value() })
+            .collect();
+        wrapper.param_id_hashes = wrapper
+            .param_ids
+            .iter()
+            .map(|id| (hash_param_id(id), *id))
+            .collect();
+
+        nih_debug_assert!(
+            !wrapper.param_map.contains_key(BYPASS_PARAM_ID),
+            "The wrapper alread yadds its own bypass parameter"
+        );
+
+        wrapper
     }
 }
 
@@ -174,6 +235,138 @@ impl<P: Plugin> IComponent for Wrapper<P> {
     unsafe fn get_state(&self, _state: *mut c_void) -> tresult {
         // TODO: Implemnt state saving and restoring
         kResultFalse
+    }
+}
+
+impl<P: Plugin> IEditController for Wrapper<P> {
+    unsafe fn set_component_state(&self, _state: *mut c_void) -> tresult {
+        // We have a single file component, so we don't need to do anything here
+        kResultOk
+    }
+
+    unsafe fn set_state(&self, state: *mut c_void) -> tresult {
+        // We have a single file component, so there's only one `set_state()` function. Unlike C++,
+        // Rust allows you to have multiple methods with the same name when they're provided by
+        // different treats, but because of the Rust implementation the host may call either of
+        // these functions depending on how they're implemented
+        IComponent::set_state(self, state)
+    }
+
+    unsafe fn get_state(&self, state: *mut c_void) -> tresult {
+        // Same for this function
+        IComponent::get_state(self, state)
+    }
+
+    unsafe fn get_parameter_count(&self) -> i32 {
+        // NOTE: We add a bypass parameter ourselves on index `self.param_ids.len()`, so these
+        //       indices are all off by one
+        self.param_ids.len() as i32 + 1
+    }
+
+    unsafe fn get_parameter_info(
+        &self,
+        param_index: i32,
+        info: *mut vst3_sys::vst::ParameterInfo,
+    ) -> tresult {
+        // Parameter index `self.param_ids.len()` is our own bypass parameter
+        if param_index < 0 || param_index > self.param_ids.len() as i32 {
+            return kInvalidArgument;
+        }
+
+        *info = std::mem::zeroed();
+
+        let info = &mut *info;
+        if param_index == self.param_ids.len() as i32 {
+            info.id = hash_param_id(BYPASS_PARAM_ID);
+            u16strlcpy(&mut info.title, "Bypass");
+            u16strlcpy(&mut info.short_title, "Bypass");
+            u16strlcpy(&mut info.units, "");
+            info.step_count = 0;
+            info.default_normalized_value = 0.0;
+            info.unit_id = vst3_sys::vst::kRootUnitId;
+            info.flags = vst3_sys::vst::ParameterFlags::kCanAutomate as i32
+                | vst3_sys::vst::ParameterFlags::kIsBypass as i32;
+        } else {
+            let param_id = &self.param_ids[param_index as usize];
+            let default_value = &self.param_defaults_normalized[param_index as usize];
+            let param_ptr = &self.param_map[param_id];
+
+            info.id = hash_param_id(param_id);
+            u16strlcpy(&mut info.title, param_ptr.name());
+            u16strlcpy(&mut info.short_title, param_ptr.name());
+            u16strlcpy(&mut info.units, param_ptr.unit());
+            // TODO: Don't forget this when we add enum parameters
+            info.step_count = 0;
+            info.default_normalized_value = *default_value as f64;
+            info.unit_id = vst3_sys::vst::kRootUnitId;
+            info.flags = vst3_sys::vst::ParameterFlags::kCanAutomate as i32;
+        }
+
+        kResultOk
+    }
+
+    unsafe fn get_param_string_by_value(
+        &self,
+        id: u32,
+        value_normalized: f64,
+        string: *mut TChar,
+    ) -> tresult {
+        // Somehow there's no length there, so we'll assume our own maximum
+        let dest = &mut *(string as *mut [TChar; 128]);
+
+        if id == *BYPASS_PARAM_HASH {
+            if value_normalized > 0.5 {
+                u16strlcpy(dest, "Bypassed")
+            } else {
+                u16strlcpy(dest, "Enabled")
+            }
+
+            kResultOk
+        } else if self.param_id_hashes.contains_key(&id) {
+            let param_id = &self.param_id_hashes[&id];
+            let param_ptr = &self.param_map[param_id];
+            u16strlcpy(
+                dest,
+                &param_ptr.normalized_value_to_string(value_normalized as f32),
+            );
+
+            kResultOk
+        } else {
+            kInvalidArgument
+        }
+    }
+
+    unsafe fn get_param_value_by_string(
+        &self,
+        id: u32,
+        string: *const TChar,
+        value_normalized: *mut f64,
+    ) -> tresult {
+        todo!()
+    }
+
+    unsafe fn normalized_param_to_plain(&self, id: u32, value_normalized: f64) -> f64 {
+        todo!()
+    }
+
+    unsafe fn plain_param_to_normalized(&self, id: u32, plain_value: f64) -> f64 {
+        todo!()
+    }
+
+    unsafe fn get_param_normalized(&self, id: u32) -> f64 {
+        todo!()
+    }
+
+    unsafe fn set_param_normalized(&self, id: u32, value: f64) -> tresult {
+        todo!()
+    }
+
+    unsafe fn set_component_handler(&self, handler: *mut c_void) -> tresult {
+        todo!()
+    }
+
+    unsafe fn create_view(&self, name: vst3_sys::base::FIDString) -> *mut c_void {
+        todo!()
     }
 }
 

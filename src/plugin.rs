@@ -32,6 +32,7 @@ use crate::params::Params;
 ///   they do we'll ignore that it's a thing)
 /// - Parameter update callbacks
 /// - Parameter hierarchies/groups
+/// - Bypass parameters, right now the VST3 wrapper generates one for you
 /// - Outputting parameter changes from the plugin
 /// - GUIs
 /// - Suspension and tail processing. This will be handled soon in a similar way to how CLAP
