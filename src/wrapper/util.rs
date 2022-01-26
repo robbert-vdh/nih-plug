@@ -19,6 +19,22 @@ use std::os::raw::c_char;
 use vst3_sys::vst::TChar;
 use widestring::U16CString;
 
+/// A Rabin fingerprint based string hash compatible with JUCE's implementation.
+///
+/// https://github.com/juce-framework/JUCE/blob/0abbba3b18c3263137eeaeaa11c917a3425ce585/modules/juce_audio_plugin_client/VST3/juce_VST3_Wrapper.cpp#L585-L601
+/// https://github.com/juce-framework/JUCE/blob/46ea879739533ca0cdc689b967edfc5390c46ef7/modules/juce_core/text/juce_String.cpp#L541-L556
+pub fn hash_param_id(id: &str) -> u32 {
+    let mut hash: u32 = 0;
+    for char in id.bytes() {
+        hash = hash * 31 + char as u32
+    }
+
+    // Studio One apparently doesn't like negative parameters, so JUCE just zeroes out the sign bit
+    hash &= !(1 << 31);
+
+    hash
+}
+
 /// The equivalent of the `strlcpy()` C function. Copy `src` to `dest` as a null-terminated
 /// C-string. If `dest` does not have enough capacity, add a null terminator at the end to prevent
 /// buffer overflows.
