@@ -150,8 +150,9 @@ impl NormalizebleRange<i32> for Range<i32> {
 /// Describes a struct containing parameters. The idea is that we can have a normal struct
 /// containing [FloatParam] and other parameter types with attributes describing a unique identifier
 /// for each parameter. We can then build a mapping from those parameter IDs to the parameters using
-/// the [param_map] function. That way we can have easy to work with JUCE-style parameter objects in
-/// the plugin without needing to manually register each parameter, like you would in JUCE.
+/// the [Params::param_map] function. That way we can have easy to work with JUCE-style parameter
+/// objects in the plugin without needing to manually register each parameter, like you would in
+/// JUCE.
 ///
 /// # Safety
 ///
