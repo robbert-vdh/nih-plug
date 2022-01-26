@@ -90,12 +90,17 @@ impl<P: Plugin> IPluginFactory for Factory<P> {
 
     unsafe fn create_instance(
         &self,
-        cid: *const vst3_com::IID,
-        _iid: *const vst3_com::IID,
-        obj: *mut *mut vst3_com::c_void,
+        cid: *const vst3_sys::IID,
+        _iid: *const vst3_sys::IID,
+        obj: *mut *mut vst3_sys::c_void,
     ) -> tresult {
-        return kResultFalse;
-        todo!()
+        if *cid != self.cid {
+            return kNoInterface;
+        }
+
+        *obj = Box::into_raw(Wrapper::<P>::new()) as *mut vst3_sys::c_void;
+
+        kResultOk
     }
 }
 
