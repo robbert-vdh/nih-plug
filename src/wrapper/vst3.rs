@@ -30,6 +30,9 @@ use crate::wrapper::util::{strlcpy, u16strlcpy};
 /// Re-export for the wrapper.
 pub use vst3_sys::sys::GUID;
 
+/// The VST3 SDK version this is roughtly based on.
+const VST3_SDK_VERSION: &'static str = "VST 3.6.14";
+
 #[VST3(implements(IComponent))]
 pub struct Wrapper<P: Plugin> {
     plugin: P,
@@ -81,7 +84,7 @@ impl<P: Plugin> IComponent for Wrapper<P> {
     ) -> i32 {
         // All plugins currently only have a single input and a single output bus
         match type_ {
-            x if x == vst3_com::vst::MediaTypes::kAudio as i32 => 1,
+            x if x == vst3_sys::vst::MediaTypes::kAudio as i32 => 1,
             _ => 0,
         }
     }
@@ -94,23 +97,23 @@ impl<P: Plugin> IComponent for Wrapper<P> {
         info: *mut vst3_sys::vst::BusInfo,
     ) -> tresult {
         match type_ {
-            t if t == vst3_com::vst::MediaTypes::kAudio as i32 => {
+            t if t == vst3_sys::vst::MediaTypes::kAudio as i32 => {
                 *info = mem::zeroed();
 
                 let info = &mut *info;
-                info.media_type = vst3_com::vst::MediaTypes::kAudio as i32;
-                info.bus_type = vst3_com::vst::BusTypes::kMain as i32;
-                info.flags = vst3_com::vst::BusFlags::kDefaultActive as u32;
+                info.media_type = vst3_sys::vst::MediaTypes::kAudio as i32;
+                info.bus_type = vst3_sys::vst::BusTypes::kMain as i32;
+                info.flags = vst3_sys::vst::BusFlags::kDefaultActive as u32;
                 match (dir, index) {
-                    (d, 0) if d == vst3_com::vst::BusDirections::kInput as i32 => {
-                        info.direction = vst3_com::vst::BusDirections::kInput as i32;
+                    (d, 0) if d == vst3_sys::vst::BusDirections::kInput as i32 => {
+                        info.direction = vst3_sys::vst::BusDirections::kInput as i32;
                         info.channel_count = self.current_bus_config.num_input_channels as i32;
                         u16strlcpy(&mut info.name, "Input");
 
                         kResultOk
                     }
-                    (d, 0) if d == vst3_com::vst::BusDirections::kOutput as i32 => {
-                        info.direction = vst3_com::vst::BusDirections::kOutput as i32;
+                    (d, 0) if d == vst3_sys::vst::BusDirections::kOutput as i32 => {
+                        info.direction = vst3_sys::vst::BusDirections::kOutput as i32;
                         info.channel_count = self.current_bus_config.num_output_channels as i32;
                         u16strlcpy(&mut info.name, "Output");
 
@@ -174,9 +177,7 @@ impl<P: Plugin> IComponent for Wrapper<P> {
     }
 }
 
-// TODO: Implement the rest
-// #[VST3(implements(IPluginFactory, IPluginFactory2, IPluginFactory3))]
-#[VST3(implements(IPluginFactory))]
+#[VST3(implements(IPluginFactory, IPluginFactory2, IPluginFactory3))]
 pub struct Factory<P: Plugin> {
     /// The exposed plugin's GUID. Instead of generating this, we'll just let the programmer decide
     /// on their own.
@@ -239,6 +240,65 @@ impl<P: Plugin> IPluginFactory for Factory<P> {
 
         *obj = Box::into_raw(Wrapper::<P>::new()) as *mut vst3_sys::c_void;
 
+        kResultOk
+    }
+}
+
+impl<P: Plugin> IPluginFactory2 for Factory<P> {
+    unsafe fn get_class_info2(
+        &self,
+        index: i32,
+        info: *mut vst3_sys::base::PClassInfo2,
+    ) -> tresult {
+        if index != 0 {
+            return kInvalidArgument;
+        }
+
+        *info = mem::zeroed();
+
+        let info = &mut *info;
+        info.cid = self.cid;
+        info.cardinality = vst3_sys::base::ClassCardinality::kManyInstances as i32;
+        strlcpy(&mut info.category, "Audio Module Class");
+        strlcpy(&mut info.name, P::NAME);
+        info.class_flags = 1 << 1; // kSimpleModeSupported
+        strlcpy(&mut info.subcategories, P::VST3_CATEGORIES);
+        strlcpy(&mut info.vendor, P::VENDOR);
+        strlcpy(&mut info.version, P::VERSION);
+        strlcpy(&mut info.sdk_version, VST3_SDK_VERSION);
+
+        kResultOk
+    }
+}
+
+impl<P: Plugin> IPluginFactory3 for Factory<P> {
+    unsafe fn get_class_info_unicode(
+        &self,
+        index: i32,
+        info: *mut vst3_sys::base::PClassInfoW,
+    ) -> tresult {
+        if index != 0 {
+            return kInvalidArgument;
+        }
+
+        *info = mem::zeroed();
+
+        let info = &mut *info;
+        info.cid = self.cid;
+        info.cardinality = vst3_sys::base::ClassCardinality::kManyInstances as i32;
+        strlcpy(&mut info.category, "Audio Module Class");
+        u16strlcpy(&mut info.name, P::NAME);
+        info.class_flags = 1 << 1; // kSimpleModeSupported
+        strlcpy(&mut info.subcategories, P::VST3_CATEGORIES);
+        u16strlcpy(&mut info.vendor, P::VENDOR);
+        u16strlcpy(&mut info.version, P::VERSION);
+        u16strlcpy(&mut info.sdk_version, VST3_SDK_VERSION);
+
+        kResultOk
+    }
+
+    unsafe fn set_host_context(&self, _context: *mut c_void) -> tresult {
+        // We don't need to do anything with this
         kResultOk
     }
 }
