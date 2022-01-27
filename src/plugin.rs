@@ -46,10 +46,6 @@ pub trait Plugin: Default + Sync {
     /// Semver compatible version string (e.g. `0.0.1`). Hosts likely won't do anything with this,
     /// but just in case they do this should only contain decimals values and dots.
     const VERSION: &'static str;
-    /// One or more categories, separated by pipe characters (`|`), up to 127 characters. Anything
-    /// logner than that will be truncated. See the VST3 SDK for examples of common categories:
-    /// https://github.com/steinbergmedia/vst3_pluginterfaces/blob/2ad397ade5b51007860bedb3b01b8afd2c5f6fba/vst/ivstaudioprocessor.h#L49-L90
-    const VST3_CATEGORIES: &'static str;
 
     /// The default number of inputs. Some hosts like, like Bitwig and Ardour, use the defaults
     /// instead of setting up the busses properly.
@@ -90,6 +86,17 @@ pub trait Plugin: Default + Sync {
     ///       assymetric
     /// TODO: Handle FTZ stuff on the wrapper side and mention that this has been handled
     fn process(&mut self, samples: &mut [&mut [f32]]) -> ProcessStatus;
+}
+
+/// Provides auxiliary metadata needed for a VST3 plugin.
+pub trait Vst3Plugin: Plugin {
+    /// The unique class ID that identifies this particular plugin. You can use the
+    /// `*b"fooofooofooofooo"` syntax for this.
+    const VST3_CLASS_ID: [u8; 16];
+    /// One or more categories, separated by pipe characters (`|`), up to 127 characters. Anything
+    /// logner than that will be truncated. See the VST3 SDK for examples of common categories:
+    /// https://github.com/steinbergmedia/vst3_pluginterfaces/blob/2ad397ade5b51007860bedb3b01b8afd2c5f6fba/vst/ivstaudioprocessor.h#L49-L90
+    const VST3_CATEGORIES: &'static str;
 }
 
 /// We only support a single main input and output bus at the moment.

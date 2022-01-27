@@ -19,7 +19,7 @@ extern crate nih_plug;
 
 use nih_plug::{
     params::{FloatParam, Params, Range},
-    plugin::{BufferConfig, BusConfig, Plugin, ProcessStatus},
+    plugin::{BufferConfig, BusConfig, Plugin, ProcessStatus, Vst3Plugin},
     util,
 };
 use std::pin::Pin;
@@ -67,7 +67,6 @@ impl Plugin for Gain {
     const EMAIL: &'static str = "info@example.com";
 
     const VERSION: &'static str = "0.0.1";
-    const VST3_CATEGORIES: &'static str = "Fx|Dynamics";
 
     const DEFAULT_NUM_INPUTS: u32 = 2;
     const DEFAULT_NUM_OUTPUTS: u32 = 2;
@@ -121,4 +120,9 @@ impl Plugin for Gain {
     }
 }
 
-nih_export_vst3!(Gain, *b"GainMoistestPlug");
+impl Vst3Plugin for Gain {
+    const VST3_CLASS_ID: [u8; 16] = *b"GainMoistestPlug";
+    const VST3_CATEGORIES: &'static str = "Fx|Dynamics";
+}
+
+nih_export_vst3!(Gain);

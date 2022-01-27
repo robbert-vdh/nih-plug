@@ -28,7 +28,7 @@ use vst3_sys::VST3;
 use widestring::U16CStr;
 
 use crate::params::ParamPtr;
-use crate::plugin::{BusConfig, Plugin};
+use crate::plugin::{BusConfig, Plugin, Vst3Plugin};
 use crate::wrapper::util::{hash_param_id, strlcpy, u16strlcpy};
 
 // Alias needed for the VST3 attribute macro
@@ -437,7 +437,7 @@ impl<P: Plugin> IEditController for Wrapper<P> {
 }
 
 #[VST3(implements(IPluginFactory, IPluginFactory2, IPluginFactory3))]
-pub struct Factory<P: Plugin> {
+pub struct Factory<P: Vst3Plugin> {
     /// The exposed plugin's GUID. Instead of generating this, we'll just let the programmer decide
     /// on their own.
     cid: GUID,
@@ -445,13 +445,18 @@ pub struct Factory<P: Plugin> {
     _phantom: PhantomData<P>,
 }
 
-impl<P: Plugin> Factory<P> {
-    pub fn new(guid: GUID) -> Box<Self> {
-        Self::allocate(guid, PhantomData::default())
+impl<P: Vst3Plugin> Factory<P> {
+    pub fn new() -> Box<Self> {
+        Self::allocate(
+            GUID {
+                data: P::VST3_CLASS_ID,
+            },
+            PhantomData::default(),
+        )
     }
 }
 
-impl<P: Plugin> IPluginFactory for Factory<P> {
+impl<P: Vst3Plugin> IPluginFactory for Factory<P> {
     unsafe fn get_factory_info(&self, info: *mut vst3_sys::base::PFactoryInfo) -> tresult {
         *info = mem::zeroed();
 
@@ -503,7 +508,7 @@ impl<P: Plugin> IPluginFactory for Factory<P> {
     }
 }
 
-impl<P: Plugin> IPluginFactory2 for Factory<P> {
+impl<P: Vst3Plugin> IPluginFactory2 for Factory<P> {
     unsafe fn get_class_info2(
         &self,
         index: i32,
@@ -530,7 +535,7 @@ impl<P: Plugin> IPluginFactory2 for Factory<P> {
     }
 }
 
-impl<P: Plugin> IPluginFactory3 for Factory<P> {
+impl<P: Vst3Plugin> IPluginFactory3 for Factory<P> {
     unsafe fn get_class_info_unicode(
         &self,
         index: i32,
@@ -562,19 +567,16 @@ impl<P: Plugin> IPluginFactory3 for Factory<P> {
     }
 }
 
-/// Export a VST3 plugin from this library using the provided plugin type and a 4x4 character class
-/// ID. This CID should be a `[u8; 16]`. You can use the `*b"fooofooofooofooo"` syntax for this.
+/// Export a VST3 plugin from this library using the provided plugin type.
 ///
 /// TODO: Come up with some way to hae Cargo spit out a VST3 module. Is that possible without a
 ///       custom per-plugin build script?
 #[macro_export]
 macro_rules! nih_export_vst3 {
-    ($plugin_ty:ty, $cid:expr) => {
+    ($plugin_ty:ty) => {
         #[no_mangle]
         pub extern "system" fn GetPluginFactory() -> *mut ::std::ffi::c_void {
-            let factory = ::nih_plug::wrapper::vst3::Factory::<$plugin_ty>::new(
-                ::nih_plug::wrapper::vst3::GUID { data: $cid },
-            );
+            let factory = ::nih_plug::wrapper::vst3::Factory::<$plugin_ty>::new();
 
             Box::into_raw(factory) as *mut ::std::ffi::c_void
         }
