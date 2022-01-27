@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use lazy_static::lazy_static;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::marker::PhantomData;
@@ -26,7 +27,7 @@ use vst3_sys::vst::{IComponent, IEditController};
 use vst3_sys::VST3;
 use widestring::U16CStr;
 
-use crate::params::{ParamPtr, Params};
+use crate::params::ParamPtr;
 use crate::plugin::{BusConfig, Plugin};
 use crate::wrapper::util::{hash_param_id, strlcpy, u16strlcpy};
 
@@ -52,7 +53,7 @@ pub struct Wrapper<P: Plugin> {
     plugin: P,
     /// Whether the plugin is currently bypassed. This is not yet integrated with the `Plugin`
     /// trait.
-    bypass_state: bool,
+    bypass_state: Cell<bool>,
 
     /// A mapping from parameter IDs to pointers to parameters belonging to the plugin. As long as
     /// `plugin` does not get recreated, these addresses will remain stable, as they are obtained
@@ -70,26 +71,26 @@ pub struct Wrapper<P: Plugin> {
     param_defaults_normalized: Vec<f32>,
 
     /// The current bus configuration, modified through `IAudioProcessor::setBusArrangements()`.
-    current_bus_config: BusConfig,
+    current_bus_config: RefCell<BusConfig>,
 }
 
 impl<P: Plugin> Wrapper<P> {
     pub fn new() -> Box<Self> {
         let mut wrapper = Self::allocate(
-            P::default(),   // plugin
-            false,          // bypass_state
-            HashMap::new(), // param_map
-            Vec::new(),     // param_ids
-            HashMap::new(), // param_id_hashes
-            Vec::new(),     // param_defaults_normalized
+            P::default(),     // plugin
+            Cell::new(false), // bypass_state
+            HashMap::new(),   // param_map
+            Vec::new(),       // param_ids
+            HashMap::new(),   // param_id_hashes
+            Vec::new(),       // param_defaults_normalized
             // Some hosts, like the current version of Bitwig and Ardour at the time of writing,
             // will try using the plugin's default not yet initialized bus arrangement. Because of
             // that, we'll always initialize this configuration even before the host requests a
             // channel layout.
-            BusConfig {
+            RefCell::new(BusConfig {
                 num_input_channels: P::DEFAULT_NUM_INPUTS,
                 num_output_channels: P::DEFAULT_NUM_OUTPUTS,
-            },
+            }),
         );
 
         // This is a mapping from the parameter IDs specified by the plugin to pointers to thsoe
@@ -169,14 +170,16 @@ impl<P: Plugin> IComponent for Wrapper<P> {
                 match (dir, index) {
                     (d, 0) if d == vst3_sys::vst::BusDirections::kInput as i32 => {
                         info.direction = vst3_sys::vst::BusDirections::kInput as i32;
-                        info.channel_count = self.current_bus_config.num_input_channels as i32;
+                        info.channel_count =
+                            self.current_bus_config.borrow().num_input_channels as i32;
                         u16strlcpy(&mut info.name, "Input");
 
                         kResultOk
                     }
                     (d, 0) if d == vst3_sys::vst::BusDirections::kOutput as i32 => {
                         info.direction = vst3_sys::vst::BusDirections::kOutput as i32;
-                        info.channel_count = self.current_bus_config.num_output_channels as i32;
+                        info.channel_count =
+                            self.current_bus_config.borrow().num_output_channels as i32;
                         u16strlcpy(&mut info.name, "Output");
 
                         kResultOk
@@ -371,27 +374,65 @@ impl<P: Plugin> IEditController for Wrapper<P> {
     }
 
     unsafe fn normalized_param_to_plain(&self, id: u32, value_normalized: f64) -> f64 {
-        todo!()
+        if id == *BYPASS_PARAM_HASH {
+            value_normalized
+        } else if let Some(param_id) = self.param_id_hashes.get(&id) {
+            let param_ptr = &self.param_map[param_id];
+            param_ptr.preview_unnormalized(value_normalized as f32) as f64
+        } else {
+            0.5
+        }
     }
 
     unsafe fn plain_param_to_normalized(&self, id: u32, plain_value: f64) -> f64 {
-        todo!()
+        if id == *BYPASS_PARAM_HASH {
+            plain_value.clamp(0.0, 1.0)
+        } else if let Some(param_id) = self.param_id_hashes.get(&id) {
+            let param_ptr = &self.param_map[param_id];
+            param_ptr.preview_normalized(plain_value as f32) as f64
+        } else {
+            0.5
+        }
     }
 
     unsafe fn get_param_normalized(&self, id: u32) -> f64 {
-        todo!()
+        if id == *BYPASS_PARAM_HASH {
+            if self.bypass_state.get() {
+                1.0
+            } else {
+                0.0
+            }
+        } else if let Some(param_id) = self.param_id_hashes.get(&id) {
+            let param_ptr = &self.param_map[param_id];
+            param_ptr.normalized_value() as f64
+        } else {
+            0.5
+        }
     }
 
     unsafe fn set_param_normalized(&self, id: u32, value: f64) -> tresult {
-        todo!()
+        if id == *BYPASS_PARAM_HASH {
+            self.bypass_state.set(value >= 0.5);
+
+            kResultOk
+        } else if let Some(param_id) = self.param_id_hashes.get(&id) {
+            let param_ptr = &self.param_map[param_id];
+            param_ptr.set_normalized_value(value as f32);
+
+            kResultOk
+        } else {
+            kInvalidArgument
+        }
     }
 
-    unsafe fn set_component_handler(&self, handler: *mut c_void) -> tresult {
-        todo!()
+    unsafe fn set_component_handler(&self, _handler: *mut c_void) -> tresult {
+        // TODO: Use this when we add GUI support
+        kResultOk
     }
 
-    unsafe fn create_view(&self, name: vst3_sys::base::FIDString) -> *mut c_void {
-        todo!()
+    unsafe fn create_view(&self, _name: vst3_sys::base::FIDString) -> *mut c_void {
+        // We currently don't support GUIs
+        std::ptr::null_mut()
     }
 }
 
