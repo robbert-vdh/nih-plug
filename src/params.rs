@@ -258,6 +258,33 @@ impl ParamPtr {
         }
     }
 
+    /// Get the normalized value for an unnormalized value, as a float. Used as part of the
+    /// wrappers.
+    ///
+    /// # Safety
+    ///
+    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
+    /// still alive.
+    pub unsafe fn preview_normalized(&self, unnormalized: f32) -> f32 {
+        match &self {
+            ParamPtr::FloatParam(p) => (**p).range.normalize(unnormalized),
+            ParamPtr::IntParam(p) => (**p).range.normalize(unnormalized as i32),
+        }
+    }
+
+    /// Get the unnormalized value for a normalized value, as a float. Used as part of the wrappers.
+    ///
+    /// # Safety
+    ///
+    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
+    /// still alive.
+    pub unsafe fn preview_unnormalized(&self, normalized: f32) -> f32 {
+        match &self {
+            ParamPtr::FloatParam(p) => (**p).range.unnormalize(normalized),
+            ParamPtr::IntParam(p) => (**p).range.unnormalize(normalized) as f32,
+        }
+    }
+
     /// Get the string representation for a normalized value. Used as part of the wrappers.
     ///
     /// # Safety
