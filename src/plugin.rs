@@ -88,12 +88,12 @@ pub trait Plugin: Default + Sync {
     /// TODO: &mut [&mut [f32]] may not be the correct type here
     /// TODO: Provide a way to access auxiliary input channels if the IO configuration is
     ///       assymetric
-    /// TODO: Add a process result to handle tails
     /// TODO: Handle FTZ stuff on the wrapper side and mention that this has been handled
-    fn process(&mut self, samples: &mut [&mut [f32]]);
+    fn process(&mut self, samples: &mut [&mut [f32]]) -> ProcessStatus;
 }
 
 /// We only support a single main input and output bus at the moment.
+#[derive(Debug, PartialEq, Eq)]
 pub struct BusConfig {
     /// The number of input channels for the plugin.
     pub num_input_channels: u32,
@@ -102,10 +102,27 @@ pub struct BusConfig {
 }
 
 /// Configuration for (the host's) audio buffers.
+#[derive(Debug, PartialEq)]
 pub struct BufferConfig {
     /// The current sample rate.
     pub sample_rate: f32,
     /// The maximum buffer size the host will use. The plugin should be able to accept variable
     /// sized buffers up to this size.
     pub max_buffer_size: u32,
+}
+
+/// Indicates the current situation after the plugin has processed audio.
+#[derive(Debug, PartialEq, Eq)]
+pub enum ProcessStatus {
+    /// Something went wrong while processing audio.
+    Error(&'static str),
+    /// The plugin has finished processing audio. When the input is silent, the most may suspend the
+    /// plugin to save resources as it sees fit.
+    Normal,
+    /// The plugin has a (reverb) tail with a specific length in samples.
+    Tail(u32),
+    /// This plugin will continue to produce sound regardless of whether or not the input is silent,
+    /// and should thus not be deactivated by the host. This is essentially the same as having an
+    /// infite tail.
+    KeepAlive,
 }

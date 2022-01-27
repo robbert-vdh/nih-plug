@@ -19,7 +19,7 @@ extern crate nih_plug;
 
 use nih_plug::{
     params::{FloatParam, Params, Range},
-    plugin::{BufferConfig, BusConfig, Plugin},
+    plugin::{BufferConfig, BusConfig, Plugin, ProcessStatus},
     util,
 };
 use std::pin::Pin;
@@ -88,9 +88,9 @@ impl Plugin for Gain {
         true
     }
 
-    fn process(&mut self, samples: &mut [&mut [f32]]) {
+    fn process(&mut self, samples: &mut [&mut [f32]]) -> ProcessStatus {
         if samples.is_empty() {
-            return;
+            return ProcessStatus::Error("Empty buffers");
         }
 
         // TODO: The wrapper should set FTZ if not yet enabled, mention ths in the process fuctnion
@@ -100,7 +100,7 @@ impl Plugin for Gain {
         for channel in &samples[1..] {
             nih_debug_assert_eq!(channel.len(), num_samples);
             if channel.len() != num_samples {
-                return;
+                return ProcessStatus::Error("Mismatching channel buffer sizes");
             }
         }
 
@@ -116,6 +116,8 @@ impl Plugin for Gain {
                 *sample *= util::db_to_gain(self.params.gain.value);
             }
         }
+
+        ProcessStatus::Normal
     }
 }
 
