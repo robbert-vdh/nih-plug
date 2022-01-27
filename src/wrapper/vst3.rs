@@ -323,8 +323,7 @@ impl<P: Plugin> IEditController for Wrapper<P> {
             }
 
             kResultOk
-        } else if self.param_id_hashes.contains_key(&id) {
-            let param_id = &self.param_id_hashes[&id];
+        } else if let Some(param_id) = self.param_id_hashes.get(&id) {
             let param_ptr = &self.param_map[param_id];
             u16strlcpy(
                 dest,
@@ -357,8 +356,7 @@ impl<P: Plugin> IEditController for Wrapper<P> {
             *value_normalized = value;
 
             kResultOk
-        } else if self.param_id_hashes.contains_key(&id) {
-            let param_id = &self.param_id_hashes[&id];
+        } else if let Some(param_id) = self.param_id_hashes.get(&id) {
             let param_ptr = &self.param_map[param_id];
             let value = match param_ptr.string_to_normalized_value(&string) {
                 Some(v) => v as f64,
