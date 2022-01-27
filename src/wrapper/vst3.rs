@@ -24,6 +24,7 @@ use vst3_sys::base::{IPluginBase, IPluginFactory, IPluginFactory2, IPluginFactor
 use vst3_sys::vst::TChar;
 use vst3_sys::vst::{IComponent, IEditController};
 use vst3_sys::VST3;
+use widestring::U16CStr;
 
 use crate::params::{ParamPtr, Params};
 use crate::plugin::{BusConfig, Plugin};
@@ -342,7 +343,33 @@ impl<P: Plugin> IEditController for Wrapper<P> {
         string: *const TChar,
         value_normalized: *mut f64,
     ) -> tresult {
-        todo!()
+        let string = match U16CStr::from_ptr_str(string as *const u16).to_string() {
+            Ok(s) => s,
+            Err(_) => return kInvalidArgument,
+        };
+
+        if id == *BYPASS_PARAM_HASH {
+            let value = match string.as_str() {
+                "Bypassed" => 1.0,
+                "Enabled" => 0.0,
+                _ => return kResultFalse,
+            };
+            *value_normalized = value;
+
+            kResultOk
+        } else if self.param_id_hashes.contains_key(&id) {
+            let param_id = &self.param_id_hashes[&id];
+            let param_ptr = &self.param_map[param_id];
+            let value = match param_ptr.string_to_normalized_value(&string) {
+                Some(v) => v as f64,
+                None => return kResultFalse,
+            };
+            *value_normalized = value;
+
+            kResultOk
+        } else {
+            kInvalidArgument
+        }
     }
 
     unsafe fn normalized_param_to_plain(&self, id: u32, value_normalized: f64) -> f64 {
