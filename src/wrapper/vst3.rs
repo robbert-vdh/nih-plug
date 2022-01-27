@@ -160,6 +160,11 @@ impl<P: Plugin> IComponent for Wrapper<P> {
         index: i32,
         info: *mut vst3_sys::vst::BusInfo,
     ) -> tresult {
+        if info.is_null() {
+            nih_debug_assert_failure!("Null pointer passed to function");
+            return kInvalidArgument;
+        }
+
         match type_ {
             t if t == vst3_sys::vst::MediaTypes::kAudio as i32 => {
                 *info = mem::zeroed();
@@ -197,6 +202,11 @@ impl<P: Plugin> IComponent for Wrapper<P> {
         in_info: *mut vst3_sys::vst::RoutingInfo,
         out_info: *mut vst3_sys::vst::RoutingInfo,
     ) -> tresult {
+        if in_info.is_null() || out_info.is_null() {
+            nih_debug_assert_failure!("Null pointer passed to function");
+            return kInvalidArgument;
+        }
+
         *out_info = mem::zeroed();
 
         let in_info = &*in_info;
@@ -273,6 +283,11 @@ impl<P: Plugin> IEditController for Wrapper<P> {
         param_index: i32,
         info: *mut vst3_sys::vst::ParameterInfo,
     ) -> tresult {
+        if info.is_null() {
+            nih_debug_assert_failure!("Null pointer passed to function");
+            return kInvalidArgument;
+        }
+
         // Parameter index `self.param_ids.len()` is our own bypass parameter
         if param_index < 0 || param_index > self.param_hashes.len() as i32 {
             return kInvalidArgument;
@@ -316,6 +331,11 @@ impl<P: Plugin> IEditController for Wrapper<P> {
         value_normalized: f64,
         string: *mut TChar,
     ) -> tresult {
+        if string.is_null() {
+            nih_debug_assert_failure!("Null pointer passed to function");
+            return kInvalidArgument;
+        }
+
         // Somehow there's no length there, so we'll assume our own maximum
         let dest = &mut *(string as *mut [TChar; 128]);
 
@@ -345,6 +365,11 @@ impl<P: Plugin> IEditController for Wrapper<P> {
         string: *const TChar,
         value_normalized: *mut f64,
     ) -> tresult {
+        if string.is_null() || value_normalized.is_null() {
+            nih_debug_assert_failure!("Null pointer passed to function");
+            return kInvalidArgument;
+        }
+
         let string = match U16CStr::from_ptr_str(string as *const u16).to_string() {
             Ok(s) => s,
             Err(_) => return kInvalidArgument,
@@ -493,6 +518,11 @@ impl<P: Vst3Plugin> IPluginFactory for Factory<P> {
         _iid: *const vst3_sys::IID,
         obj: *mut *mut vst3_sys::c_void,
     ) -> tresult {
+        if cid.is_null() || obj.is_null() {
+            nih_debug_assert_failure!("Null pointer passed to function");
+            return kInvalidArgument;
+        }
+
         if *cid != self.cid {
             return kNoInterface;
         }
