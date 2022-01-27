@@ -55,20 +55,18 @@ pub struct Wrapper<P: Plugin> {
     /// trait.
     bypass_state: Cell<bool>,
 
-    /// A mapping from parameter IDs to pointers to parameters belonging to the plugin. As long as
-    /// `plugin` does not get recreated, these addresses will remain stable, as they are obtained
-    /// from a pinned object.
-    param_map: HashMap<&'static str, ParamPtr>,
+    /// A mapping from parameter ID hashes (obtained from the string parameter IDs) to pointers to
+    /// parameters belonging to the plugin. As long as `plugin` does not get recreated, these
+    /// addresses will remain stable, as they are obtained from a pinned object.
+    param_by_hash: HashMap<u32, ParamPtr>,
     /// The keys from `param_map` in a stable order.
-    param_ids: Vec<&'static str>,
-    /// Mappings from parameter hashes back to string parameter indentifiers.
-    ///
-    /// TODO: To avoid needing two pointer dereferences each time, maybe restructure `param_map` in
-    ///       this wrapper to be indexed by the numerical hash.
-    param_id_hashes: HashMap<u32, &'static str>,
+    param_hashes: Vec<u32>,
     /// The default normalized parameter value for every parameter in `param_ids`. We need to store
     /// this in case the host requeries the parmaeter later.
     param_defaults_normalized: Vec<f32>,
+    /// Mappings from parameter hashes back to string parameter indentifiers. Useful for debug
+    /// logging and when handling plugin state.
+    param_id_hashes: HashMap<u32, &'static str>,
 
     /// The current bus configuration, modified through `IAudioProcessor::setBusArrangements()`.
     current_bus_config: RefCell<BusConfig>,
@@ -79,10 +77,10 @@ impl<P: Plugin> Wrapper<P> {
         let mut wrapper = Self::allocate(
             P::default(),     // plugin
             Cell::new(false), // bypass_state
-            HashMap::new(),   // param_map
-            Vec::new(),       // param_ids
-            HashMap::new(),   // param_id_hashes
+            HashMap::new(),   // param_by_hash
+            Vec::new(),       // param_hashes
             Vec::new(),       // param_defaults_normalized
+            HashMap::new(),   // param_id_hashes
             // Some hosts, like the current version of Bitwig and Ardour at the time of writing,
             // will try using the plugin's default not yet initialized bus arrangement. Because of
             // that, we'll always initialize this configuration even before the host requests a
@@ -96,23 +94,26 @@ impl<P: Plugin> Wrapper<P> {
         // This is a mapping from the parameter IDs specified by the plugin to pointers to thsoe
         // parameters. Since the object returned by `params()` is pinned, these pointers are safe to
         // dereference as long as `wrapper.plugin` is alive
-        wrapper.param_map = wrapper.plugin.params().param_map();
-        wrapper.param_ids = wrapper.param_map.keys().copied().collect();
-        wrapper.param_defaults_normalized = wrapper
-            .param_ids
-            .iter()
-            .map(|id| unsafe { wrapper.param_map[id].normalized_value() })
-            .collect();
-        wrapper.param_id_hashes = wrapper
-            .param_ids
-            .iter()
-            .map(|id| (hash_param_id(id), *id))
-            .collect();
-
+        let param_map = wrapper.plugin.params().param_map();
         nih_debug_assert!(
-            !wrapper.param_map.contains_key(BYPASS_PARAM_ID),
+            !param_map.contains_key(BYPASS_PARAM_ID),
             "The wrapper alread yadds its own bypass parameter"
         );
+
+        wrapper.param_by_hash = param_map
+            .iter()
+            .map(|(id, p)| (hash_param_id(id), *p))
+            .collect();
+        wrapper.param_hashes = wrapper.param_by_hash.keys().copied().collect();
+        wrapper.param_defaults_normalized = wrapper
+            .param_hashes
+            .iter()
+            .map(|hash| unsafe { wrapper.param_by_hash[hash].normalized_value() })
+            .collect();
+        wrapper.param_id_hashes = param_map
+            .into_keys()
+            .map(|id| (hash_param_id(id), id))
+            .collect();
 
         wrapper
     }
@@ -264,7 +265,7 @@ impl<P: Plugin> IEditController for Wrapper<P> {
     unsafe fn get_parameter_count(&self) -> i32 {
         // NOTE: We add a bypass parameter ourselves on index `self.param_ids.len()`, so these
         //       indices are all off by one
-        self.param_ids.len() as i32 + 1
+        self.param_hashes.len() as i32 + 1
     }
 
     unsafe fn get_parameter_info(
@@ -273,14 +274,14 @@ impl<P: Plugin> IEditController for Wrapper<P> {
         info: *mut vst3_sys::vst::ParameterInfo,
     ) -> tresult {
         // Parameter index `self.param_ids.len()` is our own bypass parameter
-        if param_index < 0 || param_index > self.param_ids.len() as i32 {
+        if param_index < 0 || param_index > self.param_hashes.len() as i32 {
             return kInvalidArgument;
         }
 
         *info = std::mem::zeroed();
 
         let info = &mut *info;
-        if param_index == self.param_ids.len() as i32 {
+        if param_index == self.param_hashes.len() as i32 {
             info.id = hash_param_id(BYPASS_PARAM_ID);
             u16strlcpy(&mut info.title, "Bypass");
             u16strlcpy(&mut info.short_title, "Bypass");
@@ -291,11 +292,11 @@ impl<P: Plugin> IEditController for Wrapper<P> {
             info.flags = vst3_sys::vst::ParameterFlags::kCanAutomate as i32
                 | vst3_sys::vst::ParameterFlags::kIsBypass as i32;
         } else {
-            let param_id = &self.param_ids[param_index as usize];
+            let param_hash = &self.param_hashes[param_index as usize];
             let default_value = &self.param_defaults_normalized[param_index as usize];
-            let param_ptr = &self.param_map[param_id];
+            let param_ptr = &self.param_by_hash[param_hash];
 
-            info.id = hash_param_id(param_id);
+            info.id = *param_hash;
             u16strlcpy(&mut info.title, param_ptr.name());
             u16strlcpy(&mut info.short_title, param_ptr.name());
             u16strlcpy(&mut info.units, param_ptr.unit());
@@ -326,8 +327,7 @@ impl<P: Plugin> IEditController for Wrapper<P> {
             }
 
             kResultOk
-        } else if let Some(param_id) = self.param_id_hashes.get(&id) {
-            let param_ptr = &self.param_map[param_id];
+        } else if let Some(param_ptr) = self.param_by_hash.get(&id) {
             u16strlcpy(
                 dest,
                 &param_ptr.normalized_value_to_string(value_normalized as f32),
@@ -359,8 +359,7 @@ impl<P: Plugin> IEditController for Wrapper<P> {
             *value_normalized = value;
 
             kResultOk
-        } else if let Some(param_id) = self.param_id_hashes.get(&id) {
-            let param_ptr = &self.param_map[param_id];
+        } else if let Some(param_ptr) = self.param_by_hash.get(&id) {
             let value = match param_ptr.string_to_normalized_value(&string) {
                 Some(v) => v as f64,
                 None => return kResultFalse,
@@ -376,8 +375,7 @@ impl<P: Plugin> IEditController for Wrapper<P> {
     unsafe fn normalized_param_to_plain(&self, id: u32, value_normalized: f64) -> f64 {
         if id == *BYPASS_PARAM_HASH {
             value_normalized
-        } else if let Some(param_id) = self.param_id_hashes.get(&id) {
-            let param_ptr = &self.param_map[param_id];
+        } else if let Some(param_ptr) = self.param_by_hash.get(&id) {
             param_ptr.preview_unnormalized(value_normalized as f32) as f64
         } else {
             0.5
@@ -387,8 +385,7 @@ impl<P: Plugin> IEditController for Wrapper<P> {
     unsafe fn plain_param_to_normalized(&self, id: u32, plain_value: f64) -> f64 {
         if id == *BYPASS_PARAM_HASH {
             plain_value.clamp(0.0, 1.0)
-        } else if let Some(param_id) = self.param_id_hashes.get(&id) {
-            let param_ptr = &self.param_map[param_id];
+        } else if let Some(param_ptr) = self.param_by_hash.get(&id) {
             param_ptr.preview_normalized(plain_value as f32) as f64
         } else {
             0.5
@@ -402,8 +399,7 @@ impl<P: Plugin> IEditController for Wrapper<P> {
             } else {
                 0.0
             }
-        } else if let Some(param_id) = self.param_id_hashes.get(&id) {
-            let param_ptr = &self.param_map[param_id];
+        } else if let Some(param_ptr) = self.param_by_hash.get(&id) {
             param_ptr.normalized_value() as f64
         } else {
             0.5
@@ -415,8 +411,7 @@ impl<P: Plugin> IEditController for Wrapper<P> {
             self.bypass_state.set(value >= 0.5);
 
             kResultOk
-        } else if let Some(param_id) = self.param_id_hashes.get(&id) {
-            let param_ptr = &self.param_map[param_id];
+        } else if let Some(param_ptr) = self.param_by_hash.get(&id) {
             param_ptr.set_normalized_value(value as f32);
 
             kResultOk

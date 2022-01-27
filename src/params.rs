@@ -185,7 +185,7 @@ pub trait Params {
 }
 
 /// Internal pointers to parameters. This is an implementation detail used by the wrappers.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ParamPtr {
     FloatParam(*mut FloatParam),
     IntParam(*mut IntParam),
