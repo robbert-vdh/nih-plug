@@ -615,7 +615,7 @@ impl<P: Vst3Plugin> IPluginFactory for Factory<P> {
         *info = mem::zeroed();
 
         let info = &mut *info;
-        strlcpy(&mut info.vendor, P::NAME);
+        strlcpy(&mut info.vendor, P::VENDOR);
         strlcpy(&mut info.url, P::URL);
         strlcpy(&mut info.email, P::EMAIL);
         info.flags = vst3_sys::base::FactoryFlags::kUnicode as i32;
