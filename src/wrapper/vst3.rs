@@ -24,15 +24,16 @@ use std::collections::HashMap;
 use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::mem;
+use vst3_com::base::kResultTrue;
 use vst3_sys::base::{kInvalidArgument, kNoInterface, kResultFalse, kResultOk, tresult, TBool};
 use vst3_sys::base::{IPluginBase, IPluginFactory, IPluginFactory2, IPluginFactory3};
 use vst3_sys::vst::TChar;
-use vst3_sys::vst::{IComponent, IEditController};
+use vst3_sys::vst::{IAudioProcessor, IComponent, IEditController};
 use vst3_sys::VST3;
 use widestring::U16CStr;
 
 use crate::params::ParamPtr;
-use crate::plugin::{BusConfig, Plugin, Vst3Plugin};
+use crate::plugin::{BufferConfig, BusConfig, Plugin, ProcessStatus, Vst3Plugin};
 use crate::wrapper::util::{hash_param_id, strlcpy, u16strlcpy};
 
 // Alias needed for the VST3 attribute macro
@@ -51,13 +52,15 @@ lazy_static! {
     static ref BYPASS_PARAM_HASH: u32 = hash_param_id(BYPASS_PARAM_ID);
 }
 
-#[VST3(implements(IComponent, IEditController))]
+#[VST3(implements(IComponent, IEditController, IAudioProcessor))]
 pub struct Wrapper<P: Plugin> {
     /// The wrapped plugin instance.
-    plugin: P,
+    plugin: RefCell<P>,
     /// Whether the plugin is currently bypassed. This is not yet integrated with the `Plugin`
     /// trait.
     bypass_state: Cell<bool>,
+    /// The last process status returned by the plugin. This is used for tail handling.
+    last_process_status: Cell<ProcessStatus>,
 
     /// A mapping from parameter ID hashes (obtained from the string parameter IDs) to pointers to
     /// parameters belonging to the plugin. As long as `plugin` does not get recreated, these
@@ -79,12 +82,13 @@ pub struct Wrapper<P: Plugin> {
 impl<P: Plugin> Wrapper<P> {
     pub fn new() -> Box<Self> {
         let mut wrapper = Self::allocate(
-            P::default(),     // plugin
-            Cell::new(false), // bypass_state
-            HashMap::new(),   // param_by_hash
-            Vec::new(),       // param_hashes
-            Vec::new(),       // param_defaults_normalized
-            HashMap::new(),   // param_id_hashes
+            RefCell::new(P::default()),       // plugin
+            Cell::new(false),                 // bypass_state
+            Cell::new(ProcessStatus::Normal), // last_process_status
+            HashMap::new(),                   // param_by_hash
+            Vec::new(),                       // param_hashes
+            Vec::new(),                       // param_defaults_normalized
+            HashMap::new(),                   // param_id_hashes
             // Some hosts, like the current version of Bitwig and Ardour at the time of writing,
             // will try using the plugin's default not yet initialized bus arrangement. Because of
             // that, we'll always initialize this configuration even before the host requests a
@@ -98,7 +102,7 @@ impl<P: Plugin> Wrapper<P> {
         // This is a mapping from the parameter IDs specified by the plugin to pointers to thsoe
         // parameters. Since the object returned by `params()` is pinned, these pointers are safe to
         // dereference as long as `wrapper.plugin` is alive
-        let param_map = wrapper.plugin.params().param_map();
+        let param_map = wrapper.plugin.borrow().params().param_map();
         nih_debug_assert!(
             !param_map.contains_key(BYPASS_PARAM_ID),
             "The wrapper alread yadds its own bypass parameter"
@@ -457,6 +461,149 @@ impl<P: Plugin> IEditController for Wrapper<P> {
     unsafe fn create_view(&self, _name: vst3_sys::base::FIDString) -> *mut c_void {
         // We currently don't support GUIs
         std::ptr::null_mut()
+    }
+}
+
+impl<P: Plugin> IAudioProcessor for Wrapper<P> {
+    unsafe fn set_bus_arrangements(
+        &self,
+        inputs: *mut vst3_sys::vst::SpeakerArrangement,
+        num_ins: i32,
+        outputs: *mut vst3_sys::vst::SpeakerArrangement,
+        num_outs: i32,
+    ) -> tresult {
+        if inputs.is_null() || outputs.is_null() {
+            nih_debug_assert_failure!("Null pointer passed to function");
+            return kInvalidArgument;
+        }
+
+        // We currently only do single audio bus IO configurations
+        if num_ins != 1 || num_outs != 1 {
+            return kInvalidArgument;
+        }
+
+        let input_channel_map = &*inputs;
+        let output_channel_map = &*outputs;
+        let proposed_config = BusConfig {
+            num_input_channels: input_channel_map.count_ones(),
+            num_output_channels: output_channel_map.count_ones(),
+        };
+        if self.plugin.borrow().accepts_bus_config(&proposed_config) {
+            self.current_bus_config.replace(proposed_config);
+
+            kResultOk
+        } else {
+            kResultFalse
+        }
+    }
+
+    unsafe fn get_bus_arrangement(
+        &self,
+        dir: vst3_sys::vst::BusDirection,
+        index: i32,
+        arr: *mut vst3_sys::vst::SpeakerArrangement,
+    ) -> tresult {
+        if arr.is_null() {
+            nih_debug_assert_failure!("Null pointer passed to function");
+            return kInvalidArgument;
+        }
+
+        let config = self.current_bus_config.borrow();
+        match (dir, index) {
+            (d, 0) if d == vst3_sys::vst::BusDirections::kInput as i32 => {
+                let channel_map = match config.num_input_channels {
+                    0 => vst3_sys::vst::kEmpty,
+                    1 => vst3_sys::vst::kMono,
+                    2 => vst3_sys::vst::kStereo,
+                    5 => vst3_sys::vst::k50,
+                    6 => vst3_sys::vst::k51,
+                    7 => vst3_sys::vst::k70Cine,
+                    8 => vst3_sys::vst::k71Cine,
+                    n => {
+                        nih_debug_assert_failure!(
+                            "No defined layout for {} channels, making something up on the spot...",
+                            n
+                        );
+                        (1 << n) - 1
+                    }
+                };
+
+                nih_debug_assert_eq!(config.num_input_channels, channel_map.count_ones());
+                *arr = channel_map;
+
+                kResultOk
+            }
+            _ => kInvalidArgument,
+        }
+    }
+
+    unsafe fn can_process_sample_size(&self, symbolic_sample_size: i32) -> tresult {
+        if symbolic_sample_size == vst3_sys::vst::SymbolicSampleSizes::kSample32 as i32 {
+            kResultOk
+        } else {
+            kResultFalse
+        }
+    }
+
+    unsafe fn get_latency_samples(&self) -> u32 {
+        // TODO: Latency compensation
+        0
+    }
+
+    unsafe fn setup_processing(&self, setup: *const vst3_sys::vst::ProcessSetup) -> tresult {
+        if setup.is_null() {
+            nih_debug_assert_failure!("Null pointer passed to function");
+            return kInvalidArgument;
+        }
+
+        // There's no special handling for offline processing at the moment
+        let setup = &*setup;
+        nih_debug_assert_eq!(
+            setup.symbolic_sample_size,
+            vst3_sys::vst::SymbolicSampleSizes::kSample32 as i32
+        );
+
+        let bus_config = self.current_bus_config.borrow();
+        let buffer_config = BufferConfig {
+            sample_rate: setup.sample_rate as f32,
+            max_buffer_size: setup.max_samples_per_block as u32,
+        };
+
+        if self
+            .plugin
+            .borrow_mut()
+            .initialize(&bus_config, &buffer_config)
+        {
+            kResultOk
+        } else {
+            kResultFalse
+        }
+    }
+
+    unsafe fn set_processing(&self, _state: TBool) -> tresult {
+        // Always reset the processing status when the plugin gets activated or deactivated
+        self.last_process_status.set(ProcessStatus::Normal);
+
+        // We don't have any special handling for suspending and resuming plugins, yet
+        kResultTrue
+    }
+
+    unsafe fn process(&self, data: *mut vst3_sys::vst::ProcessData) -> tresult {
+        if data.is_null() {
+            nih_debug_assert_failure!("Null pointer passed to function");
+            return kInvalidArgument;
+        }
+
+        todo!()
+    }
+
+    unsafe fn get_tail_samples(&self) -> u32 {
+        // https://github.com/steinbergmedia/vst3_pluginterfaces/blob/2ad397ade5b51007860bedb3b01b8afd2c5f6fba/vst/ivstaudioprocessor.h#L145-L159
+        match self.last_process_status.get() {
+            ProcessStatus::Tail(samples) => samples,
+            ProcessStatus::KeepAlive => u32::MAX, // kInfiniteTail
+            _ => 0,                               // kNoTail
+        }
     }
 }
 

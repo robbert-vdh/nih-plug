@@ -27,6 +27,8 @@ use crate::params::Params;
 /// - MIDI
 /// - Sidechain inputs
 /// - Multiple output busses
+/// - Latency compensation
+/// - Special handling for offline processing
 /// - Storing custom state, only the parameters are saved right now
 /// - Sample accurate automation (this would be great, but sadly few hosts even support it so until
 ///   they do we'll ignore that it's a thing)
@@ -100,7 +102,7 @@ pub trait Vst3Plugin: Plugin {
 }
 
 /// We only support a single main input and output bus at the moment.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BusConfig {
     /// The number of input channels for the plugin.
     pub num_input_channels: u32,
@@ -109,7 +111,7 @@ pub struct BusConfig {
 }
 
 /// Configuration for (the host's) audio buffers.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BufferConfig {
     /// The current sample rate.
     pub sample_rate: f32,
@@ -119,7 +121,7 @@ pub struct BufferConfig {
 }
 
 /// Indicates the current situation after the plugin has processed audio.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProcessStatus {
     /// Something went wrong while processing audio.
     Error(&'static str),
