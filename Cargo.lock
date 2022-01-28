@@ -71,7 +71,7 @@ checksum = "8ccb82d61f80a663efe1f787a51b16b5a51e3314d6ac365b08639f52387b33f3"
 [[package]]
 name = "vst3-com"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vst3-sys.git?branch=fix/vst3-macro-generics#5acdcd34236f81bd3c87411094f9ee3bcc5f1829"
+source = "git+https://github.com/robbert-vdh/vst3-sys.git?branch=fix/vst3-macro-generics#5dee36c1eac24e13c039d68f187a1899bc9069e6"
 dependencies = [
  "vst3-com-macros",
 ]
@@ -79,7 +79,7 @@ dependencies = [
 [[package]]
 name = "vst3-com-macros"
 version = "0.2.0"
-source = "git+https://github.com/robbert-vdh/vst3-sys.git?branch=fix/vst3-macro-generics#5acdcd34236f81bd3c87411094f9ee3bcc5f1829"
+source = "git+https://github.com/robbert-vdh/vst3-sys.git?branch=fix/vst3-macro-generics#5dee36c1eac24e13c039d68f187a1899bc9069e6"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -90,7 +90,7 @@ dependencies = [
 [[package]]
 name = "vst3-com-macros-support"
 version = "0.2.0"
-source = "git+https://github.com/robbert-vdh/vst3-sys.git?branch=fix/vst3-macro-generics#5acdcd34236f81bd3c87411094f9ee3bcc5f1829"
+source = "git+https://github.com/robbert-vdh/vst3-sys.git?branch=fix/vst3-macro-generics#5dee36c1eac24e13c039d68f187a1899bc9069e6"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -100,7 +100,7 @@ dependencies = [
 [[package]]
 name = "vst3-sys"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vst3-sys.git?branch=fix/vst3-macro-generics#5acdcd34236f81bd3c87411094f9ee3bcc5f1829"
+source = "git+https://github.com/robbert-vdh/vst3-sys.git?branch=fix/vst3-macro-generics#5dee36c1eac24e13c039d68f187a1899bc9069e6"
 dependencies = [
  "vst3-com",
 ]
