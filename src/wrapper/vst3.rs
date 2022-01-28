@@ -306,7 +306,7 @@ impl<P: Plugin> IEditController for Wrapper<P> {
 
         let info = &mut *info;
         if param_index == self.param_hashes.len() as i32 {
-            info.id = hash_param_id(BYPASS_PARAM_ID);
+            info.id = *BYPASS_PARAM_HASH;
             u16strlcpy(&mut info.title, "Bypass");
             u16strlcpy(&mut info.short_title, "Bypass");
             u16strlcpy(&mut info.units, "");
