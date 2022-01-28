@@ -661,6 +661,7 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
             }
         }
 
+        // TODO: Handle incoming parameter changes
         match self.plugin.borrow_mut().process(&mut output_slices) {
             ProcessStatus::Error(err) => {
                 nih_debug_assert_failure!("Process error: {}", err);
