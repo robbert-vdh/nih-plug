@@ -20,10 +20,12 @@
 
 use lazy_static::lazy_static;
 use std::cell::{Cell, RefCell};
+use std::cmp;
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::mem;
+use std::ptr;
 use vst3_com::base::kResultTrue;
 use vst3_sys::base::{kInvalidArgument, kNoInterface, kResultFalse, kResultOk, tresult, TBool};
 use vst3_sys::base::{IPluginBase, IPluginFactory, IPluginFactory2, IPluginFactory3};
@@ -55,15 +57,22 @@ lazy_static! {
 /// Early exit out of a VST3 function when one of the passed pointers is null
 macro_rules! check_null_ptr {
     ($ptr:expr $(, $ptrs:expr)* $(, )?) => {
+        check_null_ptr_msg!("Null pointer passed to function", $ptr $(, $ptrs)*)
+    };
+}
+
+/// The same as [check_null_ptr], but with a custom message.
+macro_rules! check_null_ptr_msg {
+    ($msg:expr, $ptr:expr $(, $ptrs:expr)* $(, )?) => {
         if $ptr.is_null() $(|| $ptrs.is_null())* {
-            nih_debug_assert_failure!("Null pointer passed to function");
+            nih_debug_assert_failure!($msg);
             return kInvalidArgument;
         }
     };
 }
 
 #[VST3(implements(IComponent, IEditController, IAudioProcessor))]
-pub struct Wrapper<P: Plugin> {
+pub struct Wrapper<'a, P: Plugin> {
     /// The wrapped plugin instance.
     plugin: RefCell<P>,
     /// Whether the plugin is currently bypassed. This is not yet integrated with the `Plugin`
@@ -71,6 +80,11 @@ pub struct Wrapper<P: Plugin> {
     bypass_state: Cell<bool>,
     /// The last process status returned by the plugin. This is used for tail handling.
     last_process_status: Cell<ProcessStatus>,
+
+    /// Contains slices for the plugin's outputs. You can't directly create a nested slice form
+    /// apointer to pointers, so this needs to be preallocated in the setup call and kept around
+    /// between process calls.
+    output_slices: RefCell<Vec<&'a mut [f32]>>,
 
     /// A mapping from parameter ID hashes (obtained from the string parameter IDs) to pointers to
     /// parameters belonging to the plugin. As long as `plugin` does not get recreated, these
@@ -89,12 +103,13 @@ pub struct Wrapper<P: Plugin> {
     current_bus_config: RefCell<BusConfig>,
 }
 
-impl<P: Plugin> Wrapper<P> {
+impl<P: Plugin> Wrapper<'_, P> {
     pub fn new() -> Box<Self> {
         let mut wrapper = Self::allocate(
             RefCell::new(P::default()),       // plugin
             Cell::new(false),                 // bypass_state
             Cell::new(ProcessStatus::Normal), // last_process_status
+            RefCell::new(Vec::new()),         // output_slices
             HashMap::new(),                   // param_by_hash
             Vec::new(),                       // param_hashes
             Vec::new(),                       // param_defaults_normalized
@@ -137,7 +152,7 @@ impl<P: Plugin> Wrapper<P> {
     }
 }
 
-impl<P: Plugin> IPluginBase for Wrapper<P> {
+impl<P: Plugin> IPluginBase for Wrapper<'_, P> {
     unsafe fn initialize(&self, _context: *mut c_void) -> tresult {
         // We currently don't need or allow any initialization logic
         kResultOk
@@ -148,7 +163,7 @@ impl<P: Plugin> IPluginBase for Wrapper<P> {
     }
 }
 
-impl<P: Plugin> IComponent for Wrapper<P> {
+impl<P: Plugin> IComponent for Wrapper<'_, P> {
     unsafe fn get_controller_class_id(&self, _tuid: *mut vst3_sys::IID) -> tresult {
         // We won't separate the edit controller to keep the implemetnation a bit smaller
         kNoInterface
@@ -265,7 +280,7 @@ impl<P: Plugin> IComponent for Wrapper<P> {
     }
 }
 
-impl<P: Plugin> IEditController for Wrapper<P> {
+impl<P: Plugin> IEditController for Wrapper<'_, P> {
     unsafe fn set_component_state(&self, _state: *mut c_void) -> tresult {
         // We have a single file component, so we don't need to do anything here
         kResultOk
@@ -459,7 +474,7 @@ impl<P: Plugin> IEditController for Wrapper<P> {
     }
 }
 
-impl<P: Plugin> IAudioProcessor for Wrapper<P> {
+impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
     unsafe fn set_bus_arrangements(
         &self,
         inputs: *mut vst3_sys::vst::SpeakerArrangement,
@@ -560,6 +575,12 @@ impl<P: Plugin> IAudioProcessor for Wrapper<P> {
             .borrow_mut()
             .initialize(&bus_config, &buffer_config)
         {
+            // Preallocate enough room in the output slices vector so we can convert a `*mut *mut
+            // f32` to a `&mut [&mut f32]` in the process call
+            self.output_slices
+                .borrow_mut()
+                .resize_with(bus_config.num_output_channels as usize, || &mut []);
+
             kResultOk
         } else {
             kResultFalse
@@ -577,7 +598,77 @@ impl<P: Plugin> IAudioProcessor for Wrapper<P> {
     unsafe fn process(&self, data: *mut vst3_sys::vst::ProcessData) -> tresult {
         check_null_ptr!(data);
 
-        todo!()
+        // The setups we suppport are:
+        // - 1 input bus
+        // - 1 output bus
+        // - 1 input bus and 1 output bus
+        let data = &*data;
+        nih_debug_assert!(
+            data.num_inputs >= 0
+                && data.num_inputs <= 1
+                && data.num_outputs >= 0
+                && data.num_outputs <= 1,
+            "The host provides more than one input or output bus"
+        );
+        nih_debug_assert_eq!(
+            data.symbolic_sample_size,
+            vst3_sys::vst::SymbolicSampleSizes::kSample32 as i32
+        );
+        nih_debug_assert!(data.num_samples >= 0);
+        if data.num_outputs < 1 {
+            nih_debug_assert_failure!("The host doesn't provide any outputs");
+            return kInvalidArgument;
+        }
+
+        // This vector has been reallocated to contain enough slices as there are output channels
+        let mut output_slices = self.output_slices.borrow_mut();
+        check_null_ptr_msg!(
+            "Process output pointer is null",
+            data.outputs,
+            (*data.outputs).buffers,
+        );
+
+        let num_output_channels = (*data.outputs).num_channels as usize;
+        nih_debug_assert_eq!(num_output_channels, output_slices.len());
+        for (output_channel_idx, output_channel_slice) in output_slices.iter_mut().enumerate() {
+            *output_channel_slice = std::slice::from_raw_parts_mut(
+                *((*data.outputs).buffers as *mut *mut f32).add(output_channel_idx),
+                data.num_samples as usize,
+            );
+        }
+
+        // Most hosts process data in place, in which case we don't need to do any copying
+        // ourselves. If the pointers do not alias, then we'll do the copy here and then the plugin
+        // can just do normal in place processing.
+        if !data.inputs.is_null() {
+            let num_input_channels = (*data.inputs).num_channels as usize;
+            nih_debug_assert!(
+                num_input_channels <= num_output_channels,
+                "Stereo to mono and similar configurations are not supported"
+            );
+            for input_channel_idx in 0..cmp::min(num_input_channels, num_output_channels) {
+                let output_channel_ptr =
+                    *((*data.outputs).buffers as *mut *mut f32).add(input_channel_idx);
+                let input_channel_ptr =
+                    *((*data.inputs).buffers as *const *const f32).add(input_channel_idx);
+                if input_channel_ptr != output_channel_ptr {
+                    ptr::copy_nonoverlapping(
+                        input_channel_ptr,
+                        output_channel_ptr,
+                        data.num_samples as usize,
+                    );
+                }
+            }
+        }
+
+        match self.plugin.borrow_mut().process(&mut output_slices) {
+            ProcessStatus::Error(err) => {
+                nih_debug_assert_failure!("Process error: {}", err);
+
+                kResultFalse
+            }
+            _ => kResultOk,
+        }
     }
 
     unsafe fn get_tail_samples(&self) -> u32 {
