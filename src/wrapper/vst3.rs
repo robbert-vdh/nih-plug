@@ -52,6 +52,16 @@ lazy_static! {
     static ref BYPASS_PARAM_HASH: u32 = hash_param_id(BYPASS_PARAM_ID);
 }
 
+/// Early exit out of a VST3 function when one of the passed pointers is null
+macro_rules! check_null_ptr {
+    ($ptr:expr $(, $ptrs:expr)* $(, )?) => {
+        if $ptr.is_null() $(|| $ptrs.is_null())* {
+            nih_debug_assert_failure!("Null pointer passed to function");
+            return kInvalidArgument;
+        }
+    };
+}
+
 #[VST3(implements(IComponent, IEditController, IAudioProcessor))]
 pub struct Wrapper<P: Plugin> {
     /// The wrapped plugin instance.
@@ -168,10 +178,7 @@ impl<P: Plugin> IComponent for Wrapper<P> {
         index: i32,
         info: *mut vst3_sys::vst::BusInfo,
     ) -> tresult {
-        if info.is_null() {
-            nih_debug_assert_failure!("Null pointer passed to function");
-            return kInvalidArgument;
-        }
+        check_null_ptr!(info);
 
         match type_ {
             t if t == vst3_sys::vst::MediaTypes::kAudio as i32 => {
@@ -210,10 +217,7 @@ impl<P: Plugin> IComponent for Wrapper<P> {
         in_info: *mut vst3_sys::vst::RoutingInfo,
         out_info: *mut vst3_sys::vst::RoutingInfo,
     ) -> tresult {
-        if in_info.is_null() || out_info.is_null() {
-            nih_debug_assert_failure!("Null pointer passed to function");
-            return kInvalidArgument;
-        }
+        check_null_ptr!(in_info, out_info);
 
         *out_info = mem::zeroed();
 
@@ -291,10 +295,7 @@ impl<P: Plugin> IEditController for Wrapper<P> {
         param_index: i32,
         info: *mut vst3_sys::vst::ParameterInfo,
     ) -> tresult {
-        if info.is_null() {
-            nih_debug_assert_failure!("Null pointer passed to function");
-            return kInvalidArgument;
-        }
+        check_null_ptr!(info);
 
         // Parameter index `self.param_ids.len()` is our own bypass parameter
         if param_index < 0 || param_index > self.param_hashes.len() as i32 {
@@ -339,10 +340,7 @@ impl<P: Plugin> IEditController for Wrapper<P> {
         value_normalized: f64,
         string: *mut TChar,
     ) -> tresult {
-        if string.is_null() {
-            nih_debug_assert_failure!("Null pointer passed to function");
-            return kInvalidArgument;
-        }
+        check_null_ptr!(string);
 
         // Somehow there's no length there, so we'll assume our own maximum
         let dest = &mut *(string as *mut [TChar; 128]);
@@ -373,10 +371,7 @@ impl<P: Plugin> IEditController for Wrapper<P> {
         string: *const TChar,
         value_normalized: *mut f64,
     ) -> tresult {
-        if string.is_null() || value_normalized.is_null() {
-            nih_debug_assert_failure!("Null pointer passed to function");
-            return kInvalidArgument;
-        }
+        check_null_ptr!(string, value_normalized);
 
         let string = match U16CStr::from_ptr_str(string as *const u16).to_string() {
             Ok(s) => s,
@@ -472,10 +467,7 @@ impl<P: Plugin> IAudioProcessor for Wrapper<P> {
         outputs: *mut vst3_sys::vst::SpeakerArrangement,
         num_outs: i32,
     ) -> tresult {
-        if inputs.is_null() || outputs.is_null() {
-            nih_debug_assert_failure!("Null pointer passed to function");
-            return kInvalidArgument;
-        }
+        check_null_ptr!(inputs, outputs);
 
         // We currently only do single audio bus IO configurations
         if num_ins != 1 || num_outs != 1 {
@@ -503,10 +495,7 @@ impl<P: Plugin> IAudioProcessor for Wrapper<P> {
         index: i32,
         arr: *mut vst3_sys::vst::SpeakerArrangement,
     ) -> tresult {
-        if arr.is_null() {
-            nih_debug_assert_failure!("Null pointer passed to function");
-            return kInvalidArgument;
-        }
+        check_null_ptr!(arr);
 
         let config = self.current_bus_config.borrow();
         match (dir, index) {
@@ -551,10 +540,7 @@ impl<P: Plugin> IAudioProcessor for Wrapper<P> {
     }
 
     unsafe fn setup_processing(&self, setup: *const vst3_sys::vst::ProcessSetup) -> tresult {
-        if setup.is_null() {
-            nih_debug_assert_failure!("Null pointer passed to function");
-            return kInvalidArgument;
-        }
+        check_null_ptr!(setup);
 
         // There's no special handling for offline processing at the moment
         let setup = &*setup;
@@ -589,10 +575,7 @@ impl<P: Plugin> IAudioProcessor for Wrapper<P> {
     }
 
     unsafe fn process(&self, data: *mut vst3_sys::vst::ProcessData) -> tresult {
-        if data.is_null() {
-            nih_debug_assert_failure!("Null pointer passed to function");
-            return kInvalidArgument;
-        }
+        check_null_ptr!(data);
 
         todo!()
     }
@@ -669,10 +652,7 @@ impl<P: Vst3Plugin> IPluginFactory for Factory<P> {
         _iid: *const vst3_sys::IID,
         obj: *mut *mut vst3_sys::c_void,
     ) -> tresult {
-        if cid.is_null() || obj.is_null() {
-            nih_debug_assert_failure!("Null pointer passed to function");
-            return kInvalidArgument;
-        }
+        check_null_ptr!(cid, obj);
 
         if *cid != self.cid {
             return kNoInterface;
