@@ -14,6 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+// The VST3 macro generates an `allocate()` function for initializing the struct, so Clippy will
+// complain as soon as a struct has more than 8 fields
+#![allow(clippy::too_many_arguments)]
+
 use lazy_static::lazy_static;
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
