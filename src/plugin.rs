@@ -29,6 +29,7 @@ use crate::params::Params;
 /// - Multiple output busses
 /// - Latency compensation
 /// - Special handling for offline processing
+/// - Transport and other context information in the process call
 /// - Storing custom state, only the parameters are saved right now
 /// - Sample accurate automation (this would be great, but sadly few hosts even support it so until
 ///   they do we'll ignore that it's a thing)
@@ -37,8 +38,6 @@ use crate::params::Params;
 /// - Bypass parameters, right now the VST3 wrapper generates one for you
 /// - Outputting parameter changes from the plugin
 /// - GUIs
-/// - Suspension and tail processing. This will be handled soon in a similar way to how CLAP
-///   handnles it.
 pub trait Plugin: Default + Sync {
     const NAME: &'static str;
     const VENDOR: &'static str;
@@ -87,6 +86,7 @@ pub trait Plugin: Default + Sync {
     /// TODO: Provide a way to access auxiliary input channels if the IO configuration is
     ///       assymetric
     /// TODO: Handle FTZ stuff on the wrapper side and mention that this has been handled
+    /// TODO: Pass transport and other context information to the plugin
     fn process(&mut self, samples: &mut [&mut [f32]]) -> ProcessStatus;
 }
 
