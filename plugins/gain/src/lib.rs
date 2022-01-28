@@ -18,6 +18,7 @@
 extern crate nih_plug;
 
 use nih_plug::{
+    formatters,
     params::{FloatParam, Params, Range},
     plugin::{BufferConfig, BusConfig, Plugin, ProcessStatus, Vst3Plugin},
     util,
@@ -53,7 +54,7 @@ impl Default for GainParams {
                 },
                 name: "Gain",
                 unit: " dB",
-                value_to_string: None,
+                value_to_string: formatters::f32_rounded(2),
                 string_to_value: None,
             },
         }

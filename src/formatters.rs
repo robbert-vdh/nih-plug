@@ -14,15 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-// TODO: Once everything is more fleshed out, document the basic usage of this library
+//! Convenience functions for formatting and parsing parameter values in common formats.
 
-#[macro_use]
-pub mod debug;
-pub mod formatters;
-pub mod params;
-pub mod plugin;
-pub mod util;
-pub mod wrapper;
-
-// Re-export our derive macros to make this a bit easier to use
-pub use nih_plug_derive::Params;
+/// Round an `f32` value to always have a specific number of decimal digits.
+pub fn f32_rounded(digits: usize) -> Option<Box<dyn Send + Sync + Fn(f32) -> String>> {
+    Some(Box::new(move |x| format!("{:.digits$}", x)))
+}
