@@ -356,7 +356,7 @@ impl<P: Plugin> IEditController for Wrapper<P> {
         } else if let Some(param_ptr) = self.param_by_hash.get(&id) {
             u16strlcpy(
                 dest,
-                &param_ptr.normalized_value_to_string(value_normalized as f32),
+                &param_ptr.normalized_value_to_string(value_normalized as f32, false),
             );
 
             kResultOk

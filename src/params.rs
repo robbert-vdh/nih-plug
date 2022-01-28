@@ -96,11 +96,19 @@ macro_rules! impl_plainparam {
             }
 
             /// Get the string representation for a normalized value. Used as part of the wrappers.
-            pub fn normalized_value_to_string(&self, normalized: f32) -> String {
+            /// Most plugin formats already have support for units, in which case it shouldn't be
+            /// part of this string or some DAWs may show duplicate units.
+            pub fn normalized_value_to_string(
+                &self,
+                normalized: f32,
+                include_unit: bool,
+            ) -> String {
                 let value = self.range.unnormalize(normalized);
-                match &self.value_to_string {
-                    Some(f) => format!("{}{}", f(value), self.unit),
-                    None => format!("{}{}", value, self.unit),
+                match (&self.value_to_string, include_unit) {
+                    (Some(f), true) => format!("{}{}", f(value), self.unit),
+                    (Some(f), false) => format!("{}", f(value)),
+                    (None, true) => format!("{}{}", value, self.unit),
+                    (None, false) => format!("{}", value),
                 }
             }
 
@@ -292,16 +300,18 @@ impl ParamPtr {
         }
     }
 
-    /// Get the string representation for a normalized value. Used as part of the wrappers.
+    /// Get the string representation for a normalized value. Used as part of the wrappers. Most
+    /// plugin formats already have support for units, in which case it shouldn't be part of this
+    /// string or some DAWs may show duplicate units.
     ///
     /// # Safety
     ///
     /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
     /// still alive.
-    pub unsafe fn normalized_value_to_string(&self, normalized: f32) -> String {
+    pub unsafe fn normalized_value_to_string(&self, normalized: f32, include_unit: bool) -> String {
         match &self {
-            ParamPtr::FloatParam(p) => (**p).normalized_value_to_string(normalized),
-            ParamPtr::IntParam(p) => (**p).normalized_value_to_string(normalized),
+            ParamPtr::FloatParam(p) => (**p).normalized_value_to_string(normalized, include_unit),
+            ParamPtr::IntParam(p) => (**p).normalized_value_to_string(normalized, include_unit),
         }
     }
 
