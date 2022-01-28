@@ -89,6 +89,9 @@ pub struct Wrapper<'a, P: Plugin> {
     /// A mapping from parameter ID hashes (obtained from the string parameter IDs) to pointers to
     /// parameters belonging to the plugin. As long as `plugin` does not get recreated, these
     /// addresses will remain stable, as they are obtained from a pinned object.
+    ///
+    /// TODO: Wrap this in a mutex in case the host tries setting parameters from multiple threads
+    ///       at the same time.
     param_by_hash: HashMap<u32, ParamPtr>,
     /// The keys from `param_map` in a stable order.
     param_hashes: Vec<u32>,
