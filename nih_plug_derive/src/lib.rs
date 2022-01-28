@@ -33,17 +33,30 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
             _ => continue,
         };
 
+        // We'll add another attribute for persistent fields later, and that's going to be mutually
+        // exclusive with this id attribute
+        let mut id_attr = None;
         for attr in field.attrs {
-            let list = match attr.parse_meta() {
-                Ok(syn::Meta::List(list)) if list.path.is_ident("id") => list,
-                _ => continue,
+            match attr.parse_meta() {
+                Ok(syn::Meta::List(list)) if list.path.is_ident("id") => {
+                    if id_attr.is_none() {
+                        id_attr = Some(list);
+                    } else {
+                        return syn::Error::new(attr.span(), "Duplicate id attribute")
+                            .to_compile_error()
+                            .into();
+                    }
+                }
+                _ => (),
             };
+        }
 
+        if let Some(list) = id_attr {
             let param_id =
                 match list.nested.first() {
                     Some(syn::NestedMeta::Lit(syn::Lit::Str(s))) => s.value(),
                     _ => return syn::Error::new(
-                        attr.span(),
+                        list.span(),
                         "The id attribute should have a single string argument: #[id(\"foo_bar\")]",
                     )
                     .to_compile_error()
