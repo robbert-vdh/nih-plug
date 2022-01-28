@@ -182,6 +182,13 @@ pub trait Params {
     /// Create a mapping from unique parameter IDs to parameters. Dereferencing the pointers stored
     /// in the values is only valid as long as this pinned object is valid.
     fn param_map(self: Pin<&Self>) -> HashMap<&'static str, ParamPtr>;
+
+    // TODO: Also handle custom state persistence in this state. Instead o having a callback for
+    //       custom state loading and restoring, it will be way nicer to use serde for this. Another
+    //       attribute `#[persist]` can mark fields that are `Serialize + Deserialize`. They these
+    //       fields can then be serialized alongside the `param_id: normalized_value` pairs for
+    //       normal parameters.
+    // fn persistent_fields(self: Pin<&mut Self>) -> Vec<&mut (dyn Serialize + Deserialize + Send + Sync)>;
 }
 
 /// Internal pointers to parameters. This is an implementation detail used by the wrappers.
