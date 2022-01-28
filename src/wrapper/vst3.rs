@@ -26,11 +26,13 @@ use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::mem;
 use std::ptr;
-use vst3_com::base::kResultTrue;
+use std::sync::atomic::{AtomicBool, Ordering};
 use vst3_sys::base::{kInvalidArgument, kNoInterface, kResultFalse, kResultOk, tresult, TBool};
 use vst3_sys::base::{IPluginBase, IPluginFactory, IPluginFactory2, IPluginFactory3};
 use vst3_sys::vst::TChar;
-use vst3_sys::vst::{IAudioProcessor, IComponent, IEditController};
+use vst3_sys::vst::{
+    IAudioProcessor, IComponent, IEditController, IParamValueQueue, IParameterChanges,
+};
 use vst3_sys::VST3;
 use widestring::U16CStr;
 
@@ -80,6 +82,7 @@ pub struct Wrapper<'a, P: Plugin> {
     bypass_state: Cell<bool>,
     /// The last process status returned by the plugin. This is used for tail handling.
     last_process_status: Cell<ProcessStatus>,
+    is_processing: AtomicBool,
 
     /// Contains slices for the plugin's outputs. You can't directly create a nested slice form
     /// apointer to pointers, so this needs to be preallocated in the setup call and kept around
@@ -89,9 +92,6 @@ pub struct Wrapper<'a, P: Plugin> {
     /// A mapping from parameter ID hashes (obtained from the string parameter IDs) to pointers to
     /// parameters belonging to the plugin. As long as `plugin` does not get recreated, these
     /// addresses will remain stable, as they are obtained from a pinned object.
-    ///
-    /// TODO: Wrap this in a mutex in case the host tries setting parameters from multiple threads
-    ///       at the same time.
     param_by_hash: HashMap<u32, ParamPtr>,
     /// The keys from `param_map` in a stable order.
     param_hashes: Vec<u32>,
@@ -112,6 +112,7 @@ impl<P: Plugin> Wrapper<'_, P> {
             RefCell::new(P::default()),       // plugin
             Cell::new(false),                 // bypass_state
             Cell::new(ProcessStatus::Normal), // last_process_status
+            AtomicBool::new(false),           // is_processing
             RefCell::new(Vec::new()),         // output_slices
             HashMap::new(),                   // param_by_hash
             Vec::new(),                       // param_hashes
@@ -152,6 +153,20 @@ impl<P: Plugin> Wrapper<'_, P> {
             .collect();
 
         wrapper
+    }
+
+    unsafe fn set_normalized_value_by_hash(&self, hash: u32, normalized_value: f64) -> tresult {
+        if hash == *BYPASS_PARAM_HASH {
+            self.bypass_state.set(normalized_value >= 0.5);
+
+            kResultOk
+        } else if let Some(param_ptr) = self.param_by_hash.get(&hash) {
+            param_ptr.set_normalized_value(normalized_value as f32);
+
+            kResultOk
+        } else {
+            kInvalidArgument
+        }
     }
 }
 
@@ -453,17 +468,13 @@ impl<P: Plugin> IEditController for Wrapper<'_, P> {
     }
 
     unsafe fn set_param_normalized(&self, id: u32, value: f64) -> tresult {
-        if id == *BYPASS_PARAM_HASH {
-            self.bypass_state.set(value >= 0.5);
-
-            kResultOk
-        } else if let Some(param_ptr) = self.param_by_hash.get(&id) {
-            param_ptr.set_normalized_value(value as f32);
-
-            kResultOk
-        } else {
-            kInvalidArgument
+        // If the plugin is currently processing audio, then this parameter change will also be sent
+        // to the process function
+        if self.is_processing.load(Ordering::SeqCst) {
+            return kResultOk;
         }
+
+        self.set_normalized_value_by_hash(id, value)
     }
 
     unsafe fn set_component_handler(&self, _handler: *mut c_void) -> tresult {
@@ -590,12 +601,13 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
         }
     }
 
-    unsafe fn set_processing(&self, _state: TBool) -> tresult {
+    unsafe fn set_processing(&self, state: TBool) -> tresult {
         // Always reset the processing status when the plugin gets activated or deactivated
         self.last_process_status.set(ProcessStatus::Normal);
+        self.is_processing.store(state != 0, Ordering::SeqCst);
 
         // We don't have any special handling for suspending and resuming plugins, yet
-        kResultTrue
+        kResultOk
     }
 
     unsafe fn process(&self, data: *mut vst3_sys::vst::ProcessData) -> tresult {
@@ -664,7 +676,32 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
             }
         }
 
-        // TODO: Handle incoming parameter changes
+        if let Some(param_changes) = data.input_param_changes.upgrade() {
+            let num_param_queues = param_changes.get_parameter_count();
+            for change_queue_idx in 0..num_param_queues {
+                if let Some(param_change_queue) =
+                    param_changes.get_parameter_data(change_queue_idx).upgrade()
+                {
+                    let param_hash = param_change_queue.get_parameter_id();
+                    let num_changes = param_change_queue.get_point_count();
+
+                    // TODO: Handle sample accurate parameter changes, possibly in a similar way to
+                    //       the smoothing
+                    let mut sample_offset = 0i32;
+                    let mut value = 0.0f64;
+                    if num_changes > 0
+                        && param_change_queue.get_point(
+                            num_changes - 1,
+                            &mut sample_offset,
+                            &mut value,
+                        ) == kResultOk
+                    {
+                        self.set_normalized_value_by_hash(param_hash, value);
+                    }
+                }
+            }
+        }
+
         match self.plugin.borrow_mut().process(&mut output_slices) {
             ProcessStatus::Error(err) => {
                 nih_debug_assert_failure!("Process error: {}", err);
