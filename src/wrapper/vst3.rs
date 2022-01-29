@@ -28,16 +28,16 @@ use std::mem;
 use std::ptr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use vst3_sys::base::{kInvalidArgument, kNoInterface, kResultFalse, kResultOk, tresult, TBool};
-use vst3_sys::base::{IPluginBase, IPluginFactory, IPluginFactory2, IPluginFactory3};
-use vst3_sys::vst::TChar;
+use vst3_sys::base::{IBStream, IPluginBase, IPluginFactory, IPluginFactory2, IPluginFactory3};
 use vst3_sys::vst::{
-    IAudioProcessor, IComponent, IEditController, IParamValueQueue, IParameterChanges,
+    IAudioProcessor, IComponent, IEditController, IParamValueQueue, IParameterChanges, TChar,
 };
-use vst3_sys::VST3;
+use vst3_sys::{ComPtr, VST3};
 use widestring::U16CStr;
 
 use crate::params::ParamPtr;
 use crate::plugin::{BufferConfig, BusConfig, Plugin, ProcessStatus, Vst3Plugin};
+use crate::wrapper::state::{ParamValue, State};
 use crate::wrapper::util::{hash_param_id, strlcpy, u16strlcpy};
 
 // Alias needed for the VST3 attribute macro
@@ -74,9 +74,12 @@ macro_rules! check_null_ptr_msg {
 }
 
 #[VST3(implements(IComponent, IEditController, IAudioProcessor))]
-pub struct Wrapper<'a, P: Plugin> {
+pub(crate) struct Wrapper<'a, P: Plugin> {
     /// The wrapped plugin instance.
     plugin: RefCell<P>,
+
+    /// The current bus configuration, modified through `IAudioProcessor::setBusArrangements()`.
+    current_bus_config: RefCell<BusConfig>,
     /// Whether the plugin is currently bypassed. This is not yet integrated with the `Plugin`
     /// trait.
     bypass_state: Cell<bool>,
@@ -101,23 +104,12 @@ pub struct Wrapper<'a, P: Plugin> {
     /// Mappings from parameter hashes back to string parameter indentifiers. Useful for debug
     /// logging and when handling plugin state.
     param_id_hashes: HashMap<u32, &'static str>,
-
-    /// The current bus configuration, modified through `IAudioProcessor::setBusArrangements()`.
-    current_bus_config: RefCell<BusConfig>,
 }
 
 impl<P: Plugin> Wrapper<'_, P> {
     pub fn new() -> Box<Self> {
         let mut wrapper = Self::allocate(
-            RefCell::new(P::default()),       // plugin
-            Cell::new(false),                 // bypass_state
-            Cell::new(ProcessStatus::Normal), // last_process_status
-            AtomicBool::new(false),           // is_processing
-            RefCell::new(Vec::new()),         // output_slices
-            HashMap::new(),                   // param_by_hash
-            Vec::new(),                       // param_hashes
-            Vec::new(),                       // param_defaults_normalized
-            HashMap::new(),                   // param_id_hashes
+            RefCell::new(P::default()),
             // Some hosts, like the current version of Bitwig and Ardour at the time of writing,
             // will try using the plugin's default not yet initialized bus arrangement. Because of
             // that, we'll always initialize this configuration even before the host requests a
@@ -126,6 +118,14 @@ impl<P: Plugin> Wrapper<'_, P> {
                 num_input_channels: P::DEFAULT_NUM_INPUTS,
                 num_output_channels: P::DEFAULT_NUM_OUTPUTS,
             }),
+            Cell::new(false),                 // bypass_state
+            Cell::new(ProcessStatus::Normal), // last_process_status
+            AtomicBool::new(false),           // is_processing
+            RefCell::new(Vec::new()),         // output_slices
+            HashMap::new(),                   // param_by_hash
+            Vec::new(),                       // param_hashes
+            Vec::new(),                       // param_defaults_normalized
+            HashMap::new(),                   // param_id_hashes
         );
 
         // This is a mapping from the parameter IDs specified by the plugin to pointers to thsoe
@@ -292,9 +292,44 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
         kResultFalse
     }
 
-    unsafe fn get_state(&self, _state: *mut c_void) -> tresult {
-        // TODO: Implemnt state saving and restoring
-        kResultFalse
+    unsafe fn get_state(&self, state: *mut c_void) -> tresult {
+        check_null_ptr!(state);
+
+        let state: ComPtr<dyn IBStream> = ComPtr::new(state as *mut _);
+
+        // We'll serialize parmaeter values as a simple `string_param_id: display_value` map.
+        let params = self
+            .param_id_hashes
+            .iter()
+            .filter_map(|(hash, param_id_str)| {
+                let param_ptr = self.param_by_hash.get(hash)?;
+                Some((param_id_str, param_ptr))
+            })
+            .map(|(&param_id_str, &param_ptr)| match param_ptr {
+                ParamPtr::FloatParam(p) => (param_id_str, ParamValue::F32((*p).value)),
+                ParamPtr::IntParam(p) => (param_id_str, ParamValue::I32((*p).value)),
+            })
+            .collect();
+        let plugin_state = State { params };
+
+        match serde_json::to_vec(&plugin_state) {
+            Ok(serialized) => {
+                let mut num_bytes_written = 0;
+                let result = state.write(
+                    serialized.as_ptr() as *const c_void,
+                    serialized.len() as i32,
+                    &mut num_bytes_written,
+                );
+
+                nih_debug_assert_eq!(result, kResultOk);
+                nih_debug_assert_eq!(num_bytes_written as usize, serialized.len());
+                kResultOk
+            }
+            Err(err) => {
+                nih_debug_assert_failure!("Could not save state: {}", err);
+                kResultFalse
+            }
+        }
     }
 }
 
@@ -722,6 +757,7 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
     }
 }
 
+#[doc(hidden)]
 #[VST3(implements(IPluginFactory, IPluginFactory2, IPluginFactory3))]
 pub struct Factory<P: Vst3Plugin> {
     /// The exposed plugin's GUID. Instead of generating this, we'll just let the programmer decide
