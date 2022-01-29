@@ -29,10 +29,9 @@ pub(crate) enum ParamValue {
 
 /// A plugin's state so it can be restored at a later point.
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(bound(deserialize = "'de: 'static"))]
 pub(crate) struct State {
     /// The plugin's parameter values. These are stored unnormalized. This mean sthe old values will
     /// be recalled when when the parameter's range gets increased. Doing so may still mess with
     /// parmaeter automation though, depending on how the host impelments that.
-    pub params: HashMap<&'static str, ParamValue>,
+    pub params: HashMap<String, ParamValue>,
 }

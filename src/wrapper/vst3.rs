@@ -35,7 +35,7 @@ use vst3_sys::vst::{
 use vst3_sys::{ComPtr, VST3};
 use widestring::U16CStr;
 
-use crate::params::ParamPtr;
+use crate::params::{Param, ParamPtr};
 use crate::plugin::{BufferConfig, BusConfig, Plugin, ProcessStatus, Vst3Plugin};
 use crate::wrapper::state::{ParamValue, State};
 use crate::wrapper::util::{hash_param_id, strlcpy, u16strlcpy};
@@ -103,7 +103,9 @@ pub(crate) struct Wrapper<'a, P: Plugin> {
     param_defaults_normalized: Vec<f32>,
     /// Mappings from parameter hashes back to string parameter indentifiers. Useful for debug
     /// logging and when handling plugin state.
-    param_id_hashes: HashMap<u32, &'static str>,
+    param_id_to_hash: HashMap<u32, &'static str>,
+    /// The inverse mapping from `param_id_hashes`. Used only for restoring state.
+    param_hash_to_id: HashMap<&'static str, u32>,
 }
 
 impl<P: Plugin> Wrapper<'_, P> {
@@ -125,7 +127,8 @@ impl<P: Plugin> Wrapper<'_, P> {
             HashMap::new(),                   // param_by_hash
             Vec::new(),                       // param_hashes
             Vec::new(),                       // param_defaults_normalized
-            HashMap::new(),                   // param_id_hashes
+            HashMap::new(),                   // param_id_to_hash
+            HashMap::new(),                   // param_hash_to_id
         );
 
         // This is a mapping from the parameter IDs specified by the plugin to pointers to thsoe
@@ -147,9 +150,14 @@ impl<P: Plugin> Wrapper<'_, P> {
             .iter()
             .map(|hash| unsafe { wrapper.param_by_hash[hash].normalized_value() })
             .collect();
-        wrapper.param_id_hashes = param_map
+        wrapper.param_id_to_hash = param_map
             .into_keys()
             .map(|id| (hash_param_id(id), id))
+            .collect();
+        wrapper.param_hash_to_id = wrapper
+            .param_id_to_hash
+            .iter()
+            .map(|(&hash, &id)| (id, hash))
             .collect();
 
         wrapper
@@ -287,9 +295,78 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
         kResultOk
     }
 
-    unsafe fn set_state(&self, _state: *mut c_void) -> tresult {
-        // TODO: Implemnt state saving and restoring
-        kResultFalse
+    unsafe fn set_state(&self, state: *mut c_void) -> tresult {
+        check_null_ptr!(state);
+
+        let state: ComPtr<dyn IBStream> = ComPtr::new(state as *mut _);
+
+        // We need to know how large the state is before we can read it. The current position can be
+        // zero, but it can also be something else. Bitwig prepends the preset header in the stream,
+        // while some other hosts don't expose that to the plugin.
+        let mut current_pos = 0;
+        let mut eof_pos = 0;
+        if state.tell(&mut current_pos) != kResultOk
+            || state.seek(0, vst3_sys::base::kIBSeekEnd, &mut eof_pos) != kResultOk
+            || state.seek(current_pos, vst3_sys::base::kIBSeekSet, ptr::null_mut()) != kResultOk
+        {
+            nih_debug_assert_failure!("Could not get the stream length");
+            return kResultFalse;
+        }
+
+        let stream_byte_size = (eof_pos - current_pos) as i32;
+        let mut num_bytes_read = 0;
+        let mut read_buffer: Vec<u8> = Vec::with_capacity(stream_byte_size as usize);
+        state.read(
+            read_buffer.as_mut_ptr() as *mut c_void,
+            read_buffer.capacity() as i32,
+            &mut num_bytes_read,
+        );
+        read_buffer.set_len(num_bytes_read as usize);
+
+        // If the size is zero, some hsots will always return `kResultFalse` even if the read was
+        // 'successful', so we can't check the return value but we can check the number of bytes
+        // read.
+        if read_buffer.len() != stream_byte_size as usize {
+            nih_debug_assert_failure!("Unexpected stream length");
+            return kResultFalse;
+        }
+
+        let state: State = match serde_json::from_slice(&read_buffer) {
+            Ok(s) => s,
+            Err(err) => {
+                nih_debug_assert_failure!("Error while deserializing state: {}", err);
+                return kResultFalse;
+            }
+        };
+
+        for (param_id_str, param_value) in state.params {
+            let param_ptr = match self
+                .param_hash_to_id
+                .get(param_id_str.as_str())
+                .and_then(|hash| self.param_by_hash.get(hash))
+            {
+                Some(ptr) => ptr,
+                None => {
+                    nih_debug_assert_failure!("Unknown parameter: {}", param_id_str);
+                    continue;
+                }
+            };
+
+            match (param_ptr, param_value) {
+                (ParamPtr::FloatParam(p), ParamValue::F32(v)) => (**p).set_plain_value(v),
+                (ParamPtr::IntParam(p), ParamValue::I32(v)) => (**p).set_plain_value(v),
+                (param_ptr, param_value) => {
+                    nih_debug_assert_failure!(
+                        "Invalid serialized value {:?} for parameter {} ({:?})",
+                        param_value,
+                        param_id_str,
+                        param_ptr,
+                    );
+                }
+            }
+        }
+
+        kResultOk
     }
 
     unsafe fn get_state(&self, state: *mut c_void) -> tresult {
@@ -299,15 +376,15 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
 
         // We'll serialize parmaeter values as a simple `string_param_id: display_value` map.
         let params = self
-            .param_id_hashes
+            .param_id_to_hash
             .iter()
             .filter_map(|(hash, param_id_str)| {
                 let param_ptr = self.param_by_hash.get(hash)?;
                 Some((param_id_str, param_ptr))
             })
             .map(|(&param_id_str, &param_ptr)| match param_ptr {
-                ParamPtr::FloatParam(p) => (param_id_str, ParamValue::F32((*p).value)),
-                ParamPtr::IntParam(p) => (param_id_str, ParamValue::I32((*p).value)),
+                ParamPtr::FloatParam(p) => (param_id_str.to_string(), ParamValue::F32((*p).value)),
+                ParamPtr::IntParam(p) => (param_id_str.to_string(), ParamValue::I32((*p).value)),
             })
             .collect();
         let plugin_state = State { params };
