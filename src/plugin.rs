@@ -80,7 +80,7 @@ pub trait Plugin: Default + Sync {
 
     /// Process audio. To not have to worry about aliasing, the host's input buffer have already
     /// been copied to the output buffers if they are not handling buffers in place (most hosts do
-    /// however).
+    /// however). All channels are also guarenteed to contain the same number of samples.
     ///
     /// TODO: &mut [&mut [f32]] may not be the correct type here
     /// TODO: Provide a way to access auxiliary input channels if the IO configuration is
