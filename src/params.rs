@@ -69,7 +69,7 @@ macro_rules! impl_plainparam {
             /// can fail if the string cannot be parsed.
             ///
             /// TODO: After implementing VST3, check if we handle parsing failures correctly
-            pub fn from_string(&mut self, string: &str) -> bool {
+            pub fn set_from_string(&mut self, string: &str) -> bool {
                 let value = match &self.string_to_value {
                     Some(f) => f(string),
                     // TODO: Check how Rust's parse function handles trailing garbage
@@ -240,10 +240,10 @@ impl ParamPtr {
     ///
     /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
     /// still alive.
-    pub unsafe fn from_string(&mut self, string: &str) -> bool {
+    pub unsafe fn set_from_string(&mut self, string: &str) -> bool {
         match &self {
-            ParamPtr::FloatParam(p) => (**p).from_string(string),
-            ParamPtr::IntParam(p) => (**p).from_string(string),
+            ParamPtr::FloatParam(p) => (**p).set_from_string(string),
+            ParamPtr::IntParam(p) => (**p).set_from_string(string),
         }
     }
 
