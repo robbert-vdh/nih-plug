@@ -96,26 +96,26 @@ fn library_name(target: &str) -> String {
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 fn vst3_bundle_library_name(target: &str) -> String {
-    format!("{target}.vst3/x86_64-linux/{target}.so")
+    format!("{target}.vst3/Contents/x86_64-linux/{target}.so")
 }
 
 #[cfg(all(target_os = "linux", target_arch = "x86"))]
 fn vst3_bundle_library_name(target: &str) -> String {
-    format!("{target}.vst3/i386-linux/{target}.so")
+    format!("{target}.vst3/Contents/i386-linux/{target}.so")
 }
 
 // TODO: This should be a Mach-O bundle, not sure how that works
 #[cfg(target_os = "macos")]
 fn vst3_bundle_library_name(target: &str) -> String {
-    format!("{target}.vst3/MacOS/{target}")
+    format!("{target}.vst3/Contents/MacOS/{target}")
 }
 
 #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
 fn vst3_bundle_library_name(target: &str) -> String {
-    format!("{target}.vst3/x86_64-win/{target}.vst3")
+    format!("{target}.vst3/Contents/x86_64-win/{target}.vst3")
 }
 
 #[cfg(all(target_os = "windows", target_arch = "x86"))]
 fn vst3_bundle_library_name(target: &str) -> String {
-    format!("{target}.vst3/x86-win/{target}.vst3")
+    format!("{target}.vst3/Contents/x86-win/{target}.vst3")
 }
