@@ -29,10 +29,11 @@ use std::ptr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use vst3_sys::base::{kInvalidArgument, kNoInterface, kResultFalse, kResultOk, tresult, TBool};
 use vst3_sys::base::{IBStream, IPluginBase, IPluginFactory, IPluginFactory2, IPluginFactory3};
+use vst3_sys::utils::VstPtr;
 use vst3_sys::vst::{
     IAudioProcessor, IComponent, IEditController, IParamValueQueue, IParameterChanges, TChar,
 };
-use vst3_sys::{ComPtr, VST3};
+use vst3_sys::VST3;
 use widestring::U16CStr;
 
 use crate::params::{Param, ParamPtr};
@@ -295,10 +296,10 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
         kResultOk
     }
 
-    unsafe fn set_state(&self, state: *mut c_void) -> tresult {
+    unsafe fn set_state(&self, state: VstPtr<dyn IBStream>) -> tresult {
         check_null_ptr!(state);
 
-        let state: ComPtr<dyn IBStream> = ComPtr::new(state as *mut _);
+        let state = state.upgrade().unwrap();
 
         // We need to know how large the state is before we can read it. The current position can be
         // zero, but it can also be something else. Bitwig prepends the preset header in the stream,
@@ -369,10 +370,10 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
         kResultOk
     }
 
-    unsafe fn get_state(&self, state: *mut c_void) -> tresult {
+    unsafe fn get_state(&self, state: VstPtr<dyn IBStream>) -> tresult {
         check_null_ptr!(state);
 
-        let state: ComPtr<dyn IBStream> = ComPtr::new(state as *mut _);
+        let state = state.upgrade().unwrap();
 
         // We'll serialize parmaeter values as a simple `string_param_id: display_value` map.
         let params = self
@@ -411,12 +412,12 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
 }
 
 impl<P: Plugin> IEditController for Wrapper<'_, P> {
-    unsafe fn set_component_state(&self, _state: *mut c_void) -> tresult {
+    unsafe fn set_component_state(&self, _state: VstPtr<dyn IBStream>) -> tresult {
         // We have a single file component, so we don't need to do anything here
         kResultOk
     }
 
-    unsafe fn set_state(&self, state: *mut c_void) -> tresult {
+    unsafe fn set_state(&self, state: VstPtr<dyn IBStream>) -> tresult {
         // We have a single file component, so there's only one `set_state()` function. Unlike C++,
         // Rust allows you to have multiple methods with the same name when they're provided by
         // different treats, but because of the Rust implementation the host may call either of
@@ -424,7 +425,7 @@ impl<P: Plugin> IEditController for Wrapper<'_, P> {
         IComponent::set_state(self, state)
     }
 
-    unsafe fn get_state(&self, state: *mut c_void) -> tresult {
+    unsafe fn get_state(&self, state: VstPtr<dyn IBStream>) -> tresult {
         // Same for this function
         IComponent::get_state(self, state)
     }
@@ -589,7 +590,10 @@ impl<P: Plugin> IEditController for Wrapper<'_, P> {
         self.set_normalized_value_by_hash(id, value)
     }
 
-    unsafe fn set_component_handler(&self, _handler: *mut c_void) -> tresult {
+    unsafe fn set_component_handler(
+        &self,
+        _handler: VstPtr<dyn vst3_sys::vst::IComponentHandler>,
+    ) -> tresult {
         // TODO: Use this when we add GUI support
         kResultOk
     }
