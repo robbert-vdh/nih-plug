@@ -37,32 +37,33 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
         // exclusive with this id attribute
         let mut id_attr = None;
         for attr in field.attrs {
-            match attr.parse_meta() {
-                Ok(syn::Meta::List(list)) if list.path.is_ident("id") => {
-                    if id_attr.is_none() {
-                        id_attr = Some(list);
-                    } else {
-                        return syn::Error::new(attr.span(), "Duplicate id attribute")
-                            .to_compile_error()
-                            .into();
+            if attr.path.is_ident("id") {
+                match attr.parse_meta() {
+                    Ok(syn::Meta::NameValue(syn::MetaNameValue {
+                        lit: syn::Lit::Str(s),
+                        ..
+                    })) => {
+                        if id_attr.is_none() {
+                            id_attr = Some(s.value());
+                        } else {
+                            return syn::Error::new(attr.span(), "Duplicate id attribute")
+                                .to_compile_error()
+                                .into();
+                        }
                     }
-                }
-                _ => (),
-            };
+                    _ => {
+                        return syn::Error::new(
+                            attr.span(),
+                            "The id attribute should be a key-value pair with a string argument: #[id = \"foo_bar\"]",
+                        )
+                        .to_compile_error()
+                        .into()
+                    }
+                };
+            }
         }
 
-        if let Some(list) = id_attr {
-            let param_id =
-                match list.nested.first() {
-                    Some(syn::NestedMeta::Lit(syn::Lit::Str(s))) => s.value(),
-                    _ => return syn::Error::new(
-                        list.span(),
-                        "The id attribute should have a single string argument: #[id(\"foo_bar\")]",
-                    )
-                    .to_compile_error()
-                    .into(),
-                };
-
+        if let Some(param_id) = id_attr {
             // The specific parameter types know how to convert themselves into the correct ParamPtr
             // variant
             param_insert_tokens
