@@ -60,6 +60,7 @@ fn bundle(target: &str, mut args: Vec<String>) -> Result<()> {
         bail!("Could not find built library at {}", lib_path.display());
     }
 
+    eprintln!();
     if bundle_vst3 {
         let vst3_lib_path = Path::new("target").join(vst3_bundle_library_name(target));
         let vst3_bundle_home = vst3_lib_path.parent().unwrap().parent().unwrap();
