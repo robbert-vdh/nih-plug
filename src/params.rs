@@ -62,14 +62,36 @@ pub struct PlainParam<T> {
     pub string_to_value: Option<Box<dyn Send + Sync + Fn(&str) -> Option<T>>>,
 }
 
+/// Describes a single parmaetre of any type.
+pub trait Param {
+    /// Set this parameter based on a string. Returns whether the updating succeeded. That can fail
+    /// if the string cannot be parsed.
+    ///
+    /// TODO: After implementing VST3, check if we handle parsing failures correctly
+    fn set_from_string(&mut self, string: &str) -> bool;
+
+    /// Get the normalized `[0, 1]` value for this parameter.
+    fn normalized_value(&self) -> f32;
+
+    /// Set this parameter based on a normalized value.
+    fn set_normalized_value(&mut self, normalized: f32);
+
+    /// Get the string representation for a normalized value. Used as part of the wrappers. Most
+    /// plugin formats already have support for units, in which case it shouldn't be part of this
+    /// string or some DAWs may show duplicate units.
+    fn normalized_value_to_string(&self, normalized: f32, include_unit: bool) -> String;
+
+    /// Get the string representation for a normalized value. Used as part of the wrappers.
+    fn string_to_normalized_value(&self, string: &str) -> Option<f32>;
+
+    /// Internal implementation detail for implementing [Params]. This should not be used directly.
+    fn as_ptr(&self) -> ParamPtr;
+}
+
 macro_rules! impl_plainparam {
     ($ty:ident) => {
-        impl $ty {
-            /// Set this parameter based on a string. Returns whether the updating succeeded. That
-            /// can fail if the string cannot be parsed.
-            ///
-            /// TODO: After implementing VST3, check if we handle parsing failures correctly
-            pub fn set_from_string(&mut self, string: &str) -> bool {
+        impl Param for $ty {
+            fn set_from_string(&mut self, string: &str) -> bool {
                 let value = match &self.string_to_value {
                     Some(f) => f(string),
                     // TODO: Check how Rust's parse function handles trailing garbage
@@ -85,24 +107,15 @@ macro_rules! impl_plainparam {
                 }
             }
 
-            /// Get the normalized `[0, 1]` value for this parameter.
-            pub fn normalized_value(&self) -> f32 {
+            fn normalized_value(&self) -> f32 {
                 self.range.normalize(self.value)
             }
 
-            /// Set this parameter based on a normalized value.
-            pub fn set_normalized_value(&mut self, normalized: f32) {
+            fn set_normalized_value(&mut self, normalized: f32) {
                 self.value = self.range.unnormalize(normalized);
             }
 
-            /// Get the string representation for a normalized value. Used as part of the wrappers.
-            /// Most plugin formats already have support for units, in which case it shouldn't be
-            /// part of this string or some DAWs may show duplicate units.
-            pub fn normalized_value_to_string(
-                &self,
-                normalized: f32,
-                include_unit: bool,
-            ) -> String {
+            fn normalized_value_to_string(&self, normalized: f32, include_unit: bool) -> String {
                 let value = self.range.unnormalize(normalized);
                 match (&self.value_to_string, include_unit) {
                     (Some(f), true) => format!("{}{}", f(value), self.unit),
@@ -112,8 +125,7 @@ macro_rules! impl_plainparam {
                 }
             }
 
-            /// Get the string representation for a normalized value. Used as part of the wrappers.
-            pub fn string_to_normalized_value(&self, string: &str) -> Option<f32> {
+            fn string_to_normalized_value(&self, string: &str) -> Option<f32> {
                 let value = match &self.string_to_value {
                     Some(f) => f(string),
                     // TODO: Check how Rust's parse function handles trailing garbage
@@ -123,8 +135,7 @@ macro_rules! impl_plainparam {
                 Some(self.range.normalize(value))
             }
 
-            /// Implementation detail for implementing [Params]. This should not be used directly.
-            pub fn as_ptr(&self) -> ParamPtr {
+            fn as_ptr(&self) -> ParamPtr {
                 ParamPtr::$ty(self as *const $ty as *mut $ty)
             }
         }

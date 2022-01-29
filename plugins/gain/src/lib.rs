@@ -19,7 +19,7 @@ extern crate nih_plug;
 
 use nih_plug::{
     formatters,
-    params::{FloatParam, Params, Range},
+    params::{FloatParam, Param, Params, Range},
     plugin::{BufferConfig, BusConfig, Plugin, ProcessStatus, Vst3Plugin},
     util,
 };
