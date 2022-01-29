@@ -472,7 +472,7 @@ impl<P: Plugin> IEditController for Wrapper<'_, P> {
         if id == *BYPASS_PARAM_HASH {
             value_normalized
         } else if let Some(param_ptr) = self.param_by_hash.get(&id) {
-            param_ptr.preview_unnormalized(value_normalized as f32) as f64
+            param_ptr.preview_plain(value_normalized as f32) as f64
         } else {
             0.5
         }

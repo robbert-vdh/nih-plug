@@ -33,10 +33,10 @@ pub enum Range<T> {
 trait NormalizebleRange<T> {
     /// Normalize an unnormalized value. Will be clamped to the bounds of the range if the
     /// normalized value exceeds `[0, 1]`.
-    fn normalize(&self, unnormalized: T) -> f32;
+    fn normalize(&self, plain: T) -> f32;
 
-    /// Unnormalize a normalized value. Will be clamped to `[0, 1]` if the unnormalized value would
-    /// exceed that range.
+    /// Unnormalize a normalized value. Will be clamped to `[0, 1]` if the plain, unnormalized value
+    /// would exceed that range.
     fn unnormalize(&self, normalized: f32) -> T;
 }
 
@@ -54,9 +54,9 @@ pub struct PlainParam<T> {
     pub name: &'static str,
     /// The parameter value's unit, added after `value_to_string` if that is set.
     pub unit: &'static str,
-    /// Optional custom conversion function from an **unnormalized** value to a string.
+    /// Optional custom conversion function from a plain **unnormalized** value to a string.
     pub value_to_string: Option<Box<dyn Send + Sync + Fn(T) -> String>>,
-    /// Optional custom conversion function from a string to an **unnormalized** value. If the
+    /// Optional custom conversion function from a string to a plain **unnormalized** value. If the
     /// string cannot be parsed, then this should return a `None`. If this happens while the
     /// parameter is being updated then the update will be canceled.
     pub string_to_value: Option<Box<dyn Send + Sync + Fn(&str) -> Option<T>>>,
@@ -99,8 +99,8 @@ macro_rules! impl_plainparam {
                 };
 
                 match value {
-                    Some(unnormalized) => {
-                        self.value = unnormalized;
+                    Some(plain) => {
+                        self.value = plain;
                         true
                     }
                     None => false,
@@ -155,9 +155,9 @@ impl<T: Display + Copy> Display for PlainParam<T> {
 }
 
 impl NormalizebleRange<f32> for Range<f32> {
-    fn normalize(&self, unnormalized: f32) -> f32 {
+    fn normalize(&self, plain: f32) -> f32 {
         match &self {
-            Range::Linear { min, max } => (unnormalized - min) / (max - min),
+            Range::Linear { min, max } => (plain - min) / (max - min),
         }
         .clamp(0.0, 1.0)
     }
@@ -171,9 +171,9 @@ impl NormalizebleRange<f32> for Range<f32> {
 }
 
 impl NormalizebleRange<i32> for Range<i32> {
-    fn normalize(&self, unnormalized: i32) -> f32 {
+    fn normalize(&self, plain: i32) -> f32 {
         match &self {
-            Range::Linear { min, max } => (unnormalized - min) as f32 / (max - min) as f32,
+            Range::Linear { min, max } => (plain - min) as f32 / (max - min) as f32,
         }
         .clamp(0.0, 1.0)
     }
@@ -284,27 +284,28 @@ impl ParamPtr {
         }
     }
 
-    /// Get the normalized value for an unnormalized value, as a float. Used as part of the
+    /// Get the normalized value for a plain, unnormalized value, as a float. Used as part of the
     /// wrappers.
     ///
     /// # Safety
     ///
     /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
     /// still alive.
-    pub unsafe fn preview_normalized(&self, unnormalized: f32) -> f32 {
+    pub unsafe fn preview_normalized(&self, plain: f32) -> f32 {
         match &self {
-            ParamPtr::FloatParam(p) => (**p).range.normalize(unnormalized),
-            ParamPtr::IntParam(p) => (**p).range.normalize(unnormalized as i32),
+            ParamPtr::FloatParam(p) => (**p).range.normalize(plain),
+            ParamPtr::IntParam(p) => (**p).range.normalize(plain as i32),
         }
     }
 
-    /// Get the unnormalized value for a normalized value, as a float. Used as part of the wrappers.
+    /// Get the plain, unnormalized value for a normalized value, as a float. Used as part of the
+    /// wrappers.
     ///
     /// # Safety
     ///
     /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
     /// still alive.
-    pub unsafe fn preview_unnormalized(&self, normalized: f32) -> f32 {
+    pub unsafe fn preview_plain(&self, normalized: f32) -> f32 {
         match &self {
             ParamPtr::FloatParam(p) => (**p).range.unnormalize(normalized),
             ParamPtr::IntParam(p) => (**p).range.unnormalize(normalized) as f32,
