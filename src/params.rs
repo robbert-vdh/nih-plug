@@ -64,11 +64,20 @@ pub struct PlainParam<T> {
 
 /// Describes a single parmaetre of any type.
 pub trait Param {
+    /// The plain parameter type.
+    type Plain;
+
     /// Set this parameter based on a string. Returns whether the updating succeeded. That can fail
     /// if the string cannot be parsed.
     ///
     /// TODO: After implementing VST3, check if we handle parsing failures correctly
     fn set_from_string(&mut self, string: &str) -> bool;
+
+    /// Get the unnormalized value for this parameter.
+    fn plain_value(&self) -> Self::Plain;
+
+    /// Set this parameter based on a plain, unnormalized value.
+    fn set_plain_value(&mut self, plain: Self::Plain);
 
     /// Get the normalized `[0, 1]` value for this parameter.
     fn normalized_value(&self) -> f32;
@@ -89,8 +98,10 @@ pub trait Param {
 }
 
 macro_rules! impl_plainparam {
-    ($ty:ident) => {
+    ($ty:ident, $plain:ty) => {
         impl Param for $ty {
+            type Plain = $plain;
+
             fn set_from_string(&mut self, string: &str) -> bool {
                 let value = match &self.string_to_value {
                     Some(f) => f(string),
@@ -105,6 +116,14 @@ macro_rules! impl_plainparam {
                     }
                     None => false,
                 }
+            }
+
+            fn plain_value(&self) -> Self::Plain {
+                self.value
+            }
+
+            fn set_plain_value(&mut self, plain: Self::Plain) {
+                self.value = plain;
             }
 
             fn normalized_value(&self) -> f32 {
@@ -142,8 +161,8 @@ macro_rules! impl_plainparam {
     };
 }
 
-impl_plainparam!(FloatParam);
-impl_plainparam!(IntParam);
+impl_plainparam!(FloatParam, f32);
+impl_plainparam!(IntParam, i32);
 
 impl<T: Display + Copy> Display for PlainParam<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
