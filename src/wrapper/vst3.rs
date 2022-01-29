@@ -969,9 +969,6 @@ impl<P: Vst3Plugin> IPluginFactory3 for Factory<P> {
 }
 
 /// Export a VST3 plugin from this library using the provided plugin type.
-///
-/// TODO: Come up with some way to hae Cargo spit out a VST3 module. Is that possible without a
-///       custom per-plugin build script?
 #[macro_export]
 macro_rules! nih_export_vst3 {
     ($plugin_ty:ty) => {

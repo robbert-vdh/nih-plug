@@ -9,6 +9,16 @@ not meant for general use (yet), the plugin API is limited to the functionality
 I needed, and I'll expose more functionality as I need it. See the doc comment
 in the `Plugin` trait for an incomplete list of missing functionality.
 
+## Building
+
+After installing [https://rustup.rs/](Rust) you can compile any of the plugins
+in the `plugins` directory in the following way, replacing `gain` with the name
+of the plugin:
+
+```shell
+cargo xtask bundle gain --release --bundle-vst3
+```
+
 ## Licensing
 
 Right now everything is licensed under the GPLv3+ license, partly because the

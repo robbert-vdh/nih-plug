@@ -3,6 +3,12 @@
 version = 3
 
 [[package]]
+name = "anyhow"
+version = "1.0.53"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94a45b455c14666b85fc40a019e8ab9eb75e3a124e05494f5397122bc9eb06e0"
+
+[[package]]
 name = "gain"
 version = "0.1.0"
 dependencies = [
@@ -159,3 +165,6 @@ checksum = "e6f1efe828a707edf85994a4501734ac1c1b9d244cfcf4de235f11c4125ace8f"
 [[package]]
 name = "xtask"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+]
