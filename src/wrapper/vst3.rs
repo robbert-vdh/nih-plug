@@ -381,6 +381,13 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
             }
         }
 
+        // The plugin can also persist arbitrary fields alongside its parameters. This is useful for
+        // storing things like sample data.
+        self.plugin
+            .borrow()
+            .params()
+            .deserialize_fields(&state.fields);
+
         kResultOk
     }
 
@@ -410,8 +417,11 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
             ParamValue::Bool(self.bypass_state.get()),
         );
 
-        let plugin_state = State { params };
+        // The plugin can also persist arbitrary fields alongside its parameters. This is useful for
+        // storing things like sample data.
+        let fields = self.plugin.borrow().params().serialize_fields();
 
+        let plugin_state = State { params, fields };
         match serde_json::to_vec(&plugin_state) {
             Ok(serialized) => {
                 let mut num_bytes_written = 0;
