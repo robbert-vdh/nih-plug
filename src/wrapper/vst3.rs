@@ -733,11 +733,44 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
     unsafe fn process(&self, data: *mut vst3_sys::vst::ProcessData) -> tresult {
         check_null_ptr!(data);
 
+        // We need to handle incoming automation first
+        let data = &*data;
+        if let Some(param_changes) = data.input_param_changes.upgrade() {
+            let num_param_queues = param_changes.get_parameter_count();
+            for change_queue_idx in 0..num_param_queues {
+                if let Some(param_change_queue) =
+                    param_changes.get_parameter_data(change_queue_idx).upgrade()
+                {
+                    let param_hash = param_change_queue.get_parameter_id();
+                    let num_changes = param_change_queue.get_point_count();
+
+                    // TODO: Handle sample accurate parameter changes, possibly in a similar way to
+                    //       the smoothing
+                    let mut sample_offset = 0i32;
+                    let mut value = 0.0f64;
+                    if num_changes > 0
+                        && param_change_queue.get_point(
+                            num_changes - 1,
+                            &mut sample_offset,
+                            &mut value,
+                        ) == kResultOk
+                    {
+                        self.set_normalized_value_by_hash(param_hash, value);
+                    }
+                }
+            }
+        }
+
+        // It's possible the host only wanted to send new parameter values
+        if data.num_outputs == 0 {
+            nih_log!("VST3 parameter flush");
+            return kResultOk;
+        }
+
         // The setups we suppport are:
         // - 1 input bus
         // - 1 output bus
         // - 1 input bus and 1 output bus
-        let data = &*data;
         nih_debug_assert!(
             data.num_inputs >= 0
                 && data.num_inputs <= 1
@@ -750,10 +783,6 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
             vst3_sys::vst::SymbolicSampleSizes::kSample32 as i32
         );
         nih_debug_assert!(data.num_samples >= 0);
-        if data.num_outputs < 1 {
-            nih_debug_assert_failure!("The host doesn't provide any outputs");
-            return kInvalidArgument;
-        }
 
         // This vector has been reallocated to contain enough slices as there are output channels
         let mut output_slices = self.output_slices.borrow_mut();
@@ -792,32 +821,6 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
                         output_channel_ptr,
                         data.num_samples as usize,
                     );
-                }
-            }
-        }
-
-        if let Some(param_changes) = data.input_param_changes.upgrade() {
-            let num_param_queues = param_changes.get_parameter_count();
-            for change_queue_idx in 0..num_param_queues {
-                if let Some(param_change_queue) =
-                    param_changes.get_parameter_data(change_queue_idx).upgrade()
-                {
-                    let param_hash = param_change_queue.get_parameter_id();
-                    let num_changes = param_change_queue.get_point_count();
-
-                    // TODO: Handle sample accurate parameter changes, possibly in a similar way to
-                    //       the smoothing
-                    let mut sample_offset = 0i32;
-                    let mut value = 0.0f64;
-                    if num_changes > 0
-                        && param_change_queue.get_point(
-                            num_changes - 1,
-                            &mut sample_offset,
-                            &mut value,
-                        ) == kResultOk
-                    {
-                        self.set_normalized_value_by_hash(param_hash, value);
-                    }
                 }
             }
         }
