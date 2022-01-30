@@ -21,6 +21,11 @@ use std::pin::Pin;
 pub type FloatParam = PlainParam<f32>;
 pub type IntParam = PlainParam<i32>;
 
+/// Re-export for use in the [Params] proc-macro.
+pub use serde_json::from_slice as deserialize_field;
+/// Re-export for use in the [Params] proc-macro.
+pub use serde_json::to_vec as serialize_field;
+
 /// A distribution for a parameter's range. Probably need to add some forms of skewed ranges and
 /// maybe a callback based implementation at some point.
 #[derive(Debug)]
@@ -292,16 +297,20 @@ impl NormalizebleRange<i32> for Range<i32> {
 /// This implementation is safe when using from the wrapper because the plugin object needs to be
 /// pinned, and it can never outlive the wrapper.
 pub trait Params {
-    /// Create a mapping from unique parameter IDs to parameters. Dereferencing the pointers stored
-    /// in the values is only valid as long as this pinned object is valid.
+    /// Create a mapping from unique parameter IDs to parameters. This is done for every parameter
+    /// field marked with `#[id = "stable_name"]`. Dereferencing the pointers stored in the values
+    /// is only valid as long as this pinned object is valid.
     fn param_map(self: Pin<&Self>) -> HashMap<&'static str, ParamPtr>;
 
-    // TODO: Also handle custom state persistence in this state. Instead o having a callback for
-    //       custom state loading and restoring, it will be way nicer to use serde for this. Another
-    //       attribute `#[persist]` can mark fields that are `Serialize + Deserialize`. They these
-    //       fields can then be serialized alongside the `param_id: normalized_value` pairs for
-    //       normal parameters.
-    // fn persistent_fields(self: Pin<&mut Self>) -> Vec<&mut (dyn Serialize + Deserialize + Send + Sync)>;
+    /// Serialize all fields marked with `#[persist = "stable_name"]` into a hash map containing
+    /// JSON-representations of those fields so they can be written to the plugin's state and
+    /// recalled later. This uses [serialize_field] under the hood.
+    fn serialize_fields(&self) -> HashMap<String, Vec<u8>>;
+
+    /// Restore all fields marked with `#[persist = "stable_name"]` from a hashmap created by
+    /// [Self::serialize_fields]. This gets called when the plugin's state is being restored. This
+    /// uses [deserialize_field] under the hood.
+    fn deserialize_fields(&mut self, serialized: HashMap<&str, Vec<u8>>);
 }
 
 /// Internal pointers to parameters. This is an implementation detail used by the wrappers.
