@@ -360,7 +360,7 @@ pub trait Params {
     fn serialize_fields(&self) -> HashMap<String, Vec<u8>>;
 
     /// Restore all fields marked with `#[persist = "stable_name"]` from a hashmap created by
-    /// [Self::serialize_fields]. All of thse fields should be wrapped in a [PersistentFieldq] with
+    /// [Self::serialize_fields]. All of thse fields should be wrapped in a [PersistentField] with
     /// thread safe interior mutability, like an `RwLock` or a `Mutex`. This gets called when the
     /// plugin's state is being restored. This uses [deserialize_field] under the hood.
     fn deserialize_fields(&self, serialized: &HashMap<String, Vec<u8>>);
