@@ -122,7 +122,7 @@ checksum = "8ccb82d61f80a663efe1f787a51b16b5a51e3314d6ac365b08639f52387b33f3"
 [[package]]
 name = "vst3-com"
 version = "0.1.0"
-source = "git+https://github.com/RustAudio/vst3-sys.git#b65de68a7ad22b67e246948baf888ff08b3f31e9"
+source = "git+https://github.com/robbert-vdh/vst3-sys.git?branch=feature/pointer-rewrite#5307e7763ed3fb37e67cd5ba9627d33b9bbb9426"
 dependencies = [
  "vst3-com-macros",
 ]
@@ -130,7 +130,7 @@ dependencies = [
 [[package]]
 name = "vst3-com-macros"
 version = "0.2.0"
-source = "git+https://github.com/RustAudio/vst3-sys.git#b65de68a7ad22b67e246948baf888ff08b3f31e9"
+source = "git+https://github.com/robbert-vdh/vst3-sys.git?branch=feature/pointer-rewrite#5307e7763ed3fb37e67cd5ba9627d33b9bbb9426"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -141,7 +141,7 @@ dependencies = [
 [[package]]
 name = "vst3-com-macros-support"
 version = "0.2.0"
-source = "git+https://github.com/RustAudio/vst3-sys.git#b65de68a7ad22b67e246948baf888ff08b3f31e9"
+source = "git+https://github.com/robbert-vdh/vst3-sys.git?branch=feature/pointer-rewrite#5307e7763ed3fb37e67cd5ba9627d33b9bbb9426"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -151,7 +151,7 @@ dependencies = [
 [[package]]
 name = "vst3-sys"
 version = "0.1.0"
-source = "git+https://github.com/RustAudio/vst3-sys.git#b65de68a7ad22b67e246948baf888ff08b3f31e9"
+source = "git+https://github.com/robbert-vdh/vst3-sys.git?branch=feature/pointer-rewrite#5307e7763ed3fb37e67cd5ba9627d33b9bbb9426"
 dependencies = [
  "vst3-com",
 ]

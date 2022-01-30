@@ -29,7 +29,7 @@ use std::ptr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use vst3_sys::base::{kInvalidArgument, kNoInterface, kResultFalse, kResultOk, tresult, TBool};
 use vst3_sys::base::{IBStream, IPluginBase, IPluginFactory, IPluginFactory2, IPluginFactory3};
-use vst3_sys::utils::VstPtr;
+use vst3_sys::utils::SharedVstPtr;
 use vst3_sys::vst::{
     IAudioProcessor, IComponent, IEditController, IParamValueQueue, IParameterChanges, TChar,
 };
@@ -296,7 +296,7 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
         kResultOk
     }
 
-    unsafe fn set_state(&self, state: VstPtr<dyn IBStream>) -> tresult {
+    unsafe fn set_state(&self, state: SharedVstPtr<dyn IBStream>) -> tresult {
         check_null_ptr!(state);
 
         let state = state.upgrade().unwrap();
@@ -370,7 +370,7 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
         kResultOk
     }
 
-    unsafe fn get_state(&self, state: VstPtr<dyn IBStream>) -> tresult {
+    unsafe fn get_state(&self, state: SharedVstPtr<dyn IBStream>) -> tresult {
         check_null_ptr!(state);
 
         let state = state.upgrade().unwrap();
@@ -412,12 +412,12 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
 }
 
 impl<P: Plugin> IEditController for Wrapper<'_, P> {
-    unsafe fn set_component_state(&self, _state: VstPtr<dyn IBStream>) -> tresult {
+    unsafe fn set_component_state(&self, _state: SharedVstPtr<dyn IBStream>) -> tresult {
         // We have a single file component, so we don't need to do anything here
         kResultOk
     }
 
-    unsafe fn set_state(&self, state: VstPtr<dyn IBStream>) -> tresult {
+    unsafe fn set_state(&self, state: SharedVstPtr<dyn IBStream>) -> tresult {
         // We have a single file component, so there's only one `set_state()` function. Unlike C++,
         // Rust allows you to have multiple methods with the same name when they're provided by
         // different treats, but because of the Rust implementation the host may call either of
@@ -425,7 +425,7 @@ impl<P: Plugin> IEditController for Wrapper<'_, P> {
         IComponent::set_state(self, state)
     }
 
-    unsafe fn get_state(&self, state: VstPtr<dyn IBStream>) -> tresult {
+    unsafe fn get_state(&self, state: SharedVstPtr<dyn IBStream>) -> tresult {
         // Same for this function
         IComponent::get_state(self, state)
     }
@@ -592,7 +592,7 @@ impl<P: Plugin> IEditController for Wrapper<'_, P> {
 
     unsafe fn set_component_handler(
         &self,
-        _handler: VstPtr<dyn vst3_sys::vst::IComponentHandler>,
+        _handler: SharedVstPtr<dyn vst3_sys::vst::IComponentHandler>,
     ) -> tresult {
         // TODO: Use this when we add GUI support
         kResultOk

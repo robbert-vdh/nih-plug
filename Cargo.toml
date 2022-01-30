@@ -13,5 +13,5 @@ nih_plug_derive = { path = "nih_plug_derive" }
 lazy_static = "1.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-vst3-sys = { git = "https://github.com/RustAudio/vst3-sys.git" }
+vst3-sys = { git = "https://github.com/robbert-vdh/vst3-sys.git", branch = "feature/pointer-rewrite" }
 widestring = "1.0.0-beta.1"
