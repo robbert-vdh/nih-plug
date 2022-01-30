@@ -17,6 +17,7 @@
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::pin::Pin;
+use std::sync::{Mutex, RwLock};
 
 pub type FloatParam = PlainParam<f32>;
 pub type IntParam = PlainParam<i32>;
@@ -25,6 +26,48 @@ pub type IntParam = PlainParam<i32>;
 pub use serde_json::from_slice as deserialize_field;
 /// Re-export for use in the [Params] proc-macro.
 pub use serde_json::to_vec as serialize_field;
+
+/// The functinoality needed for persisting a field to the plugin's state, and for restoring values
+/// when loading old state.
+pub trait PersistentField<'a, T>: Send + Sync
+where
+    T: serde::Serialize + serde::Deserialize<'a>,
+{
+    fn set(&self, new_value: T);
+    fn map<F, R>(&self, f: F) -> R
+    where
+        F: Fn(&T) -> R;
+}
+
+impl<'a, T> PersistentField<'a, T> for RwLock<T>
+where
+    T: serde::Serialize + serde::Deserialize<'a> + Send + Sync,
+{
+    fn set(&self, new_value: T) {
+        *self.write().expect("Poisoned RwLock on write") = new_value;
+    }
+    fn map<F, R>(&self, f: F) -> R
+    where
+        F: Fn(&T) -> R,
+    {
+        f(&self.read().expect("Poisoned RwLock on read"))
+    }
+}
+
+impl<'a, T> PersistentField<'a, T> for Mutex<T>
+where
+    T: serde::Serialize + serde::Deserialize<'a> + Send + Sync,
+{
+    fn set(&self, new_value: T) {
+        *self.lock().expect("Poisoned Mutex") = new_value;
+    }
+    fn map<F, R>(&self, f: F) -> R
+    where
+        F: Fn(&T) -> R,
+    {
+        f(&self.lock().expect("Poisoned Mutex"))
+    }
+}
 
 /// A distribution for a parameter's range. Probably need to add some forms of skewed ranges and
 /// maybe a callback based implementation at some point.
@@ -285,12 +328,15 @@ impl NormalizebleRange<i32> for Range<i32> {
     }
 }
 
-/// Describes a struct containing parameters. The idea is that we can have a normal struct
-/// containing [FloatParam] and other parameter types with attributes describing a unique identifier
-/// for each parameter. We can then build a mapping from those parameter IDs to the parameters using
-/// the [Params::param_map] function. That way we can have easy to work with JUCE-style parameter
-/// objects in the plugin without needing to manually register each parameter, like you would in
-/// JUCE.
+/// Describes a struct containing parameters and other persistent fields. The idea is that we can
+/// have a normal struct containing [FloatParam] and other parameter types with attributes assigning
+/// a unique identifier to each parameter. We can then build a mapping from those parameter IDs to
+/// the parameters using the [Params::param_map] function. That way we can have easy to work with
+/// JUCE-style parameter objects in the plugin without needing to manually register each parameter,
+/// like you would in JUCE.
+///
+/// The other persistent parameters should be [PersistentField]s containing types that can be
+/// serialized and deserialized with Serde.
 ///
 /// # Safety
 ///
@@ -308,9 +354,10 @@ pub trait Params {
     fn serialize_fields(&self) -> HashMap<String, Vec<u8>>;
 
     /// Restore all fields marked with `#[persist = "stable_name"]` from a hashmap created by
-    /// [Self::serialize_fields]. This gets called when the plugin's state is being restored. This
-    /// uses [deserialize_field] under the hood.
-    fn deserialize_fields(&mut self, serialized: HashMap<&str, Vec<u8>>);
+    /// [Self::serialize_fields]. All of thse fields should be wrapped in a [PersistentFieldq] with
+    /// thread safe interior mutability, like an `RwLock` or a `Mutex`. This gets called when the
+    /// plugin's state is being restored. This uses [deserialize_field] under the hood.
+    fn deserialize_fields(&self, serialized: &HashMap<String, Vec<u8>>);
 }
 
 /// Internal pointers to parameters. This is an implementation detail used by the wrappers.

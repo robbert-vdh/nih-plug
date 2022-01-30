@@ -24,6 +24,7 @@ use nih_plug::{
     util,
 };
 use std::pin::Pin;
+use std::sync::RwLock;
 
 struct Gain {
     params: Pin<Box<GainParams>>,
@@ -38,7 +39,7 @@ struct GainParams {
     /// together with a preset/state file saved for this plugin. This can be useful for storign
     /// things like sample data.
     #[persist = "industry_secrets"]
-    pub random_data: Vec<f32>,
+    pub random_data: RwLock<Vec<f32>>,
 }
 
 impl Default for Gain {
@@ -63,7 +64,7 @@ impl Default for GainParams {
                 value_to_string: formatters::f32_rounded(2),
                 string_to_value: None,
             },
-            random_data: Vec::new(),
+            random_data: RwLock::new(Vec::new()),
         }
     }
 }

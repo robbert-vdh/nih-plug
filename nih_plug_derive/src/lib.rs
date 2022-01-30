@@ -102,34 +102,36 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                 // function we get type erasure for free since we only need to worry about byte
                 // vectors
                 field_serialize_tokens.push(quote! {
-                    match ::nih_plug::params::serialize_field(&self.#field_name) {
+                    match ::nih_plug::params::PersistentField::map(
+                        &self.#field_name,
+                        ::nih_plug::params::serialize_field,
+                    ) {
                         Ok(data) => {
                             serialized.insert(String::from(#stable_name), data);
                         }
                         Err(err) => {
-                            ::nih_plug::nih_log!(
-                                "Could not serialize '{}': {}",
-                                #stable_name,
-                                err
-                            )
+                            ::nih_plug::nih_log!("Could not serialize '{}': {}", #stable_name, err)
                         }
                     };
                 });
                 field_deserialize_tokens.push(quote! {
-                     #stable_name => {
-                         match ::nih_plug::params::deserialize_field(&data) {
-                             Ok(deserialized) => {
-                                 self.#field_name = deserialized;
-                             }
-                             Err(err) => {
-                                 ::nih_plug::nih_log!(
-                                     "Could not deserialize '{}': {}",
-                                     #stable_name,
-                                     err
-                                 )
-                             }
-                         };
-                     }
+                    #stable_name => {
+                        match ::nih_plug::params::deserialize_field(&data) {
+                            Ok(deserialized) => {
+                                ::nih_plug::params::PersistentField::set(
+                                    &self.#field_name,
+                                    deserialized,
+                                );
+                            }
+                            Err(err) => {
+                                ::nih_plug::nih_log!(
+                                    "Could not deserialize '{}': {}",
+                                    #stable_name,
+                                    err
+                                )
+                            }
+                        };
+                    }
                 });
             }
             (Some(_), Some(_)) => {
@@ -164,9 +166,9 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                 serialized
             }
 
-            fn deserialize_fields(&mut self, serialized: ::std::collections::HashMap<&str, Vec<u8>>) {
+            fn deserialize_fields(&self, serialized: &::std::collections::HashMap<String, Vec<u8>>) {
                 for (field_name, data) in serialized {
-                    match field_name {
+                    match field_name.as_str() {
                         #(#field_deserialize_tokens)*
                         _ => nih_log!("Unknown field name: {}", field_name),
                     }
