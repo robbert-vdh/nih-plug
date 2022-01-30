@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+//! TODO: Document how to use the [Param] trait. For the moment, just look at the gain example.
+
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::pin::Pin;
@@ -31,6 +33,8 @@ pub use serde_json::to_vec as serialize_field;
 /// when loading old state.
 ///
 /// TODO: Replace uses of standard library synchronization primitives with parking_lot's
+/// TODO: Modifying these fields (or any parameter for that matter) should mark the plugin's state
+///       as dirty.
 pub trait PersistentField<'a, T>: Send + Sync
 where
     T: serde::Serialize + serde::Deserialize<'a>,
