@@ -25,6 +25,7 @@ use std::collections::HashMap;
 pub(crate) enum ParamValue {
     F32(f32),
     I32(i32),
+    Bool(bool),
 }
 
 /// A plugin's state so it can be restored at a later point.

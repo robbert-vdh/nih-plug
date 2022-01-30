@@ -341,6 +341,20 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
         };
 
         for (param_id_str, param_value) in state.params {
+            // Handle the bypass parameter separately
+            if param_id_str == BYPASS_PARAM_ID {
+                match param_value {
+                    ParamValue::Bool(b) => self.bypass_state.set(b),
+                    _ => nih_debug_assert_failure!(
+                        "Invalid serialized value {:?} for parameter {} ({:?})",
+                        param_value,
+                        param_id_str,
+                        param_id_str,
+                    ),
+                };
+                continue;
+            }
+
             let param_ptr = match self
                 .param_hash_to_id
                 .get(param_id_str.as_str())
@@ -376,7 +390,7 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
         let state = state.upgrade().unwrap();
 
         // We'll serialize parmaeter values as a simple `string_param_id: display_value` map.
-        let params = self
+        let mut params: HashMap<_, _> = self
             .param_id_to_hash
             .iter()
             .filter_map(|(hash, param_id_str)| {
@@ -388,6 +402,13 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
                 ParamPtr::IntParam(p) => (param_id_str.to_string(), ParamValue::I32((*p).value)),
             })
             .collect();
+
+        // Don't forget about the bypass parameter
+        params.insert(
+            BYPASS_PARAM_ID.to_string(),
+            ParamValue::Bool(self.bypass_state.get()),
+        );
+
         let plugin_state = State { params };
 
         match serde_json::to_vec(&plugin_state) {
