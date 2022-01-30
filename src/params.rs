@@ -62,6 +62,21 @@ pub struct PlainParam<T> {
     pub string_to_value: Option<Box<dyn Send + Sync + Fn(&str) -> Option<T>>>,
 }
 
+/// A simple boolean parmaeter.
+pub struct BoolParam {
+    /// The field's current, normalized value. Should be initialized with the default value.
+    pub value: bool,
+
+    /// The parameter's human readable display name.
+    pub name: &'static str,
+    /// Optional custom conversion function from a boolean value to a string.
+    pub value_to_string: Option<Box<dyn Send + Sync + Fn(bool) -> String>>,
+    /// Optional custom conversion function from a string to a boolean value. If the string cannot
+    /// be parsed, then this should return a `None`. If this happens while the parameter is being
+    /// updated then the update will be canceled.
+    pub string_to_value: Option<Box<dyn Send + Sync + Fn(&str) -> Option<bool>>>,
+}
+
 /// Describes a single parmaetre of any type.
 pub trait Param {
     /// The plain parameter type.
@@ -164,6 +179,66 @@ macro_rules! impl_plainparam {
 impl_plainparam!(FloatParam, f32);
 impl_plainparam!(IntParam, i32);
 
+impl Param for BoolParam {
+    type Plain = bool;
+
+    fn set_from_string(&mut self, string: &str) -> bool {
+        let value = match &self.string_to_value {
+            Some(f) => f(string),
+            None => Some(string.eq_ignore_ascii_case("true")),
+        };
+
+        match value {
+            Some(plain) => {
+                self.value = plain;
+                true
+            }
+            None => false,
+        }
+    }
+
+    fn plain_value(&self) -> Self::Plain {
+        self.value
+    }
+
+    fn set_plain_value(&mut self, plain: Self::Plain) {
+        self.value = plain;
+    }
+
+    fn normalized_value(&self) -> f32 {
+        if self.value {
+            1.0
+        } else {
+            0.0
+        }
+    }
+
+    fn set_normalized_value(&mut self, normalized: f32) {
+        self.value = normalized > 0.5;
+    }
+
+    fn normalized_value_to_string(&self, normalized: f32, _include_unit: bool) -> String {
+        let value = normalized > 0.5;
+        match &self.value_to_string {
+            Some(f) => format!("{}", f(value)),
+            None => format!("{}", value),
+        }
+    }
+
+    fn string_to_normalized_value(&self, string: &str) -> Option<f32> {
+        let value = match &self.string_to_value {
+            Some(f) => f(string),
+            None => Some(string.eq_ignore_ascii_case("true")),
+        }?;
+
+        Some(if value { 1.0 } else { 0.0 })
+    }
+
+    fn as_ptr(&self) -> ParamPtr {
+        ParamPtr::BoolParam(self as *const BoolParam as *mut BoolParam)
+    }
+}
+
 impl<T: Display + Copy> Display for PlainParam<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.value_to_string {
@@ -234,6 +309,7 @@ pub trait Params {
 pub enum ParamPtr {
     FloatParam(*mut FloatParam),
     IntParam(*mut IntParam),
+    BoolParam(*mut BoolParam),
 }
 
 impl ParamPtr {
@@ -247,6 +323,7 @@ impl ParamPtr {
         match &self {
             ParamPtr::FloatParam(p) => (**p).name,
             ParamPtr::IntParam(p) => (**p).name,
+            ParamPtr::BoolParam(p) => (**p).name,
         }
     }
 
@@ -260,6 +337,7 @@ impl ParamPtr {
         match &self {
             ParamPtr::FloatParam(p) => (**p).unit,
             ParamPtr::IntParam(p) => (**p).unit,
+            ParamPtr::BoolParam(_) => "",
         }
     }
 
@@ -274,6 +352,7 @@ impl ParamPtr {
         match &self {
             ParamPtr::FloatParam(p) => (**p).set_from_string(string),
             ParamPtr::IntParam(p) => (**p).set_from_string(string),
+            ParamPtr::BoolParam(p) => (**p).set_from_string(string),
         }
     }
 
@@ -287,6 +366,7 @@ impl ParamPtr {
         match &self {
             ParamPtr::FloatParam(p) => (**p).normalized_value(),
             ParamPtr::IntParam(p) => (**p).normalized_value(),
+            ParamPtr::BoolParam(p) => (**p).normalized_value(),
         }
     }
 
@@ -300,6 +380,7 @@ impl ParamPtr {
         match &self {
             ParamPtr::FloatParam(p) => (**p).set_normalized_value(normalized),
             ParamPtr::IntParam(p) => (**p).set_normalized_value(normalized),
+            ParamPtr::BoolParam(p) => (**p).set_normalized_value(normalized),
         }
     }
 
@@ -314,6 +395,7 @@ impl ParamPtr {
         match &self {
             ParamPtr::FloatParam(p) => (**p).range.normalize(plain),
             ParamPtr::IntParam(p) => (**p).range.normalize(plain as i32),
+            ParamPtr::BoolParam(_) => plain,
         }
     }
 
@@ -328,6 +410,7 @@ impl ParamPtr {
         match &self {
             ParamPtr::FloatParam(p) => (**p).range.unnormalize(normalized),
             ParamPtr::IntParam(p) => (**p).range.unnormalize(normalized) as f32,
+            ParamPtr::BoolParam(_) => normalized,
         }
     }
 
@@ -343,6 +426,7 @@ impl ParamPtr {
         match &self {
             ParamPtr::FloatParam(p) => (**p).normalized_value_to_string(normalized, include_unit),
             ParamPtr::IntParam(p) => (**p).normalized_value_to_string(normalized, include_unit),
+            ParamPtr::BoolParam(p) => (**p).normalized_value_to_string(normalized, include_unit),
         }
     }
 
@@ -356,6 +440,7 @@ impl ParamPtr {
         match &self {
             ParamPtr::FloatParam(p) => (**p).string_to_normalized_value(string),
             ParamPtr::IntParam(p) => (**p).string_to_normalized_value(string),
+            ParamPtr::BoolParam(p) => (**p).string_to_normalized_value(string),
         }
     }
 }
