@@ -38,5 +38,8 @@ pub(crate) struct State {
     /// Arbitrary fields that should be persisted together with the plugin's parameters. Any field
     /// on the [Params] struct that's annotated with `#[persist = "stable_name"]` will be persisted
     /// this way.
+    ///
+    /// TODO: Serialize this as base64 or some other more densely packed representation. Currently
+    ///       every bute takes up 2-4 ASCII characters
     pub fields: HashMap<String, Vec<u8>>,
 }
