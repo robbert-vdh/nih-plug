@@ -16,7 +16,6 @@
 
 //! Utilities for saving a [crate::plugin::Plugin]'s state.
 
-use serde::de::Error;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -40,38 +39,7 @@ pub(crate) struct State {
     /// on the [Params] struct that's annotated with `#[persist = "stable_name"]` will be persisted
     /// this way.
     ///
-    /// The individual JSON-serialized fields are encoded as base64 strings so they don't take up as
-    /// much space in the preset. Storing them as a plain JSON string would have also been possible,
-    /// but that can get messy with escaping since those will likely also contain double quotes.
-    #[serde(serialize_with = "encode_fields")]
-    #[serde(deserialize_with = "decode_fields")]
-    pub fields: HashMap<String, Vec<u8>>,
-}
-
-fn encode_fields<S>(bytes: &HashMap<String, Vec<u8>>, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    serializer.collect_map(
-        bytes
-            .into_iter()
-            .map(|(id, json)| (id, base64::encode(json))),
-    )
-}
-
-fn decode_fields<'de, D>(deserializer: D) -> Result<HashMap<String, Vec<u8>>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let base64_map: HashMap<String, String> = HashMap::deserialize(deserializer)?;
-    let decoded_map: Result<HashMap<String, Vec<u8>>, D::Error> = base64_map
-        .into_iter()
-        .map(|(id, base64)| {
-            base64::decode(base64)
-                .map(|decoded| (id, decoded))
-                .map_err(|err| D::Error::custom(format!("base64 decode failed: {}", err)))
-        })
-        .collect();
-
-    Ok(decoded_map?)
+    /// The individual fields are also serialized as JSON so they can safely be restored
+    /// independently of the other fields.
+    pub fields: HashMap<String, String>,
 }

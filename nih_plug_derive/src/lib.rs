@@ -158,7 +158,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                 param_map
             }
 
-            fn serialize_fields(&self) -> ::std::collections::HashMap<String, Vec<u8>> {
+            fn serialize_fields(&self) -> ::std::collections::HashMap<String, String> {
                 let mut serialized = ::std::collections::HashMap::new();
 
                 #(#field_serialize_tokens)*
@@ -166,7 +166,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                 serialized
             }
 
-            fn deserialize_fields(&self, serialized: &::std::collections::HashMap<String, Vec<u8>>) {
+            fn deserialize_fields(&self, serialized: &::std::collections::HashMap<String, String>) {
                 for (field_name, data) in serialized {
                     match field_name.as_str() {
                         #(#field_deserialize_tokens)*

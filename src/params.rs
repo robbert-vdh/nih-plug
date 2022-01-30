@@ -25,9 +25,9 @@ pub type FloatParam = PlainParam<f32>;
 pub type IntParam = PlainParam<i32>;
 
 /// Re-export for use in the [Params] proc-macro.
-pub use serde_json::from_slice as deserialize_field;
+pub use serde_json::from_str as deserialize_field;
 /// Re-export for use in the [Params] proc-macro.
-pub use serde_json::to_vec as serialize_field;
+pub use serde_json::to_string as serialize_field;
 
 /// The functinoality needed for persisting a field to the plugin's state, and for restoring values
 /// when loading old state.
@@ -357,13 +357,13 @@ pub trait Params {
     /// Serialize all fields marked with `#[persist = "stable_name"]` into a hash map containing
     /// JSON-representations of those fields so they can be written to the plugin's state and
     /// recalled later. This uses [serialize_field] under the hood.
-    fn serialize_fields(&self) -> HashMap<String, Vec<u8>>;
+    fn serialize_fields(&self) -> HashMap<String, String>;
 
     /// Restore all fields marked with `#[persist = "stable_name"]` from a hashmap created by
     /// [Self::serialize_fields]. All of thse fields should be wrapped in a [PersistentField] with
     /// thread safe interior mutability, like an `RwLock` or a `Mutex`. This gets called when the
     /// plugin's state is being restored. This uses [deserialize_field] under the hood.
-    fn deserialize_fields(&self, serialized: &HashMap<String, Vec<u8>>);
+    fn deserialize_fields(&self, serialized: &HashMap<String, String>);
 }
 
 /// Internal pointers to parameters. This is an implementation detail used by the wrappers.
