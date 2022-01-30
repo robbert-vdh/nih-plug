@@ -33,6 +33,12 @@ struct Gain {
 struct GainParams {
     #[id = "gain"]
     pub gain: FloatParam,
+
+    /// This field isn't used in this exampleq, but anything written to the vector would be restored
+    /// together with a preset/state file saved for this plugin. This can be useful for storign
+    /// things like sample data.
+    #[persist = "industry_secrets"]
+    pub random_data: Vec<f32>,
 }
 
 impl Default for Gain {
@@ -57,6 +63,7 @@ impl Default for GainParams {
                 value_to_string: formatters::f32_rounded(2),
                 string_to_value: None,
             },
+            random_data: Vec::new(),
         }
     }
 }
