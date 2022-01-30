@@ -642,33 +642,37 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
     ) -> tresult {
         check_null_ptr!(arr);
 
-        let config = self.current_bus_config.borrow();
-        match (dir, index) {
-            (d, 0) if d == vst3_sys::vst::BusDirections::kInput as i32 => {
-                let channel_map = match config.num_input_channels {
-                    0 => vst3_sys::vst::kEmpty,
-                    1 => vst3_sys::vst::kMono,
-                    2 => vst3_sys::vst::kStereo,
-                    5 => vst3_sys::vst::k50,
-                    6 => vst3_sys::vst::k51,
-                    7 => vst3_sys::vst::k70Cine,
-                    8 => vst3_sys::vst::k71Cine,
-                    n => {
-                        nih_debug_assert_failure!(
-                            "No defined layout for {} channels, making something up on the spot...",
-                            n
-                        );
-                        (1 << n) - 1
-                    }
-                };
-
-                nih_debug_assert_eq!(config.num_input_channels, channel_map.count_ones());
-                *arr = channel_map;
-
-                kResultOk
+        let channel_count_to_map = |count| match count {
+            0 => vst3_sys::vst::kEmpty,
+            1 => vst3_sys::vst::kMono,
+            2 => vst3_sys::vst::kStereo,
+            5 => vst3_sys::vst::k50,
+            6 => vst3_sys::vst::k51,
+            7 => vst3_sys::vst::k70Cine,
+            8 => vst3_sys::vst::k71Cine,
+            n => {
+                nih_debug_assert_failure!(
+                    "No defined layout for {} channels, making something up on the spot...",
+                    n
+                );
+                (1 << n) - 1
             }
-            _ => kInvalidArgument,
-        }
+        };
+
+        let config = self.current_bus_config.borrow();
+        let num_channels = match (dir, index) {
+            (d, 0) if d == vst3_sys::vst::BusDirections::kInput as i32 => config.num_input_channels,
+            (d, 0) if d == vst3_sys::vst::BusDirections::kOutput as i32 => {
+                config.num_output_channels
+            }
+            _ => return kInvalidArgument,
+        };
+        let channel_map = channel_count_to_map(num_channels);
+
+        nih_debug_assert_eq!(config.num_input_channels, channel_map.count_ones());
+        *arr = channel_map;
+
+        kResultOk
     }
 
     unsafe fn can_process_sample_size(&self, symbolic_sample_size: i32) -> tresult {
