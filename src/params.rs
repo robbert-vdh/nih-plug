@@ -29,6 +29,8 @@ pub use serde_json::to_vec as serialize_field;
 
 /// The functinoality needed for persisting a field to the plugin's state, and for restoring values
 /// when loading old state.
+///
+/// TODO: Replace uses of standard library synchronization primitives with parking_lot's
 pub trait PersistentField<'a, T>: Send + Sync
 where
     T: serde::Serialize + serde::Deserialize<'a>,
