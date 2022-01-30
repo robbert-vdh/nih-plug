@@ -17,6 +17,6 @@
 //! Convenience functions for formatting and parsing parameter values in common formats.
 
 /// Round an `f32` value to always have a specific number of decimal digits.
-pub fn f32_rounded(digits: usize) -> Option<Box<dyn Send + Sync + Fn(f32) -> String>> {
+pub fn f32_rounded(digits: usize) -> Option<Box<dyn Fn(f32) -> String + Send + Sync>> {
     Some(Box::new(move |x| format!("{:.digits$}", x)))
 }
