@@ -59,6 +59,9 @@ pub struct PlainParam<T> {
     /// Optional callback for listening to value changes. The argument passed to this function is
     /// the parameter's new **plain** value. This should not do anything expensive as it may be
     /// called multiple times in rapid succession.
+    ///
+    /// To use this, you'll probably want to store an `Arc<Atomic*>` alongside the parmater in the
+    /// parmaeters struct, move a clone of that `Arc` into this closure, and then modify that.
     pub value_changed: Option<Arc<dyn Fn(T) -> () + Send + Sync>>,
 
     /// The distribution of the parameter's values.
@@ -128,6 +131,48 @@ pub trait Param {
 
     /// Internal implementation detail for implementing [Params]. This should not be used directly.
     fn as_ptr(&self) -> ParamPtr;
+}
+
+impl<T> Default for PlainParam<T>
+where
+    T: Default,
+    Range<T>: Default,
+{
+    fn default() -> Self {
+        Self {
+            value: T::default(),
+            value_changed: None,
+            range: Range::default(),
+            name: "",
+            unit: "",
+            value_to_string: None,
+            string_to_value: None,
+        }
+    }
+}
+
+impl Default for BoolParam {
+    fn default() -> Self {
+        Self {
+            value: false,
+            value_changed: None,
+            name: "",
+            value_to_string: None,
+            string_to_value: None,
+        }
+    }
+}
+
+impl Default for Range<f32> {
+    fn default() -> Self {
+        Self::Linear { min: 0.0, max: 1.0 }
+    }
+}
+
+impl Default for Range<i32> {
+    fn default() -> Self {
+        Self::Linear { min: 0, max: 1 }
+    }
 }
 
 macro_rules! impl_plainparam {
