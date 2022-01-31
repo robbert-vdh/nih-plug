@@ -19,7 +19,7 @@ extern crate nih_plug;
 
 use nih_plug::{
     formatters,
-    params::{FloatParam, Param, Params, Range},
+    params::{BoolParam, FloatParam, Param, Params, Range},
     plugin::{BufferConfig, BusConfig, Plugin, ProcessStatus, Vst3Plugin},
     util,
 };
@@ -34,6 +34,9 @@ struct Gain {
 struct GainParams {
     #[id = "gain"]
     pub gain: FloatParam,
+
+    #[id = "as_long_as_this_name_stays_constant"]
+    pub the_field_name_can_change: BoolParam,
 
     /// This field isn't used in this exampleq, but anything written to the vector would be restored
     /// together with a preset/state file saved for this plugin. This can be useful for storign
@@ -69,6 +72,13 @@ impl Default for GainParams {
                 unit: " dB",
                 value_to_string: formatters::f32_rounded(2),
                 string_to_value: None,
+            },
+            // For brevity's sake you can also use the default values. Don't forget to set the field
+            // name, default value, and range though.
+            the_field_name_can_change: BoolParam {
+                value: false,
+                name: "Important Value",
+                ..BoolParam::default()
             },
             random_data: RwLock::new(Vec::new()),
         }
