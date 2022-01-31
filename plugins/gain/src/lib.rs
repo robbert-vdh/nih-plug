@@ -23,8 +23,8 @@ use nih_plug::{
     plugin::{BufferConfig, BusConfig, Plugin, ProcessStatus, Vst3Plugin},
     util,
 };
+use parking_lot::RwLock;
 use std::pin::Pin;
-use std::sync::RwLock;
 
 struct Gain {
     params: Pin<Box<GainParams>>,

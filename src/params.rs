@@ -19,7 +19,6 @@
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::pin::Pin;
-use std::sync::{Mutex, RwLock};
 
 pub type FloatParam = PlainParam<f32>;
 pub type IntParam = PlainParam<i32>;
@@ -32,7 +31,6 @@ pub use serde_json::to_string as serialize_field;
 /// The functinoality needed for persisting a field to the plugin's state, and for restoring values
 /// when loading old state.
 ///
-/// TODO: Replace uses of standard library synchronization primitives with parking_lot's
 /// TODO: Modifying these fields (or any parameter for that matter) should mark the plugin's state
 ///       as dirty.
 pub trait PersistentField<'a, T>: Send + Sync
@@ -45,7 +43,7 @@ where
         F: Fn(&T) -> R;
 }
 
-impl<'a, T> PersistentField<'a, T> for RwLock<T>
+impl<'a, T> PersistentField<'a, T> for std::sync::RwLock<T>
 where
     T: serde::Serialize + serde::Deserialize<'a> + Send + Sync,
 {
@@ -60,7 +58,22 @@ where
     }
 }
 
-impl<'a, T> PersistentField<'a, T> for Mutex<T>
+impl<'a, T> PersistentField<'a, T> for parking_lot::RwLock<T>
+where
+    T: serde::Serialize + serde::Deserialize<'a> + Send + Sync,
+{
+    fn set(&self, new_value: T) {
+        *self.write() = new_value;
+    }
+    fn map<F, R>(&self, f: F) -> R
+    where
+        F: Fn(&T) -> R,
+    {
+        f(&self.read())
+    }
+}
+
+impl<'a, T> PersistentField<'a, T> for std::sync::Mutex<T>
 where
     T: serde::Serialize + serde::Deserialize<'a> + Send + Sync,
 {
@@ -74,6 +87,28 @@ where
         f(&self.lock().expect("Poisoned Mutex"))
     }
 }
+
+macro_rules! impl_persistent_field_parking_lot_mutex {
+    ($ty:ty) => {
+        impl<'a, T> PersistentField<'a, T> for $ty
+        where
+            T: serde::Serialize + serde::Deserialize<'a> + Send + Sync,
+        {
+            fn set(&self, new_value: T) {
+                *self.lock() = new_value;
+            }
+            fn map<F, R>(&self, f: F) -> R
+            where
+                F: Fn(&T) -> R,
+            {
+                f(&self.lock())
+            }
+        }
+    };
+}
+
+impl_persistent_field_parking_lot_mutex!(parking_lot::Mutex<T>);
+impl_persistent_field_parking_lot_mutex!(parking_lot::FairMutex<T>);
 
 /// A distribution for a parameter's range. Probably need to add some forms of skewed ranges and
 /// maybe a callback based implementation at some point.
@@ -373,6 +408,11 @@ pub enum ParamPtr {
     IntParam(*mut IntParam),
     BoolParam(*mut BoolParam),
 }
+
+// These pointers only point to fields on pinned structs, and the caller always needs to make sure
+// that dereferencing them is safe
+unsafe impl Send for ParamPtr {}
+unsafe impl Sync for ParamPtr {}
 
 impl ParamPtr {
     /// Get the human readable name for this parameter.

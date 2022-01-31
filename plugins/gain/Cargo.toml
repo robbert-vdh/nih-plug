@@ -8,3 +8,5 @@ crate-type = ["cdylib"]
 
 [dependencies]
 nih_plug = { path = "../../" }
+
+parking_lot = "0.12"
