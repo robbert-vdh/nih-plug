@@ -18,16 +18,18 @@
 
 use std::sync::Arc;
 
+use crate::params::Param;
+
 #[cfg(all(target_family = "unix", not(target_os = "macos")))]
 mod linux;
 
 #[cfg(all(target_family = "unix", not(target_os = "macos")))]
 pub(crate) use linux::LinuxEventLoop as OsEventLoop;
 
+pub(crate) const TASK_QUEUE_CAPACITY: usize = 512;
+
 // TODO: ProcessContext for parameter automation and sending events
 // TODO: GuiContext for GUI parameter automation and resizing
-
-pub(crate) const TASK_QUEUE_CAPACITY: usize = 512;
 
 /// General callbacks the plugin can make during its lifetime. This is passed to the plugin during
 /// [Plugin::initialize].
@@ -40,11 +42,13 @@ pub trait ProcessContext {
     /// Update the current latency of the plugin. If the plugin is currently processing audio, then
     /// this may cause audio playback to be restarted.
     fn set_latency_samples(&self, samples: u32);
+
 }
 
 /// A trait describing the functionality of the platform-specific event loop that can execute tasks
-/// of type `T` in executor `E`. Posting a task to the queue should be realtime safe. This thread
-/// queue should be created during the wrapper's initial initialization on the main thread.
+/// of type `T` in executor `E`. Posting a task to the internal task queue should be realtime safe.
+/// This event loop should be created during the wrapper's initial initialization on the main
+/// thread.
 ///
 /// This is never used generically, but having this as a trait will cause any missing functions on
 /// an implementation to show up as compiler errors even when using a different platform.
@@ -56,22 +60,20 @@ where
     T: Send,
     E: MainThreadExecutor<T>,
 {
-    /// Create a main thread tasks queue for the given executor. The thread this is called on will
-    /// be designated as the main thread, so this should be called when constructing the wrapper.
-    ///
-    /// TODO: Spawn, and update docs
+    /// Create and start a new event loop. The thread this is called on will be designated as the
+    /// main thread, so this should be called when constructing the wrapper.
     fn new_and_spawn(executor: Arc<E>) -> Self;
 
-    /// Either post the function to a queue so it can be run later from the main thread using a
-    /// timer, or run the function directly if this is the main thread. This needs to be callable at
-    /// any time withotu blocking.
+    /// Either post the function to the task queue so it can be delegated to the main thread, or
+    /// execute the task directly if this is the main thread. This function needs to be callable at
+    /// any time without blocking.
     ///
-    /// If the task queue was full, then this will return false.
+    /// If the task queue is full, then this will return false.
     #[must_use]
     fn do_maybe_async(&self, task: T) -> bool;
 
-    /// Whether the calling thread is the even loop's main thread. This is usually the thread the
-    /// event loop instance wel initialized on.
+    /// Whether the calling thread is the event loop's main thread. This is usually the thread the
+    /// event loop instance was initialized on.
     fn is_main_thread(&self) -> bool;
 }
 

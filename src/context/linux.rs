@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-//! An event loop impelemntation for Linux. APIs on Linux are generally thread safe, so the context
+//! An event loop implementation for Linux. APIs on Linux are generally thread safe, so the context
 //! of a main thread does not exist there. Because of that, this mostly just serves as a way to
 //! delegate expensive processing to another thread.
 
