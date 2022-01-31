@@ -251,7 +251,7 @@ impl Param for BoolParam {
     fn set_from_string(&mut self, string: &str) -> bool {
         let value = match &self.string_to_value {
             Some(f) => f(string),
-            None => Some(string.eq_ignore_ascii_case("true")),
+            None => Some(string.eq_ignore_ascii_case("true") || string.eq_ignore_ascii_case("on")),
         };
 
         match value {
@@ -288,16 +288,17 @@ impl Param for BoolParam {
 
     fn normalized_value_to_string(&self, normalized: f32, _include_unit: bool) -> String {
         let value = normalized > 0.5;
-        match &self.value_to_string {
-            Some(f) => format!("{}", f(value)),
-            None => format!("{}", value),
+        match (value, &self.value_to_string) {
+            (v, Some(f)) => format!("{}", f(v)),
+            (true, None) => String::from("On"),
+            (false, None) => String::from("Off"),
         }
     }
 
     fn string_to_normalized_value(&self, string: &str) -> Option<f32> {
         let value = match &self.string_to_value {
             Some(f) => f(string),
-            None => Some(string.eq_ignore_ascii_case("true")),
+            None => Some(string.eq_ignore_ascii_case("true") || string.eq_ignore_ascii_case("on")),
         }?;
 
         Some(if value { 1.0 } else { 0.0 })
@@ -313,6 +314,16 @@ impl<T: Display + Copy> Display for PlainParam<T> {
         match &self.value_to_string {
             Some(func) => write!(f, "{}{}", func(self.value), self.unit),
             None => write!(f, "{}{}", self.value, self.unit),
+        }
+    }
+}
+
+impl Display for BoolParam {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match (self.value, &self.value_to_string) {
+            (v, Some(func)) => write!(f, "{}", func(v)),
+            (true, None) => write!(f, "On"),
+            (false, None) => write!(f, "Off"),
         }
     }
 }
