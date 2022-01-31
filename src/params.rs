@@ -19,6 +19,7 @@
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::pin::Pin;
+use std::sync::Arc;
 
 pub type FloatParam = PlainParam<f32>;
 pub type IntParam = PlainParam<i32>;
@@ -62,11 +63,11 @@ pub struct PlainParam<T> {
     /// The parameter value's unit, added after `value_to_string` if that is set.
     pub unit: &'static str,
     /// Optional custom conversion function from a plain **unnormalized** value to a string.
-    pub value_to_string: Option<Box<dyn Fn(T) -> String + Send + Sync>>,
+    pub value_to_string: Option<Arc<dyn Fn(T) -> String + Send + Sync>>,
     /// Optional custom conversion function from a string to a plain **unnormalized** value. If the
     /// string cannot be parsed, then this should return a `None`. If this happens while the
     /// parameter is being updated then the update will be canceled.
-    pub string_to_value: Option<Box<dyn Fn(&str) -> Option<T> + Send + Sync>>,
+    pub string_to_value: Option<Arc<dyn Fn(&str) -> Option<T> + Send + Sync>>,
 }
 
 /// A simple boolean parmaeter.
@@ -77,11 +78,11 @@ pub struct BoolParam {
     /// The parameter's human readable display name.
     pub name: &'static str,
     /// Optional custom conversion function from a boolean value to a string.
-    pub value_to_string: Option<Box<dyn Fn(bool) -> String + Send + Sync>>,
+    pub value_to_string: Option<Arc<dyn Fn(bool) -> String + Send + Sync>>,
     /// Optional custom conversion function from a string to a boolean value. If the string cannot
     /// be parsed, then this should return a `None`. If this happens while the parameter is being
     /// updated then the update will be canceled.
-    pub string_to_value: Option<Box<dyn Fn(&str) -> Option<bool> + Send + Sync>>,
+    pub string_to_value: Option<Arc<dyn Fn(&str) -> Option<bool> + Send + Sync>>,
 }
 
 /// Describes a single parmaetre of any type.
