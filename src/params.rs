@@ -39,7 +39,7 @@ pub enum Range<T> {
 /// A normalizable range for type `T`, where `self` is expected to be a type `R<T>`. Higher kinded
 /// types would have made this trait definition a lot clearer.
 trait NormalizebleRange<T> {
-    /// Normalize an unnormalized value. Will be clamped to the bounds of the range if the
+    /// Normalize a plain, unnormalized value. Will be clamped to the bounds of the range if the
     /// normalized value exceeds `[0, 1]`.
     fn normalize(&self, plain: T) -> f32;
 
@@ -51,10 +51,15 @@ trait NormalizebleRange<T> {
 /// A numerical parameter that's stored unnormalized. The range is used for the normalization
 /// process.
 pub struct PlainParam<T> {
-    /// The field's current, normalized value. Should be initialized with the default value. Storing
-    /// parameter values like this instead of in a single contiguous array is bad for cache
+    /// The field's current plain, unnormalized value. Should be initialized with the default value.
+    /// Storing parameter values like this instead of in a single contiguous array is bad for cache
     /// locality, but it does allow for a much nicer declarative API.
     pub value: T,
+
+    /// Optional callback for listening to value changes. The argument passed to this function is
+    /// the parameter's new **plain** value. This should not do anything expensive as it may be
+    /// called multiple times in rapid succession.
+    pub value_changed: Option<Arc<dyn Fn(T) -> () + Send + Sync>>,
 
     /// The distribution of the parameter's values.
     pub range: Range<T>,
@@ -74,6 +79,11 @@ pub struct PlainParam<T> {
 pub struct BoolParam {
     /// The field's current, normalized value. Should be initialized with the default value.
     pub value: bool,
+
+    /// Optional callback for listening to value changes. The argument passed to this function is
+    /// the parameter's new value. This should not do anything expensive as it may be called
+    /// multiple times in rapid succession.
+    pub value_changed: Option<Arc<dyn Fn(bool) -> () + Send + Sync>>,
 
     /// The parameter's human readable display name.
     pub name: &'static str,
@@ -147,6 +157,9 @@ macro_rules! impl_plainparam {
 
             fn set_plain_value(&mut self, plain: Self::Plain) {
                 self.value = plain;
+                if let Some(f) = &self.value_changed {
+                    f(plain);
+                }
             }
 
             fn normalized_value(&self) -> f32 {
@@ -154,7 +167,7 @@ macro_rules! impl_plainparam {
             }
 
             fn set_normalized_value(&mut self, normalized: f32) {
-                self.value = self.range.unnormalize(normalized);
+                self.set_plain_value(self.range.unnormalize(normalized));
             }
 
             fn normalized_value_to_string(&self, normalized: f32, include_unit: bool) -> String {
@@ -211,6 +224,9 @@ impl Param for BoolParam {
 
     fn set_plain_value(&mut self, plain: Self::Plain) {
         self.value = plain;
+        if let Some(f) = &self.value_changed {
+            f(plain);
+        }
     }
 
     fn normalized_value(&self) -> f32 {
@@ -222,7 +238,7 @@ impl Param for BoolParam {
     }
 
     fn set_normalized_value(&mut self, normalized: f32) {
-        self.value = normalized > 0.5;
+        self.set_plain_value(normalized > 0.5);
     }
 
     fn normalized_value_to_string(&self, normalized: f32, _include_unit: bool) -> String {

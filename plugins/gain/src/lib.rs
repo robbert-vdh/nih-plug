@@ -55,6 +55,12 @@ impl Default for GainParams {
         Self {
             gain: FloatParam {
                 value: 0.0,
+                value_changed: None,
+                // If, for instance, updating this parameter would require other parts of the
+                // plugin's internal state to be updated other values to also be updated, then you
+                // can use a callback like this, where `requires_updates` is an `Arc<AtomicBool>`
+                // that's also stored on the parameters struct:
+                // value_changed: Some(Arc::new(move |_new| { requires_update.store(true, Ordering::Release); })),
                 range: Range::Linear {
                     min: -30.0,
                     max: 30.0,
