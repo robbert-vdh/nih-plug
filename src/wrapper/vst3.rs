@@ -25,10 +25,10 @@ use std::cmp;
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::marker::PhantomData;
-use std::mem;
+use std::mem::{self, MaybeUninit};
 use std::pin::Pin;
 use std::ptr;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use vst3_sys::base::{kInvalidArgument, kNoInterface, kResultFalse, kResultOk, tresult, TBool};
 use vst3_sys::base::{IBStream, IPluginBase, IPluginFactory, IPluginFactory2, IPluginFactory3};
@@ -39,6 +39,7 @@ use vst3_sys::vst::{
 use vst3_sys::VST3;
 use widestring::U16CStr;
 
+use crate::context::{EventLoop, MainThreadExecutor, OsEventLoop, ProcessContext};
 use crate::params::{Param, ParamPtr};
 use crate::plugin::{BufferConfig, BusConfig, Plugin, ProcessStatus, Vst3Plugin};
 use crate::wrapper::state::{ParamValue, State};
@@ -82,6 +83,14 @@ pub(crate) struct Wrapper<'a, P: Plugin> {
     /// The wrapped plugin instance.
     plugin: Pin<Box<RwLock<P>>>,
 
+    /// A realtime-safe task queue so the plugin can schedule tasks that need to be run later on the
+    /// GUI thread.
+    ///
+    /// This RwLock is only needed because it has to be initialized late. There is no reason to
+    /// mutably borrow the event loop, so reads will never be contested.
+    ///
+    /// TODO: Is there a better type for Send+Sync late initializaiton?
+    event_loop: RwLock<MaybeUninit<OsEventLoop<Task, Self>>>,
     /// The current bus configuration, modified through `IAudioProcessor::setBusArrangements()`.
     current_bus_config: AtomicCell<BusConfig>,
     /// Whether the plugin is currently bypassed. This is not yet integrated with the `Plugin`
@@ -89,6 +98,8 @@ pub(crate) struct Wrapper<'a, P: Plugin> {
     bypass_state: AtomicBool,
     /// The last process status returned by the plugin. This is used for tail handling.
     last_process_status: AtomicCell<ProcessStatus>,
+    /// The current latency in samples, as set by the plugin through the [ProcessContext].
+    current_latency: AtomicU32,
     /// Whether the plugin is currently processing audio. In other words, the last state
     /// `IAudioProcessor::setActive()` has been called with.
     is_processing: AtomicBool,
@@ -120,10 +131,21 @@ pub(crate) struct Wrapper<'a, P: Plugin> {
 unsafe impl<P: Plugin> Send for Wrapper<'_, P> {}
 unsafe impl<P: Plugin> Sync for Wrapper<'_, P> {}
 
+/// Tasks that can be sent from the plugin to be executed on the main thread in a non-blocking
+/// realtime safe way (either a random thread or `IRunLoop` on Linux, the OS' message loop on
+/// Windows and macOS).
+#[derive(Debug, Clone)]
+enum Task {
+    /// Trigger a restart with the given restart flags. This is a bit set of the flags from
+    /// [vst3_sys::vst::RestartFlags].
+    TriggerRestart(u32),
+}
+
 impl<P: Plugin> Wrapper<'_, P> {
     pub fn new() -> Arc<Self> {
         let mut wrapper = Self::allocate(
             Box::pin(RwLock::default()),        // plugin
+            RwLock::new(MaybeUninit::uninit()), // event_loop
             // Some hosts, like the current version of Bitwig and Ardour at the time of writing,
             // will try using the plugin's default not yet initialized bus arrangement. Because of
             // that, we'll always initialize this configuration even before the host requests a
@@ -134,6 +156,7 @@ impl<P: Plugin> Wrapper<'_, P> {
             }),
             AtomicBool::new(false),                 // bypass_state
             AtomicCell::new(ProcessStatus::Normal), // last_process_status
+            AtomicU32::new(0),                      // current_latency
             AtomicBool::new(false),                 // is_processing
             RwLock::new(Vec::new()),                // output_slices
             HashMap::new(),                         // param_by_hash
@@ -175,7 +198,12 @@ impl<P: Plugin> Wrapper<'_, P> {
             .map(|(&hash, &id)| (id, hash))
             .collect();
 
+        // FIXME: Right now this is safe, but if we are going to have a singleton main thread queue
+        //        serving multiple plugin instances, Arc can't be used because its reference count
+        //        is separate from the internal COM-style reference count.
         let wrapper: Arc<Wrapper<'_, P>> = wrapper.into();
+        *wrapper.event_loop.write() = MaybeUninit::new(OsEventLoop::new_and_spawn(wrapper.clone()));
+
         wrapper
     }
 
@@ -192,6 +220,32 @@ impl<P: Plugin> Wrapper<'_, P> {
         } else {
             kInvalidArgument
         }
+    }
+}
+
+impl<P: Plugin> MainThreadExecutor<Task> for Wrapper<'_, P> {
+    fn execute(&self, task: Task) {
+        // TODO: When we add GUI resizing and context menus, this should propagate those events to
+        //       `IRunLoop` on Linux to keep REAPER happy. That does mean a double spool, but we can
+        //       come up with a nicer solution to handle that later (can always add a separate
+        //       function for checking if a to be scheduled task can be handled right ther and
+        //       then).
+        match task {
+            Task::TriggerRestart(_flags) => {
+                // TODO: Actually call the restart function
+                nih_log!("Handling {:?}", task);
+            }
+        }
+    }
+}
+
+unsafe impl<P: Plugin> ProcessContext for Wrapper<'_, P> {
+    fn set_latency_samples(self: &Arc<Self>, samples: u32) {
+        self.current_latency.store(samples, Ordering::SeqCst);
+        let task_posted = unsafe { self.event_loop.read().assume_init_ref() }.do_maybe_async(
+            Task::TriggerRestart(vst3_sys::vst::RestartFlags::kLatencyChanged as u32),
+        );
+        nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
     }
 }
 
@@ -737,8 +791,7 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
     }
 
     unsafe fn get_latency_samples(&self) -> u32 {
-        // TODO: Latency compensation
-        0
+        self.current_latency.load(Ordering::SeqCst)
     }
 
     unsafe fn setup_processing(&self, setup: *const vst3_sys::vst::ProcessSetup) -> tresult {
