@@ -488,7 +488,7 @@ impl<P: Plugin> IEditController for Wrapper<'_, P> {
             u16strlcpy(&mut info.title, "Bypass");
             u16strlcpy(&mut info.short_title, "Bypass");
             u16strlcpy(&mut info.units, "");
-            info.step_count = 0;
+            info.step_count = 1;
             info.default_normalized_value = 0.0;
             info.unit_id = vst3_sys::vst::kRootUnitId;
             info.flags = vst3_sys::vst::ParameterFlags::kCanAutomate as i32
@@ -502,8 +502,13 @@ impl<P: Plugin> IEditController for Wrapper<'_, P> {
             u16strlcpy(&mut info.title, param_ptr.name());
             u16strlcpy(&mut info.short_title, param_ptr.name());
             u16strlcpy(&mut info.units, param_ptr.unit());
-            // TODO: Don't forget this when we add enum parameters
-            info.step_count = 0;
+            info.step_count = match param_ptr {
+                ParamPtr::FloatParam(_) => 0,
+                ParamPtr::IntParam(p) => match (**p).range {
+                    crate::params::Range::Linear { min, max } => max - min,
+                },
+                ParamPtr::BoolParam(_) => 1,
+            };
             info.default_normalized_value = *default_value as f64;
             info.unit_id = vst3_sys::vst::kRootUnitId;
             info.flags = vst3_sys::vst::ParameterFlags::kCanAutomate as i32;
