@@ -120,10 +120,8 @@ struct WrapperInner<'a, P: Plugin> {
     /// The default normalized parameter value for every parameter in `param_ids`. We need to store
     /// this in case the host requeries the parmaeter later.
     param_defaults_normalized: Vec<f32>,
-    /// Mappings from parameter hashes back to string parameter indentifiers. Useful for debug
-    /// logging and when handling plugin state.
-    param_id_to_hash: HashMap<u32, &'static str>,
-    /// The inverse mapping from `param_id_hashes`. Used only for restoring state.
+    /// Mappings from string parameter indentifiers to parameter hashes. Useful for debug logging
+    /// and when storing and restorign plugin state.
     param_hash_to_id: HashMap<&'static str, u32>,
 }
 
@@ -174,8 +172,6 @@ impl<P: Plugin> WrapperInner<'_, P> {
             HashMap::new(),
             param_defaults_normalized:
             Vec::new(),
-            param_id_to_hash:
-            HashMap::new(),
             param_hash_to_id:
             HashMap::new(),
         };
@@ -208,10 +204,6 @@ impl<P: Plugin> WrapperInner<'_, P> {
         wrapper.param_defaults_normalized = param_id_hashes_ptrs
             .clone()
             .map(|(_, _, ptr)| unsafe { ptr.normalized_value() })
-            .collect();
-        wrapper.param_id_to_hash = param_id_hashes_ptrs
-            .clone()
-            .map(|(id, hash, _)| (hash, *id))
             .collect();
         wrapper.param_hash_to_id = param_id_hashes_ptrs
             .map(|(id, hash, _)| (*id, hash))
@@ -499,9 +491,9 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
         // We'll serialize parmaeter values as a simple `string_param_id: display_value` map.
         let mut params: HashMap<_, _> = self
             .inner
-            .param_id_to_hash
+            .param_hash_to_id
             .iter()
-            .filter_map(|(hash, param_id_str)| {
+            .filter_map(|(param_id_str, hash)| {
                 let param_ptr = self.inner.param_by_hash.get(hash)?;
                 Some((param_id_str, param_ptr))
             })
