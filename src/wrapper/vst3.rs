@@ -189,23 +189,27 @@ impl<P: Plugin> WrapperInner<'_, P> {
         );
 
         // Only calculate these hashes once, and in the stable order defined by the plugin
-        let param_id_hashes_ptrs = param_ids.iter().filter_map(|id| {
-            let param_ptr = param_map.get(id)?;
-            Some((id, hash_param_id(id), param_ptr))
-        });
+        let param_id_hashes_ptrs: Vec<_> = param_ids
+            .iter()
+            .filter_map(|id| {
+                let param_ptr = param_map.get(id)?;
+                Some((id, hash_param_id(id), param_ptr))
+            })
+            .collect();
         wrapper.param_hashes = param_id_hashes_ptrs
-            .clone()
-            .map(|(_, hash, _)| hash)
+            .iter()
+            .map(|&(_, hash, _)| hash)
             .collect();
         wrapper.param_by_hash = param_id_hashes_ptrs
-            .clone()
-            .map(|(_, hash, ptr)| (hash, *ptr))
+            .iter()
+            .map(|&(_, hash, ptr)| (hash, *ptr))
             .collect();
         wrapper.param_defaults_normalized = param_id_hashes_ptrs
-            .clone()
-            .map(|(_, _, ptr)| unsafe { ptr.normalized_value() })
+            .iter()
+            .map(|&(_, _, ptr)| unsafe { ptr.normalized_value() })
             .collect();
         wrapper.param_id_to_hash = param_id_hashes_ptrs
+            .into_iter()
             .map(|(id, hash, _)| (*id, hash))
             .collect();
 
