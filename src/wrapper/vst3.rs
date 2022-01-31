@@ -78,8 +78,10 @@ macro_rules! check_null_ptr_msg {
     };
 }
 
-#[VST3(implements(IComponent, IEditController, IAudioProcessor))]
-pub(crate) struct Wrapper<'a, P: Plugin> {
+/// The actual wrapper bits. We need this as an `Arc<T>` so we can safely use our event loop API.
+/// Since we can't combine that with VST3's interior reference counting this just has to be moved to
+/// its own struct.
+struct WrapperInner<'a, P: Plugin> {
     /// The wrapped plugin instance.
     plugin: Pin<Box<RwLock<P>>>,
 
@@ -125,11 +127,10 @@ pub(crate) struct Wrapper<'a, P: Plugin> {
     param_hash_to_id: HashMap<&'static str, u32>,
 }
 
-// FIXME: This is far, far, far from ideal. The problem is that the `VST` attribute macro adds
-//        VTable pointers to the struct (that are stored separately by leaking `Box<T>`s), and we
-//        can't mark those as safe ourselves.
-unsafe impl<P: Plugin> Send for Wrapper<'_, P> {}
-unsafe impl<P: Plugin> Sync for Wrapper<'_, P> {}
+#[VST3(implements(IComponent, IEditController, IAudioProcessor))]
+pub(crate) struct Wrapper<'a, P: Plugin> {
+    inner: Arc<WrapperInner<'a, P>>,
+}
 
 /// Tasks that can be sent from the plugin to be executed on the main thread in a non-blocking
 /// realtime safe way (either a random thread or `IRunLoop` on Linux, the OS' message loop on
@@ -141,11 +142,15 @@ enum Task {
     TriggerRestart(u32),
 }
 
-impl<P: Plugin> Wrapper<'_, P> {
+impl<P: Plugin> WrapperInner<'_, P> {
+    // XXX: The unsafe blocks in this function are unnecessary. but rust-analyzer gets a bit
+    //      confused by all of these vtables
+    #[allow(unused_unsafe)]
     pub fn new() -> Arc<Self> {
-        let mut wrapper = Self::allocate(
-            Box::pin(RwLock::default()),        // plugin
-            RwLock::new(MaybeUninit::uninit()), // event_loop
+        let mut wrapper = Self {
+            plugin: Box::pin(RwLock::default()),
+            event_loop: RwLock::new(MaybeUninit::uninit()),
+            current_bus_config:
             // Some hosts, like the current version of Bitwig and Ardour at the time of writing,
             // will try using the plugin's default not yet initialized bus arrangement. Because of
             // that, we'll always initialize this configuration even before the host requests a
@@ -154,24 +159,32 @@ impl<P: Plugin> Wrapper<'_, P> {
                 num_input_channels: P::DEFAULT_NUM_INPUTS,
                 num_output_channels: P::DEFAULT_NUM_OUTPUTS,
             }),
-            AtomicBool::new(false),                 // bypass_state
-            AtomicCell::new(ProcessStatus::Normal), // last_process_status
-            AtomicU32::new(0),                      // current_latency
-            AtomicBool::new(false),                 // is_processing
-            RwLock::new(Vec::new()),                // output_slices
-            HashMap::new(),                         // param_by_hash
-            Vec::new(),                             // param_hashes
-            Vec::new(),                             // param_defaults_normalized
-            HashMap::new(),                         // param_id_to_hash
-            HashMap::new(),                         // param_hash_to_id
-        );
+            bypass_state:
+            AtomicBool::new(false),
+            last_process_status:
+            AtomicCell::new(ProcessStatus::Normal),
+            current_latency:
+            AtomicU32::new(0),
+            is_processing:
+            AtomicBool::new(false),
+            output_slices: RwLock::new(Vec::new()),
+            param_by_hash:
+            HashMap::new(),
+            param_hashes:
+            Vec::new(),
+            param_defaults_normalized:
+            Vec::new(),
+            param_id_to_hash:
+            HashMap::new(),
+            param_hash_to_id:
+            HashMap::new(),
+        };
 
         // This is a mapping from the parameter IDs specified by the plugin to pointers to thsoe
         // parameters. Since the object returned by `params()` is pinned, these pointers are safe to
         // dereference as long as `wrapper.plugin` is alive
         // XXX: This unsafe block is unnecessary. rust-analyzer gets a bit confused and this this
         //      `read()` function is from `IBStream` which it definitely is not.
-        #[allow(unused_unsafe)]
         let param_map = unsafe { wrapper.plugin.read() }.params().param_map();
         nih_debug_assert!(
             !param_map.contains_key(BYPASS_PARAM_ID),
@@ -201,8 +214,11 @@ impl<P: Plugin> Wrapper<'_, P> {
         // FIXME: Right now this is safe, but if we are going to have a singleton main thread queue
         //        serving multiple plugin instances, Arc can't be used because its reference count
         //        is separate from the internal COM-style reference count.
-        let wrapper: Arc<Wrapper<'_, P>> = wrapper.into();
-        *wrapper.event_loop.write() = MaybeUninit::new(OsEventLoop::new_and_spawn(wrapper.clone()));
+        let wrapper: Arc<WrapperInner<'_, P>> = wrapper.into();
+        // XXX: This unsafe block is unnecessary. rust-analyzer gets a bit confused and this this
+        //      `write()` function is from `IBStream` which it definitely is not.
+        *unsafe { wrapper.event_loop.write() } =
+            MaybeUninit::new(OsEventLoop::new_and_spawn(wrapper.clone()));
 
         wrapper
     }
@@ -223,7 +239,13 @@ impl<P: Plugin> Wrapper<'_, P> {
     }
 }
 
-impl<P: Plugin> MainThreadExecutor<Task> for Wrapper<'_, P> {
+impl<P: Plugin> Wrapper<'_, P> {
+    pub fn new() -> Box<Self> {
+        Self::allocate(WrapperInner::new())
+    }
+}
+
+impl<P: Plugin> MainThreadExecutor<Task> for WrapperInner<'_, P> {
     fn execute(&self, task: Task) {
         // TODO: When we add GUI resizing and context menus, this should propagate those events to
         //       `IRunLoop` on Linux to keep REAPER happy. That does mean a double spool, but we can
@@ -239,7 +261,7 @@ impl<P: Plugin> MainThreadExecutor<Task> for Wrapper<'_, P> {
     }
 }
 
-unsafe impl<P: Plugin> ProcessContext for Wrapper<'_, P> {
+unsafe impl<P: Plugin> ProcessContext for WrapperInner<'_, P> {
     fn set_latency_samples(self: &Arc<Self>, samples: u32) {
         self.current_latency.store(samples, Ordering::SeqCst);
         let task_posted = unsafe { self.event_loop.read().assume_init_ref() }.do_maybe_async(
@@ -304,7 +326,7 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
                     (d, 0) if d == vst3_sys::vst::BusDirections::kInput as i32 => {
                         info.direction = vst3_sys::vst::BusDirections::kInput as i32;
                         info.channel_count =
-                            self.current_bus_config.load().num_input_channels as i32;
+                            self.inner.current_bus_config.load().num_input_channels as i32;
                         u16strlcpy(&mut info.name, "Input");
 
                         kResultOk
@@ -312,7 +334,7 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
                     (d, 0) if d == vst3_sys::vst::BusDirections::kOutput as i32 => {
                         info.direction = vst3_sys::vst::BusDirections::kOutput as i32;
                         info.channel_count =
-                            self.current_bus_config.load().num_output_channels as i32;
+                            self.inner.current_bus_config.load().num_output_channels as i32;
                         u16strlcpy(&mut info.name, "Output");
 
                         kResultOk
@@ -414,7 +436,7 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
             // Handle the bypass parameter separately
             if param_id_str == BYPASS_PARAM_ID {
                 match param_value {
-                    ParamValue::Bool(b) => self.bypass_state.store(b, Ordering::SeqCst),
+                    ParamValue::Bool(b) => self.inner.bypass_state.store(b, Ordering::SeqCst),
                     _ => nih_debug_assert_failure!(
                         "Invalid serialized value {:?} for parameter {} ({:?})",
                         param_value,
@@ -426,9 +448,10 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
             }
 
             let param_ptr = match self
+                .inner
                 .param_hash_to_id
                 .get(param_id_str.as_str())
-                .and_then(|hash| self.param_by_hash.get(hash))
+                .and_then(|hash| self.inner.param_by_hash.get(hash))
             {
                 Some(ptr) => ptr,
                 None => {
@@ -453,7 +476,8 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
 
         // The plugin can also persist arbitrary fields alongside its parameters. This is useful for
         // storing things like sample data.
-        self.plugin
+        self.inner
+            .plugin
             .read()
             .params()
             .deserialize_fields(&state.fields);
@@ -468,10 +492,11 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
 
         // We'll serialize parmaeter values as a simple `string_param_id: display_value` map.
         let mut params: HashMap<_, _> = self
+            .inner
             .param_id_to_hash
             .iter()
             .filter_map(|(hash, param_id_str)| {
-                let param_ptr = self.param_by_hash.get(hash)?;
+                let param_ptr = self.inner.param_by_hash.get(hash)?;
                 Some((param_id_str, param_ptr))
             })
             .map(|(&param_id_str, &param_ptr)| match param_ptr {
@@ -484,12 +509,12 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
         // Don't forget about the bypass parameter
         params.insert(
             BYPASS_PARAM_ID.to_string(),
-            ParamValue::Bool(self.bypass_state.load(Ordering::SeqCst)),
+            ParamValue::Bool(self.inner.bypass_state.load(Ordering::SeqCst)),
         );
 
         // The plugin can also persist arbitrary fields alongside its parameters. This is useful for
         // storing things like sample data.
-        let fields = self.plugin.read().params().serialize_fields();
+        let fields = self.inner.plugin.read().params().serialize_fields();
 
         let plugin_state = State { params, fields };
         match serde_json::to_vec(&plugin_state) {
@@ -535,7 +560,7 @@ impl<P: Plugin> IEditController for Wrapper<'_, P> {
     unsafe fn get_parameter_count(&self) -> i32 {
         // NOTE: We add a bypass parameter ourselves on index `self.param_ids.len()`, so these
         //       indices are all off by one
-        self.param_hashes.len() as i32 + 1
+        self.inner.param_hashes.len() as i32 + 1
     }
 
     unsafe fn get_parameter_info(
@@ -546,14 +571,14 @@ impl<P: Plugin> IEditController for Wrapper<'_, P> {
         check_null_ptr!(info);
 
         // Parameter index `self.param_ids.len()` is our own bypass parameter
-        if param_index < 0 || param_index > self.param_hashes.len() as i32 {
+        if param_index < 0 || param_index > self.inner.param_hashes.len() as i32 {
             return kInvalidArgument;
         }
 
         *info = std::mem::zeroed();
 
         let info = &mut *info;
-        if param_index == self.param_hashes.len() as i32 {
+        if param_index == self.inner.param_hashes.len() as i32 {
             info.id = *BYPASS_PARAM_HASH;
             u16strlcpy(&mut info.title, "Bypass");
             u16strlcpy(&mut info.short_title, "Bypass");
@@ -564,9 +589,9 @@ impl<P: Plugin> IEditController for Wrapper<'_, P> {
             info.flags = vst3_sys::vst::ParameterFlags::kCanAutomate as i32
                 | vst3_sys::vst::ParameterFlags::kIsBypass as i32;
         } else {
-            let param_hash = &self.param_hashes[param_index as usize];
-            let default_value = &self.param_defaults_normalized[param_index as usize];
-            let param_ptr = &self.param_by_hash[param_hash];
+            let param_hash = &self.inner.param_hashes[param_index as usize];
+            let default_value = &self.inner.param_defaults_normalized[param_index as usize];
+            let param_ptr = &self.inner.param_by_hash[param_hash];
 
             info.id = *param_hash;
             u16strlcpy(&mut info.title, param_ptr.name());
@@ -606,7 +631,7 @@ impl<P: Plugin> IEditController for Wrapper<'_, P> {
             }
 
             kResultOk
-        } else if let Some(param_ptr) = self.param_by_hash.get(&id) {
+        } else if let Some(param_ptr) = self.inner.param_by_hash.get(&id) {
             u16strlcpy(
                 dest,
                 &param_ptr.normalized_value_to_string(value_normalized as f32, false),
@@ -640,7 +665,7 @@ impl<P: Plugin> IEditController for Wrapper<'_, P> {
             *value_normalized = value;
 
             kResultOk
-        } else if let Some(param_ptr) = self.param_by_hash.get(&id) {
+        } else if let Some(param_ptr) = self.inner.param_by_hash.get(&id) {
             let value = match param_ptr.string_to_normalized_value(&string) {
                 Some(v) => v as f64,
                 None => return kResultFalse,
@@ -656,7 +681,7 @@ impl<P: Plugin> IEditController for Wrapper<'_, P> {
     unsafe fn normalized_param_to_plain(&self, id: u32, value_normalized: f64) -> f64 {
         if id == *BYPASS_PARAM_HASH {
             value_normalized
-        } else if let Some(param_ptr) = self.param_by_hash.get(&id) {
+        } else if let Some(param_ptr) = self.inner.param_by_hash.get(&id) {
             param_ptr.preview_plain(value_normalized as f32) as f64
         } else {
             0.5
@@ -666,7 +691,7 @@ impl<P: Plugin> IEditController for Wrapper<'_, P> {
     unsafe fn plain_param_to_normalized(&self, id: u32, plain_value: f64) -> f64 {
         if id == *BYPASS_PARAM_HASH {
             plain_value.clamp(0.0, 1.0)
-        } else if let Some(param_ptr) = self.param_by_hash.get(&id) {
+        } else if let Some(param_ptr) = self.inner.param_by_hash.get(&id) {
             param_ptr.preview_normalized(plain_value as f32) as f64
         } else {
             0.5
@@ -675,12 +700,12 @@ impl<P: Plugin> IEditController for Wrapper<'_, P> {
 
     unsafe fn get_param_normalized(&self, id: u32) -> f64 {
         if id == *BYPASS_PARAM_HASH {
-            if self.bypass_state.load(Ordering::SeqCst) {
+            if self.inner.bypass_state.load(Ordering::SeqCst) {
                 1.0
             } else {
                 0.0
             }
-        } else if let Some(param_ptr) = self.param_by_hash.get(&id) {
+        } else if let Some(param_ptr) = self.inner.param_by_hash.get(&id) {
             param_ptr.normalized_value() as f64
         } else {
             0.5
@@ -690,11 +715,11 @@ impl<P: Plugin> IEditController for Wrapper<'_, P> {
     unsafe fn set_param_normalized(&self, id: u32, value: f64) -> tresult {
         // If the plugin is currently processing audio, then this parameter change will also be sent
         // to the process function
-        if self.is_processing.load(Ordering::SeqCst) {
+        if self.inner.is_processing.load(Ordering::SeqCst) {
             return kResultOk;
         }
 
-        self.set_normalized_value_by_hash(id, value)
+        self.inner.set_normalized_value_by_hash(id, value)
     }
 
     unsafe fn set_component_handler(
@@ -732,8 +757,13 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
             num_input_channels: input_channel_map.count_ones(),
             num_output_channels: output_channel_map.count_ones(),
         };
-        if self.plugin.read().accepts_bus_config(&proposed_config) {
-            self.current_bus_config.store(proposed_config);
+        if self
+            .inner
+            .plugin
+            .read()
+            .accepts_bus_config(&proposed_config)
+        {
+            self.inner.current_bus_config.store(proposed_config);
 
             kResultOk
         } else {
@@ -766,7 +796,7 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
             }
         };
 
-        let config = self.current_bus_config.load();
+        let config = self.inner.current_bus_config.load();
         let num_channels = match (dir, index) {
             (d, 0) if d == vst3_sys::vst::BusDirections::kInput as i32 => config.num_input_channels,
             (d, 0) if d == vst3_sys::vst::BusDirections::kOutput as i32 => {
@@ -791,7 +821,7 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
     }
 
     unsafe fn get_latency_samples(&self) -> u32 {
-        self.current_latency.load(Ordering::SeqCst)
+        self.inner.current_latency.load(Ordering::SeqCst)
     }
 
     unsafe fn setup_processing(&self, setup: *const vst3_sys::vst::ProcessSetup) -> tresult {
@@ -804,16 +834,22 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
             vst3_sys::vst::SymbolicSampleSizes::kSample32 as i32
         );
 
-        let bus_config = self.current_bus_config.load();
+        let bus_config = self.inner.current_bus_config.load();
         let buffer_config = BufferConfig {
             sample_rate: setup.sample_rate as f32,
             max_buffer_size: setup.max_samples_per_block as u32,
         };
 
-        if self.plugin.write().initialize(&bus_config, &buffer_config) {
+        if self
+            .inner
+            .plugin
+            .write()
+            .initialize(&bus_config, &buffer_config)
+        {
             // Preallocate enough room in the output slices vector so we can convert a `*mut *mut
             // f32` to a `&mut [&mut f32]` in the process call
-            self.output_slices
+            self.inner
+                .output_slices
                 .write()
                 .resize_with(bus_config.num_output_channels as usize, || &mut []);
 
@@ -825,8 +861,8 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
 
     unsafe fn set_processing(&self, state: TBool) -> tresult {
         // Always reset the processing status when the plugin gets activated or deactivated
-        self.last_process_status.store(ProcessStatus::Normal);
-        self.is_processing.store(state != 0, Ordering::SeqCst);
+        self.inner.last_process_status.store(ProcessStatus::Normal);
+        self.inner.is_processing.store(state != 0, Ordering::SeqCst);
 
         // We don't have any special handling for suspending and resuming plugins, yet
         kResultOk
@@ -857,7 +893,7 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
                             &mut value,
                         ) == kResultOk
                     {
-                        self.set_normalized_value_by_hash(param_hash, value);
+                        self.inner.set_normalized_value_by_hash(param_hash, value);
                     }
                 }
             }
@@ -887,7 +923,7 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
         nih_debug_assert!(data.num_samples >= 0);
 
         // This vector has been reallocated to contain enough slices as there are output channels
-        let mut output_slices = self.output_slices.write();
+        let mut output_slices = self.inner.output_slices.write();
         check_null_ptr_msg!(
             "Process output pointer is null",
             data.outputs,
@@ -927,7 +963,7 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
             }
         }
 
-        match self.plugin.write().process(&mut output_slices) {
+        match self.inner.plugin.write().process(&mut output_slices) {
             ProcessStatus::Error(err) => {
                 nih_debug_assert_failure!("Process error: {}", err);
 
@@ -939,7 +975,7 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
 
     unsafe fn get_tail_samples(&self) -> u32 {
         // https://github.com/steinbergmedia/vst3_pluginterfaces/blob/2ad397ade5b51007860bedb3b01b8afd2c5f6fba/vst/ivstaudioprocessor.h#L145-L159
-        match self.last_process_status.load() {
+        match self.inner.last_process_status.load() {
             ProcessStatus::Tail(samples) => samples,
             ProcessStatus::KeepAlive => u32::MAX, // kInfiniteTail
             _ => 0,                               // kNoTail
@@ -1016,11 +1052,7 @@ impl<P: Vst3Plugin> IPluginFactory for Factory<P> {
             return kNoInterface;
         }
 
-        // XXX: Right now this `Arc` mostly serves to have clearer, safer interactions between the
-        //      wrapper, the plugin, and the other behind the scene bits. The wrapper will still get
-        //      freed using `FUnknown`'s internal reference count when the host drops it, so we
-        //      actually need to leak this Arc here so it always stays at 1 reference or higher.
-        *obj = Arc::into_raw(Wrapper::<P>::new()) as *mut vst3_sys::c_void;
+        *obj = Box::into_raw(Wrapper::<P>::new()) as *mut vst3_sys::c_void;
 
         kResultOk
     }

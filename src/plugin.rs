@@ -38,7 +38,7 @@ use crate::params::Params;
 /// - Bypass parameters, right now the VST3 wrapper generates one for you
 /// - Outputting parameter changes from the plugin
 /// - GUIs
-pub trait Plugin: Default + Sync {
+pub trait Plugin: Default + Send + Sync {
     const NAME: &'static str;
     const VENDOR: &'static str;
     const URL: &'static str;
