@@ -28,88 +28,6 @@ pub use serde_json::from_str as deserialize_field;
 /// Re-export for use in the [Params] proc-macro.
 pub use serde_json::to_string as serialize_field;
 
-/// The functinoality needed for persisting a field to the plugin's state, and for restoring values
-/// when loading old state.
-///
-/// TODO: Modifying these fields (or any parameter for that matter) should mark the plugin's state
-///       as dirty.
-pub trait PersistentField<'a, T>: Send + Sync
-where
-    T: serde::Serialize + serde::Deserialize<'a>,
-{
-    fn set(&self, new_value: T);
-    fn map<F, R>(&self, f: F) -> R
-    where
-        F: Fn(&T) -> R;
-}
-
-impl<'a, T> PersistentField<'a, T> for std::sync::RwLock<T>
-where
-    T: serde::Serialize + serde::Deserialize<'a> + Send + Sync,
-{
-    fn set(&self, new_value: T) {
-        *self.write().expect("Poisoned RwLock on write") = new_value;
-    }
-    fn map<F, R>(&self, f: F) -> R
-    where
-        F: Fn(&T) -> R,
-    {
-        f(&self.read().expect("Poisoned RwLock on read"))
-    }
-}
-
-impl<'a, T> PersistentField<'a, T> for parking_lot::RwLock<T>
-where
-    T: serde::Serialize + serde::Deserialize<'a> + Send + Sync,
-{
-    fn set(&self, new_value: T) {
-        *self.write() = new_value;
-    }
-    fn map<F, R>(&self, f: F) -> R
-    where
-        F: Fn(&T) -> R,
-    {
-        f(&self.read())
-    }
-}
-
-impl<'a, T> PersistentField<'a, T> for std::sync::Mutex<T>
-where
-    T: serde::Serialize + serde::Deserialize<'a> + Send + Sync,
-{
-    fn set(&self, new_value: T) {
-        *self.lock().expect("Poisoned Mutex") = new_value;
-    }
-    fn map<F, R>(&self, f: F) -> R
-    where
-        F: Fn(&T) -> R,
-    {
-        f(&self.lock().expect("Poisoned Mutex"))
-    }
-}
-
-macro_rules! impl_persistent_field_parking_lot_mutex {
-    ($ty:ty) => {
-        impl<'a, T> PersistentField<'a, T> for $ty
-        where
-            T: serde::Serialize + serde::Deserialize<'a> + Send + Sync,
-        {
-            fn set(&self, new_value: T) {
-                *self.lock() = new_value;
-            }
-            fn map<F, R>(&self, f: F) -> R
-            where
-                F: Fn(&T) -> R,
-            {
-                f(&self.lock())
-            }
-        }
-    };
-}
-
-impl_persistent_field_parking_lot_mutex!(parking_lot::Mutex<T>);
-impl_persistent_field_parking_lot_mutex!(parking_lot::FairMutex<T>);
-
 /// A distribution for a parameter's range. Probably need to add some forms of skewed ranges and
 /// maybe a callback based implementation at some point.
 #[derive(Debug)]
@@ -546,6 +464,88 @@ impl ParamPtr {
         }
     }
 }
+
+/// The functinoality needed for persisting a field to the plugin's state, and for restoring values
+/// when loading old state.
+///
+/// TODO: Modifying these fields (or any parameter for that matter) should mark the plugin's state
+///       as dirty.
+pub trait PersistentField<'a, T>: Send + Sync
+where
+    T: serde::Serialize + serde::Deserialize<'a>,
+{
+    fn set(&self, new_value: T);
+    fn map<F, R>(&self, f: F) -> R
+    where
+        F: Fn(&T) -> R;
+}
+
+impl<'a, T> PersistentField<'a, T> for std::sync::RwLock<T>
+where
+    T: serde::Serialize + serde::Deserialize<'a> + Send + Sync,
+{
+    fn set(&self, new_value: T) {
+        *self.write().expect("Poisoned RwLock on write") = new_value;
+    }
+    fn map<F, R>(&self, f: F) -> R
+    where
+        F: Fn(&T) -> R,
+    {
+        f(&self.read().expect("Poisoned RwLock on read"))
+    }
+}
+
+impl<'a, T> PersistentField<'a, T> for parking_lot::RwLock<T>
+where
+    T: serde::Serialize + serde::Deserialize<'a> + Send + Sync,
+{
+    fn set(&self, new_value: T) {
+        *self.write() = new_value;
+    }
+    fn map<F, R>(&self, f: F) -> R
+    where
+        F: Fn(&T) -> R,
+    {
+        f(&self.read())
+    }
+}
+
+impl<'a, T> PersistentField<'a, T> for std::sync::Mutex<T>
+where
+    T: serde::Serialize + serde::Deserialize<'a> + Send + Sync,
+{
+    fn set(&self, new_value: T) {
+        *self.lock().expect("Poisoned Mutex") = new_value;
+    }
+    fn map<F, R>(&self, f: F) -> R
+    where
+        F: Fn(&T) -> R,
+    {
+        f(&self.lock().expect("Poisoned Mutex"))
+    }
+}
+
+macro_rules! impl_persistent_field_parking_lot_mutex {
+    ($ty:ty) => {
+        impl<'a, T> PersistentField<'a, T> for $ty
+        where
+            T: serde::Serialize + serde::Deserialize<'a> + Send + Sync,
+        {
+            fn set(&self, new_value: T) {
+                *self.lock() = new_value;
+            }
+            fn map<F, R>(&self, f: F) -> R
+            where
+                F: Fn(&T) -> R,
+            {
+                f(&self.lock())
+            }
+        }
+    };
+}
+
+impl_persistent_field_parking_lot_mutex!(parking_lot::Mutex<T>);
+impl_persistent_field_parking_lot_mutex!(parking_lot::FairMutex<T>);
 
 #[cfg(test)]
 mod tests {
