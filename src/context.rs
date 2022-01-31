@@ -43,6 +43,10 @@ pub trait ProcessContext {
     /// this may cause audio playback to be restarted.
     fn set_latency_samples(&self, samples: u32);
 
+    // // TODO: Add this next
+    // fn set_parameter<P>(&self, param: &P, value: P::Plain)
+    // where
+    //     P: Param;
 }
 
 /// A trait describing the functionality of the platform-specific event loop that can execute tasks
