@@ -122,7 +122,7 @@ struct WrapperInner<'a, P: Plugin> {
     param_defaults_normalized: Vec<f32>,
     /// Mappings from string parameter indentifiers to parameter hashes. Useful for debug logging
     /// and when storing and restorign plugin state.
-    param_hash_to_id: HashMap<&'static str, u32>,
+    param_id_to_hash: HashMap<&'static str, u32>,
 }
 
 #[VST3(implements(IComponent, IEditController, IAudioProcessor))]
@@ -172,7 +172,7 @@ impl<P: Plugin> WrapperInner<'_, P> {
             HashMap::new(),
             param_defaults_normalized:
             Vec::new(),
-            param_hash_to_id:
+            param_id_to_hash:
             HashMap::new(),
         };
 
@@ -205,7 +205,7 @@ impl<P: Plugin> WrapperInner<'_, P> {
             .clone()
             .map(|(_, _, ptr)| unsafe { ptr.normalized_value() })
             .collect();
-        wrapper.param_hash_to_id = param_id_hashes_ptrs
+        wrapper.param_id_to_hash = param_id_hashes_ptrs
             .map(|(id, hash, _)| (*id, hash))
             .collect();
 
@@ -447,7 +447,7 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
 
             let param_ptr = match self
                 .inner
-                .param_hash_to_id
+                .param_id_to_hash
                 .get(param_id_str.as_str())
                 .and_then(|hash| self.inner.param_by_hash.get(hash))
             {
@@ -491,7 +491,7 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
         // We'll serialize parmaeter values as a simple `string_param_id: display_value` map.
         let mut params: HashMap<_, _> = self
             .inner
-            .param_hash_to_id
+            .param_id_to_hash
             .iter()
             .filter_map(|(param_id_str, hash)| {
                 let param_ptr = self.inner.param_by_hash.get(hash)?;
