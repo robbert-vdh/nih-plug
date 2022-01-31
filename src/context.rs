@@ -31,17 +31,15 @@ pub(crate) const TASK_QUEUE_CAPACITY: usize = 512;
 
 /// General callbacks the plugin can make during its lifetime. This is passed to the plugin during
 /// [Plugin::initialize].
-///
-/// # Safety
-///
-/// This context is passed to be stored by the plugin, and it may thus not outlive the wrapper.
-/// Hence the use of reference counted smart pointers. The implementing wrapper needs to be able to
-/// handle concurrent requests, and it should perform the actual callback within
-/// [MainThreadQueue::do_maybe_async].
-pub unsafe trait ProcessContext {
+//
+// # Safety
+//
+// The implementing wrapper needs to be able to handle concurrent requests, and it should perform
+// the actual callback within [MainThreadQueue::do_maybe_async].
+pub trait ProcessContext {
     /// Update the current latency of the plugin. If the plugin is currently processing audio, then
     /// this may cause audio playback to be restarted.
-    fn set_latency_samples(self: &Arc<Self>, samples: u32);
+    fn set_latency_samples(&self, samples: u32);
 }
 
 /// A trait describing the functionality of the platform-specific event loop that can execute tasks
