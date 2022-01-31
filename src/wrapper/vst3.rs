@@ -111,12 +111,12 @@ struct WrapperInner<'a, P: Plugin> {
     /// between process calls.
     output_slices: RwLock<Vec<&'a mut [f32]>>,
 
+    /// The keys from `param_map` in a stable order.
+    param_hashes: Vec<u32>,
     /// A mapping from parameter ID hashes (obtained from the string parameter IDs) to pointers to
     /// parameters belonging to the plugin. As long as `plugin` does not get recreated, these
     /// addresses will remain stable, as they are obtained from a pinned object.
     param_by_hash: HashMap<u32, ParamPtr>,
-    /// The keys from `param_map` in a stable order.
-    param_hashes: Vec<u32>,
     /// The default normalized parameter value for every parameter in `param_ids`. We need to store
     /// this in case the host requeries the parmaeter later.
     param_defaults_normalized: Vec<f32>,
@@ -168,10 +168,10 @@ impl<P: Plugin> WrapperInner<'_, P> {
             is_processing:
             AtomicBool::new(false),
             output_slices: RwLock::new(Vec::new()),
-            param_by_hash:
-            HashMap::new(),
             param_hashes:
             Vec::new(),
+            param_by_hash:
+            HashMap::new(),
             param_defaults_normalized:
             Vec::new(),
             param_id_to_hash:
@@ -186,29 +186,35 @@ impl<P: Plugin> WrapperInner<'_, P> {
         // XXX: This unsafe block is unnecessary. rust-analyzer gets a bit confused and this this
         //      `read()` function is from `IBStream` which it definitely is not.
         let param_map = unsafe { wrapper.plugin.read() }.params().param_map();
+        let param_ids = unsafe { wrapper.plugin.read() }.params().param_ids();
         nih_debug_assert!(
             !param_map.contains_key(BYPASS_PARAM_ID),
             "The wrapper alread yadds its own bypass parameter"
         );
 
-        wrapper.param_by_hash = param_map
-            .iter()
-            .map(|(id, p)| (hash_param_id(id), *p))
+        // Only calculate these hashes once, and in the stable order defined by the plugin
+        let param_id_hashes_ptrs = param_ids.iter().filter_map(|id| {
+            let param_ptr = param_map.get(id)?;
+            Some((id, hash_param_id(id), param_ptr))
+        });
+        wrapper.param_hashes = param_id_hashes_ptrs
+            .clone()
+            .map(|(_, hash, _)| hash)
             .collect();
-        wrapper.param_hashes = wrapper.param_by_hash.keys().copied().collect();
-        wrapper.param_defaults_normalized = wrapper
-            .param_hashes
-            .iter()
-            .map(|hash| unsafe { wrapper.param_by_hash[hash].normalized_value() })
+        wrapper.param_by_hash = param_id_hashes_ptrs
+            .clone()
+            .map(|(_, hash, ptr)| (hash, *ptr))
             .collect();
-        wrapper.param_id_to_hash = param_map
-            .into_keys()
-            .map(|id| (hash_param_id(id), id))
+        wrapper.param_defaults_normalized = param_id_hashes_ptrs
+            .clone()
+            .map(|(_, _, ptr)| unsafe { ptr.normalized_value() })
             .collect();
-        wrapper.param_hash_to_id = wrapper
-            .param_id_to_hash
-            .iter()
-            .map(|(&hash, &id)| (id, hash))
+        wrapper.param_id_to_hash = param_id_hashes_ptrs
+            .clone()
+            .map(|(id, hash, _)| (hash, *id))
+            .collect();
+        wrapper.param_hash_to_id = param_id_hashes_ptrs
+            .map(|(id, hash, _)| (*id, hash))
             .collect();
 
         // FIXME: Right now this is safe, but if we are going to have a singleton main thread queue

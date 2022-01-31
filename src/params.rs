@@ -369,6 +369,10 @@ pub trait Params {
     /// is only valid as long as this pinned object is valid.
     fn param_map(self: Pin<&Self>) -> HashMap<&'static str, ParamPtr>;
 
+    /// All parameter IDs from `param_map`, in a stable order. This order will be used to display
+    /// the parameters.
+    fn param_ids(self: Pin<&Self>) -> &'static [&'static str];
+
     /// Serialize all fields marked with `#[persist = "stable_name"]` into a hash map containing
     /// JSON-representations of those fields so they can be written to the plugin's state and
     /// recalled later. This uses [serialize_field] under the hood.

@@ -29,6 +29,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
     // `persist` function we'll create functions that serialize and deserialize those fields
     // individually (so they can be added and removed independently of eachother) using JSON.
     let mut param_mapping_insert_tokens = Vec::new();
+    let mut param_id_string_tokens = Vec::new();
     let mut field_serialize_tokens = Vec::new();
     let mut field_deserialize_tokens = Vec::new();
     for field in fields.named {
@@ -96,6 +97,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                 // variant
                 param_mapping_insert_tokens
                     .push(quote! { param_map.insert(#param_id, self.#field_name.as_ptr()); });
+                param_id_string_tokens.push(quote! { #param_id, });
             }
             (None, Some(stable_name)) => {
                 // We don't know anything about the field types, but because we can generate this
@@ -156,6 +158,10 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                 #(#param_mapping_insert_tokens)*
 
                 param_map
+            }
+
+            fn param_ids(self: std::pin::Pin<&Self>) -> &'static [&'static str] {
+                &[#(#param_id_string_tokens)*]
             }
 
             fn serialize_fields(&self) -> ::std::collections::HashMap<String, String> {
