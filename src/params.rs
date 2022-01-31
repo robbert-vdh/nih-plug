@@ -56,6 +56,18 @@ pub struct PlainParam<T> {
     /// locality, but it does allow for a much nicer declarative API.
     pub value: T,
 
+    // // TODO: Add optional value smoothing using an Enum. This would need to include  at least
+    // //       - `Smoothing::None`: Don't do any work, `value` is just the most recent vlaue in the
+    // //         block
+    // //       - `Smoothing::Smooth(f32)`: Automatically smooth to `f32` milliseconds. The host will
+    // //         provide this as an iterator (would probably be much faster than precalculating
+    // //         verything).
+    // //       - `Smoothing::SampleAccurate(f32)`: Same as `Smooth`, but uses sample accurate
+    // //         automation values if the host provides those instead of the last value.
+    // //
+    // //       And this would need to integrate nicely with the sample buffer iterator adapter when
+    // //       that gets added
+    // pub smoothed: Smoothing<T>,
     /// Optional callback for listening to value changes. The argument passed to this function is
     /// the parameter's new **plain** value. This should not do anything expensive as it may be
     /// called multiple times in rapid succession.
