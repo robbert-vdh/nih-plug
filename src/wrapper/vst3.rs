@@ -436,9 +436,8 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
                 match param_value {
                     ParamValue::Bool(b) => self.inner.bypass_state.store(b, Ordering::SeqCst),
                     _ => nih_debug_assert_failure!(
-                        "Invalid serialized value {:?} for parameter {} ({:?})",
+                        "Invalid serialized value {:?} for parameter \"{}\"",
                         param_value,
-                        param_id_str,
                         param_id_str,
                     ),
                 };
@@ -461,9 +460,10 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
             match (param_ptr, param_value) {
                 (ParamPtr::FloatParam(p), ParamValue::F32(v)) => (**p).set_plain_value(v),
                 (ParamPtr::IntParam(p), ParamValue::I32(v)) => (**p).set_plain_value(v),
+                (ParamPtr::BoolParam(p), ParamValue::Bool(v)) => (**p).set_plain_value(v),
                 (param_ptr, param_value) => {
                     nih_debug_assert_failure!(
-                        "Invalid serialized value {:?} for parameter {} ({:?})",
+                        "Invalid serialized value {:?} for parameter \"{}\" ({:?})",
                         param_value,
                         param_id_str,
                         param_ptr,
