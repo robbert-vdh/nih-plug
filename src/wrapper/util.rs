@@ -21,9 +21,21 @@ use widestring::U16CString;
 
 /// A Rabin fingerprint based string hash for parameter ID strings.
 pub fn hash_param_id(id: &str) -> u32 {
+    let mut overflow;
+    let mut overflow2;
+    let mut has_overflown = false;
     let mut hash: u32 = 0;
     for char in id.bytes() {
-        hash = hash * 31 + char as u32
+        (hash, overflow) = hash.overflowing_mul(31);
+        (hash, overflow2) = hash.overflowing_add(char as u32);
+        has_overflown |= overflow || overflow2;
+    }
+
+    if has_overflown {
+        nih_log!(
+            "Overflow while hasing param ID \"{}\", consider using shorter IDs to avoid collissions",
+            id
+        );
     }
 
     // Studio One apparently doesn't like negative parameters, so JUCE just zeroes out the sign bit
