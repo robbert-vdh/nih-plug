@@ -102,7 +102,7 @@ pub trait Vst3Plugin: Plugin {
 }
 
 /// We only support a single main input and output bus at the moment.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BusConfig {
     /// The number of input channels for the plugin.
     pub num_input_channels: u32,

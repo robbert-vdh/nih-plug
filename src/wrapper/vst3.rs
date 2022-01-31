@@ -18,15 +18,18 @@
 // complain as soon as a struct has more than 8 fields
 #![allow(clippy::too_many_arguments)]
 
+use crossbeam::atomic::AtomicCell;
 use lazy_static::lazy_static;
-use std::cell::{Cell, RefCell};
+use parking_lot::RwLock;
 use std::cmp;
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::mem;
+use std::pin::Pin;
 use std::ptr;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use vst3_sys::base::{kInvalidArgument, kNoInterface, kResultFalse, kResultOk, tresult, TBool};
 use vst3_sys::base::{IBStream, IPluginBase, IPluginFactory, IPluginFactory2, IPluginFactory3};
 use vst3_sys::utils::SharedVstPtr;
@@ -77,21 +80,23 @@ macro_rules! check_null_ptr_msg {
 #[VST3(implements(IComponent, IEditController, IAudioProcessor))]
 pub(crate) struct Wrapper<'a, P: Plugin> {
     /// The wrapped plugin instance.
-    plugin: RefCell<P>,
+    plugin: Pin<Box<RwLock<P>>>,
 
     /// The current bus configuration, modified through `IAudioProcessor::setBusArrangements()`.
-    current_bus_config: RefCell<BusConfig>,
+    current_bus_config: AtomicCell<BusConfig>,
     /// Whether the plugin is currently bypassed. This is not yet integrated with the `Plugin`
     /// trait.
-    bypass_state: Cell<bool>,
+    bypass_state: AtomicBool,
     /// The last process status returned by the plugin. This is used for tail handling.
-    last_process_status: Cell<ProcessStatus>,
+    last_process_status: AtomicCell<ProcessStatus>,
+    /// Whether the plugin is currently processing audio. In other words, the last state
+    /// `IAudioProcessor::setActive()` has been called with.
     is_processing: AtomicBool,
 
     /// Contains slices for the plugin's outputs. You can't directly create a nested slice form
     /// apointer to pointers, so this needs to be preallocated in the setup call and kept around
     /// between process calls.
-    output_slices: RefCell<Vec<&'a mut [f32]>>,
+    output_slices: RwLock<Vec<&'a mut [f32]>>,
 
     /// A mapping from parameter ID hashes (obtained from the string parameter IDs) to pointers to
     /// parameters belonging to the plugin. As long as `plugin` does not get recreated, these
@@ -109,33 +114,42 @@ pub(crate) struct Wrapper<'a, P: Plugin> {
     param_hash_to_id: HashMap<&'static str, u32>,
 }
 
+// FIXME: This is far, far, far from ideal. The problem is that the `VST` attribute macro adds
+//        VTable pointers to the struct (that are stored separately by leaking `Box<T>`s), and we
+//        can't mark those as safe ourselves.
+unsafe impl<P: Plugin> Send for Wrapper<'_, P> {}
+unsafe impl<P: Plugin> Sync for Wrapper<'_, P> {}
+
 impl<P: Plugin> Wrapper<'_, P> {
-    pub fn new() -> Box<Self> {
+    pub fn new() -> Arc<Self> {
         let mut wrapper = Self::allocate(
-            RefCell::new(P::default()),
+            Box::pin(RwLock::default()),        // plugin
             // Some hosts, like the current version of Bitwig and Ardour at the time of writing,
             // will try using the plugin's default not yet initialized bus arrangement. Because of
             // that, we'll always initialize this configuration even before the host requests a
             // channel layout.
-            RefCell::new(BusConfig {
+            AtomicCell::new(BusConfig {
                 num_input_channels: P::DEFAULT_NUM_INPUTS,
                 num_output_channels: P::DEFAULT_NUM_OUTPUTS,
             }),
-            Cell::new(false),                 // bypass_state
-            Cell::new(ProcessStatus::Normal), // last_process_status
-            AtomicBool::new(false),           // is_processing
-            RefCell::new(Vec::new()),         // output_slices
-            HashMap::new(),                   // param_by_hash
-            Vec::new(),                       // param_hashes
-            Vec::new(),                       // param_defaults_normalized
-            HashMap::new(),                   // param_id_to_hash
-            HashMap::new(),                   // param_hash_to_id
+            AtomicBool::new(false),                 // bypass_state
+            AtomicCell::new(ProcessStatus::Normal), // last_process_status
+            AtomicBool::new(false),                 // is_processing
+            RwLock::new(Vec::new()),                // output_slices
+            HashMap::new(),                         // param_by_hash
+            Vec::new(),                             // param_hashes
+            Vec::new(),                             // param_defaults_normalized
+            HashMap::new(),                         // param_id_to_hash
+            HashMap::new(),                         // param_hash_to_id
         );
 
         // This is a mapping from the parameter IDs specified by the plugin to pointers to thsoe
         // parameters. Since the object returned by `params()` is pinned, these pointers are safe to
         // dereference as long as `wrapper.plugin` is alive
-        let param_map = wrapper.plugin.borrow().params().param_map();
+        // XXX: This unsafe block is unnecessary. rust-analyzer gets a bit confused and this this
+        //      `read()` function is from `IBStream` which it definitely is not.
+        #[allow(unused_unsafe)]
+        let param_map = unsafe { wrapper.plugin.read() }.params().param_map();
         nih_debug_assert!(
             !param_map.contains_key(BYPASS_PARAM_ID),
             "The wrapper alread yadds its own bypass parameter"
@@ -161,12 +175,14 @@ impl<P: Plugin> Wrapper<'_, P> {
             .map(|(&hash, &id)| (id, hash))
             .collect();
 
+        let wrapper: Arc<Wrapper<'_, P>> = wrapper.into();
         wrapper
     }
 
     unsafe fn set_normalized_value_by_hash(&self, hash: u32, normalized_value: f64) -> tresult {
         if hash == *BYPASS_PARAM_HASH {
-            self.bypass_state.set(normalized_value >= 0.5);
+            self.bypass_state
+                .store(normalized_value >= 0.5, Ordering::SeqCst);
 
             kResultOk
         } else if let Some(param_ptr) = self.param_by_hash.get(&hash) {
@@ -234,7 +250,7 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
                     (d, 0) if d == vst3_sys::vst::BusDirections::kInput as i32 => {
                         info.direction = vst3_sys::vst::BusDirections::kInput as i32;
                         info.channel_count =
-                            self.current_bus_config.borrow().num_input_channels as i32;
+                            self.current_bus_config.load().num_input_channels as i32;
                         u16strlcpy(&mut info.name, "Input");
 
                         kResultOk
@@ -242,7 +258,7 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
                     (d, 0) if d == vst3_sys::vst::BusDirections::kOutput as i32 => {
                         info.direction = vst3_sys::vst::BusDirections::kOutput as i32;
                         info.channel_count =
-                            self.current_bus_config.borrow().num_output_channels as i32;
+                            self.current_bus_config.load().num_output_channels as i32;
                         u16strlcpy(&mut info.name, "Output");
 
                         kResultOk
@@ -344,7 +360,7 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
             // Handle the bypass parameter separately
             if param_id_str == BYPASS_PARAM_ID {
                 match param_value {
-                    ParamValue::Bool(b) => self.bypass_state.set(b),
+                    ParamValue::Bool(b) => self.bypass_state.store(b, Ordering::SeqCst),
                     _ => nih_debug_assert_failure!(
                         "Invalid serialized value {:?} for parameter {} ({:?})",
                         param_value,
@@ -384,7 +400,7 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
         // The plugin can also persist arbitrary fields alongside its parameters. This is useful for
         // storing things like sample data.
         self.plugin
-            .borrow()
+            .read()
             .params()
             .deserialize_fields(&state.fields);
 
@@ -414,12 +430,12 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
         // Don't forget about the bypass parameter
         params.insert(
             BYPASS_PARAM_ID.to_string(),
-            ParamValue::Bool(self.bypass_state.get()),
+            ParamValue::Bool(self.bypass_state.load(Ordering::SeqCst)),
         );
 
         // The plugin can also persist arbitrary fields alongside its parameters. This is useful for
         // storing things like sample data.
-        let fields = self.plugin.borrow().params().serialize_fields();
+        let fields = self.plugin.read().params().serialize_fields();
 
         let plugin_state = State { params, fields };
         match serde_json::to_vec(&plugin_state) {
@@ -605,7 +621,7 @@ impl<P: Plugin> IEditController for Wrapper<'_, P> {
 
     unsafe fn get_param_normalized(&self, id: u32) -> f64 {
         if id == *BYPASS_PARAM_HASH {
-            if self.bypass_state.get() {
+            if self.bypass_state.load(Ordering::SeqCst) {
                 1.0
             } else {
                 0.0
@@ -662,8 +678,8 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
             num_input_channels: input_channel_map.count_ones(),
             num_output_channels: output_channel_map.count_ones(),
         };
-        if self.plugin.borrow().accepts_bus_config(&proposed_config) {
-            self.current_bus_config.replace(proposed_config);
+        if self.plugin.read().accepts_bus_config(&proposed_config) {
+            self.current_bus_config.store(proposed_config);
 
             kResultOk
         } else {
@@ -696,7 +712,7 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
             }
         };
 
-        let config = self.current_bus_config.borrow();
+        let config = self.current_bus_config.load();
         let num_channels = match (dir, index) {
             (d, 0) if d == vst3_sys::vst::BusDirections::kInput as i32 => config.num_input_channels,
             (d, 0) if d == vst3_sys::vst::BusDirections::kOutput as i32 => {
@@ -735,21 +751,17 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
             vst3_sys::vst::SymbolicSampleSizes::kSample32 as i32
         );
 
-        let bus_config = self.current_bus_config.borrow();
+        let bus_config = self.current_bus_config.load();
         let buffer_config = BufferConfig {
             sample_rate: setup.sample_rate as f32,
             max_buffer_size: setup.max_samples_per_block as u32,
         };
 
-        if self
-            .plugin
-            .borrow_mut()
-            .initialize(&bus_config, &buffer_config)
-        {
+        if self.plugin.write().initialize(&bus_config, &buffer_config) {
             // Preallocate enough room in the output slices vector so we can convert a `*mut *mut
             // f32` to a `&mut [&mut f32]` in the process call
             self.output_slices
-                .borrow_mut()
+                .write()
                 .resize_with(bus_config.num_output_channels as usize, || &mut []);
 
             kResultOk
@@ -760,7 +772,7 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
 
     unsafe fn set_processing(&self, state: TBool) -> tresult {
         // Always reset the processing status when the plugin gets activated or deactivated
-        self.last_process_status.set(ProcessStatus::Normal);
+        self.last_process_status.store(ProcessStatus::Normal);
         self.is_processing.store(state != 0, Ordering::SeqCst);
 
         // We don't have any special handling for suspending and resuming plugins, yet
@@ -822,7 +834,7 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
         nih_debug_assert!(data.num_samples >= 0);
 
         // This vector has been reallocated to contain enough slices as there are output channels
-        let mut output_slices = self.output_slices.borrow_mut();
+        let mut output_slices = self.output_slices.write();
         check_null_ptr_msg!(
             "Process output pointer is null",
             data.outputs,
@@ -862,7 +874,7 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
             }
         }
 
-        match self.plugin.borrow_mut().process(&mut output_slices) {
+        match self.plugin.write().process(&mut output_slices) {
             ProcessStatus::Error(err) => {
                 nih_debug_assert_failure!("Process error: {}", err);
 
@@ -874,7 +886,7 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
 
     unsafe fn get_tail_samples(&self) -> u32 {
         // https://github.com/steinbergmedia/vst3_pluginterfaces/blob/2ad397ade5b51007860bedb3b01b8afd2c5f6fba/vst/ivstaudioprocessor.h#L145-L159
-        match self.last_process_status.get() {
+        match self.last_process_status.load() {
             ProcessStatus::Tail(samples) => samples,
             ProcessStatus::KeepAlive => u32::MAX, // kInfiniteTail
             _ => 0,                               // kNoTail
@@ -951,7 +963,11 @@ impl<P: Vst3Plugin> IPluginFactory for Factory<P> {
             return kNoInterface;
         }
 
-        *obj = Box::into_raw(Wrapper::<P>::new()) as *mut vst3_sys::c_void;
+        // XXX: Right now this `Arc` mostly serves to have clearer, safer interactions between the
+        //      wrapper, the plugin, and the other behind the scene bits. The wrapper will still get
+        //      freed using `FUnknown`'s internal reference count when the host drops it, so we
+        //      actually need to leak this Arc here so it always stays at 1 reference or higher.
+        *obj = Arc::into_raw(Wrapper::<P>::new()) as *mut vst3_sys::c_void;
 
         kResultOk
     }

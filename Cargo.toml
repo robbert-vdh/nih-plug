@@ -10,6 +10,8 @@ members = ["nih_plug_derive", "plugins/gain", "xtask"]
 
 [dependencies]
 nih_plug_derive = { path = "nih_plug_derive" }
+
+crossbeam = "0.8"
 lazy_static = "1.4"
 parking_lot = "0.12"
 serde = { version = "1.0", features = ["derive"] }

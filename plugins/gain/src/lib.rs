@@ -45,7 +45,7 @@ struct GainParams {
 impl Default for Gain {
     fn default() -> Self {
         Self {
-            params: Pin::new(Box::default()),
+            params: Box::pin(GainParams::default()),
         }
     }
 }
