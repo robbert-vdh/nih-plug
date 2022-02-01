@@ -19,31 +19,16 @@
 use std::fmt::Display;
 use std::sync::Arc;
 
+use self::range::NormalizebleRange;
+
 pub mod internals;
+pub mod range;
 
 pub type FloatParam = PlainParam<f32>;
 pub type IntParam = PlainParam<i32>;
 
 pub use internals::Params;
-
-/// A distribution for a parameter's range. Probably need to add some forms of skewed ranges and
-/// maybe a callback based implementation at some point.
-#[derive(Debug)]
-pub enum Range<T> {
-    Linear { min: T, max: T },
-}
-
-/// A normalizable range for type `T`, where `self` is expected to be a type `R<T>`. Higher kinded
-/// types would have made this trait definition a lot clearer.
-trait NormalizebleRange<T> {
-    /// Normalize a plain, unnormalized value. Will be clamped to the bounds of the range if the
-    /// normalized value exceeds `[0, 1]`.
-    fn normalize(&self, plain: T) -> f32;
-
-    /// Unnormalize a normalized value. Will be clamped to `[0, 1]` if the plain, unnormalized value
-    /// would exceed that range.
-    fn unnormalize(&self, normalized: f32) -> T;
-}
+pub use range::Range;
 
 /// Describes a single parmaetre of any type.
 pub trait Param {
@@ -169,18 +154,6 @@ impl Default for BoolParam {
             value_to_string: None,
             string_to_value: None,
         }
-    }
-}
-
-impl Default for Range<f32> {
-    fn default() -> Self {
-        Self::Linear { min: 0.0, max: 1.0 }
-    }
-}
-
-impl Default for Range<i32> {
-    fn default() -> Self {
-        Self::Linear { min: 0, max: 1 }
     }
 }
 
@@ -334,83 +307,5 @@ impl Display for BoolParam {
             (true, None) => write!(f, "On"),
             (false, None) => write!(f, "Off"),
         }
-    }
-}
-
-impl NormalizebleRange<f32> for Range<f32> {
-    fn normalize(&self, plain: f32) -> f32 {
-        match &self {
-            Range::Linear { min, max } => (plain - min) / (max - min),
-        }
-        .clamp(0.0, 1.0)
-    }
-
-    fn unnormalize(&self, normalized: f32) -> f32 {
-        let normalized = normalized.clamp(0.0, 1.0);
-        match &self {
-            Range::Linear { min, max } => (normalized * (max - min)) + min,
-        }
-    }
-}
-
-impl NormalizebleRange<i32> for Range<i32> {
-    fn normalize(&self, plain: i32) -> f32 {
-        match &self {
-            Range::Linear { min, max } => (plain - min) as f32 / (max - min) as f32,
-        }
-        .clamp(0.0, 1.0)
-    }
-
-    fn unnormalize(&self, normalized: f32) -> i32 {
-        let normalized = normalized.clamp(0.0, 1.0);
-        match &self {
-            Range::Linear { min, max } => (normalized * (max - min) as f32).round() as i32 + min,
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn make_linear_float_range() -> Range<f32> {
-        Range::Linear {
-            min: 10.0,
-            max: 20.0,
-        }
-    }
-
-    fn make_linear_int_range() -> Range<i32> {
-        Range::Linear { min: -10, max: 10 }
-    }
-
-    #[test]
-    fn range_normalize_linear_float() {
-        let range = make_linear_float_range();
-        assert_eq!(range.normalize(17.5), 0.75);
-    }
-
-    #[test]
-    fn range_normalize_linear_int() {
-        let range = make_linear_int_range();
-        assert_eq!(range.normalize(-5), 0.25);
-    }
-
-    #[test]
-    fn range_unnormalize_linear_float() {
-        let range = make_linear_float_range();
-        assert_eq!(range.unnormalize(0.25), 12.5);
-    }
-
-    #[test]
-    fn range_unnormalize_linear_int() {
-        let range = make_linear_int_range();
-        assert_eq!(range.unnormalize(0.75), 5);
-    }
-
-    #[test]
-    fn range_unnormalize_linear_int_rounding() {
-        let range = make_linear_int_range();
-        assert_eq!(range.unnormalize(0.73), 5);
     }
 }
