@@ -28,13 +28,10 @@ use crate::param::Params;
 /// - MIDI
 /// - Sidechain inputs
 /// - Multiple output busses
-/// - Latency compensation
 /// - Special handling for offline processing
 /// - Transport and other context information in the process call
-/// - Storing custom state, only the parameters are saved right now
 /// - Sample accurate automation (this would be great, but sadly few hosts even support it so until
 ///   they do we'll ignore that it's a thing)
-/// - Parameter update callbacks
 /// - Parameter hierarchies/groups
 /// - Bypass parameters, right now the VST3 wrapper generates one for you
 /// - Outputting parameter changes from the plugin
