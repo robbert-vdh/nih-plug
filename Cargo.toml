@@ -6,7 +6,12 @@ authors = ["Robbert van der Helm <mail@robbertvanderhelm.nl>"]
 license = "GPL-3.0-or-later"
 
 [workspace]
-members = ["nih_plug_derive", "plugins/gain", "xtask"]
+members = [
+  "nih_plug_derive",
+  "xtask",
+
+  "plugins/gain",
+]
 
 [dependencies]
 nih_plug_derive = { path = "nih_plug_derive" }
