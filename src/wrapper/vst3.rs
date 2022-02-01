@@ -636,6 +636,8 @@ impl<P: Plugin> IEditController for Wrapper<'_, P> {
                 ParamPtr::FloatParam(_) => 0,
                 ParamPtr::IntParam(p) => match (**p).range {
                     crate::param::Range::Linear { min, max } => max - min,
+                    crate::param::Range::Skewed { min, max, .. } => max - min,
+                    crate::param::Range::SymmetricalSkewed { min, max, .. } => max - min,
                 },
                 ParamPtr::BoolParam(_) => 1,
             };
