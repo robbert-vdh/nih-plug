@@ -294,11 +294,14 @@ impl<P: Plugin> MainThreadExecutor<Task> for WrapperInner<'_, P> {
 
 impl<P: Plugin> ProcessContext for WrapperInner<'_, P> {
     fn set_latency_samples(&self, samples: u32) {
-        self.current_latency.store(samples, Ordering::SeqCst);
-        let task_posted = unsafe { self.event_loop.read().assume_init_ref() }.do_maybe_async(
-            Task::TriggerRestart(vst3_sys::vst::RestartFlags::kLatencyChanged as i32),
-        );
-        nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+        // Only trigger a restart if it's actually needed
+        let old_latency = self.current_latency.swap(samples, Ordering::SeqCst);
+        if old_latency != samples {
+            let task_posted = unsafe { self.event_loop.read().assume_init_ref() }.do_maybe_async(
+                Task::TriggerRestart(vst3_sys::vst::RestartFlags::kLatencyChanged as i32),
+            );
+            nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+        }
     }
 }
 
