@@ -18,6 +18,7 @@
 extern crate nih_plug;
 
 use nih_plug::{
+    context::ProcessContext,
     formatters,
     params::{BoolParam, FloatParam, Param, Params, Range},
     plugin::{BufferConfig, BusConfig, Plugin, ProcessStatus, Vst3Plugin},
@@ -105,14 +106,23 @@ impl Plugin for Gain {
         config.num_input_channels == config.num_output_channels && config.num_input_channels > 0
     }
 
-    fn initialize(&mut self, _bus_config: &BusConfig, _buffer_config: &BufferConfig) -> bool {
+    fn initialize(
+        &mut self,
+        _bus_config: &BusConfig,
+        _buffer_config: &BufferConfig,
+        _context: &dyn ProcessContext,
+    ) -> bool {
         // This plugin doesn't need any special initialization, but if you need to do anything
         // expensive then this would be the place. State is kept around while when the host
         // reconfigures the plugin.
         true
     }
 
-    fn process(&mut self, samples: &mut [&mut [f32]]) -> ProcessStatus {
+    fn process(
+        &mut self,
+        samples: &mut [&mut [f32]],
+        _context: &dyn ProcessContext,
+    ) -> ProcessStatus {
         if samples.is_empty() {
             return ProcessStatus::Error("Empty buffers");
         }

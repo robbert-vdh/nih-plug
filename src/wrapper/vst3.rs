@@ -876,7 +876,7 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
             .inner
             .plugin
             .write()
-            .initialize(&bus_config, &buffer_config)
+            .initialize(&bus_config, &buffer_config, self.inner.as_ref())
         {
             // Preallocate enough room in the output slices vector so we can convert a `*mut *mut
             // f32` to a `&mut [&mut f32]` in the process call
@@ -995,7 +995,12 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
             }
         }
 
-        match self.inner.plugin.write().process(&mut output_slices) {
+        match self
+            .inner
+            .plugin
+            .write()
+            .process(&mut output_slices, self.inner.as_ref())
+        {
             ProcessStatus::Error(err) => {
                 nih_debug_assert_failure!("Process error: {}", err);
 

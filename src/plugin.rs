@@ -16,6 +16,7 @@
 
 use std::pin::Pin;
 
+use crate::context::ProcessContext;
 use crate::params::Params;
 
 /// Basic functionality that needs to be implemented by a plugin. The wrappers will use this to
@@ -72,11 +73,19 @@ pub trait Plugin: Default + Send + Sync {
     /// shouldn't do anything beyond returning true or false.
     fn accepts_bus_config(&self, config: &BusConfig) -> bool;
 
-    /// Initialize the plugin for the given bus and buffer configurations.
+    /// Initialize the plugin for the given bus and buffer configurations. If the plugin is being
+    /// restored from an old state, then that state will have already been restored at this point.
+    /// If based on those parameters (or for any reason whatsoever) the plugin needs to introduce
+    /// latency, then you can do so here using the process context.
     ///
-    /// Before this point, the plugin should not have done any expensive initialization. Pleaes
+    /// Before this point, the plugin should not have done any expensive initialization. Please
     /// don't be that plugin that takes twenty seconds to scan.
-    fn initialize(&mut self, bus_config: &BusConfig, buffer_config: &BufferConfig) -> bool;
+    fn initialize(
+        &mut self,
+        bus_config: &BusConfig,
+        buffer_config: &BufferConfig,
+        context: &dyn ProcessContext,
+    ) -> bool;
 
     /// Process audio. To not have to worry about aliasing, the host's input buffer have already
     /// been copied to the output buffers if they are not handling buffers in place (most hosts do
@@ -87,7 +96,11 @@ pub trait Plugin: Default + Send + Sync {
     ///       assymetric
     /// TODO: Handle FTZ stuff on the wrapper side and mention that this has been handled
     /// TODO: Pass transport and other context information to the plugin
-    fn process(&mut self, samples: &mut [&mut [f32]]) -> ProcessStatus;
+    fn process(
+        &mut self,
+        samples: &mut [&mut [f32]],
+        context: &dyn ProcessContext,
+    ) -> ProcessStatus;
 }
 
 /// Provides auxiliary metadata needed for a VST3 plugin.
