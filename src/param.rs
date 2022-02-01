@@ -45,6 +45,41 @@ trait NormalizebleRange<T> {
     fn unnormalize(&self, normalized: f32) -> T;
 }
 
+/// Describes a single parmaetre of any type.
+pub trait Param {
+    /// The plain parameter type.
+    type Plain;
+
+    /// Set this parameter based on a string. Returns whether the updating succeeded. That can fail
+    /// if the string cannot be parsed.
+    ///
+    /// TODO: After implementing VST3, check if we handle parsing failures correctly
+    fn set_from_string(&mut self, string: &str) -> bool;
+
+    /// Get the unnormalized value for this parameter.
+    fn plain_value(&self) -> Self::Plain;
+
+    /// Set this parameter based on a plain, unnormalized value.
+    fn set_plain_value(&mut self, plain: Self::Plain);
+
+    /// Get the normalized `[0, 1]` value for this parameter.
+    fn normalized_value(&self) -> f32;
+
+    /// Set this parameter based on a normalized value.
+    fn set_normalized_value(&mut self, normalized: f32);
+
+    /// Get the string representation for a normalized value. Used as part of the wrappers. Most
+    /// plugin formats already have support for units, in which case it shouldn't be part of this
+    /// string or some DAWs may show duplicate units.
+    fn normalized_value_to_string(&self, normalized: f32, include_unit: bool) -> String;
+
+    /// Get the string representation for a normalized value. Used as part of the wrappers.
+    fn string_to_normalized_value(&self, string: &str) -> Option<f32>;
+
+    /// Internal implementation detail for implementing [Params]. This should not be used directly.
+    fn as_ptr(&self) -> internals::ParamPtr;
+}
+
 /// A numerical parameter that's stored unnormalized. The range is used for the normalization
 /// process.
 pub struct PlainParam<T> {
@@ -105,41 +140,6 @@ pub struct BoolParam {
     /// be parsed, then this should return a `None`. If this happens while the parameter is being
     /// updated then the update will be canceled.
     pub string_to_value: Option<Arc<dyn Fn(&str) -> Option<bool> + Send + Sync>>,
-}
-
-/// Describes a single parmaetre of any type.
-pub trait Param {
-    /// The plain parameter type.
-    type Plain;
-
-    /// Set this parameter based on a string. Returns whether the updating succeeded. That can fail
-    /// if the string cannot be parsed.
-    ///
-    /// TODO: After implementing VST3, check if we handle parsing failures correctly
-    fn set_from_string(&mut self, string: &str) -> bool;
-
-    /// Get the unnormalized value for this parameter.
-    fn plain_value(&self) -> Self::Plain;
-
-    /// Set this parameter based on a plain, unnormalized value.
-    fn set_plain_value(&mut self, plain: Self::Plain);
-
-    /// Get the normalized `[0, 1]` value for this parameter.
-    fn normalized_value(&self) -> f32;
-
-    /// Set this parameter based on a normalized value.
-    fn set_normalized_value(&mut self, normalized: f32);
-
-    /// Get the string representation for a normalized value. Used as part of the wrappers. Most
-    /// plugin formats already have support for units, in which case it shouldn't be part of this
-    /// string or some DAWs may show duplicate units.
-    fn normalized_value_to_string(&self, normalized: f32, include_unit: bool) -> String;
-
-    /// Get the string representation for a normalized value. Used as part of the wrappers.
-    fn string_to_normalized_value(&self, string: &str) -> Option<f32>;
-
-    /// Internal implementation detail for implementing [Params]. This should not be used directly.
-    fn as_ptr(&self) -> internals::ParamPtr;
 }
 
 impl<T> Default for PlainParam<T>
