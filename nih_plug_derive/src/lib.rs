@@ -104,9 +104,9 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                 // function we get type erasure for free since we only need to worry about byte
                 // vectors
                 field_serialize_tokens.push(quote! {
-                    match ::nih_plug::param::PersistentField::map(
+                    match ::nih_plug::param::internals::PersistentField::map(
                         &self.#field_name,
-                        ::nih_plug::param::serialize_field,
+                        ::nih_plug::param::internals::serialize_field,
                     ) {
                         Ok(data) => {
                             serialized.insert(String::from(#stable_name), data);
@@ -118,9 +118,9 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                 });
                 field_deserialize_tokens.push(quote! {
                     #stable_name => {
-                        match ::nih_plug::param::deserialize_field(&data) {
+                        match ::nih_plug::param::internals::deserialize_field(&data) {
                             Ok(deserialized) => {
-                                ::nih_plug::param::PersistentField::set(
+                                ::nih_plug::param::internals::PersistentField::set(
                                     &self.#field_name,
                                     deserialized,
                                 );
@@ -152,7 +152,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
         impl Params for #struct_name {
             fn param_map(
                 self: std::pin::Pin<&Self>,
-            ) -> std::collections::HashMap<&'static str, nih_plug::param::ParamPtr> {
+            ) -> std::collections::HashMap<&'static str, nih_plug::param::internals::ParamPtr> {
                 let mut param_map = std::collections::HashMap::new();
 
                 #(#param_mapping_insert_tokens)*
