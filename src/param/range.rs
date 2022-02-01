@@ -26,7 +26,9 @@ pub enum Range<T> {
     /// for a more intuitively way to calculate the skew factor where positive values skew the range
     /// towards the end while negative values skew the range toward the start.
     Skewed { min: T, max: T, factor: f32 },
-    /// The same as [Range::Skewed], but with the skewing happening from a central point.
+    /// The same as [Range::Skewed], but with the skewing happening from a central point. This
+    /// central point is rescaled to be at 50% of the parameter's range for convenience of use. Git
+    /// blame this comment to find a version that doesn't do this.
     SymmetricalSkewed {
         min: T,
         max: T,
@@ -87,8 +89,7 @@ impl NormalizebleRange<f32> for Range<f32> {
                     // unnormalized and scaled back to the original [center_proportion, 1] range
                     let scaled_proportion = (unscaled_proportion - center_proportion)
                         * (1.0 - center_proportion).recip();
-                    (scaled_proportion.powf(*factor) * (1.0 - center_proportion))
-                        + center_proportion
+                    (scaled_proportion.powf(*factor) * 0.5) + 0.5
                 } else {
                     // The part below the center gets scaled, inverted (so the range is [0, 1] where
                     // 0 corresponds to the center proportion and 1 corresponds to the orignal
@@ -96,7 +97,7 @@ impl NormalizebleRange<f32> for Range<f32> {
                     // original range
                     let inverted_scaled_proportion =
                         (center_proportion - unscaled_proportion) * (center_proportion).recip();
-                    (1.0 - inverted_scaled_proportion.powf(*factor)) * (center_proportion)
+                    (1.0 - inverted_scaled_proportion.powf(*factor)) * 0.5
                 }
             }
         }
@@ -118,15 +119,13 @@ impl NormalizebleRange<f32> for Range<f32> {
             } => {
                 // Reconstructing the subranges works the same as with the normal skewed ranges
                 let center_proportion = (center - min) / (max - min);
-                let skewed_proportion = if normalized > center_proportion {
-                    let scaled_proportion =
-                        (normalized - center_proportion) * (1.0 - center_proportion).recip();
+                let skewed_proportion = if normalized > 0.5 {
+                    let scaled_proportion = (normalized - 0.5) * 2.0;
                     (scaled_proportion.powf(factor.recip()) * (1.0 - center_proportion))
                         + center_proportion
                 } else {
-                    let inverted_scaled_proportion =
-                        (center_proportion - normalized) * (center_proportion).recip();
-                    (1.0 - inverted_scaled_proportion.powf(factor.recip())) * (center_proportion)
+                    let inverted_scaled_proportion = (0.5 - normalized) * 2.0;
+                    (1.0 - inverted_scaled_proportion.powf(factor.recip())) * center_proportion
                 };
 
                 (skewed_proportion * (max - min)) + min
@@ -154,12 +153,11 @@ impl NormalizebleRange<i32> for Range<i32> {
                 if unscaled_proportion > center_proportion {
                     let scaled_proportion = (unscaled_proportion - center_proportion)
                         * (1.0 - center_proportion).recip();
-                    (scaled_proportion.powf(*factor) * (1.0 - center_proportion))
-                        + center_proportion
+                    (scaled_proportion.powf(*factor) * 0.5) + 0.5
                 } else {
                     let inverted_scaled_proportion =
                         (center_proportion - unscaled_proportion) * (center_proportion).recip();
-                    (1.0 - inverted_scaled_proportion.powf(*factor)) * (center_proportion)
+                    (1.0 - inverted_scaled_proportion.powf(*factor)) * 0.5
                 }
             }
         }
@@ -180,15 +178,13 @@ impl NormalizebleRange<i32> for Range<i32> {
                 center,
             } => {
                 let center_proportion = (center - min) as f32 / (max - min) as f32;
-                let skewed_proportion = if normalized > center_proportion {
-                    let scaled_proportion =
-                        (normalized - center_proportion) * (1.0 - center_proportion).recip();
+                let skewed_proportion = if normalized > 0.5 {
+                    let scaled_proportion = (normalized - 0.5) * 2.0;
                     (scaled_proportion.powf(factor.recip()) * (1.0 - center_proportion))
                         + center_proportion
                 } else {
-                    let inverted_scaled_proportion =
-                        (center_proportion - normalized) * (center_proportion).recip();
-                    (1.0 - inverted_scaled_proportion.powf(factor.recip())) * (center_proportion)
+                    let inverted_scaled_proportion = (0.5 - normalized) * 2.0;
+                    (1.0 - inverted_scaled_proportion.powf(factor.recip())) * center_proportion
                 };
 
                 (skewed_proportion * (max - min) as f32).round() as i32 + min
@@ -361,25 +357,25 @@ mod tests {
         #[test]
         fn range_normalize_float() {
             let range = make_symmetrical_skewed_float_range(Range::skew_factor(-2.0));
-            assert_eq!(range.normalize(17.5), 0.9277015);
+            assert_eq!(range.normalize(17.5), 0.951801);
         }
 
         #[test]
         fn range_normalize_int() {
             let range = make_symmetrical_skewed_int_range(Range::skew_factor(-2.0));
-            assert_eq!(range.normalize(-5), 0.09411134);
+            assert_eq!(range.normalize(-5), 0.13444477);
         }
 
         #[test]
         fn range_unnormalize_float() {
             let range = make_symmetrical_skewed_float_range(Range::skew_factor(-2.0));
-            assert_eq!(range.unnormalize(0.9277015), 17.5);
+            assert_eq!(range.unnormalize(0.951801), 17.5);
         }
 
         #[test]
         fn range_unnormalize_int() {
             let range = make_symmetrical_skewed_int_range(Range::skew_factor(-2.0));
-            assert_eq!(range.unnormalize(0.09411134), -5);
+            assert_eq!(range.unnormalize(0.13444477), -5);
         }
     }
 }
