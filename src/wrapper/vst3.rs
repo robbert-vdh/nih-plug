@@ -93,6 +93,10 @@ struct WrapperInner<'a, P: Plugin> {
     ///
     /// TODO: Is there a better type for Send+Sync late initializaiton?
     event_loop: RwLock<MaybeUninit<OsEventLoop<Task, Self>>>,
+
+    /// Whether the plugin is currently processing audio. In other words, the last state
+    /// `IAudioProcessor::setActive()` has been called with.
+    is_processing: AtomicBool,
     /// The current bus configuration, modified through `IAudioProcessor::setBusArrangements()`.
     current_bus_config: AtomicCell<BusConfig>,
     /// Whether the plugin is currently bypassed. This is not yet integrated with the `Plugin`
@@ -102,10 +106,6 @@ struct WrapperInner<'a, P: Plugin> {
     last_process_status: AtomicCell<ProcessStatus>,
     /// The current latency in samples, as set by the plugin through the [ProcessContext].
     current_latency: AtomicU32,
-    /// Whether the plugin is currently processing audio. In other words, the last state
-    /// `IAudioProcessor::setActive()` has been called with.
-    is_processing: AtomicBool,
-
     /// Contains slices for the plugin's outputs. You can't directly create a nested slice form
     /// apointer to pointers, so this needs to be preallocated in the setup call and kept around
     /// between process calls.
@@ -147,33 +147,27 @@ impl<P: Plugin> WrapperInner<'_, P> {
     pub fn new() -> Arc<Self> {
         let mut wrapper = Self {
             plugin: Box::pin(RwLock::default()),
+
             event_loop: RwLock::new(MaybeUninit::uninit()),
-            current_bus_config:
+
+            is_processing: AtomicBool::new(false),
             // Some hosts, like the current version of Bitwig and Ardour at the time of writing,
             // will try using the plugin's default not yet initialized bus arrangement. Because of
             // that, we'll always initialize this configuration even before the host requests a
             // channel layout.
-            AtomicCell::new(BusConfig {
+            current_bus_config: AtomicCell::new(BusConfig {
                 num_input_channels: P::DEFAULT_NUM_INPUTS,
                 num_output_channels: P::DEFAULT_NUM_OUTPUTS,
             }),
-            bypass_state:
-            AtomicBool::new(false),
-            last_process_status:
-            AtomicCell::new(ProcessStatus::Normal),
-            current_latency:
-            AtomicU32::new(0),
-            is_processing:
-            AtomicBool::new(false),
+            bypass_state: AtomicBool::new(false),
+            last_process_status: AtomicCell::new(ProcessStatus::Normal),
+            current_latency: AtomicU32::new(0),
             output_slices: RwLock::new(Vec::new()),
-            param_hashes:
-            Vec::new(),
-            param_by_hash:
-            HashMap::new(),
-            param_defaults_normalized:
-            Vec::new(),
-            param_id_to_hash:
-            HashMap::new(),
+
+            param_hashes: Vec::new(),
+            param_by_hash: HashMap::new(),
+            param_defaults_normalized: Vec::new(),
+            param_id_to_hash: HashMap::new(),
         };
 
         // This is a mapping from the parameter IDs specified by the plugin to pointers to thsoe
