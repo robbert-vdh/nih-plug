@@ -79,7 +79,7 @@ impl Default for GainParams {
             the_field_name_can_change: BoolParam {
                 value: false,
                 name: "Important Value",
-                ..BoolParam::default()
+                ..Default::default()
             },
             random_data: RwLock::new(Vec::new()),
         }
