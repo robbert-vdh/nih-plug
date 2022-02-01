@@ -34,7 +34,8 @@ use vst3_sys::base::{kInvalidArgument, kNoInterface, kResultFalse, kResultOk, tr
 use vst3_sys::base::{IBStream, IPluginBase, IPluginFactory, IPluginFactory2, IPluginFactory3};
 use vst3_sys::utils::SharedVstPtr;
 use vst3_sys::vst::{
-    IAudioProcessor, IComponent, IEditController, IParamValueQueue, IParameterChanges, TChar,
+    IAudioProcessor, IComponent, IComponentHandler, IEditController, IParamValueQueue,
+    IParameterChanges, TChar,
 };
 use vst3_sys::VST3;
 use widestring::U16CStr;
@@ -84,6 +85,10 @@ macro_rules! check_null_ptr_msg {
 struct WrapperInner<'a, P: Plugin> {
     /// The wrapped plugin instance.
     plugin: Pin<Box<RwLock<P>>>,
+
+    /// The host's `IComponentHandler` instance, if passed through
+    /// `IEditController::set_component_handler`.
+    component_handler: RwLock<Option<VstPtr<dyn IComponentHandler>>>,
 
     /// A realtime-safe task queue so the plugin can schedule tasks that need to be run later on the
     /// GUI thread.
@@ -140,6 +145,31 @@ enum Task {
     TriggerRestart(u32),
 }
 
+/// Send+Sync wrapper for these interface pointers.
+#[repr(transparent)]
+struct VstPtr<T: vst3_sys::ComInterface + ?Sized> {
+    ptr: vst3_sys::VstPtr<T>,
+}
+
+impl<T: vst3_sys::ComInterface + ?Sized> std::ops::Deref for VstPtr<T> {
+    type Target = vst3_sys::VstPtr<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.ptr
+    }
+}
+
+impl<T: vst3_sys::ComInterface + ?Sized> From<vst3_sys::VstPtr<T>> for VstPtr<T> {
+    fn from(ptr: vst3_sys::VstPtr<T>) -> Self {
+        Self { ptr }
+    }
+}
+
+/// SAFETY: Sharing these pointers across thread is s safe as they have internal atomic reference
+/// counting, so as long as a `VstPtr<T>` handle exists the object will stay alive.
+unsafe impl<T: vst3_sys::ComInterface + ?Sized> Send for VstPtr<T> {}
+unsafe impl<T: vst3_sys::ComInterface + ?Sized> Sync for VstPtr<T> {}
+
 impl<P: Plugin> WrapperInner<'_, P> {
     // XXX: The unsafe blocks in this function are unnecessary. but rust-analyzer gets a bit
     //      confused by all of these vtables
@@ -147,6 +177,8 @@ impl<P: Plugin> WrapperInner<'_, P> {
     pub fn new() -> Arc<Self> {
         let mut wrapper = Self {
             plugin: Box::pin(RwLock::default()),
+
+            component_handler: RwLock::new(None),
 
             event_loop: RwLock::new(MaybeUninit::uninit()),
 
@@ -720,9 +752,10 @@ impl<P: Plugin> IEditController for Wrapper<'_, P> {
 
     unsafe fn set_component_handler(
         &self,
-        _handler: SharedVstPtr<dyn vst3_sys::vst::IComponentHandler>,
+        handler: SharedVstPtr<dyn vst3_sys::vst::IComponentHandler>,
     ) -> tresult {
-        // TODO: Use this when we add GUI support
+        *self.inner.component_handler.write() = handler.upgrade().map(VstPtr::from);
+
         kResultOk
     }
 
