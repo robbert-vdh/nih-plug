@@ -18,8 +18,6 @@
 
 use std::sync::Weak;
 
-use crate::params::Param;
-
 #[cfg(all(target_family = "unix", not(target_os = "macos")))]
 mod linux;
 
