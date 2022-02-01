@@ -142,7 +142,7 @@ pub(crate) struct Wrapper<'a, P: Plugin> {
 enum Task {
     /// Trigger a restart with the given restart flags. This is a bit set of the flags from
     /// [vst3_sys::vst::RestartFlags].
-    TriggerRestart(u32),
+    TriggerRestart(i32),
 }
 
 /// Send+Sync wrapper for these interface pointers.
@@ -281,10 +281,12 @@ impl<P: Plugin> MainThreadExecutor<Task> for WrapperInner<'_, P> {
         //       function for checking if a to be scheduled task can be handled right ther and
         //       then).
         match task {
-            Task::TriggerRestart(_flags) => {
-                // TODO: Actually call the restart function
-                nih_log!("Handling {:?}", task);
-            }
+            Task::TriggerRestart(flags) => match &*self.component_handler.read() {
+                Some(handler) => unsafe {
+                    handler.restart_component(flags);
+                },
+                None => nih_debug_assert_failure!("Component handler not yet set"),
+            },
         }
     }
 }
@@ -293,7 +295,7 @@ impl<P: Plugin> ProcessContext for WrapperInner<'_, P> {
     fn set_latency_samples(&self, samples: u32) {
         self.current_latency.store(samples, Ordering::SeqCst);
         let task_posted = unsafe { self.event_loop.read().assume_init_ref() }.do_maybe_async(
-            Task::TriggerRestart(vst3_sys::vst::RestartFlags::kLatencyChanged as u32),
+            Task::TriggerRestart(vst3_sys::vst::RestartFlags::kLatencyChanged as i32),
         );
         nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
     }
