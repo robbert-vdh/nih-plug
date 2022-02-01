@@ -19,7 +19,7 @@
 //! delegate expensive processing to another thread.
 
 use crossbeam::channel;
-use std::sync::Arc;
+use std::sync::Weak;
 use std::thread::{self, JoinHandle, ThreadId};
 
 use super::{EventLoop, MainThreadExecutor};
@@ -31,7 +31,7 @@ pub(crate) struct LinuxEventLoop<T, E> {
     /// The thing that ends up executing these tasks. The tasks are usually executed from the worker
     /// thread, but if the current thread is the main thread then the task cna also be executed
     /// directly.
-    executor: Arc<E>,
+    executor: Weak<E>,
 
     /// The ID of the main thread. In practice this is the ID of the thread that created this task
     /// queue.
@@ -59,7 +59,7 @@ where
     T: Send,
     E: MainThreadExecutor<T>,
 {
-    fn new_and_spawn(executor: Arc<E>) -> Self {
+    fn new_and_spawn(executor: Weak<E>) -> Self {
         let (sender, receiver) = channel::bounded(super::TASK_QUEUE_CAPACITY);
 
         Self {
@@ -83,8 +83,16 @@ where
 
     fn do_maybe_async(&self, task: T) -> bool {
         if self.is_main_thread() {
-            self.executor.execute(task);
-            true
+            match self.executor.upgrade() {
+                Some(e) => {
+                    e.execute(task);
+                    true
+                }
+                None => {
+                    nih_log!("The executor doesn't exist but somehow it's still submitting tasks, this shouldn't be possible!");
+                    false
+                }
+            }
         } else {
             self.worker_thread_channel
                 .try_send(Message::Task(task))
@@ -109,14 +117,20 @@ impl<T, E> Drop for LinuxEventLoop<T, E> {
 }
 
 /// The worker thread used in [EventLoop] that executes incmoing tasks on the event loop's executor.
-fn worker_thread<T, E>(receiver: channel::Receiver<Message<T>>, executor: Arc<E>)
+fn worker_thread<T, E>(receiver: channel::Receiver<Message<T>>, executor: Weak<E>)
 where
     T: Send,
     E: MainThreadExecutor<T>,
 {
     loop {
         match receiver.recv() {
-            Ok(Message::Task(task)) => executor.execute(task),
+            Ok(Message::Task(task)) => match executor.upgrade() {
+                Some(e) => e.execute(task),
+                None => {
+                    nih_log!("Received a new task but the executor is no longer alive, shutting down worker");
+                    return;
+                }
+            },
             Ok(Message::Shutdown) => return,
             Err(err) => {
                 nih_log!(

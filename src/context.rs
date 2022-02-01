@@ -16,7 +16,7 @@
 
 //! Different contexts the plugin can use to make callbacks to the host in different...contexts.
 
-use std::sync::Arc;
+use std::sync::Weak;
 
 use crate::params::Param;
 
@@ -66,7 +66,7 @@ where
 {
     /// Create and start a new event loop. The thread this is called on will be designated as the
     /// main thread, so this should be called when constructing the wrapper.
-    fn new_and_spawn(executor: Arc<E>) -> Self;
+    fn new_and_spawn(executor: Weak<E>) -> Self;
 
     /// Either post the function to the task queue so it can be delegated to the main thread, or
     /// execute the task directly if this is the main thread. This function needs to be callable at

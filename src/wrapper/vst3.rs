@@ -220,7 +220,7 @@ impl<P: Plugin> WrapperInner<'_, P> {
         // XXX: This unsafe block is unnecessary. rust-analyzer gets a bit confused and this this
         //      `write()` function is from `IBStream` which it definitely is not.
         *unsafe { wrapper.event_loop.write() } =
-            MaybeUninit::new(OsEventLoop::new_and_spawn(wrapper.clone()));
+            MaybeUninit::new(OsEventLoop::new_and_spawn(Arc::downgrade(&wrapper)));
 
         wrapper
     }
