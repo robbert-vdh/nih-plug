@@ -73,10 +73,10 @@ impl Default for SineParams {
             },
             frequency: FloatParam {
                 value: 420.0,
-                // TODO: Add logarithmic ranges
-                range: Range::Linear {
+                range: Range::Skewed {
                     min: 1.0,
                     max: 20_000.0,
+                    factor: Range::skew_factor(-2.0),
                 },
                 name: "Frequency",
                 unit: " Hz",
