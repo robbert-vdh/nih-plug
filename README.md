@@ -11,7 +11,7 @@ in the `Plugin` trait for an incomplete list of missing functionality.
 
 ## Building
 
-After installing [https://rustup.rs/](Rust) you can compile any of the plugins
+After installing [Rust](https://rustup.rs/) you can compile any of the plugins
 in the `plugins` directory in the following way, replacing `gain` with the name
 of the plugin:
 
