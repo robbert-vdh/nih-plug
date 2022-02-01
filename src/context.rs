@@ -83,6 +83,6 @@ where
 
 /// Something that can execute tasks of type `T`.
 pub(crate) trait MainThreadExecutor<T>: Send + Sync {
-    /// Execute a task on the current thread.
-    fn execute(&self, task: T);
+    /// Execute a task on the current thread. This shoudl only be called from the main thread.
+    unsafe fn execute(&self, task: T);
 }

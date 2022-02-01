@@ -85,7 +85,7 @@ where
         if self.is_main_thread() {
             match self.executor.upgrade() {
                 Some(e) => {
-                    e.execute(task);
+                    unsafe { e.execute(task) };
                     true
                 }
                 None => {
@@ -125,7 +125,7 @@ where
     loop {
         match receiver.recv() {
             Ok(Message::Task(task)) => match executor.upgrade() {
-                Some(e) => e.execute(task),
+                Some(e) => unsafe { e.execute(task) },
                 None => {
                     nih_log!("Received a new task but the executor is no longer alive, shutting down worker");
                     return;

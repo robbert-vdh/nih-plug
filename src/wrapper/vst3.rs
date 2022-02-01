@@ -274,7 +274,8 @@ impl<P: Plugin> Wrapper<'_, P> {
 }
 
 impl<P: Plugin> MainThreadExecutor<Task> for WrapperInner<'_, P> {
-    fn execute(&self, task: Task) {
+    unsafe fn execute(&self, task: Task) {
+        // This function is always called from the main thread
         // TODO: When we add GUI resizing and context menus, this should propagate those events to
         //       `IRunLoop` on Linux to keep REAPER happy. That does mean a double spool, but we can
         //       come up with a nicer solution to handle that later (can always add a separate
@@ -282,9 +283,9 @@ impl<P: Plugin> MainThreadExecutor<Task> for WrapperInner<'_, P> {
         //       then).
         match task {
             Task::TriggerRestart(flags) => match &*self.component_handler.read() {
-                Some(handler) => unsafe {
+                Some(handler) => {
                     handler.restart_component(flags);
-                },
+                }
                 None => nih_debug_assert_failure!("Component handler not yet set"),
             },
         }
