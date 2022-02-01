@@ -30,7 +30,7 @@ pub(crate) const TASK_QUEUE_CAPACITY: usize = 512;
 // TODO: GuiContext for GUI parameter automation and resizing
 
 /// General callbacks the plugin can make during its lifetime. This is passed to the plugin during
-/// [Plugin::initialize].
+/// [crate::plugin::Plugin::initialize].
 //
 // # Safety
 //
