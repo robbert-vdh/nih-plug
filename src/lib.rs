@@ -20,7 +20,7 @@ pub mod context;
 #[macro_use]
 pub mod debug;
 pub mod formatters;
-pub mod params;
+pub mod param;
 pub mod plugin;
 pub mod util;
 pub mod wrapper;

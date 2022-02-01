@@ -17,7 +17,7 @@
 use std::pin::Pin;
 
 use crate::context::ProcessContext;
-use crate::params::Params;
+use crate::param::Params;
 
 /// Basic functionality that needs to be implemented by a plugin. The wrappers will use this to
 /// expose the plugin in a particular plugin format.
