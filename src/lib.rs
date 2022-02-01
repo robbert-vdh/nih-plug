@@ -16,9 +16,6 @@
 
 // TODO: Once everything is more fleshed out, document the basic usage of this library
 
-// FIXME: Find an alternative for this
-#![feature(thread_spawn_unchecked)]
-
 pub mod context;
 #[macro_use]
 pub mod debug;

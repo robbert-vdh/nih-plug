@@ -22,9 +22,9 @@ use crossbeam::channel;
 use std::sync::Arc;
 use std::thread::{self, JoinHandle, ThreadId};
 
-use crate::nih_log;
-
 use super::{EventLoop, MainThreadExecutor};
+use crate::nih_log;
+use crate::util::ThreadSpawnUnchecked;
 
 /// See [super::EventLoop].
 pub(crate) struct LinuxEventLoop<T, E> {
@@ -69,9 +69,12 @@ where
             worker_thread: Some(unsafe {
                 thread::Builder::new()
                     .name(String::from("worker"))
-                    // FIXME: Find another way to bind a thread lifetime to this struct without a
-                    //        nightly-only fature
-                    .spawn_unchecked(move || worker_thread(receiver, executor))
+                    // The worker thread gets joined when this struct gets dropped, and if this
+                    // struct never gets dropped it just sits there idly. Panics cannot be unwound,
+                    // but in plugin-land we have bigger worries than that.
+                    // This is the same as the `.spawn_unchecked()` function, but without requiring
+                    // a nightly compiler.
+                    .spawn_unchecked_2(move || worker_thread(receiver, executor))
                     .expect("Could not spawn worker thread")
             }),
             worker_thread_channel: sender,

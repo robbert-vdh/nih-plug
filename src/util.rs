@@ -35,6 +35,31 @@ pub fn gain_to_db(gain: f32) -> f32 {
     }
 }
 
+/// A version of [std::thread::Builder::spawn_unchecked] that works on the stable compiler.
+/// Implementation courtesy of Yandros on the Rust Discord.
+pub(crate) trait ThreadSpawnUnchecked {
+    unsafe fn spawn_unchecked_2<F, R>(self, f: F) -> std::io::Result<std::thread::JoinHandle<R>>
+    where
+        F: FnOnce() -> R + Send,
+        R: 'static + Send;
+}
+
+impl ThreadSpawnUnchecked for std::thread::Builder {
+    unsafe fn spawn_unchecked_2<F, R>(self, f: F) -> std::io::Result<std::thread::JoinHandle<R>>
+    where
+        F: FnOnce() -> R + Send,
+        R: 'static + Send,
+    {
+        let f: Box<dyn Send + FnOnce() -> R> = Box::new(f);
+        // ^ No need for `'_` inside function bodies
+        // v but this is more readable
+        let _: &Box<dyn '_ + Send + FnOnce() -> R> = &f;
+        // Safety: same-layout since only a lifetime difference
+        let f: Box<dyn 'static + Send + FnOnce() -> R> = std::mem::transmute(f);
+        self.spawn(f)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
