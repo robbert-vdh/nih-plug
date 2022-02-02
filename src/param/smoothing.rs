@@ -20,7 +20,7 @@ pub enum SmoothingStyle {
     /// available for the parameters.
     None,
     /// Smooth parameter changes so the .
-    SmoothLinear(f32),
+    Linear(f32),
     // TODO: Sample-accurate modes
 }
 
@@ -79,13 +79,11 @@ impl Smoother<f32> {
         } else {
             self.steps_left = match self.style {
                 SmoothingStyle::None => 1,
-                SmoothingStyle::SmoothLinear(time) => (sample_rate * time / 1000.0).round() as u32,
+                SmoothingStyle::Linear(time) => (sample_rate * time / 1000.0).round() as u32,
             };
             self.step_size = match self.style {
                 SmoothingStyle::None => 0.0,
-                SmoothingStyle::SmoothLinear(_) => {
-                    (self.target - self.current) / self.steps_left as f32
-                }
+                SmoothingStyle::Linear(_) => (self.target - self.current) / self.steps_left as f32,
             };
         }
     }
@@ -102,7 +100,7 @@ impl Smoother<f32> {
             } else {
                 match &self.style {
                     SmoothingStyle::None => self.current = self.target,
-                    SmoothingStyle::SmoothLinear(_) => self.current += self.step_size,
+                    SmoothingStyle::Linear(_) => self.current += self.step_size,
                 };
             }
 
@@ -122,11 +120,11 @@ impl Smoother<i32> {
         } else {
             self.steps_left = match self.style {
                 SmoothingStyle::None => 1,
-                SmoothingStyle::SmoothLinear(time) => (sample_rate * time / 1000.0).round() as u32,
+                SmoothingStyle::Linear(time) => (sample_rate * time / 1000.0).round() as u32,
             };
             self.step_size = match self.style {
                 SmoothingStyle::None => 0.0,
-                SmoothingStyle::SmoothLinear(_) => {
+                SmoothingStyle::Linear(_) => {
                     (self.target as f32 - self.current) / self.steps_left as f32
                 }
             };
@@ -142,7 +140,7 @@ impl Smoother<i32> {
             } else {
                 match &self.style {
                     SmoothingStyle::None => self.current = self.target as f32,
-                    SmoothingStyle::SmoothLinear(_) => self.current += self.step_size,
+                    SmoothingStyle::Linear(_) => self.current += self.step_size,
                 };
             }
 
