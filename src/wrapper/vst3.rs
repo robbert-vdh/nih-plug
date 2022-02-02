@@ -43,6 +43,7 @@ use widestring::U16CStr;
 use crate::buffer::Buffer;
 use crate::context::{EventLoop, MainThreadExecutor, OsEventLoop, ProcessContext};
 use crate::param::internals::ParamPtr;
+use crate::param::range::Range;
 use crate::param::Param;
 use crate::plugin::{BufferConfig, BusConfig, Plugin, ProcessStatus, Vst3Plugin};
 use crate::wrapper::state::{ParamValue, State};
@@ -637,9 +638,9 @@ impl<P: Plugin> IEditController for Wrapper<'_, P> {
             info.step_count = match param_ptr {
                 ParamPtr::FloatParam(_) => 0,
                 ParamPtr::IntParam(p) => match (**p).range {
-                    crate::param::Range::Linear { min, max } => max - min,
-                    crate::param::Range::Skewed { min, max, .. } => max - min,
-                    crate::param::Range::SymmetricalSkewed { min, max, .. } => max - min,
+                    Range::Linear { min, max } => max - min,
+                    Range::Skewed { min, max, .. } => max - min,
+                    Range::SymmetricalSkewed { min, max, .. } => max - min,
                 },
                 ParamPtr::BoolParam(_) => 1,
             };

@@ -16,15 +16,26 @@
 
 // TODO: Once everything is more fleshed out, document the basic usage of this library
 
-pub mod buffer;
-pub mod context;
 #[macro_use]
 pub mod debug;
+
 pub mod formatters;
-pub mod param;
-pub mod plugin;
 pub mod util;
-pub mod wrapper;
 
 // Re-export our derive macros to make this a bit easier to use
 pub use nih_plug_derive::Params;
+
+// And also re-export anything you'd need to build a plugin
+pub use buffer::Buffer;
+pub use context::ProcessContext;
+pub use param::internals::Params;
+pub use param::range::Range;
+pub use param::{BoolParam, FloatParam, IntParam, Param};
+pub use plugin::{BufferConfig, BusConfig, Plugin, ProcessStatus, Vst3Plugin};
+
+// The rest is either internal or already re-exported
+mod buffer;
+mod context;
+pub mod param;
+pub mod plugin;
+pub mod wrapper;

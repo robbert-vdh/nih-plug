@@ -18,7 +18,7 @@ use std::pin::Pin;
 
 use crate::buffer::Buffer;
 use crate::context::ProcessContext;
-use crate::param::Params;
+use crate::param::internals::Params;
 
 /// Basic functionality that needs to be implemented by a plugin. The wrappers will use this to
 /// expose the plugin in a particular plugin format.

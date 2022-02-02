@@ -18,13 +18,10 @@
 extern crate nih_plug;
 
 use nih_plug::{
-    buffer::Buffer,
-    context::ProcessContext,
-    formatters,
-    param::{FloatParam, Param, Params, Range},
-    plugin::{BufferConfig, BusConfig, Plugin, ProcessStatus, Vst3Plugin},
-    util,
+    formatters, util, Buffer, BufferConfig, BusConfig, Plugin, ProcessContext, ProcessStatus,
+    Vst3Plugin,
 };
+use nih_plug::{FloatParam, Param, Params, Range};
 use std::f32::consts;
 use std::pin::Pin;
 

@@ -19,16 +19,13 @@
 use std::fmt::Display;
 use std::sync::Arc;
 
-use self::range::NormalizebleRange;
+use self::range::{NormalizebleRange, Range};
 
 pub mod internals;
 pub mod range;
 
 pub type FloatParam = PlainParam<f32>;
 pub type IntParam = PlainParam<i32>;
-
-pub use internals::Params;
-pub use range::Range;
 
 /// Describes a single parmaetre of any type.
 pub trait Param {
