@@ -551,9 +551,18 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
                 Some((param_id_str, param_ptr))
             })
             .map(|(&param_id_str, &param_ptr)| match param_ptr {
-                ParamPtr::FloatParam(p) => (param_id_str.to_string(), ParamValue::F32((*p).value)),
-                ParamPtr::IntParam(p) => (param_id_str.to_string(), ParamValue::I32((*p).value)),
-                ParamPtr::BoolParam(p) => (param_id_str.to_string(), ParamValue::Bool((*p).value)),
+                ParamPtr::FloatParam(p) => (
+                    param_id_str.to_string(),
+                    ParamValue::F32((*p).plain_value()),
+                ),
+                ParamPtr::IntParam(p) => (
+                    param_id_str.to_string(),
+                    ParamValue::I32((*p).plain_value()),
+                ),
+                ParamPtr::BoolParam(p) => (
+                    param_id_str.to_string(),
+                    ParamValue::Bool((*p).plain_value()),
+                ),
             })
             .collect();
 
