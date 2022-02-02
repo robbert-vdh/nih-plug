@@ -50,12 +50,9 @@ impl ThreadSpawnUnchecked for std::thread::Builder {
         F: FnOnce() -> R + Send,
         R: 'static + Send,
     {
-        let f: Box<dyn Send + FnOnce() -> R> = Box::new(f);
-        // ^ No need for `'_` inside function bodies
-        // v but this is more readable
-        let _: &Box<dyn '_ + Send + FnOnce() -> R> = &f;
-        // Safety: same-layout since only a lifetime difference
-        let f: Box<dyn 'static + Send + FnOnce() -> R> = std::mem::transmute(f);
+        let f: Box<dyn '_ + FnOnce() -> R + Send> = Box::new(f);
+        // SAFETY: same-layout since only a lifetime difference
+        let f: Box<dyn 'static + FnOnce() -> R + Send> = std::mem::transmute(f);
         self.spawn(f)
     }
 }
