@@ -43,7 +43,7 @@ use widestring::U16CStr;
 use crate::buffer::Buffer;
 use crate::context::{EventLoop, MainThreadExecutor, OsEventLoop, ProcessContext};
 use crate::param::internals::ParamPtr;
-use crate::param::range::{NormalizebleRange, Range};
+use crate::param::range::Range;
 use crate::param::Param;
 use crate::plugin::{BufferConfig, BusConfig, Plugin, ProcessStatus, Vst3Plugin};
 use crate::wrapper::state::{ParamValue, State};
@@ -275,10 +275,9 @@ impl<P: Plugin> WrapperInner<'_, P> {
         } else if let Some(param_ptr) = self.param_by_hash.get(&hash) {
             // Also update the parameter's smoothing if applicable
             match (param_ptr, sample_rate) {
-                (ParamPtr::FloatParam(p), Some(sample_rate)) => {
-                    let plain_value = (**p).range.unnormalize(normalized_value as f32);
-                    (**p).set_plain_value(plain_value);
-                    (**p).smoothed.set_target(sample_rate, plain_value);
+                (_, Some(sample_rate)) => {
+                    param_ptr.set_normalized_value(normalized_value as f32);
+                    param_ptr.update_smoother(sample_rate);
                 }
                 _ => param_ptr.set_normalized_value(normalized_value as f32),
             }
@@ -489,6 +488,11 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
             }
         };
 
+        let sample_rate = self
+            .inner
+            .current_buffer_config
+            .load()
+            .map(|c| c.sample_rate);
         for (param_id_str, param_value) in state.params {
             // Handle the bypass parameter separately
             if param_id_str == BYPASS_PARAM_ID {
@@ -528,6 +532,11 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
                         param_ptr,
                     );
                 }
+            }
+
+            // Make sure everything starts out in sync
+            if let Some(sample_rate) = sample_rate {
+                param_ptr.update_smoother(sample_rate);
             }
         }
 
@@ -922,6 +931,11 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
             sample_rate: setup.sample_rate as f32,
             max_buffer_size: setup.max_samples_per_block as u32,
         };
+
+        // Befure initializing the plugin, make sure all smoothers are set the the default values
+        for param in self.inner.param_by_hash.values() {
+            param.update_smoother(buffer_config.sample_rate);
+        }
 
         if self
             .inner

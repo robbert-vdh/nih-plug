@@ -126,7 +126,7 @@ impl ParamPtr {
     ///
     /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
     /// still alive.
-    pub unsafe fn update_smoother(&mut self, sample_rate: f32) {
+    pub unsafe fn update_smoother(&self, sample_rate: f32) {
         match &self {
             ParamPtr::FloatParam(p) => (**p).update_smoother(sample_rate),
             ParamPtr::IntParam(p) => (**p).update_smoother(sample_rate),
