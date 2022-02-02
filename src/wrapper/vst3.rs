@@ -43,7 +43,7 @@ use widestring::U16CStr;
 use crate::context::{EventLoop, MainThreadExecutor, OsEventLoop, ProcessContext};
 use crate::param::internals::ParamPtr;
 use crate::param::Param;
-use crate::plugin::{BufferConfig, BusConfig, Plugin, ProcessStatus, Vst3Plugin};
+use crate::plugin::{Buffer, BufferConfig, BusConfig, Plugin, ProcessStatus, Vst3Plugin};
 use crate::wrapper::state::{ParamValue, State};
 use crate::wrapper::util::{hash_param_id, strlcpy, u16strlcpy};
 
@@ -1001,11 +1001,15 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
             }
         }
 
+        // SAFETY: This borrow never outlives this process function, but this is still super unsafe
+        // TODO: Try to rewrite this so the buffer owns the slices and is stored in the RwLock
+        let mut buffer = Buffer::unchecked_new(&mut *(output_slices.as_mut() as *mut _));
         match self
             .inner
             .plugin
             .write()
-            .process(&mut output_slices, self.inner.as_ref())
+            // SAFETY: Same here
+            .process(&mut *(&mut buffer as *mut _), self.inner.as_ref())
         {
             ProcessStatus::Error(err) => {
                 nih_debug_assert_failure!("Process error: {}", err);

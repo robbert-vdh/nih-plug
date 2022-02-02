@@ -21,7 +21,7 @@ use nih_plug::{
     context::ProcessContext,
     formatters,
     param::{FloatParam, Param, Params, Range},
-    plugin::{BufferConfig, BusConfig, Plugin, ProcessStatus, Vst3Plugin},
+    plugin::{Buffer, BufferConfig, BusConfig, Plugin, ProcessStatus, Vst3Plugin},
     util,
 };
 use std::f32::consts;
@@ -118,27 +118,13 @@ impl Plugin for Sine {
         true
     }
 
-    fn process(
+    fn process<'samples>(
         &mut self,
-        samples: &mut [&mut [f32]],
+        buffer: &'samples mut Buffer<'_, 'samples>,
         _context: &dyn ProcessContext,
     ) -> ProcessStatus {
-        if samples.is_empty() {
-            return ProcessStatus::Error("Empty buffers");
-        }
-
-        // TODO: Move this iterator to an adapter
-        let num_channels = samples.len();
-        let num_samples = samples[0].len();
-        for channel in &samples[1..] {
-            nih_debug_assert_eq!(channel.len(), num_samples);
-            if channel.len() != num_samples {
-                return ProcessStatus::Error("Mismatching channel buffer sizes");
-            }
-        }
-
         let phase_delta = self.params.frequency.value / self.sample_rate;
-        for sample_idx in 0..num_samples {
+        for samples in buffer.iter_mut() {
             let sine = (self.phase * consts::TAU).sin();
 
             self.phase = self.phase + phase_delta;
@@ -146,13 +132,7 @@ impl Plugin for Sine {
                 self.phase -= 1.0;
             }
 
-            for channel_idx in 0..num_channels {
-                let sample = unsafe {
-                    samples
-                        .get_unchecked_mut(channel_idx)
-                        .get_unchecked_mut(sample_idx)
-                };
-
+            for sample in samples {
                 // TODO: Parameter smoothing
                 *sample = sine * util::db_to_gain(self.params.gain.value);
             }

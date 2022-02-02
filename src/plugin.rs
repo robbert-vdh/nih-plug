@@ -88,14 +88,13 @@ pub trait Plugin: Default + Send + Sync {
     /// been copied to the output buffers if they are not handling buffers in place (most hosts do
     /// however). All channels are also guarenteed to contain the same number of samples.
     ///
-    /// TODO: &mut [&mut [f32]] may not be the correct type here
     /// TODO: Provide a way to access auxiliary input channels if the IO configuration is
     ///       assymetric
     /// TODO: Handle FTZ stuff on the wrapper side and mention that this has been handled
     /// TODO: Pass transport and other context information to the plugin
-    fn process(
+    fn process<'samples>(
         &mut self,
-        samples: &mut [&mut [f32]],
+        buffer: &'samples mut Buffer<'_, 'samples>,
         context: &dyn ProcessContext,
     ) -> ProcessStatus;
 }
@@ -144,4 +143,109 @@ pub enum ProcessStatus {
     /// and should thus not be deactivated by the host. This is essentially the same as having an
     /// infite tail.
     KeepAlive,
+}
+
+/// The audio buffers used during processing. This contains the output audio output buffers with the
+/// inputs already copied to the outputs. You can either use the iterator adapters to conveniently
+/// and efficiently iterate over the samples, or you can do your own thing using the raw audio
+/// buffers.
+pub struct Buffer<'outer, 'inner> {
+    /// The raw output buffers.
+    raw: &'outer mut [&'inner mut [f32]],
+}
+
+impl<'outer, 'inner> Buffer<'outer, 'inner> {
+    /// Construct a new buffer adapter based on a set of audio buffers.
+    ///
+    /// # Safety
+    ///
+    /// The rest of this object assumes all channel lengths are equal. Panics will likely occur if
+    /// this is not the case.
+    pub unsafe fn unchecked_new(buffers: &'outer mut [&'inner mut [f32]]) -> Self {
+        Self { raw: buffers }
+    }
+
+    /// Returns true if this buffer does not contain any samples.
+    ///
+    /// TODO: Right now we guarantee that empty buffers never make it to the process function,
+    ///       should we keep this?
+    pub fn is_empty(&self) -> bool {
+        self.raw.is_empty() || self.raw[0].is_empty()
+    }
+
+    /// Obtain the raw audio buffers.
+    pub fn as_raw(&'outer mut self) -> &'outer mut [&'inner mut [f32]] {
+        self.raw
+    }
+
+    /// Iterate over the samples, returning a channel iterator for each sample.
+    pub fn iter_mut(&'outer mut self) -> Samples<'outer, 'inner> {
+        Samples {
+            buffers: &mut self.raw,
+            current_sample: 0,
+        }
+    }
+}
+
+/// An iterator over all samples in the buffer, yielding iterators over each channel for every
+/// sample. This iteration order offers good cache locality for per-sample access.
+pub struct Samples<'outer, 'inner> {
+    /// The raw output buffers.
+    pub(self) buffers: &'outer mut [&'inner mut [f32]],
+    pub(self) current_sample: usize,
+}
+
+impl<'outer, 'inner> Iterator for Samples<'outer, 'inner> {
+    type Item = Channels<'outer, 'inner>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current_sample < self.buffers[0].len() {
+            // SAFETY: We guarantee that each sample is only mutably borrowed once in the channels
+            // iterator
+            let buffers: &'outer mut _ = unsafe { &mut *(self.buffers as *mut _) };
+            let channels = Channels {
+                buffers,
+                current_sample: self.current_sample,
+                current_channel: 0,
+            };
+
+            self.current_sample += 1;
+
+            Some(channels)
+        } else {
+            None
+        }
+    }
+}
+
+/// An iterator over the channel data for a sample, yielded by [Samples].
+pub struct Channels<'outer, 'inner> {
+    /// The raw output buffers.
+    pub(self) buffers: &'outer mut [&'inner mut [f32]],
+    pub(self) current_sample: usize,
+    pub(self) current_channel: usize,
+}
+
+impl<'outer, 'inner> Iterator for Channels<'outer, 'inner> {
+    type Item = &'inner mut f32;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current_channel < self.buffers.len() {
+            // SAFETY: These bounds have already been checked
+            let sample = unsafe {
+                self.buffers
+                    .get_unchecked_mut(self.current_channel)
+                    .get_unchecked_mut(self.current_sample)
+            };
+            // SAFETY: It is not possible to have multiple mutable references to the same sample at
+            // the same time
+            let sample: &'inner mut f32 = unsafe { &mut *(sample as *mut f32) };
+
+            self.current_channel += 1;
+
+            Some(sample)
+        } else {
+            None
+        }
+    }
 }
