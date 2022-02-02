@@ -107,6 +107,9 @@ struct WrapperInner<'a, P: Plugin> {
     is_processing: AtomicBool,
     /// The current bus configuration, modified through `IAudioProcessor::setBusArrangements()`.
     current_bus_config: AtomicCell<BusConfig>,
+    /// The current buffer configuration, containing the sample rate and the maximum block size.
+    /// Will be set in `IAudioProcessor::setupProcessing()`.
+    current_buffer_config: AtomicCell<Option<BufferConfig>>,
     /// Whether the plugin is currently bypassed. This is not yet integrated with the `Plugin`
     /// trait.
     bypass_state: AtomicBool,
@@ -195,6 +198,7 @@ impl<P: Plugin> WrapperInner<'_, P> {
                 num_input_channels: P::DEFAULT_NUM_INPUTS,
                 num_output_channels: P::DEFAULT_NUM_OUTPUTS,
             }),
+            current_buffer_config: AtomicCell::new(None),
             bypass_state: AtomicBool::new(false),
             last_process_status: AtomicCell::new(ProcessStatus::Normal),
             current_latency: AtomicU32::new(0),
@@ -519,6 +523,15 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
             .read()
             .params()
             .deserialize_fields(&state.fields);
+
+        // Reinitialize the plugin after loading state so it can respond to the new parmaeters
+        let bus_config = self.inner.current_bus_config.load();
+        if let Some(buffer_config) = self.inner.current_buffer_config.load() {
+            self.inner
+                .plugin
+                .write()
+                .initialize(&bus_config, &buffer_config, self.inner.as_ref());
+        }
 
         kResultOk
     }
@@ -893,6 +906,9 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
                 .write()
                 .as_raw_vec()
                 .resize_with(bus_config.num_output_channels as usize, || &mut []);
+
+            // Also store this for later, so we can reinitialize the plugin after restoring state
+            self.inner.current_buffer_config.store(Some(buffer_config));
 
             kResultOk
         } else {

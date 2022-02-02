@@ -87,7 +87,9 @@ pub trait Plugin: Default + Send + Sync {
 
     /// Process audio. To not have to worry about aliasing, the host's input buffer have already
     /// been copied to the output buffers if they are not handling buffers in place (most hosts do
-    /// however). All channels are also guarenteed to contain the same number of samples.
+    /// however). All channels are also guarenteed to contain the same number of samples. Depending
+    /// on how the host restores plugin state, this function may also be called twice in rapid
+    /// succession.
     ///
     /// TODO: Provide a way to access auxiliary input channels if the IO configuration is
     ///       assymetric
@@ -117,7 +119,7 @@ pub struct BusConfig {
 }
 
 /// Configuration for (the host's) audio buffers.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BufferConfig {
     /// The current sample rate.
     pub sample_rate: f32,
