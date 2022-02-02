@@ -77,10 +77,10 @@ macro_rules! nih_debug_assert_eq {
     );
 }
 
-/// A `debug_assert_neq!()` analogue that prints the error with line number information instead of
+/// A `debug_assert_ne!()` analogue that prints the error with line number information instead of
 /// panicking.
 #[macro_export]
-macro_rules! nih_debug_assert_neq {
+macro_rules! nih_debug_assert_ne {
     ($left:expr, $right:expr $(,)?) => (
         if cfg!(debug_assertions) && $left == $right {
             nih_log!(concat!("Debug assertion failed: ", stringify!($left), " == ", stringify!($right)));
