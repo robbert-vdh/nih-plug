@@ -118,16 +118,12 @@ impl Plugin for Sine {
         true
     }
 
-    fn process<'samples>(
-        &mut self,
-        buffer: &'samples mut Buffer<'_, 'samples>,
-        _context: &dyn ProcessContext,
-    ) -> ProcessStatus {
+    fn process(&mut self, buffer: &mut Buffer, _context: &dyn ProcessContext) -> ProcessStatus {
         let phase_delta = self.params.frequency.value / self.sample_rate;
         for samples in buffer.iter_mut() {
             let sine = (self.phase * consts::TAU).sin();
 
-            self.phase = self.phase + phase_delta;
+            self.phase += phase_delta;
             if self.phase >= 1.0 {
                 self.phase -= 1.0;
             }

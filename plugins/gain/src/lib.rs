@@ -118,11 +118,7 @@ impl Plugin for Gain {
         true
     }
 
-    fn process<'samples>(
-        &mut self,
-        buffer: &'samples mut Buffer<'_, 'samples>,
-        _context: &dyn ProcessContext,
-    ) -> ProcessStatus {
+    fn process(&mut self, buffer: &mut Buffer, _context: &dyn ProcessContext) -> ProcessStatus {
         // TODO: The wrapper should set FTZ if not yet enabled, mention ths in the process fuctnion
         for samples in buffer.iter_mut() {
             for sample in samples {

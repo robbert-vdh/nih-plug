@@ -114,8 +114,9 @@ struct WrapperInner<'a, P: Plugin> {
     current_latency: AtomicU32,
     /// Contains slices for the plugin's outputs. You can't directly create a nested slice form
     /// apointer to pointers, so this needs to be preallocated in the setup call and kept around
-    /// between process calls.
-    output_slices: RwLock<Vec<&'a mut [f32]>>,
+    /// between process calls. This buffer owns the vector, because otherwise it would need to store
+    /// a mutable reference to the data contained in this mutex.
+    output_buffer: RwLock<Buffer<'a>>,
 
     /// The keys from `param_map` in a stable order.
     param_hashes: Vec<u32>,
@@ -195,7 +196,7 @@ impl<P: Plugin> WrapperInner<'_, P> {
             bypass_state: AtomicBool::new(false),
             last_process_status: AtomicCell::new(ProcessStatus::Normal),
             current_latency: AtomicU32::new(0),
-            output_slices: RwLock::new(Vec::new()),
+            output_buffer: RwLock::new(Buffer::new()),
 
             param_hashes: Vec::new(),
             param_by_hash: HashMap::new(),
@@ -887,8 +888,9 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
             // Preallocate enough room in the output slices vector so we can convert a `*mut *mut
             // f32` to a `&mut [&mut f32]` in the process call
             self.inner
-                .output_slices
+                .output_buffer
                 .write()
+                .as_raw_vec()
                 .resize_with(bus_config.num_output_channels as usize, || &mut []);
 
             kResultOk
@@ -960,21 +962,27 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
         );
         nih_debug_assert!(data.num_samples >= 0);
 
-        // This vector has been reallocated to contain enough slices as there are output channels
-        let mut output_slices = self.inner.output_slices.write();
+        let num_output_channels = (*data.outputs).num_channels as usize;
         check_null_ptr_msg!(
             "Process output pointer is null",
             data.outputs,
             (*data.outputs).buffers,
         );
 
-        let num_output_channels = (*data.outputs).num_channels as usize;
-        nih_debug_assert_eq!(num_output_channels, output_slices.len());
-        for (output_channel_idx, output_channel_slice) in output_slices.iter_mut().enumerate() {
-            *output_channel_slice = std::slice::from_raw_parts_mut(
-                *((*data.outputs).buffers as *mut *mut f32).add(output_channel_idx),
-                data.num_samples as usize,
-            );
+        // This vector has been reallocated to contain enough slices as there are output channels
+        let mut output_buffer = self.inner.output_buffer.write();
+        {
+            let output_slices = output_buffer.as_raw_vec();
+            nih_debug_assert_eq!(num_output_channels, output_slices.len());
+            for (output_channel_idx, output_channel_slice) in output_slices.iter_mut().enumerate() {
+                // SAFETY: These pointers may not be valid outside of this function even though
+                // their lifetime is equal to this structs. This is still safe because they are only
+                // dereferenced here later as part of this process function.
+                *output_channel_slice = std::slice::from_raw_parts_mut(
+                    *((*data.outputs).buffers as *mut *mut f32).add(output_channel_idx),
+                    data.num_samples as usize,
+                );
+            }
         }
 
         // Most hosts process data in place, in which case we don't need to do any copying
@@ -1001,15 +1009,12 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
             }
         }
 
-        // SAFETY: This borrow never outlives this process function, but this is still super unsafe
-        // TODO: Try to rewrite this so the buffer owns the slices and is stored in the RwLock
-        let mut buffer = Buffer::unchecked_new(&mut *(output_slices.as_mut() as *mut _));
         match self
             .inner
             .plugin
             .write()
             // SAFETY: Same here
-            .process(&mut *(&mut buffer as *mut _), self.inner.as_ref())
+            .process(&mut output_buffer, self.inner.as_ref())
         {
             ProcessStatus::Error(err) => {
                 nih_debug_assert_failure!("Process error: {}", err);

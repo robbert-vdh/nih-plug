@@ -92,11 +92,7 @@ pub trait Plugin: Default + Send + Sync {
     ///       assymetric
     /// TODO: Handle FTZ stuff on the wrapper side and mention that this has been handled
     /// TODO: Pass transport and other context information to the plugin
-    fn process<'samples>(
-        &mut self,
-        buffer: &'samples mut Buffer<'_, 'samples>,
-        context: &dyn ProcessContext,
-    ) -> ProcessStatus;
+    fn process(&mut self, buffer: &mut Buffer, context: &dyn ProcessContext) -> ProcessStatus;
 }
 
 /// Provides auxiliary metadata needed for a VST3 plugin.
@@ -149,41 +145,54 @@ pub enum ProcessStatus {
 /// inputs already copied to the outputs. You can either use the iterator adapters to conveniently
 /// and efficiently iterate over the samples, or you can do your own thing using the raw audio
 /// buffers.
-pub struct Buffer<'outer, 'inner> {
-    /// The raw output buffers.
-    raw: &'outer mut [&'inner mut [f32]],
+pub struct Buffer<'a> {
+    /// Contains slices for the plugin's outputs. You can't directly create a nested slice form
+    /// apointer to pointers, so this needs to be preallocated in the setup call and kept around
+    /// between process calls. And because storing a reference to this means a) that you need a lot
+    /// of lifetime annotations everywhere and b) that at some point you need unsound lifetime casts
+    /// because this `Buffers` either cannot have the same lifetime as the separately stored output
+    /// buffers, and it also cannot be stored in a field next to it because that would mean
+    /// containing mutable references to data stored in a mutex.
+    output_slices: Vec<&'a mut [f32]>,
 }
 
-impl<'outer, 'inner> Buffer<'outer, 'inner> {
+impl<'a> Buffer<'a> {
     /// Construct a new buffer adapter based on a set of audio buffers.
-    ///
-    /// # Safety
-    ///
-    /// The rest of this object assumes all channel lengths are equal. Panics will likely occur if
-    /// this is not the case.
-    pub unsafe fn unchecked_new(buffers: &'outer mut [&'inner mut [f32]]) -> Self {
-        Self { raw: buffers }
+    pub fn new() -> Self {
+        Self {
+            output_slices: Vec::new(),
+        }
     }
 
     /// Returns true if this buffer does not contain any samples.
-    ///
-    /// TODO: Right now we guarantee that empty buffers never make it to the process function,
-    ///       should we keep this?
     pub fn is_empty(&self) -> bool {
-        self.raw.is_empty() || self.raw[0].is_empty()
+        self.output_slices.is_empty() || self.output_slices[0].is_empty()
     }
 
     /// Obtain the raw audio buffers.
-    pub fn as_raw(&'outer mut self) -> &'outer mut [&'inner mut [f32]] {
-        self.raw
+    pub fn as_raw(&mut self) -> &mut [&'a mut [f32]] {
+        &mut self.output_slices
     }
 
     /// Iterate over the samples, returning a channel iterator for each sample.
-    pub fn iter_mut(&'outer mut self) -> Samples<'outer, 'inner> {
+    pub fn iter_mut(&mut self) -> Samples<'_, 'a> {
         Samples {
-            buffers: &mut self.raw,
+            buffers: &mut self.output_slices,
             current_sample: 0,
         }
+    }
+
+    /// Access the raw output slice vector. This neds to be resized to match the number of output
+    /// channels during the plugin's initialization. Then during audio processing, these slices
+    /// should be updated to point to the plugin's audio buffers.
+    ///
+    /// # Safety
+    ///
+    /// The stored slices must point to live data when this object is passed to the plugins' process
+    /// function. The rest of this object also assumes all channel lengths are equal. Panics will
+    /// likely occur if this is not the case.
+    pub unsafe fn as_raw_vec(&mut self) -> &mut Vec<&'a mut [f32]> {
+        &mut self.output_slices
     }
 }
 
