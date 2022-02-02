@@ -16,6 +16,7 @@
 
 // TODO: Once everything is more fleshed out, document the basic usage of this library
 
+pub mod buffer;
 pub mod context;
 #[macro_use]
 pub mod debug;

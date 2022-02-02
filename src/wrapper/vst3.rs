@@ -40,10 +40,11 @@ use vst3_sys::vst::{
 use vst3_sys::VST3;
 use widestring::U16CStr;
 
+use crate::buffer::Buffer;
 use crate::context::{EventLoop, MainThreadExecutor, OsEventLoop, ProcessContext};
 use crate::param::internals::ParamPtr;
 use crate::param::Param;
-use crate::plugin::{Buffer, BufferConfig, BusConfig, Plugin, ProcessStatus, Vst3Plugin};
+use crate::plugin::{BufferConfig, BusConfig, Plugin, ProcessStatus, Vst3Plugin};
 use crate::wrapper::state::{ParamValue, State};
 use crate::wrapper::util::{hash_param_id, strlcpy, u16strlcpy};
 

@@ -18,10 +18,11 @@
 extern crate nih_plug;
 
 use nih_plug::{
+    buffer::Buffer,
     context::ProcessContext,
     formatters,
     param::{BoolParam, FloatParam, Param, Params, Range},
-    plugin::{Buffer, BufferConfig, BusConfig, Plugin, ProcessStatus, Vst3Plugin},
+    plugin::{BufferConfig, BusConfig, Plugin, ProcessStatus, Vst3Plugin},
     util,
 };
 use parking_lot::RwLock;
