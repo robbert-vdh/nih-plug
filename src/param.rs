@@ -91,7 +91,7 @@ pub struct PlainParam<T> {
     ///
     /// To use this, you'll probably want to store an `Arc<Atomic*>` alongside the parmater in the
     /// parmaeters struct, move a clone of that `Arc` into this closure, and then modify that.
-    pub value_changed: Option<Arc<dyn Fn(T) -> () + Send + Sync>>,
+    pub value_changed: Option<Arc<dyn Fn(T) + Send + Sync>>,
 
     /// The distribution of the parameter's values.
     pub range: Range<T>,
@@ -115,7 +115,7 @@ pub struct BoolParam {
     /// Optional callback for listening to value changes. The argument passed to this function is
     /// the parameter's new value. This should not do anything expensive as it may be called
     /// multiple times in rapid succession.
-    pub value_changed: Option<Arc<dyn Fn(bool) -> () + Send + Sync>>,
+    pub value_changed: Option<Arc<dyn Fn(bool) + Send + Sync>>,
 
     /// The parameter's human readable display name.
     pub name: &'static str,
@@ -145,6 +145,7 @@ where
     }
 }
 
+#[allow(clippy::derivable_impls)]
 impl Default for BoolParam {
     fn default() -> Self {
         Self {
@@ -271,7 +272,7 @@ impl Param for BoolParam {
     fn normalized_value_to_string(&self, normalized: f32, _include_unit: bool) -> String {
         let value = normalized > 0.5;
         match (value, &self.value_to_string) {
-            (v, Some(f)) => format!("{}", f(v)),
+            (v, Some(f)) => f(v),
             (true, None) => String::from("On"),
             (false, None) => String::from("Off"),
         }
