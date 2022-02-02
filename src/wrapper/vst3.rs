@@ -582,17 +582,16 @@ impl<P: Plugin> IEditController for Wrapper<'_, P> {
         kResultOk
     }
 
-    unsafe fn set_state(&self, state: SharedVstPtr<dyn IBStream>) -> tresult {
-        // We have a single file component, so there's only one `set_state()` function. Unlike C++,
-        // Rust allows you to have multiple methods with the same name when they're provided by
-        // different treats, but because of the Rust implementation the host may call either of
-        // these functions depending on how they're implemented
-        IComponent::set_state(self, state)
+    unsafe fn set_state(&self, _state: SharedVstPtr<dyn IBStream>) -> tresult {
+        // We don't store any separate state here. The plugin's state will have been restored
+        // through the component. Calling that same function here will likely lead to duplicate
+        // state restores
+        kResultOk
     }
 
-    unsafe fn get_state(&self, state: SharedVstPtr<dyn IBStream>) -> tresult {
+    unsafe fn get_state(&self, _state: SharedVstPtr<dyn IBStream>) -> tresult {
         // Same for this function
-        IComponent::get_state(self, state)
+        kResultOk
     }
 
     unsafe fn get_parameter_count(&self) -> i32 {
