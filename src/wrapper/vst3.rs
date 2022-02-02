@@ -277,7 +277,7 @@ impl<P: Plugin> WrapperInner<'_, P> {
             match (param_ptr, sample_rate) {
                 (_, Some(sample_rate)) => {
                     param_ptr.set_normalized_value(normalized_value as f32);
-                    param_ptr.update_smoother(sample_rate);
+                    param_ptr.update_smoother(sample_rate, false);
                 }
                 _ => param_ptr.set_normalized_value(normalized_value as f32),
             }
@@ -536,7 +536,7 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
 
             // Make sure everything starts out in sync
             if let Some(sample_rate) = sample_rate {
-                param_ptr.update_smoother(sample_rate);
+                param_ptr.update_smoother(sample_rate, true);
             }
         }
 
@@ -934,7 +934,7 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
 
         // Befure initializing the plugin, make sure all smoothers are set the the default values
         for param in self.inner.param_by_hash.values() {
-            param.update_smoother(buffer_config.sample_rate);
+            param.update_smoother(buffer_config.sample_rate, true);
         }
 
         if self

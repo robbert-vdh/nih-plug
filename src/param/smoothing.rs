@@ -71,18 +71,23 @@ impl<T: Default> Smoother<T> {
 // unwrap all of those options is not going to be very fun.
 impl Smoother<f32> {
     /// Set the target value.
-    pub fn set_target(&mut self, sample_rate: f32, target: f32) {
+    pub fn set_target(&mut self, sample_rate: f32, target: f32, reset: bool) {
         self.target = target;
-        self.steps_left = match self.style {
-            SmoothingStyle::None => 1,
-            SmoothingStyle::SmoothLinear(time) => (sample_rate * time / 1000.0).round() as u32,
-        };
-        self.step_size = match self.style {
-            SmoothingStyle::None => 0.0,
-            SmoothingStyle::SmoothLinear(_) => {
-                (self.target - self.current) / self.steps_left as f32
-            }
-        };
+        if reset {
+            self.current = self.target;
+            self.steps_left = 0;
+        } else {
+            self.steps_left = match self.style {
+                SmoothingStyle::None => 1,
+                SmoothingStyle::SmoothLinear(time) => (sample_rate * time / 1000.0).round() as u32,
+            };
+            self.step_size = match self.style {
+                SmoothingStyle::None => 0.0,
+                SmoothingStyle::SmoothLinear(_) => {
+                    (self.target - self.current) / self.steps_left as f32
+                }
+            };
+        }
     }
 
     // Yes, Clippy, like I said, this was intentional
@@ -109,18 +114,23 @@ impl Smoother<f32> {
 }
 
 impl Smoother<i32> {
-    pub fn set_target(&mut self, sample_rate: f32, target: i32) {
+    pub fn set_target(&mut self, sample_rate: f32, target: i32, reset: bool) {
         self.target = target;
-        self.steps_left = match self.style {
-            SmoothingStyle::None => 1,
-            SmoothingStyle::SmoothLinear(time) => (sample_rate * time / 1000.0).round() as u32,
-        };
-        self.step_size = match self.style {
-            SmoothingStyle::None => 0.0,
-            SmoothingStyle::SmoothLinear(_) => {
-                (self.target as f32 - self.current) / self.steps_left as f32
-            }
-        };
+        if reset {
+            self.current = self.target as f32;
+            self.steps_left = 0;
+        } else {
+            self.steps_left = match self.style {
+                SmoothingStyle::None => 1,
+                SmoothingStyle::SmoothLinear(time) => (sample_rate * time / 1000.0).round() as u32,
+            };
+            self.step_size = match self.style {
+                SmoothingStyle::None => 0.0,
+                SmoothingStyle::SmoothLinear(_) => {
+                    (self.target as f32 - self.current) / self.steps_left as f32
+                }
+            };
+        }
     }
 
     #[allow(clippy::should_implement_trait)]

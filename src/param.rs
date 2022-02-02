@@ -34,9 +34,10 @@ pub trait Param {
     /// The plain parameter type.
     type Plain;
 
-    /// Update the smoother state to point to the current value. Used when initializing and
-    /// restoring a plugin so everything is in sync.
-    fn update_smoother(&mut self, sample_rate: f32);
+    /// Update the smoother state to point to the current value. Also used when initializing and
+    /// restoring a plugin so everything is in sync. In that case the smoother should completely
+    /// reset to the current value.
+    fn update_smoother(&mut self, sample_rate: f32, reset: bool);
 
     /// Set this parameter based on a string. Returns whether the updating succeeded. That can fail
     /// if the string cannot be parsed.
@@ -162,8 +163,8 @@ macro_rules! impl_plainparam {
         impl Param for $ty {
             type Plain = $plain;
 
-            fn update_smoother(&mut self, sample_rate: f32) {
-                self.smoothed.set_target(sample_rate, self.value);
+            fn update_smoother(&mut self, sample_rate: f32, reset: bool) {
+                self.smoothed.set_target(sample_rate, self.value, reset);
             }
 
             fn set_from_string(&mut self, string: &str) -> bool {
@@ -234,7 +235,7 @@ impl_plainparam!(IntParam, i32);
 impl Param for BoolParam {
     type Plain = bool;
 
-    fn update_smoother(&mut self, _sample_rate: f32) {
+    fn update_smoother(&mut self, _sample_rate: f32, _init: bool) {
         // Can't really smooth a binary parameter now can you
     }
 
