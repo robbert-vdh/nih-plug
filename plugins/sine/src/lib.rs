@@ -60,7 +60,7 @@ impl Default for SineParams {
         Self {
             gain: FloatParam {
                 value: -10.0,
-                smoothed: Smoother::new(SmoothingStyle::SmoothLinear(2.0)),
+                smoothed: Smoother::new(SmoothingStyle::SmoothLinear(3.0)),
                 range: Range::Linear {
                     min: -30.0,
                     max: 0.0,

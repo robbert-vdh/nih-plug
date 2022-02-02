@@ -57,7 +57,7 @@ impl Default for GainParams {
         Self {
             gain: FloatParam {
                 value: 0.0,
-                smoothed: Smoother::new(SmoothingStyle::SmoothLinear(2.0)),
+                smoothed: Smoother::new(SmoothingStyle::SmoothLinear(3.0)),
                 value_changed: None,
                 // If, for instance, updating this parameter would require other parts of the
                 // plugin's internal state to be updated other values to also be updated, then you
