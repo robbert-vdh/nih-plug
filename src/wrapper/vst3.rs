@@ -202,7 +202,7 @@ impl<P: Plugin> WrapperInner<'_, P> {
             bypass_state: AtomicBool::new(false),
             last_process_status: AtomicCell::new(ProcessStatus::Normal),
             current_latency: AtomicU32::new(0),
-            output_buffer: RwLock::new(Buffer::new()),
+            output_buffer: RwLock::new(Buffer::default()),
 
             param_hashes: Vec::new(),
             param_by_hash: HashMap::new(),

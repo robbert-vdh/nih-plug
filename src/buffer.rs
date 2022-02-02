@@ -18,6 +18,7 @@
 /// inputs already copied to the outputs. You can either use the iterator adapters to conveniently
 /// and efficiently iterate over the samples, or you can do your own thing using the raw audio
 /// buffers.
+#[derive(Default)]
 pub struct Buffer<'a> {
     /// Contains slices for the plugin's outputs. You can't directly create a nested slice form
     /// apointer to pointers, so this needs to be preallocated in the setup call and kept around
@@ -30,13 +31,6 @@ pub struct Buffer<'a> {
 }
 
 impl<'a> Buffer<'a> {
-    /// Construct a new buffer adapter based on a set of audio buffers.
-    pub fn new() -> Self {
-        Self {
-            output_slices: Vec::new(),
-        }
-    }
-
     /// Returns true if this buffer does not contain any samples.
     pub fn is_empty(&self) -> bool {
         self.output_slices.is_empty() || self.output_slices[0].is_empty()
