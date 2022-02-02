@@ -19,8 +19,14 @@ pub enum SmoothingStyle {
     /// No smoothing is applied. The parameter's `value` field contains the latest sample value
     /// available for the parameters.
     None,
-    /// Smooth parameter changes so the .
+    /// Smooth parameter changes so the current value approaches the target value at a constant
+    /// rate.
     Linear(f32),
+    /// Smooth parameter changes such that the rate matches the curve of a logarithmic function.
+    /// This is useful for smoothing things like frequencies and decibel gain value. **The caveat is
+    /// that the value may never reach 0**, or you will end up multiplying and dividing things by
+    /// zero. Make sure your value ranges don't include 0.
+    Logarithmic(f32),
     // TODO: Sample-accurate modes
 }
 
@@ -79,11 +85,19 @@ impl Smoother<f32> {
         } else {
             self.steps_left = match self.style {
                 SmoothingStyle::None => 1,
-                SmoothingStyle::Linear(time) => (sample_rate * time / 1000.0).round() as u32,
+                SmoothingStyle::Linear(time) | SmoothingStyle::Logarithmic(time) => {
+                    (sample_rate * time / 1000.0).round() as u32
+                }
             };
             self.step_size = match self.style {
                 SmoothingStyle::None => 0.0,
                 SmoothingStyle::Linear(_) => (self.target - self.current) / self.steps_left as f32,
+                SmoothingStyle::Logarithmic(_) => {
+                    // We need to solve `current * (step_size ^ steps_left) = target` for
+                    // `step_size`
+                    nih_debug_assert_ne!(self.current, 0.0);
+                    (self.target / self.current).powf((self.steps_left as f32).recip())
+                }
             };
         }
     }
@@ -101,6 +115,7 @@ impl Smoother<f32> {
                 match &self.style {
                     SmoothingStyle::None => self.current = self.target,
                     SmoothingStyle::Linear(_) => self.current += self.step_size,
+                    SmoothingStyle::Logarithmic(_) => self.current *= self.step_size,
                 };
             }
 
@@ -120,12 +135,18 @@ impl Smoother<i32> {
         } else {
             self.steps_left = match self.style {
                 SmoothingStyle::None => 1,
-                SmoothingStyle::Linear(time) => (sample_rate * time / 1000.0).round() as u32,
+                SmoothingStyle::Linear(time) | SmoothingStyle::Logarithmic(time) => {
+                    (sample_rate * time / 1000.0).round() as u32
+                }
             };
             self.step_size = match self.style {
                 SmoothingStyle::None => 0.0,
                 SmoothingStyle::Linear(_) => {
                     (self.target as f32 - self.current) / self.steps_left as f32
+                }
+                SmoothingStyle::Logarithmic(_) => {
+                    nih_debug_assert_ne!(self.current, 0.0);
+                    (self.target as f32 / self.current).powf((self.steps_left as f32).recip())
                 }
             };
         }
@@ -141,6 +162,7 @@ impl Smoother<i32> {
                 match &self.style {
                     SmoothingStyle::None => self.current = self.target as f32,
                     SmoothingStyle::Linear(_) => self.current += self.step_size,
+                    SmoothingStyle::Logarithmic(_) => self.current *= self.step_size,
                 };
             }
 
@@ -174,6 +196,37 @@ mod tests {
     #[test]
     fn linear_i32_smoothing() {
         let mut smoother: Smoother<i32> = Smoother::new(SmoothingStyle::Linear(100.0));
+        smoother.set_target(100.0, 10, true);
+        assert_eq!(smoother.next(), 10);
+
+        // Integers are rounded, but with these values we can still test this
+        smoother.set_target(100.0, 20, false);
+        for _ in 0..(10 - 2) {
+            dbg!(smoother.next());
+        }
+        assert_ne!(smoother.next(), 20);
+        assert_eq!(smoother.next(), 20);
+    }
+
+    #[test]
+    fn logarithmic_f32_smoothing() {
+        let mut smoother: Smoother<f32> = Smoother::new(SmoothingStyle::Logarithmic(100.0));
+        smoother.set_target(100.0, 10.0, true);
+        assert_eq!(smoother.next(), 10.0);
+
+        // Instead of testing the actual values, we'll make sure that we reach the target values at
+        // the expected time.
+        smoother.set_target(100.0, 20.0, false);
+        for _ in 0..(10 - 2) {
+            dbg!(smoother.next());
+        }
+        assert_ne!(smoother.next(), 20.0);
+        assert_eq!(smoother.next(), 20.0);
+    }
+
+    #[test]
+    fn logarithmic_i32_smoothing() {
+        let mut smoother: Smoother<i32> = Smoother::new(SmoothingStyle::Logarithmic(100.0));
         smoother.set_target(100.0, 10, true);
         assert_eq!(smoother.next(), 10);
 
