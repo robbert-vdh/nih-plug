@@ -45,13 +45,16 @@ fn bundle(target: &str, mut args: Vec<String>) -> Result<()> {
         }
     }
 
-    Command::new("cargo")
+    let status = Command::new("cargo")
         .arg("build")
         .arg("-p")
         .arg(target)
         .args(args)
         .status()
-        .context(format!("Could not build {target}"))?;
+        .context(format!("Could not call cargo to build {target}"))?;
+    if !status.success() {
+        bail!("Could not build {}", target);
+    }
 
     let lib_path = Path::new("target")
         .join(if is_release_build { "release" } else { "debug" })
