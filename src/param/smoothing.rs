@@ -69,7 +69,6 @@ impl<T: Default> Smoother<T> {
 
 // These are not iterators for the sole reason that this will always yield a value, and needing to
 // unwrap all of those options is not going to be very fun.
-// TODO: Also implement for i32
 impl Smoother<f32> {
     /// Set the target value.
     pub fn set_target(&mut self, sample_rate: f32, target: f32) {
@@ -103,6 +102,41 @@ impl Smoother<f32> {
             }
 
             self.current
+        } else {
+            self.target
+        }
+    }
+}
+
+impl Smoother<i32> {
+    pub fn set_target(&mut self, sample_rate: f32, target: i32) {
+        self.target = target;
+        self.steps_left = match self.style {
+            SmoothingStyle::None => 1,
+            SmoothingStyle::SmoothLinear(time) => (sample_rate * time / 1000.0).round() as u32,
+        };
+        self.step_size = match self.style {
+            SmoothingStyle::None => 0.0,
+            SmoothingStyle::SmoothLinear(_) => {
+                (self.target as f32 - self.current) / self.steps_left as f32
+            }
+        };
+    }
+
+    #[allow(clippy::should_implement_trait)]
+    pub fn next(&mut self) -> i32 {
+        if self.steps_left > 1 {
+            self.steps_left -= 1;
+            if self.steps_left == 0 {
+                self.current = self.target as f32;
+            } else {
+                match &self.style {
+                    SmoothingStyle::None => self.current = self.target as f32,
+                    SmoothingStyle::SmoothLinear(_) => self.current += self.step_size,
+                };
+            }
+
+            self.current.round() as i32
         } else {
             self.target
         }
