@@ -150,3 +150,39 @@ impl Smoother<i32> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn linear_f32_smoothing() {
+        let mut smoother: Smoother<f32> = Smoother::new(SmoothingStyle::Linear(100.0));
+        smoother.set_target(100.0, 10.0, true);
+        assert_eq!(smoother.next(), 10.0);
+
+        // Instead of testing the actual values, we'll make sure that we reach the target values at
+        // the expected time.
+        smoother.set_target(100.0, 20.0, false);
+        for _ in 0..(10 - 2) {
+            dbg!(smoother.next());
+        }
+        assert_ne!(smoother.next(), 20.0);
+        assert_eq!(smoother.next(), 20.0);
+    }
+
+    #[test]
+    fn linear_i32_smoothing() {
+        let mut smoother: Smoother<i32> = Smoother::new(SmoothingStyle::Linear(100.0));
+        smoother.set_target(100.0, 10, true);
+        assert_eq!(smoother.next(), 10);
+
+        // Integers are rounded, but with these values we can still test this
+        smoother.set_target(100.0, 20, false);
+        for _ in 0..(10 - 2) {
+            dbg!(smoother.next());
+        }
+        assert_ne!(smoother.next(), 20);
+        assert_eq!(smoother.next(), 20);
+    }
+}
