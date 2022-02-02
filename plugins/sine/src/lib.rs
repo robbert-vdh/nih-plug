@@ -21,7 +21,7 @@ use nih_plug::{
     formatters, util, Buffer, BufferConfig, BusConfig, Plugin, ProcessContext, ProcessStatus,
     Vst3Plugin,
 };
-use nih_plug::{FloatParam, Param, Params, Range};
+use nih_plug::{FloatParam, Param, Params, Range, Smoother, SmoothingStyle};
 use std::f32::consts;
 use std::pin::Pin;
 
@@ -60,6 +60,7 @@ impl Default for SineParams {
         Self {
             gain: FloatParam {
                 value: -10.0,
+                smoothed: Smoother::new(SmoothingStyle::SmoothLinear(2.0)),
                 range: Range::Linear {
                     min: -30.0,
                     max: 0.0,
@@ -71,6 +72,7 @@ impl Default for SineParams {
             },
             frequency: FloatParam {
                 value: 420.0,
+                smoothed: Smoother::new(SmoothingStyle::SmoothLinear(10.0)),
                 range: Range::Skewed {
                     min: 1.0,
                     max: 20_000.0,
@@ -117,8 +119,12 @@ impl Plugin for Sine {
     }
 
     fn process(&mut self, buffer: &mut Buffer, _context: &dyn ProcessContext) -> ProcessStatus {
-        let phase_delta = self.params.frequency.value / self.sample_rate;
         for samples in buffer.iter_mut() {
+            // Smoothing is optionally built into the parameters themselves
+            let gain = self.params.gain.smoothed.next();
+            let frequency = self.params.frequency.smoothed.next();
+
+            let phase_delta = frequency / self.sample_rate;
             let sine = (self.phase * consts::TAU).sin();
 
             self.phase += phase_delta;
@@ -127,8 +133,7 @@ impl Plugin for Sine {
             }
 
             for sample in samples {
-                // TODO: Parameter smoothing
-                *sample = sine * util::db_to_gain(self.params.gain.value);
+                *sample = sine * util::db_to_gain(gain);
             }
         }
 

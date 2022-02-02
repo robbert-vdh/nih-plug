@@ -43,7 +43,7 @@ use widestring::U16CStr;
 use crate::buffer::Buffer;
 use crate::context::{EventLoop, MainThreadExecutor, OsEventLoop, ProcessContext};
 use crate::param::internals::ParamPtr;
-use crate::param::range::Range;
+use crate::param::range::{NormalizebleRange, Range};
 use crate::param::Param;
 use crate::plugin::{BufferConfig, BusConfig, Plugin, ProcessStatus, Vst3Plugin};
 use crate::wrapper::state::{ParamValue, State};
@@ -259,14 +259,29 @@ impl<P: Plugin> WrapperInner<'_, P> {
         wrapper
     }
 
-    unsafe fn set_normalized_value_by_hash(&self, hash: u32, normalized_value: f64) -> tresult {
+    /// Convenience function for setting a value for a parameter as triggered by a VST3 parameter
+    /// update. The same rate is for updating parameter smoothing.
+    unsafe fn set_normalized_value_by_hash(
+        &self,
+        hash: u32,
+        normalized_value: f64,
+        sample_rate: Option<f32>,
+    ) -> tresult {
         if hash == *BYPASS_PARAM_HASH {
             self.bypass_state
                 .store(normalized_value >= 0.5, Ordering::SeqCst);
 
             kResultOk
         } else if let Some(param_ptr) = self.param_by_hash.get(&hash) {
-            param_ptr.set_normalized_value(normalized_value as f32);
+            // Also update the parameter's smoothing if applicable
+            match (param_ptr, sample_rate) {
+                (ParamPtr::FloatParam(p), Some(sample_rate)) => {
+                    let plain_value = (**p).range.unnormalize(normalized_value as f32);
+                    (**p).set_plain_value(plain_value);
+                    (**p).smoothed.set_target(sample_rate, plain_value);
+                }
+                _ => param_ptr.set_normalized_value(normalized_value as f32),
+            }
 
             kResultOk
         } else {
@@ -780,7 +795,13 @@ impl<P: Plugin> IEditController for Wrapper<'_, P> {
             return kResultOk;
         }
 
-        self.inner.set_normalized_value_by_hash(id, value)
+        let sample_rate = self
+            .inner
+            .current_buffer_config
+            .load()
+            .map(|c| c.sample_rate);
+        self.inner
+            .set_normalized_value_by_hash(id, value, sample_rate)
     }
 
     unsafe fn set_component_handler(
@@ -939,6 +960,11 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
 
         // We need to handle incoming automation first
         let data = &*data;
+        let sample_rate = self
+            .inner
+            .current_buffer_config
+            .load()
+            .map(|c| c.sample_rate);
         if let Some(param_changes) = data.input_param_changes.upgrade() {
             let num_param_queues = param_changes.get_parameter_count();
             for change_queue_idx in 0..num_param_queues {
@@ -959,7 +985,8 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
                             &mut value,
                         ) == kResultOk
                     {
-                        self.inner.set_normalized_value_by_hash(param_hash, value);
+                        self.inner
+                            .set_normalized_value_by_hash(param_hash, value, sample_rate);
                     }
                 }
             }

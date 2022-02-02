@@ -21,7 +21,7 @@ use nih_plug::{
     formatters, util, Buffer, BufferConfig, BusConfig, Plugin, ProcessContext, ProcessStatus,
     Vst3Plugin,
 };
-use nih_plug::{BoolParam, FloatParam, Param, Params, Range};
+use nih_plug::{BoolParam, FloatParam, Param, Params, Range, Smoother, SmoothingStyle};
 use parking_lot::RwLock;
 use std::pin::Pin;
 
@@ -57,6 +57,7 @@ impl Default for GainParams {
         Self {
             gain: FloatParam {
                 value: 0.0,
+                smoothed: Smoother::new(SmoothingStyle::SmoothLinear(2.0)),
                 value_changed: None,
                 // If, for instance, updating this parameter would require other parts of the
                 // plugin's internal state to be updated other values to also be updated, then you
@@ -119,9 +120,11 @@ impl Plugin for Gain {
     fn process(&mut self, buffer: &mut Buffer, _context: &dyn ProcessContext) -> ProcessStatus {
         // TODO: The wrapper should set FTZ if not yet enabled, mention ths in the process fuctnion
         for samples in buffer.iter_mut() {
+            // Smoothing is optionally built into the parameters themselves
+            let gain = self.params.gain.smoothed.next();
+
             for sample in samples {
-                // TODO: Smoothing
-                *sample *= util::db_to_gain(self.params.gain.value);
+                *sample *= util::db_to_gain(gain);
             }
         }
 

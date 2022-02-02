@@ -30,6 +30,7 @@ pub use buffer::Buffer;
 pub use context::ProcessContext;
 pub use param::internals::Params;
 pub use param::range::Range;
+pub use param::smoothing::{Smoother, SmoothingStyle};
 pub use param::{BoolParam, FloatParam, IntParam, Param};
 pub use plugin::{BufferConfig, BusConfig, Plugin, ProcessStatus, Vst3Plugin};
 
