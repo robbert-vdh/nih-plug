@@ -119,6 +119,21 @@ impl ParamPtr {
         }
     }
 
+    /// Update the smoother state to point to the current value. Used when initializing and
+    /// restoring a plugin so everything is in sync.
+    ///
+    /// # Safety
+    ///
+    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
+    /// still alive.
+    pub unsafe fn update_smoother(&mut self, sample_rate: f32) {
+        match &self {
+            ParamPtr::FloatParam(p) => (**p).update_smoother(sample_rate),
+            ParamPtr::IntParam(p) => (**p).update_smoother(sample_rate),
+            ParamPtr::BoolParam(p) => (**p).update_smoother(sample_rate),
+        }
+    }
+
     /// Set this parameter based on a string. Returns whether the updating succeeded. That can fail
     /// if the string cannot be parsed.
     ///
@@ -149,6 +164,8 @@ impl ParamPtr {
     }
 
     /// Set this parameter based on a normalized value.
+    ///
+    /// This does **not** update the smoother.
     ///
     /// # Safety
     ///

@@ -34,6 +34,10 @@ pub trait Param {
     /// The plain parameter type.
     type Plain;
 
+    /// Update the smoother state to point to the current value. Used when initializing and
+    /// restoring a plugin so everything is in sync.
+    fn update_smoother(&mut self, sample_rate: f32);
+
     /// Set this parameter based on a string. Returns whether the updating succeeded. That can fail
     /// if the string cannot be parsed.
     ///
@@ -44,12 +48,19 @@ pub trait Param {
     fn plain_value(&self) -> Self::Plain;
 
     /// Set this parameter based on a plain, unnormalized value.
+    ///
+    /// This does **not** update the smoother.
+    ///
+    /// TDOO: Decide on whether this should update the smoother or not. That wouldn't be compatible
+    /// with sample accurate automation when we add that.
     fn set_plain_value(&mut self, plain: Self::Plain);
 
     /// Get the normalized `[0, 1]` value for this parameter.
     fn normalized_value(&self) -> f32;
 
     /// Set this parameter based on a normalized value.
+    ///
+    /// This does **not** update the smoother.
     fn set_normalized_value(&mut self, normalized: f32);
 
     /// Get the string representation for a normalized value. Used as part of the wrappers. Most
@@ -151,6 +162,10 @@ macro_rules! impl_plainparam {
         impl Param for $ty {
             type Plain = $plain;
 
+            fn update_smoother(&mut self, sample_rate: f32) {
+                self.smoothed.set_target(sample_rate, self.value);
+            }
+
             fn set_from_string(&mut self, string: &str) -> bool {
                 let value = match &self.string_to_value {
                     Some(f) => f(string),
@@ -218,6 +233,10 @@ impl_plainparam!(IntParam, i32);
 
 impl Param for BoolParam {
     type Plain = bool;
+
+    fn update_smoother(&mut self, _sample_rate: f32) {
+        // Can't really smooth a binary parameter now can you
+    }
 
     fn set_from_string(&mut self, string: &str) -> bool {
         let value = match &self.string_to_value {
