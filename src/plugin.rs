@@ -74,7 +74,8 @@ pub trait Plugin: Default + Send + Sync {
     /// Initialize the plugin for the given bus and buffer configurations. If the plugin is being
     /// restored from an old state, then that state will have already been restored at this point.
     /// If based on those parameters (or for any reason whatsoever) the plugin needs to introduce
-    /// latency, then you can do so here using the process context.
+    /// latency, then you can do so here using the process context. Depending on how the host
+    /// restores plugin state, this function may also be called twice in rapid succession.
     ///
     /// Before this point, the plugin should not have done any expensive initialization. Please
     /// don't be that plugin that takes twenty seconds to scan.
@@ -85,11 +86,12 @@ pub trait Plugin: Default + Send + Sync {
         context: &dyn ProcessContext,
     ) -> bool;
 
-    /// Process audio. To not have to worry about aliasing, the host's input buffer have already
-    /// been copied to the output buffers if they are not handling buffers in place (most hosts do
-    /// however). All channels are also guarenteed to contain the same number of samples. Depending
-    /// on how the host restores plugin state, this function may also be called twice in rapid
-    /// succession.
+    /// Process audio. The host's input buffers have already been copied to the output buffers if
+    /// they are not processing audio in place (most hosts do however). All channels are also
+    /// guarenteed to contain the same number of samples. Lastly, denormals have already been taken
+    /// case of by NIH-plug, and you can optionally enable the `assert_process_allocs` feature to
+    /// abort the program when any allocation accurs in the process function while running in debug
+    /// mode.
     ///
     /// TODO: Provide a way to access auxiliary input channels if the IO configuration is
     ///       assymetric
