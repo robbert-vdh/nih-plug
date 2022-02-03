@@ -10,8 +10,8 @@ members = [
   "nih_plug_derive",
   "xtask",
 
-  "plugins/gain",
-  "plugins/sine",
+  "plugins/examples/gain",
+  "plugins/examples/sine",
 ]
 
 [dependencies]
