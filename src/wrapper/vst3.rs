@@ -898,7 +898,7 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
         };
         let channel_map = channel_count_to_map(num_channels);
 
-        nih_debug_assert_eq!(config.num_input_channels, channel_map.count_ones());
+        nih_debug_assert_eq!(num_channels, channel_map.count_ones());
         *arr = channel_map;
 
         kResultOk
