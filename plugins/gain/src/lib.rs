@@ -118,7 +118,6 @@ impl Plugin for Gain {
     }
 
     fn process(&mut self, buffer: &mut Buffer, _context: &dyn ProcessContext) -> ProcessStatus {
-        // TODO: The wrapper should set FTZ if not yet enabled, mention ths in the process fuctnion
         for samples in buffer.iter_mut() {
             // Smoothing is optionally built into the parameters themselves
             let gain = self.params.gain.smoothed.next();

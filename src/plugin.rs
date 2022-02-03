@@ -93,7 +93,6 @@ pub trait Plugin: Default + Send + Sync {
     ///
     /// TODO: Provide a way to access auxiliary input channels if the IO configuration is
     ///       assymetric
-    /// TODO: Handle FTZ stuff on the wrapper side and mention that this has been handled
     /// TODO: Pass transport and other context information to the plugin
     fn process(&mut self, buffer: &mut Buffer, context: &dyn ProcessContext) -> ProcessStatus;
 }

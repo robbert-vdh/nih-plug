@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use std::cmp;
+use std::marker::PhantomData;
 use std::os::raw::c_char;
 use vst3_sys::vst::TChar;
 use widestring::U16CString;
@@ -92,11 +93,65 @@ pub fn u16strlcpy(dest: &mut [TChar], src: &str) {
 /// `assert_no_alloc` if needed, while also making sure that things like FTZ are set up correctly if
 /// the host has not already done so.
 pub fn process_wrapper<T, F: FnOnce() -> T>(f: F) -> T {
+    // Make sure FTZ is always enabled, even if the host doesn't do it for us
+    let _ftz_guard = ScopedFtz::enable();
+
     cfg_if::cfg_if! {
         if #[cfg(all(debug_assertions, feature = "assert_process_allocs"))] {
             assert_no_alloc::assert_no_alloc(f)
         } else {
             f()
+        }
+    }
+}
+
+/// Enable the CPU's Flush To Zero flag while this object is in scope. If the flag was not already
+/// set, it will be restored to its old value when this gets dropped.
+struct ScopedFtz {
+    /// The old FTZ mode to restore to, if FTZ was not already set.
+    old_ftz_mode: Option<u32>,
+    /// We can't directly implement !Send and !Sync, but this will do the same thing. This object
+    /// affects the current thread's floating point registers, so it may only be dropped on the
+    /// current thread.
+    send_sync_marker: PhantomData<*const ()>,
+}
+
+impl ScopedFtz {
+    fn enable() -> Self {
+        cfg_if::cfg_if! {
+            if #[cfg(target_feature = "sse")] {
+                let mode = unsafe { std::arch::x86_64::_MM_GET_FLUSH_ZERO_MODE() };
+                if mode != std::arch::x86_64::_MM_FLUSH_ZERO_ON {
+                    unsafe { std::arch::x86_64::_MM_SET_FLUSH_ZERO_MODE(std::arch::x86_64::_MM_FLUSH_ZERO_ON) };
+
+                    Self {
+                        old_ftz_mode: Some(mode),
+                        send_sync_marker: PhantomData,
+                    }
+                } else {
+                    Self {
+                        old_ftz_mode: None,
+                        send_sync_marker: PhantomData,
+                    }
+                }
+            } else {
+                Self {
+                    old_ftz_mode: None,
+                    send_sync_marker: PhantomData,
+                }
+            }
+        }
+    }
+}
+
+impl Drop for ScopedFtz {
+    fn drop(&mut self) {
+        if let Some(mode) = self.old_ftz_mode {
+            cfg_if::cfg_if! {
+                if #[cfg(target_feature = "sse")] {
+                    unsafe { std::arch::x86_64::_MM_SET_FLUSH_ZERO_MODE(mode) };
+                }
+            };
         }
     }
 }
