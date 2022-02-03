@@ -38,7 +38,7 @@ pub fn hash_param_id(id: &str) -> u32 {
 
     if has_overflown {
         nih_log!(
-            "Overflow while hashing param ID \"{}\", consider using shorter IDs to avoid collissions",
+            "Overflow while hashing param ID \"{}\", consider using 6 character IDs to avoid collissions",
             id
         );
     }
