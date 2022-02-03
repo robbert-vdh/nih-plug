@@ -36,6 +36,8 @@ pub use serde_json::to_string as serialize_field;
 /// The other persistent parameters should be [PersistentField]s containing types that can be
 /// serialized and deserialized with Serde.
 ///
+/// Take a look at the example gain plugin to see how this should be used.
+///
 /// # Safety
 ///
 /// This implementation is safe when using from the wrapper because the plugin object needs to be
