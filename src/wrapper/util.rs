@@ -19,6 +19,10 @@ use std::os::raw::c_char;
 use vst3_sys::vst::TChar;
 use widestring::U16CString;
 
+#[cfg(all(debug_assertions, feature = "assert_process_allocs"))]
+#[global_allocator]
+static A: assert_no_alloc::AllocDisabler = assert_no_alloc::AllocDisabler;
+
 /// A Rabin fingerprint based string hash for parameter ID strings.
 pub fn hash_param_id(id: &str) -> u32 {
     let mut overflow;
@@ -82,4 +86,17 @@ pub fn u16strlcpy(dest: &mut [TChar], src: &str) {
     let copy_len = cmp::min(dest.len() - 1, src_utf16_chars_signed.len());
     dest[..copy_len].copy_from_slice(&src_utf16_chars_signed[..copy_len]);
     dest[copy_len] = 0;
+}
+
+/// A wrapper around the entire process function, including the plugin wrapper parts. This sets up
+/// `assert_no_alloc` if needed, while also making sure that things like FTZ are set up correctly if
+/// the host has not already done so.
+pub fn process_wrapper<T, F: FnOnce() -> T>(f: F) -> T {
+    cfg_if::cfg_if! {
+        if #[cfg(all(debug_assertions, feature = "assert_process_allocs"))] {
+            assert_no_alloc::assert_no_alloc(f)
+        } else {
+            f()
+        }
+    }
 }
