@@ -71,6 +71,12 @@ impl<T: Default> Smoother<T> {
     pub fn none() -> Self {
         Default::default()
     }
+
+    /// Whether calling [next] will yield a new value or an old value. Useful if you need to
+    /// recompute something wheenver this parameter changes.
+    pub fn is_smoothing(&self) -> bool {
+        self.steps_left > 0
+    }
 }
 
 // These are not iterators for the sole reason that this will always yield a value, and needing to
