@@ -40,7 +40,7 @@ struct SineParams {
     #[id = "gain"]
     pub gain: FloatParam,
 
-    #[id = "frequency"]
+    #[id = "freq"]
     pub frequency: FloatParam,
 }
 
