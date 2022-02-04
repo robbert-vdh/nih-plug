@@ -25,9 +25,8 @@ use nih_plug::{BoolParam, FloatParam, Param, Params, Range, Smoother, SmoothingS
 use std::f32::consts;
 use std::pin::Pin;
 
-/// A test tone generator.
-///
-/// TODO: Add MIDI support, this seems like a nice minimal example for that.
+/// A test tone generator that can either generate a sine wave based on the plugin's parameters or
+/// based on the current MIDI input.
 struct Sine {
     params: Pin<Box<SineParams>>,
     sample_rate: f32,
