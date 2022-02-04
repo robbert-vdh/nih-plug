@@ -352,11 +352,17 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
     unsafe fn get_bus_count(
         &self,
         type_: vst3_sys::vst::MediaType,
-        _dir: vst3_sys::vst::BusDirection,
+        dir: vst3_sys::vst::BusDirection,
     ) -> i32 {
         // All plugins currently only have a single input and a single output bus
         match type_ {
             x if x == vst3_sys::vst::MediaTypes::kAudio as i32 => 1,
+            x if x == vst3_sys::vst::MediaTypes::kEvent as i32
+                && dir == vst3_sys::vst::BusDirections::kInput as i32
+                && P::ACCEPTS_MIDI =>
+            {
+                1
+            }
             _ => 0,
         }
     }
@@ -370,8 +376,8 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
     ) -> tresult {
         check_null_ptr!(info);
 
-        match type_ {
-            t if t == vst3_sys::vst::MediaTypes::kAudio as i32 => {
+        match (type_, dir, index) {
+            (t, _, _) if t == vst3_sys::vst::MediaTypes::kAudio as i32 => {
                 *info = mem::zeroed();
 
                 let info = &mut *info;
@@ -397,6 +403,22 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
                     }
                     _ => kInvalidArgument,
                 }
+            }
+            (t, d, 0)
+                if t == vst3_sys::vst::MediaTypes::kEvent as i32
+                    && d == vst3_sys::vst::BusDirections::kInput as i32
+                    && P::ACCEPTS_MIDI =>
+            {
+                *info = mem::zeroed();
+
+                let info = &mut *info;
+                info.media_type = vst3_sys::vst::MediaTypes::kEvent as i32;
+                info.direction = vst3_sys::vst::BusDirections::kInput as i32;
+                info.channel_count = 16;
+                u16strlcpy(&mut info.name, "MIDI");
+                info.bus_type = vst3_sys::vst::BusTypes::kMain as i32;
+                info.flags = vst3_sys::vst::BusFlags::kDefaultActive as u32;
+                kResultOk
             }
             _ => kInvalidArgument,
         }
@@ -428,13 +450,20 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
     unsafe fn activate_bus(
         &self,
         type_: vst3_sys::vst::MediaType,
-        _dir: vst3_sys::vst::BusDirection,
+        dir: vst3_sys::vst::BusDirection,
         index: i32,
         _state: vst3_sys::base::TBool,
     ) -> tresult {
         // We don't need any special handling here
-        match (type_, index) {
-            (t, 0) if t == vst3_sys::vst::MediaTypes::kAudio as i32 => kResultOk,
+        match (type_, dir, index) {
+            (t, _, 0) if t == vst3_sys::vst::MediaTypes::kAudio as i32 => kResultOk,
+            (t, d, 0)
+                if t == vst3_sys::vst::MediaTypes::kEvent as i32
+                    && d == vst3_sys::vst::BusDirections::kInput as i32
+                    && P::ACCEPTS_MIDI =>
+            {
+                kResultOk
+            }
             _ => kInvalidArgument,
         }
     }
