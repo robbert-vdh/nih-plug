@@ -146,6 +146,32 @@ struct WrapperInner<P: Plugin> {
 pub(crate) struct Wrapper<P: Plugin> {
     inner: Arc<WrapperInner<P>>,
 }
+
+/// A [ProcessContext] implementation for the wrapper. This is a separate object so it can hold on
+/// to lock guards for event queues. Otherwise reading these events would require constant
+/// unnecessary atomic operations to lock the uncontested RwLocks.
+struct WrapperProcessContext<'a, P: Plugin> {
+    inner: &'a WrapperInner<P>,
+}
+
+impl<P: Plugin> ProcessContext for WrapperProcessContext<'_, P> {
+    fn set_latency_samples(&self, samples: u32) {
+        // Only trigger a restart if it's actually needed
+        let old_latency = self.inner.current_latency.swap(samples, Ordering::SeqCst);
+        if old_latency != samples {
+            let task_posted = unsafe { self.inner.event_loop.read().assume_init_ref() }
+                .do_maybe_async(Task::TriggerRestart(
+                    vst3_sys::vst::RestartFlags::kLatencyChanged as i32,
+                ));
+            nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+        }
+    }
+
+    fn next_midi_event(&self) -> Option<NoteEvent> {
+        // TODO: Instead of having to lock this queue, move the lock guard into
+        //       `WrapperProcessContext`. That's the whole reason this was split up.
+        self.inner.input_events.write().pop_front()
+    }
 }
 
 /// Tasks that can be sent from the plugin to be executed on the main thread in a non-blocking
@@ -266,6 +292,10 @@ impl<P: Plugin> WrapperInner<P> {
         wrapper
     }
 
+    pub fn make_process_context(&self) -> WrapperProcessContext<'_, P> {
+        WrapperProcessContext { inner: self }
+    }
+
     /// Convenience function for setting a value for a parameter as triggered by a VST3 parameter
     /// update. The same rate is for updating parameter smoothing.
     unsafe fn set_normalized_value_by_hash(
@@ -318,23 +348,6 @@ impl<P: Plugin> MainThreadExecutor<Task> for WrapperInner<P> {
                 None => nih_debug_assert_failure!("Component handler not yet set"),
             },
         }
-    }
-}
-
-impl<P: Plugin> ProcessContext for WrapperInner<P> {
-    fn set_latency_samples(&self, samples: u32) {
-        // Only trigger a restart if it's actually needed
-        let old_latency = self.current_latency.swap(samples, Ordering::SeqCst);
-        if old_latency != samples {
-            let task_posted = unsafe { self.event_loop.read().assume_init_ref() }.do_maybe_async(
-                Task::TriggerRestart(vst3_sys::vst::RestartFlags::kLatencyChanged as i32),
-            );
-            nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
-        }
-    }
-
-    fn next_midi_event(&self) -> Option<NoteEvent> {
-        self.input_events.write().pop_front()
     }
 }
 
@@ -591,10 +604,11 @@ impl<P: Plugin> IComponent for Wrapper<P> {
         // Reinitialize the plugin after loading state so it can respond to the new parmaeters
         let bus_config = self.inner.current_bus_config.load();
         if let Some(buffer_config) = self.inner.current_buffer_config.load() {
-            self.inner
-                .plugin
-                .write()
-                .initialize(&bus_config, &buffer_config, self.inner.as_ref());
+            self.inner.plugin.write().initialize(
+                &bus_config,
+                &buffer_config,
+                &self.inner.make_process_context(),
+            );
         }
 
         kResultOk
@@ -977,12 +991,11 @@ impl<P: Plugin> IAudioProcessor for Wrapper<P> {
             param.update_smoother(buffer_config.sample_rate, true);
         }
 
-        if self
-            .inner
-            .plugin
-            .write()
-            .initialize(&bus_config, &buffer_config, self.inner.as_ref())
-        {
+        if self.inner.plugin.write().initialize(
+            &bus_config,
+            &buffer_config,
+            &self.inner.make_process_context(),
+        ) {
             // Preallocate enough room in the output slices vector so we can convert a `*mut *mut
             // f32` to a `&mut [&mut f32]` in the process call
             self.inner
@@ -1160,7 +1173,7 @@ impl<P: Plugin> IAudioProcessor for Wrapper<P> {
                 .plugin
                 .write()
                 // SAFETY: Same here
-                .process(&mut output_buffer, self.inner.as_ref())
+                .process(&mut output_buffer, &self.inner.make_process_context())
             {
                 ProcessStatus::Error(err) => {
                     nih_debug_assert_failure!("Process error: {}", err);
