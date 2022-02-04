@@ -88,7 +88,7 @@ pub trait Plugin: Default + Send + Sync {
         &mut self,
         bus_config: &BusConfig,
         buffer_config: &BufferConfig,
-        context: &impl ProcessContext,
+        context: &mut impl ProcessContext,
     ) -> bool {
         true
     }
@@ -103,7 +103,7 @@ pub trait Plugin: Default + Send + Sync {
     /// TODO: Provide a way to access auxiliary input channels if the IO configuration is
     ///       assymetric
     /// TODO: Pass transport and other context information to the plugin
-    fn process(&mut self, buffer: &mut Buffer, context: &impl ProcessContext) -> ProcessStatus;
+    fn process(&mut self, buffer: &mut Buffer, context: &mut impl ProcessContext) -> ProcessStatus;
 }
 
 /// Provides auxiliary metadata needed for a VST3 plugin.

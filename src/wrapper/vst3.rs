@@ -20,7 +20,7 @@
 
 use crossbeam::atomic::AtomicCell;
 use lazy_static::lazy_static;
-use parking_lot::RwLock;
+use parking_lot::{RwLock, RwLockWriteGuard};
 use std::cmp;
 use std::collections::{HashMap, VecDeque};
 use std::ffi::c_void;
@@ -152,6 +152,7 @@ pub(crate) struct Wrapper<P: Plugin> {
 /// unnecessary atomic operations to lock the uncontested RwLocks.
 struct WrapperProcessContext<'a, P: Plugin> {
     inner: &'a WrapperInner<P>,
+    input_events_guard: RwLockWriteGuard<'a, VecDeque<NoteEvent>>,
 }
 
 impl<P: Plugin> ProcessContext for WrapperProcessContext<'_, P> {
@@ -167,10 +168,8 @@ impl<P: Plugin> ProcessContext for WrapperProcessContext<'_, P> {
         }
     }
 
-    fn next_midi_event(&self) -> Option<NoteEvent> {
-        // TODO: Instead of having to lock this queue, move the lock guard into
-        //       `WrapperProcessContext`. That's the whole reason this was split up.
-        self.inner.input_events.write().pop_front()
+    fn next_midi_event(&mut self) -> Option<NoteEvent> {
+        self.input_events_guard.pop_front()
     }
 }
 
@@ -293,7 +292,10 @@ impl<P: Plugin> WrapperInner<P> {
     }
 
     pub fn make_process_context(&self) -> WrapperProcessContext<'_, P> {
-        WrapperProcessContext { inner: self }
+        WrapperProcessContext {
+            inner: self,
+            input_events_guard: self.input_events.write(),
+        }
     }
 
     /// Convenience function for setting a value for a parameter as triggered by a VST3 parameter
@@ -607,7 +609,7 @@ impl<P: Plugin> IComponent for Wrapper<P> {
             self.inner.plugin.write().initialize(
                 &bus_config,
                 &buffer_config,
-                &self.inner.make_process_context(),
+                &mut self.inner.make_process_context(),
             );
         }
 
@@ -994,7 +996,7 @@ impl<P: Plugin> IAudioProcessor for Wrapper<P> {
         if self.inner.plugin.write().initialize(
             &bus_config,
             &buffer_config,
-            &self.inner.make_process_context(),
+            &mut self.inner.make_process_context(),
         ) {
             // Preallocate enough room in the output slices vector so we can convert a `*mut *mut
             // f32` to a `&mut [&mut f32]` in the process call
@@ -1173,7 +1175,7 @@ impl<P: Plugin> IAudioProcessor for Wrapper<P> {
                 .plugin
                 .write()
                 // SAFETY: Same here
-                .process(&mut output_buffer, &self.inner.make_process_context())
+                .process(&mut output_buffer, &mut self.inner.make_process_context())
             {
                 ProcessStatus::Error(err) => {
                     nih_debug_assert_failure!("Process error: {}", err);

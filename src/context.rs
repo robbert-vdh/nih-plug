@@ -48,7 +48,7 @@ pub trait ProcessContext {
     /// TODO: Rethink this API, both in terms of ergonomics, and if we can do this in a way that
     ///       doesn't require locks (because of the thread safe-ness, which we don't really need
     ///       here)
-    fn next_midi_event(&self) -> Option<NoteEvent>;
+    fn next_midi_event(&mut self) -> Option<NoteEvent>;
 
     // // TODO: Add this next
     // fn set_parameter<P>(&self, param: &P, value: P::Plain)
