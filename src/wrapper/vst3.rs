@@ -85,7 +85,7 @@ macro_rules! check_null_ptr_msg {
 /// The actual wrapper bits. We need this as an `Arc<T>` so we can safely use our event loop API.
 /// Since we can't combine that with VST3's interior reference counting this just has to be moved to
 /// its own struct.
-struct WrapperInner<'a, P: Plugin> {
+struct WrapperInner<P: Plugin> {
     /// The wrapped plugin instance.
     plugin: Pin<Box<RwLock<P>>>,
 
@@ -121,7 +121,7 @@ struct WrapperInner<'a, P: Plugin> {
     /// apointer to pointers, so this needs to be preallocated in the setup call and kept around
     /// between process calls. This buffer owns the vector, because otherwise it would need to store
     /// a mutable reference to the data contained in this mutex.
-    output_buffer: RwLock<Buffer<'a>>,
+    output_buffer: RwLock<Buffer<'static>>,
     /// The incoming events for the plugin, if `P::ACCEPTS_MIDI` is set.
     ///
     /// TODO: Maybe load these lazily at some point instead of needing to spool them all to this
@@ -143,8 +143,9 @@ struct WrapperInner<'a, P: Plugin> {
 }
 
 #[VST3(implements(IComponent, IEditController, IAudioProcessor))]
-pub(crate) struct Wrapper<'a, P: Plugin> {
-    inner: Arc<WrapperInner<'a, P>>,
+pub(crate) struct Wrapper<P: Plugin> {
+    inner: Arc<WrapperInner<P>>,
+}
 }
 
 /// Tasks that can be sent from the plugin to be executed on the main thread in a non-blocking
@@ -182,7 +183,7 @@ impl<T: vst3_sys::ComInterface + ?Sized> From<vst3_sys::VstPtr<T>> for VstPtr<T>
 unsafe impl<T: vst3_sys::ComInterface + ?Sized> Send for VstPtr<T> {}
 unsafe impl<T: vst3_sys::ComInterface + ?Sized> Sync for VstPtr<T> {}
 
-impl<P: Plugin> WrapperInner<'_, P> {
+impl<P: Plugin> WrapperInner<P> {
     // XXX: The unsafe blocks in this function are unnecessary. but rust-analyzer gets a bit
     //      confused by all of these vtables
     #[allow(unused_unsafe)]
@@ -256,7 +257,7 @@ impl<P: Plugin> WrapperInner<'_, P> {
         // FIXME: Right now this is safe, but if we are going to have a singleton main thread queue
         //        serving multiple plugin instances, Arc can't be used because its reference count
         //        is separate from the internal COM-style reference count.
-        let wrapper: Arc<WrapperInner<'_, P>> = wrapper.into();
+        let wrapper: Arc<WrapperInner<P>> = wrapper.into();
         // XXX: This unsafe block is unnecessary. rust-analyzer gets a bit confused and this this
         //      `write()` function is from `IBStream` which it definitely is not.
         *unsafe { wrapper.event_loop.write() } =
@@ -295,13 +296,13 @@ impl<P: Plugin> WrapperInner<'_, P> {
     }
 }
 
-impl<P: Plugin> Wrapper<'_, P> {
+impl<P: Plugin> Wrapper<P> {
     pub fn new() -> Box<Self> {
         Self::allocate(WrapperInner::new())
     }
 }
 
-impl<P: Plugin> MainThreadExecutor<Task> for WrapperInner<'_, P> {
+impl<P: Plugin> MainThreadExecutor<Task> for WrapperInner<P> {
     unsafe fn execute(&self, task: Task) {
         // This function is always called from the main thread
         // TODO: When we add GUI resizing and context menus, this should propagate those events to
@@ -320,7 +321,7 @@ impl<P: Plugin> MainThreadExecutor<Task> for WrapperInner<'_, P> {
     }
 }
 
-impl<P: Plugin> ProcessContext for WrapperInner<'_, P> {
+impl<P: Plugin> ProcessContext for WrapperInner<P> {
     fn set_latency_samples(&self, samples: u32) {
         // Only trigger a restart if it's actually needed
         let old_latency = self.current_latency.swap(samples, Ordering::SeqCst);
@@ -337,7 +338,7 @@ impl<P: Plugin> ProcessContext for WrapperInner<'_, P> {
     }
 }
 
-impl<P: Plugin> IPluginBase for Wrapper<'_, P> {
+impl<P: Plugin> IPluginBase for Wrapper<P> {
     unsafe fn initialize(&self, _context: *mut c_void) -> tresult {
         // We currently don't need or allow any initialization logic
         kResultOk
@@ -348,7 +349,7 @@ impl<P: Plugin> IPluginBase for Wrapper<'_, P> {
     }
 }
 
-impl<P: Plugin> IComponent for Wrapper<'_, P> {
+impl<P: Plugin> IComponent for Wrapper<P> {
     unsafe fn get_controller_class_id(&self, _tuid: *mut vst3_sys::IID) -> tresult {
         // We won't separate the edit controller to keep the implemetnation a bit smaller
         kNoInterface
@@ -661,7 +662,7 @@ impl<P: Plugin> IComponent for Wrapper<'_, P> {
     }
 }
 
-impl<P: Plugin> IEditController for Wrapper<'_, P> {
+impl<P: Plugin> IEditController for Wrapper<P> {
     unsafe fn set_component_state(&self, _state: SharedVstPtr<dyn IBStream>) -> tresult {
         // We have a single file component, so we don't need to do anything here
         kResultOk
@@ -867,7 +868,7 @@ impl<P: Plugin> IEditController for Wrapper<'_, P> {
     }
 }
 
-impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
+impl<P: Plugin> IAudioProcessor for Wrapper<P> {
     unsafe fn set_bus_arrangements(
         &self,
         inputs: *mut vst3_sys::vst::SpeakerArrangement,
