@@ -22,7 +22,7 @@ use crossbeam::atomic::AtomicCell;
 use lazy_static::lazy_static;
 use parking_lot::RwLock;
 use std::cmp;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::mem::{self, MaybeUninit};
@@ -34,7 +34,7 @@ use vst3_sys::base::{kInvalidArgument, kNoInterface, kResultFalse, kResultOk, tr
 use vst3_sys::base::{IBStream, IPluginBase, IPluginFactory, IPluginFactory2, IPluginFactory3};
 use vst3_sys::utils::SharedVstPtr;
 use vst3_sys::vst::{
-    IAudioProcessor, IComponent, IComponentHandler, IEditController, IParamValueQueue,
+    IAudioProcessor, IComponent, IComponentHandler, IEditController, IEventList, IParamValueQueue,
     IParameterChanges, TChar,
 };
 use vst3_sys::VST3;
@@ -45,7 +45,7 @@ use crate::context::{EventLoop, MainThreadExecutor, OsEventLoop, ProcessContext}
 use crate::param::internals::ParamPtr;
 use crate::param::range::Range;
 use crate::param::Param;
-use crate::plugin::{BufferConfig, BusConfig, Plugin, ProcessStatus, Vst3Plugin};
+use crate::plugin::{BufferConfig, BusConfig, NoteEvent, Plugin, ProcessStatus, Vst3Plugin};
 use crate::wrapper::state::{ParamValue, State};
 use crate::wrapper::util::{hash_param_id, process_wrapper, strlcpy, u16strlcpy};
 
@@ -122,6 +122,11 @@ struct WrapperInner<'a, P: Plugin> {
     /// between process calls. This buffer owns the vector, because otherwise it would need to store
     /// a mutable reference to the data contained in this mutex.
     output_buffer: RwLock<Buffer<'a>>,
+    /// The incoming events for the plugin, if `P::ACCEPTS_MIDI` is set.
+    ///
+    /// TODO: Maybe load these lazily at some point instead of needing to spool them all to this
+    ///       queue first
+    input_events: RwLock<VecDeque<NoteEvent>>,
 
     /// The keys from `param_map` in a stable order.
     param_hashes: Vec<u32>,
@@ -203,6 +208,7 @@ impl<P: Plugin> WrapperInner<'_, P> {
             last_process_status: AtomicCell::new(ProcessStatus::Normal),
             current_latency: AtomicU32::new(0),
             output_buffer: RwLock::new(Buffer::default()),
+            input_events: RwLock::new(VecDeque::with_capacity(512)),
 
             param_hashes: Vec::new(),
             param_by_hash: HashMap::new(),
@@ -1033,6 +1039,36 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
                         {
                             self.inner
                                 .set_normalized_value_by_hash(param_hash, value, sample_rate);
+                        }
+                    }
+                }
+            }
+
+            // And also incoming note events if the plugin accepts MDII
+            if P::ACCEPTS_MIDI {
+                let mut input_events = self.inner.input_events.write();
+                if let Some(events) = data.input_events.upgrade() {
+                    let num_events = events.get_event_count();
+
+                    input_events.clear();
+                    let mut event: MaybeUninit<_> = MaybeUninit::uninit();
+                    for i in 0..num_events {
+                        nih_debug_assert_eq!(events.get_event(i, event.as_mut_ptr()), kResultOk);
+                        let event = event.assume_init();
+                        if event.type_ == vst3_sys::vst::EventTypes::kNoteOnEvent as u16 {
+                            let event = event.event.note_on;
+                            input_events.push_back(NoteEvent::NoteOn {
+                                channel: event.channel as u8,
+                                note: event.pitch as u8,
+                                velocity: (event.velocity * 127.0).round() as u8,
+                            });
+                        } else if event.type_ == vst3_sys::vst::EventTypes::kNoteOffEvent as u16 {
+                            let event = event.event.note_off;
+                            input_events.push_back(NoteEvent::NoteOff {
+                                channel: event.channel as u8,
+                                note: event.pitch as u8,
+                                velocity: (event.velocity * 127.0).round() as u8,
+                            });
                         }
                     }
                 }

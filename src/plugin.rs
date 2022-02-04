@@ -26,7 +26,6 @@ use crate::param::internals::Params;
 /// This is super basic, and lots of things I didn't need or want to use yet haven't been
 /// implemented. Notable missing features include:
 ///
-/// - MIDI
 /// - Sidechain inputs
 /// - Multiple output busses
 /// - Special handling for offline processing
@@ -153,4 +152,14 @@ pub enum ProcessStatus {
     /// and should thus not be deactivated by the host. This is essentially the same as having an
     /// infite tail.
     KeepAlive,
+}
+
+/// Event for (incoming) notes. Right now this only supports a very small subset of the MIDI
+/// specification.
+///
+/// TODO: Add more events as needed
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum NoteEvent {
+    NoteOn { channel: u8, note: u8, velocity: u8 },
+    NoteOff { channel: u8, note: u8, velocity: u8 },
 }
