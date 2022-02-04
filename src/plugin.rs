@@ -35,6 +35,8 @@ use crate::param::internals::Params;
 /// - Parameter hierarchies/groups
 /// - Bypass parameters, right now the VST3 wrapper generates one for you
 /// - Outputting parameter changes from the plugin
+/// - MIDI CC handling
+/// - Outputting MIDI events
 /// - GUIs
 pub trait Plugin: Default + Send + Sync {
     const NAME: &'static str;
