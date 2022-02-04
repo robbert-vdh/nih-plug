@@ -33,8 +33,14 @@ struct Sine {
 
     /// The current phase of the sine wave, always kept between in `[0, 1]`.
     phase: f32,
-    /// The active frequency, if triggered by MIDI.
-    active_note_freq: Option<f32>,
+
+    /// The frequency if the active note, if triggered by MIDI.
+    midi_note_freq: f32,
+    /// A simple attack and release envelope to avoid clicks.
+    ///
+    /// Smoothing is built into the parameters, but you can also use them manually if you need to
+    /// smooth soemthing that isn't a parameter.
+    midi_note_gain: Smoother<f32>,
 }
 
 #[derive(Params)]
@@ -56,7 +62,8 @@ impl Default for Sine {
             sample_rate: 1.0,
 
             phase: 0.0,
-            active_note_freq: None,
+            midi_note_freq: 1.0,
+            midi_note_gain: Smoother::new(SmoothingStyle::Linear(5.0)),
         }
     }
 }
@@ -158,16 +165,12 @@ impl Plugin for Sine {
                     match next_event {
                         Some(event) if event.timing() == sample_id as u32 => match event {
                             nih_plug::NoteEvent::NoteOn { note, .. } => {
-                                // Reset the phase if this is a new note
-                                if self.active_note_freq.is_none() {
-                                    self.phase = 0.0;
-                                }
-
-                                self.active_note_freq = Some(util::midi_note_to_freq(note));
+                                self.midi_note_freq = util::midi_note_to_freq(note);
+                                self.midi_note_gain.set_target(self.sample_rate, 1.0);
                             }
                             nih_plug::NoteEvent::NoteOff { note, .. } => {
-                                if self.active_note_freq == Some(util::midi_note_to_freq(note)) {
-                                    self.active_note_freq = None;
+                                if self.midi_note_freq == util::midi_note_to_freq(note) {
+                                    self.midi_note_gain.set_target(self.sample_rate, 0.0);
                                 }
                             }
                         },
@@ -177,10 +180,8 @@ impl Plugin for Sine {
                     next_event = context.next_midi_event();
                 }
 
-                match self.active_note_freq {
-                    Some(frequency) => self.calculate_sine(frequency),
-                    None => 0.0,
-                }
+                // This gain envelope prevents clicks with new notes and with released notes
+                self.calculate_sine(self.midi_note_freq) * self.midi_note_gain.next()
             } else {
                 let frequency = self.params.frequency.smoothed.next();
                 self.calculate_sine(frequency)
