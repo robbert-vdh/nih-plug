@@ -164,7 +164,11 @@ macro_rules! impl_plainparam {
             type Plain = $plain;
 
             fn update_smoother(&mut self, sample_rate: f32, reset: bool) {
-                self.smoothed.set_target(sample_rate, self.value, reset);
+                if reset {
+                    self.smoothed.reset(self.value);
+                } else {
+                    self.smoothed.set_target(sample_rate, self.value);
+                }
             }
 
             fn set_from_string(&mut self, string: &str) -> bool {
