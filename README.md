@@ -3,11 +3,12 @@
 Because of course we need to remake everything from scratch!
 
 This is a work in progress JUCE-lite-lite written in Rust to do some experiments
-with. The idea is to have a statefull but simple plugin API without too much
-magic, while also cutting unnecessary ceremony wherever possible. Since this is
-not meant for general use (yet), the plugin API is limited to the functionality
-I needed, and I'll expose more functionality as I need it. See the doc comment
-in the `Plugin` trait for an incomplete list of missing functionality.
+with. The idea is to have a statefull but simple plugin API that gets rid of as
+much unnecessary ceremony wherever possible, while also keeping the amount of
+magic to minimum. Since this is not quite meant for general use just yet, the
+plugin API is limited to the functionality I needed and I'll expose more
+functionality as I need it. See the documentation comment in the `Plugin` trait
+for an incomplete list of missing functionality.
 
 ## Building
 
@@ -18,6 +19,17 @@ of the plugin:
 ```shell
 cargo xtask bundle gain --release --bundle-vst3
 ```
+
+## Example plugins
+
+The best way to get an idea for what the API looks like is to look at the
+examples.
+
+- **gain** is a simple smoothed gain plugin that shows off a couple other parts
+  of the API, like support for storing arbitrary serializable state.
+- **sine** is a simple test tone generator plugin with frequency smoothing that
+  can also make use of MIDI input instead of generating a static signal based on
+  the plugin's parameters.
 
 ## Licensing
 
