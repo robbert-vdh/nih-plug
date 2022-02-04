@@ -60,10 +60,6 @@ pub trait Plugin: Default + Send + Sync {
     /// The plugin's parameters. The host will update the parameter values before calling
     /// `process()`. These parameters are identified by strings that should never change when the
     /// plugin receives an update.
-    ///
-    /// TODO: Rethink the API a bit more. Also Requiring the pin on self makes more sense, but it's
-    ///       not strictly necessary. We'll have to change this once the API is usable to see what's
-    ///       ergonmic.
     fn params(&self) -> Pin<&dyn Params>;
 
     //
