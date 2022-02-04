@@ -284,25 +284,25 @@ mod tests {
         #[test]
         fn range_normalize_float() {
             let range = make_skewed_float_range(Range::skew_factor(-2.0));
-            assert_eq!(range.normalize(17.5), 0.9306048591020996);
+            assert_eq!(range.normalize(17.5), 0.9306049);
         }
 
         #[test]
         fn range_normalize_int() {
             let range = make_skewed_int_range(Range::skew_factor(-2.0));
-            assert_eq!(range.normalize(-5), 0.7071067811865476);
+            assert_eq!(range.normalize(-5), 0.70710677);
         }
 
         #[test]
         fn range_unnormalize_float() {
             let range = make_skewed_float_range(Range::skew_factor(-2.0));
-            assert_eq!(range.unnormalize(0.9306048591020996), 17.5);
+            assert_eq!(range.unnormalize(0.9306049), 17.5);
         }
 
         #[test]
         fn range_unnormalize_int() {
             let range = make_skewed_int_range(Range::skew_factor(-2.0));
-            assert_eq!(range.unnormalize(0.7071067811865476), -5);
+            assert_eq!(range.unnormalize(0.70710677), -5);
         }
 
         #[test]

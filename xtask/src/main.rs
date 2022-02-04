@@ -3,7 +3,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-const USAGE_STRING: &'static str = "Usage: cargo xtask bundle <target> [--release] [--bundle-vst3]";
+const USAGE_STRING: &str = "Usage: cargo xtask bundle <target> [--release] [--bundle-vst3]";
 
 fn main() -> Result<()> {
     let project_root = Path::new(env!("CARGO_MANIFEST_DIR"))
