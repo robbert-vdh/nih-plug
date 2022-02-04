@@ -54,6 +54,10 @@ pub trait Plugin: Default + Send + Sync {
     /// instead of setting up the busses properly.
     const DEFAULT_NUM_OUTPUTS: u32;
 
+    /// Whether the plugin accepts note events. If this is set to `false`, then the plugin won't
+    /// receive any note events.
+    const ACCEPTS_MIDI: bool;
+
     /// The plugin's parameters. The host will update the parameter values before calling
     /// `process()`. These parameters are identified by strings that should never change when the
     /// plugin receives an update.

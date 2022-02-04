@@ -98,6 +98,8 @@ impl Plugin for Sine {
     const DEFAULT_NUM_INPUTS: u32 = 0;
     const DEFAULT_NUM_OUTPUTS: u32 = 2;
 
+    const ACCEPTS_MIDI: bool = true;
+
     fn params(&self) -> Pin<&dyn Params> {
         self.params.as_ref()
     }
