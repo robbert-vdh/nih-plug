@@ -21,7 +21,7 @@ use nih_plug::{
     formatters, util, Buffer, BufferConfig, BusConfig, Plugin, ProcessContext, ProcessStatus,
     Vst3Plugin,
 };
-use nih_plug::{FloatParam, Param, Params, Range, Smoother, SmoothingStyle};
+use nih_plug::{BoolParam, FloatParam, Param, Params, Range, Smoother, SmoothingStyle};
 use std::f32::consts;
 use std::pin::Pin;
 
@@ -32,7 +32,10 @@ struct Sine {
     params: Pin<Box<SineParams>>,
     sample_rate: f32,
 
+    /// The current phase of the sine wave, always kept between in `[0, 1]`.
     phase: f32,
+    /// The active frequency, if triggered by MIDI.
+    active_note_freq: Option<f32>,
 }
 
 #[derive(Params)]
@@ -42,6 +45,9 @@ struct SineParams {
 
     #[id = "freq"]
     pub frequency: FloatParam,
+
+    #[id = "usemid"]
+    pub use_midi: BoolParam,
 }
 
 impl Default for Sine {
@@ -51,6 +57,7 @@ impl Default for Sine {
             sample_rate: 1.0,
 
             phase: 0.0,
+            active_note_freq: None,
         }
     }
 }
@@ -83,7 +90,26 @@ impl Default for SineParams {
                 value_to_string: formatters::f32_rounded(0),
                 ..Default::default()
             },
+            use_midi: BoolParam {
+                value: false,
+                name: "Use MIDI",
+                ..Default::default()
+            },
         }
+    }
+}
+
+impl Sine {
+    fn calculate_sine(&mut self, frequency: f32) -> f32 {
+        let phase_delta = frequency / self.sample_rate;
+        let sine = (self.phase * consts::TAU).sin();
+
+        self.phase += phase_delta;
+        if self.phase >= 1.0 {
+            self.phase -= 1.0;
+        }
+
+        sine
     }
 }
 
@@ -120,19 +146,46 @@ impl Plugin for Sine {
         true
     }
 
-    fn process(&mut self, buffer: &mut Buffer, _context: &dyn ProcessContext) -> ProcessStatus {
-        for samples in buffer.iter_mut() {
+    fn process(&mut self, buffer: &mut Buffer, context: &dyn ProcessContext) -> ProcessStatus {
+        let mut next_event = context.next_midi_event();
+        for (sample_id, samples) in buffer.iter_mut().enumerate() {
             // Smoothing is optionally built into the parameters themselves
             let gain = self.params.gain.smoothed.next();
-            let frequency = self.params.frequency.smoothed.next();
 
-            let phase_delta = frequency / self.sample_rate;
-            let sine = (self.phase * consts::TAU).sin();
+            // This plugin can be either triggered by MIDI or controleld by a parameter
+            let sine = if self.params.use_midi.value {
+                // Act on the next MIDI event
+                'midi_events: loop {
+                    match next_event {
+                        Some(event) if event.timing() == sample_id as u32 => match event {
+                            nih_plug::NoteEvent::NoteOn { note, .. } => {
+                                // Reset the phase if this is a new note
+                                if self.active_note_freq.is_none() {
+                                    self.phase = 0.0;
+                                }
 
-            self.phase += phase_delta;
-            if self.phase >= 1.0 {
-                self.phase -= 1.0;
-            }
+                                self.active_note_freq = Some(util::midi_note_to_freq(note));
+                            }
+                            nih_plug::NoteEvent::NoteOff { note, .. } => {
+                                if self.active_note_freq == Some(util::midi_note_to_freq(note)) {
+                                    self.active_note_freq = None;
+                                }
+                            }
+                        },
+                        _ => break 'midi_events,
+                    }
+
+                    next_event = context.next_midi_event();
+                }
+
+                match self.active_note_freq {
+                    Some(frequency) => self.calculate_sine(frequency),
+                    None => 0.0,
+                }
+            } else {
+                let frequency = self.params.frequency.smoothed.next();
+                self.calculate_sine(frequency)
+            };
 
             for sample in samples {
                 *sample = sine * util::db_to_gain(gain);

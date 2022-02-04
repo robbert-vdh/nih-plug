@@ -155,7 +155,7 @@ pub enum ProcessStatus {
 }
 
 /// Event for (incoming) notes. Right now this only supports a very small subset of the MIDI
-/// specification.
+/// specification. See the util module for convenient conversion functions.
 ///
 /// All of the timings are sample offsets withing the current buffer.
 ///
@@ -174,4 +174,14 @@ pub enum NoteEvent {
         note: u8,
         velocity: u8,
     },
+}
+
+impl NoteEvent {
+    /// Return the sample within the current buffer this event belongs to.
+    pub fn timing(&self) -> u32 {
+        match &self {
+            NoteEvent::NoteOn { timing, .. } => *timing,
+            NoteEvent::NoteOff { timing, .. } => *timing,
+        }
+    }
 }

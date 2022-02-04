@@ -35,6 +35,12 @@ pub fn gain_to_db(gain: f32) -> f32 {
     }
 }
 
+/// Convert a MIDI note ID to a frequency at A4 = 440 Hz equal temperament and middle C = note 60 =
+/// C4.
+pub fn midi_note_to_freq(pitch: u8) -> f32 {
+    2.0f32.powf((pitch as f32 - 69.0) / 12.0) * 440.0
+}
+
 /// A version of [std::thread::Builder::spawn_unchecked] that works on the stable compiler.
 /// Implementation courtesy of Yandros on the Rust Discord.
 pub(crate) trait ThreadSpawnUnchecked {
