@@ -157,9 +157,21 @@ pub enum ProcessStatus {
 /// Event for (incoming) notes. Right now this only supports a very small subset of the MIDI
 /// specification.
 ///
+/// All of the timings are sample offsets withing the current buffer.
+///
 /// TODO: Add more events as needed
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum NoteEvent {
-    NoteOn { channel: u8, note: u8, velocity: u8 },
-    NoteOff { channel: u8, note: u8, velocity: u8 },
+    NoteOn {
+        timing: u32,
+        channel: u8,
+        note: u8,
+        velocity: u8,
+    },
+    NoteOff {
+        timing: u32,
+        channel: u8,
+        note: u8,
+        velocity: u8,
+    },
 }

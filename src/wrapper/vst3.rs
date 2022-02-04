@@ -1055,9 +1055,11 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
                     for i in 0..num_events {
                         nih_debug_assert_eq!(events.get_event(i, event.as_mut_ptr()), kResultOk);
                         let event = event.assume_init();
+                        let timing = event.sample_offset as u32;
                         if event.type_ == vst3_sys::vst::EventTypes::kNoteOnEvent as u16 {
                             let event = event.event.note_on;
                             input_events.push_back(NoteEvent::NoteOn {
+                                timing,
                                 channel: event.channel as u8,
                                 note: event.pitch as u8,
                                 velocity: (event.velocity * 127.0).round() as u8,
@@ -1065,6 +1067,7 @@ impl<P: Plugin> IAudioProcessor for Wrapper<'_, P> {
                         } else if event.type_ == vst3_sys::vst::EventTypes::kNoteOffEvent as u16 {
                             let event = event.event.note_off;
                             input_events.push_back(NoteEvent::NoteOff {
+                                timing,
                                 channel: event.channel as u8,
                                 note: event.pitch as u8,
                                 velocity: (event.velocity * 127.0).round() as u8,
