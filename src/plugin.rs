@@ -73,22 +73,28 @@ pub trait Plugin: Default + Send + Sync {
 
     /// Whether the plugin supports a bus config. This only acts as a check, and the plugin
     /// shouldn't do anything beyond returning true or false.
-    fn accepts_bus_config(&self, config: &BusConfig) -> bool;
+    fn accepts_bus_config(&self, config: &BusConfig) -> bool {
+        config.num_input_channels == 2 && config.num_output_channels == 2
+    }
 
     /// Initialize the plugin for the given bus and buffer configurations. If the plugin is being
     /// restored from an old state, then that state will have already been restored at this point.
     /// If based on those parameters (or for any reason whatsoever) the plugin needs to introduce
     /// latency, then you can do so here using the process context. Depending on how the host
-    /// restores plugin state, this function may also be called twice in rapid succession.
+    /// restores plugin state, this function may also be called twice in rapid succession. If the
+    /// plugin fails to inialize for whatever reason, then this should return `false`.
     ///
     /// Before this point, the plugin should not have done any expensive initialization. Please
     /// don't be that plugin that takes twenty seconds to scan.
+    #[allow(unused_variables)]
     fn initialize(
         &mut self,
         bus_config: &BusConfig,
         buffer_config: &BufferConfig,
         context: &dyn ProcessContext,
-    ) -> bool;
+    ) -> bool {
+        true
+    }
 
     /// Process audio. The host's input buffers have already been copied to the output buffers if
     /// they are not processing audio in place (most hosts do however). All channels are also
