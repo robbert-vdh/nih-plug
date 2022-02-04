@@ -24,6 +24,8 @@ mod linux;
 #[cfg(all(target_family = "unix", not(target_os = "macos")))]
 pub(crate) use linux::LinuxEventLoop as OsEventLoop;
 
+use crate::plugin::NoteEvent;
+
 pub(crate) const TASK_QUEUE_CAPACITY: usize = 512;
 
 // TODO: ProcessContext for parameter automation and sending events
@@ -40,6 +42,13 @@ pub trait ProcessContext {
     /// Update the current latency of the plugin. If the plugin is currently processing audio, then
     /// this may cause audio playback to be restarted.
     fn set_latency_samples(&self, samples: u32);
+
+    /// Return the next note event, if there is one. The event contains the timing
+    ///
+    /// TODO: Rethink this API, both in terms of ergonomics, and if we can do this in a way that
+    ///       doesn't require locks (because of the thread safe-ness, which we don't really need
+    ///       here)
+    fn next_midi_event(&self) -> Option<NoteEvent>;
 
     // // TODO: Add this next
     // fn set_parameter<P>(&self, param: &P, value: P::Plain)

@@ -331,6 +331,10 @@ impl<P: Plugin> ProcessContext for WrapperInner<'_, P> {
             nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
         }
     }
+
+    fn next_midi_event(&self) -> Option<NoteEvent> {
+        self.input_events.write().pop_front()
+    }
 }
 
 impl<P: Plugin> IPluginBase for Wrapper<'_, P> {
