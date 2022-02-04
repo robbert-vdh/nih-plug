@@ -145,14 +145,14 @@ impl Plugin for Sine {
         &mut self,
         _bus_config: &BusConfig,
         buffer_config: &BufferConfig,
-        _context: &dyn ProcessContext,
+        _context: &impl ProcessContext,
     ) -> bool {
         self.sample_rate = buffer_config.sample_rate;
 
         true
     }
 
-    fn process(&mut self, buffer: &mut Buffer, context: &dyn ProcessContext) -> ProcessStatus {
+    fn process(&mut self, buffer: &mut Buffer, context: &impl ProcessContext) -> ProcessStatus {
         let mut next_event = context.next_midi_event();
         for (sample_id, samples) in buffer.iter_mut().enumerate() {
             // Smoothing is optionally built into the parameters themselves

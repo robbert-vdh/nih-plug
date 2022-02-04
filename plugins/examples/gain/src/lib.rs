@@ -111,7 +111,7 @@ impl Plugin for Gain {
         &mut self,
         _bus_config: &BusConfig,
         _buffer_config: &BufferConfig,
-        _context: &dyn ProcessContext,
+        _context: &impl ProcessContext,
     ) -> bool {
         // This plugin doesn't need any special initialization, but if you need to do anything
         // expensive then this would be the place. State is kept around while when the host
@@ -119,7 +119,7 @@ impl Plugin for Gain {
         true
     }
 
-    fn process(&mut self, buffer: &mut Buffer, _context: &dyn ProcessContext) -> ProcessStatus {
+    fn process(&mut self, buffer: &mut Buffer, _context: &impl ProcessContext) -> ProcessStatus {
         for samples in buffer.iter_mut() {
             // Smoothing is optionally built into the parameters themselves
             let gain = self.params.gain.smoothed.next();
