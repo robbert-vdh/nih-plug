@@ -49,14 +49,14 @@ pub trait Plugin: Default + Send + Sync {
 
     /// The default number of inputs. Some hosts like, like Bitwig and Ardour, use the defaults
     /// instead of setting up the busses properly.
-    const DEFAULT_NUM_INPUTS: u32;
+    const DEFAULT_NUM_INPUTS: u32 = 2;
     /// The default number of inputs. Some hosts like, like Bitwig and Ardour, use the defaults
     /// instead of setting up the busses properly.
-    const DEFAULT_NUM_OUTPUTS: u32;
+    const DEFAULT_NUM_OUTPUTS: u32 = 2;
 
     /// Whether the plugin accepts note events. If this is set to `false`, then the plugin won't
     /// receive any note events.
-    const ACCEPTS_MIDI: bool;
+    const ACCEPTS_MIDI: bool = false;
 
     /// The plugin's parameters. The host will update the parameter values before calling
     /// `process()`. These parameters are identified by strings that should never change when the
