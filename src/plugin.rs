@@ -149,13 +149,8 @@ pub trait Vst3Plugin: Plugin {
     const VST3_CATEGORIES: &'static str;
 }
 
-/// An editor for a [Plugin]. The [Drop] implementation gets called when the host closes the editor.
-//
-// XXX: Requiring a [Drop] bound is a bit unorthodox, but together with [Plugin::create_editor] it
-//      encodes the lifecycle of an editor perfectly as you cannot have duplicate (or missing)
-//      initialize and close calls. Maybe think this over again later.
-#[allow(drop_bounds)]
-pub trait Editor: Drop + Send + Sync {
+/// An editor for a [Plugin]. This object gets dropped when the host closes the editor.
+pub trait Editor: Send + Sync {
     /// Return the (currnent) size of the editor in pixels as a `(width, height)` pair.
     fn size(&self) -> (u32, u32);
 
