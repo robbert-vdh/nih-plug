@@ -57,18 +57,18 @@ pub trait ProcessContext {
     // fn set_parameter<P: Param>(&self, param: &P, value: P::Plain);
 }
 
-/// Callbacks the plugin can make while handling its GUI, such as updating parameter values. This is
-/// passed to the plugin during [crate::plugin::Plugin::create_editor()].
+/// Callbacks the plugin can make when the user interacts with its GUI such as updating parameter
+/// values. This is passed to the plugin during [crate::plugin::Plugin::create_editor()]. All of
+/// these functions assume they're being called from the main GUI thread.
 //
 // # Safety
 //
-// The implementing wrapper needs to be able to handle concurrent requests, and it should perform
-// the actual callback within [MainThreadQueue::do_maybe_async].
-//
-// TODO: Update documentation
-// TODO: Add the safe generic setter API
+// The implementing wrapper can assume that everything is being called from the main thread. Since
+// NIH-plug doesn't own the GUI event loop, this invariant cannot be part of the interface.
 pub trait GuiContext: Send + Sync {
-    /// TODO: Docuemnt safe API
+    /// Retrieve a safe setter for updating the plugin's parameters. Modifying parameters here will
+    /// broadcast the changes both to the host and to your plugin's [crate::param::internal::Params]
+    /// object.
     fn setter(&self) -> ParamSetter
     where
         Self: Sized,
@@ -76,30 +76,37 @@ pub trait GuiContext: Send + Sync {
         ParamSetter { context: self }
     }
 
-    /// Inform the host that you will start automating a parmater. This needs to be called before
-    /// calling [Self::set_parameter()] for the specified parameter.
-    unsafe fn begin_set_parameter(&self, param: ParamPtr);
-
-    /// Set a parameter to the specified parameter value. You will need to call
-    /// [Self::begin_set_parameter()] before and [Self::end_set_parameter()] after calling this so
-    /// the host can properly record automation for the parameter. This can be called multiple times
-    /// in a row before calling [Self::end_set_parameter()], for instance when moving a slider
-    /// around.
+    /// Inform the host a parameter will be automated. Use [ParamSetter::begin_set_parameter]
+    /// instead for a safe, user friendly API.
     ///
-    /// This function assumes you're already calling this from a GUI thread. Calling any of these
-    /// functions from any other thread may result in unexpected behavior.
-    // TODO: Move into helper
-    // fn set_parameter<P: Param>(&self, param: &P, value: P::Plain);
-    unsafe fn set_parameter_normalized(&self, param: ParamPtr, normalized: f32);
+    /// # Safety
+    ///
+    /// The implementing function still needs to check if `param` actually exists. This function is
+    /// mostly marked as unsafe for API reasons.
+    unsafe fn raw_begin_set_parameter(&self, param: ParamPtr);
 
-    /// Inform the host that you are done automating a parameter. This needs to be called after one
-    /// or more [Self::set_parameter()] calls for a parameter so the host knows the automation
-    /// gesture has finished.
-    unsafe fn end_set_parameter(&self, param: ParamPtr);
+    /// Inform the host a parameter is being automated with an already normalized value. Use
+    /// [ParamSetter::set_parameter] instead for a safe, user friendly API.
+    ///
+    /// # Safety
+    ///
+    /// The implementing function still needs to check if `param` actually exists. This function is
+    /// mostly marked as unsafe for API reasons.
+    unsafe fn raw_set_parameter_normalized(&self, param: ParamPtr, normalized: f32);
+
+    /// Inform the host a parameter has been automated. Use [ParamSetter::end_set_parameter] instead
+    /// for a safe, user friendly API.
+    ///
+    /// # Safety
+    ///
+    /// The implementing function still needs to check if `param` actually exists. This function is
+    /// mostly marked as unsafe for API reasons.
+    unsafe fn raw_end_set_parameter(&self, param: ParamPtr);
 }
 
-/// A convenience struct for setting parameter values.
-// TODO: Document
+/// A convenience helper for setting parameter values. Any changes made here will be broadcasted to
+/// the host and reflected in the plugin's [crate::param::internal::Params] object. These functions
+/// should only be called from the main thread.
 pub struct ParamSetter<'a> {
     context: &'a dyn GuiContext,
 }
