@@ -32,6 +32,7 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use vst3_sys::base::{kInvalidArgument, kNoInterface, kResultFalse, kResultOk, tresult, TBool};
 use vst3_sys::base::{IBStream, IPluginBase, IPluginFactory, IPluginFactory2, IPluginFactory3};
+use vst3_sys::gui::IPlugView;
 use vst3_sys::utils::SharedVstPtr;
 use vst3_sys::vst::{
     IAudioProcessor, IComponent, IComponentHandler, IEditController, IEventList, IParamValueQueue,
@@ -90,7 +91,6 @@ macro_rules! check_null_ptr_msg {
 struct WrapperInner<P: Plugin> {
     /// The wrapped plugin instance.
     plugin: Box<RwLock<P>>,
-    editor: RwLock<Option<Box<dyn Editor>>>,
 
     /// The host's `IComponentHandler` instance, if passed through
     /// `IEditController::set_component_handler`.
@@ -152,6 +152,14 @@ struct WrapperInner<P: Plugin> {
 #[VST3(implements(IComponent, IEditController, IAudioProcessor))]
 pub(crate) struct Wrapper<P: Plugin> {
     inner: Arc<WrapperInner<P>>,
+}
+
+/// The plugin's [IPlugView] instance created in [IEditController::create_view] if `P` has an
+/// editor. This is managed separately so the lifetime bounds match up.
+#[VST3(implements(IPlugView))]
+struct WrapperView<P: Plugin> {
+    inner: Arc<WrapperInner<P>>,
+    editor: RwLock<Option<Box<dyn Editor>>>,
 }
 
 /// A [ProcessContext] implementation for the wrapper. This is a separate object so it can hold on
@@ -266,7 +274,6 @@ impl<P: Plugin> WrapperInner<P> {
     pub fn new() -> Arc<Self> {
         let mut wrapper = Self {
             plugin: Box::new(RwLock::default()),
-            editor: RwLock::new(None),
 
             component_handler: RwLock::new(None),
 
@@ -388,6 +395,12 @@ impl<P: Plugin> WrapperInner<P> {
 impl<P: Plugin> Wrapper<P> {
     pub fn new() -> Box<Self> {
         Self::allocate(WrapperInner::new())
+    }
+}
+
+impl<P: Plugin> WrapperView<P> {
+    pub fn new(inner: Arc<WrapperInner<P>>) -> Box<Self> {
+        Self::allocate(inner, RwLock::new(None))
     }
 }
 
@@ -1251,6 +1264,66 @@ impl<P: Plugin> IAudioProcessor for Wrapper<P> {
             ProcessStatus::KeepAlive => u32::MAX, // kInfiniteTail
             _ => 0,                               // kNoTail
         }
+    }
+}
+
+impl<P: Plugin> IPlugView for WrapperView<P> {
+    unsafe fn is_platform_type_supported(&self, type_: vst3_com::base::FIDString) -> tresult {
+        todo!()
+    }
+
+    unsafe fn attached(&self, parent: *mut c_void, type_: vst3_com::base::FIDString) -> tresult {
+        todo!()
+    }
+
+    unsafe fn removed(&self) -> tresult {
+        todo!()
+    }
+
+    unsafe fn on_wheel(&self, distance: f32) -> tresult {
+        todo!()
+    }
+
+    unsafe fn on_key_down(
+        &self,
+        key: vst3_com::base::char16,
+        key_code: i16,
+        modifiers: i16,
+    ) -> tresult {
+        todo!()
+    }
+
+    unsafe fn on_key_up(
+        &self,
+        key: vst3_com::base::char16,
+        key_code: i16,
+        modifiers: i16,
+    ) -> tresult {
+        todo!()
+    }
+
+    unsafe fn get_size(&self, size: *mut vst3_com::gui::ViewRect) -> tresult {
+        todo!()
+    }
+
+    unsafe fn on_size(&self, new_size: *mut vst3_com::gui::ViewRect) -> tresult {
+        todo!()
+    }
+
+    unsafe fn on_focus(&self, state: TBool) -> tresult {
+        todo!()
+    }
+
+    unsafe fn set_frame(&self, frame: *mut c_void) -> tresult {
+        todo!()
+    }
+
+    unsafe fn can_resize(&self) -> tresult {
+        todo!()
+    }
+
+    unsafe fn check_size_constraint(&self, rect: *mut vst3_com::gui::ViewRect) -> tresult {
+        todo!()
     }
 }
 
