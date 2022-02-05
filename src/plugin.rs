@@ -159,6 +159,10 @@ pub trait Editor: Drop + Send + Sync {
     /// Return the (currnent) size of the editor in pixels as a `(width, height)` pair.
     fn size(&self) -> (u32, u32);
 
+    // TODO: Reconsider adding a tick function here for the Linux `IRunLoop`. To keep this platform
+    //       and API agnostic, add a way to ask the GuiContext if the wrapper already provides a
+    //       tick function. If it does not, then the Editor implementation must handle this by
+    //       itself. This would also need an associated `PREFERRED_FRAME_RATE` constant.
     // TODO: Add the things needed for DPI scaling
     // TODO: Resizing
 }
