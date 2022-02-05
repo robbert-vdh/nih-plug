@@ -949,8 +949,14 @@ impl<P: Plugin> IEditController for Wrapper<P> {
     }
 
     unsafe fn create_view(&self, _name: vst3_sys::base::FIDString) -> *mut c_void {
-        // We currently don't support GUIs
-        ptr::null_mut()
+        // Without specialization this is the least redundant way to check if the plugin has an
+        // editor. The default implementation returns a None here.
+        match self.inner.plugin.read().editor_size() {
+            Some(_) => {
+                Box::into_raw(WrapperView::<P>::new(self.inner.clone())) as *mut vst3_sys::c_void
+            }
+            None => ptr::null_mut(),
+        }
     }
 }
 
