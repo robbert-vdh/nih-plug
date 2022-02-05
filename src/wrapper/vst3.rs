@@ -221,6 +221,13 @@ impl<P: Plugin> GuiContext for WrapperInner<P> {
         match &*self.component_handler.read() {
             Some(handler) => match self.param_ptr_to_hash.get(&param) {
                 Some(hash) => {
+                    // XXX: The host will also report this value to the plugin, this may cause fun
+                    //      behaviour with rapid parameter changes. How does JUCE handle this?
+                    self.set_normalized_value_by_hash(
+                        *hash,
+                        normalized,
+                        self.current_buffer_config.load().map(|c| c.sample_rate),
+                    );
                     handler.perform_edit(*hash, normalized as f64);
                 }
                 None => nih_debug_assert_failure!("Unknown parameter: {:?}", param),
@@ -377,7 +384,7 @@ impl<P: Plugin> WrapperInner<P> {
     unsafe fn set_normalized_value_by_hash(
         &self,
         hash: u32,
-        normalized_value: f64,
+        normalized_value: f32,
         sample_rate: Option<f32>,
     ) -> tresult {
         if hash == *BYPASS_PARAM_HASH {
@@ -389,10 +396,10 @@ impl<P: Plugin> WrapperInner<P> {
             // Also update the parameter's smoothing if applicable
             match (param_ptr, sample_rate) {
                 (_, Some(sample_rate)) => {
-                    param_ptr.set_normalized_value(normalized_value as f32);
+                    param_ptr.set_normalized_value(normalized_value);
                     param_ptr.update_smoother(sample_rate, false);
                 }
-                _ => param_ptr.set_normalized_value(normalized_value as f32),
+                _ => param_ptr.set_normalized_value(normalized_value),
             }
 
             kResultOk
@@ -946,7 +953,7 @@ impl<P: Plugin> IEditController for Wrapper<P> {
             .load()
             .map(|c| c.sample_rate);
         self.inner
-            .set_normalized_value_by_hash(id, value, sample_rate)
+            .set_normalized_value_by_hash(id, value as f32, sample_rate)
     }
 
     unsafe fn set_component_handler(
@@ -1143,8 +1150,11 @@ impl<P: Plugin> IAudioProcessor for Wrapper<P> {
                                 &mut value,
                             ) == kResultOk
                         {
-                            self.inner
-                                .set_normalized_value_by_hash(param_hash, value, sample_rate);
+                            self.inner.set_normalized_value_by_hash(
+                                param_hash,
+                                value as f32,
+                                sample_rate,
+                            );
                         }
                     }
                 }
