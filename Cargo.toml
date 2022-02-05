@@ -12,6 +12,7 @@ repository = "https://github.com/robbert-vdh/nih-plugs"
 [workspace]
 members = [
   "nih_plug_derive",
+  "nih_plug_egui",
   "xtask",
 
   "plugins/examples/gain",
