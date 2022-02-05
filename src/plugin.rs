@@ -39,6 +39,7 @@ use crate::param::internals::Params;
 /// - MIDI CC handling
 /// - Outputting MIDI events
 /// - GUIs
+#[allow(unused_variables)]
 pub trait Plugin: Default + Send + Sync {
     /// The type of the GUI editor instance belonging to this plugin. Use [NoEditor] when you don't
     /// need an editor. Make sure to implement both the [Self::create_editor()] and
@@ -84,8 +85,8 @@ pub trait Plugin: Default + Send + Sync {
     //       instance.
     fn create_editor(
         &self,
-        _parent: RawWindowHandle,
-        _context: &impl GuiContext,
+        parent: RawWindowHandle,
+        context: &impl GuiContext,
     ) -> Option<Self::Editor> {
         None
     }
@@ -114,7 +115,6 @@ pub trait Plugin: Default + Send + Sync {
     ///
     /// Before this point, the plugin should not have done any expensive initialization. Please
     /// don't be that plugin that takes twenty seconds to scan.
-    #[allow(unused_variables)]
     fn initialize(
         &mut self,
         bus_config: &BusConfig,
