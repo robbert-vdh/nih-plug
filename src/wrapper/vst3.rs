@@ -143,6 +143,10 @@ struct WrapperInner<P: Plugin> {
     /// Mappings from string parameter indentifiers to parameter hashes. Useful for debug logging
     /// and when storing and restorign plugin state.
     param_id_to_hash: HashMap<&'static str, u32>,
+    /// The inverse mapping from [Self::param_by_hash]. This is needed to be able to have an
+    /// ergonomic parameter setting API that uses references to the parameters instead of having to
+    /// add a setter function to the parameter (or even worse, have it be completely untyped).
+    param_ptr_to_hash: HashMap<ParamPtr, u32>,
 }
 
 #[VST3(implements(IComponent, IEditController, IAudioProcessor))]
@@ -181,16 +185,42 @@ impl<P: Plugin> ProcessContext for WrapperProcessContext<'_, P> {
 // alternative is to pass an `Arc<Self as GuiContext>` to the plugin and hope it doesn't do anything
 // weird with it.
 impl<P: Plugin> GuiContext for WrapperInner<P> {
+    // All of these functions are supposed to be called from the main thread, so we'll put some
+    // trust in the caller and assume that this is indeed the case
     unsafe fn raw_begin_set_parameter(&self, param: ParamPtr) {
-        todo!()
+        match &*self.component_handler.read() {
+            Some(handler) => match self.param_ptr_to_hash.get(&param) {
+                Some(hash) => {
+                    handler.begin_edit(*hash);
+                }
+                None => nih_debug_assert_failure!("Unknown parameter: {:?}", param),
+            },
+            None => nih_debug_assert_failure!("Component handler not yet set"),
+        }
     }
 
     unsafe fn raw_set_parameter_normalized(&self, param: ParamPtr, normalized: f32) {
-        todo!()
+        match &*self.component_handler.read() {
+            Some(handler) => match self.param_ptr_to_hash.get(&param) {
+                Some(hash) => {
+                    handler.perform_edit(*hash, normalized as f64);
+                }
+                None => nih_debug_assert_failure!("Unknown parameter: {:?}", param),
+            },
+            None => nih_debug_assert_failure!("Component handler not yet set"),
+        }
     }
 
     unsafe fn raw_end_set_parameter(&self, param: ParamPtr) {
-        todo!()
+        match &*self.component_handler.read() {
+            Some(handler) => match self.param_ptr_to_hash.get(&param) {
+                Some(hash) => {
+                    handler.end_edit(*hash);
+                }
+                None => nih_debug_assert_failure!("Unknown parameter: {:?}", param),
+            },
+            None => nih_debug_assert_failure!("Component handler not yet set"),
+        }
     }
 }
 
@@ -262,6 +292,7 @@ impl<P: Plugin> WrapperInner<P> {
             param_by_hash: HashMap::new(),
             param_defaults_normalized: Vec::new(),
             param_id_to_hash: HashMap::new(),
+            param_ptr_to_hash: HashMap::new(),
         };
 
         // This is a mapping from the parameter IDs specified by the plugin to pointers to thsoe
@@ -297,8 +328,12 @@ impl<P: Plugin> WrapperInner<P> {
             .map(|&(_, _, ptr)| unsafe { ptr.normalized_value() })
             .collect();
         wrapper.param_id_to_hash = param_id_hashes_ptrs
+            .iter()
+            .map(|&(id, hash, _)| (*id, hash))
+            .collect();
+        wrapper.param_ptr_to_hash = param_id_hashes_ptrs
             .into_iter()
-            .map(|(id, hash, _)| (*id, hash))
+            .map(|(_, hash, ptr)| (*ptr, hash))
             .collect();
 
         // FIXME: Right now this is safe, but if we are going to have a singleton main thread queue
