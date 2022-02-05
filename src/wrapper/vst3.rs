@@ -24,7 +24,7 @@ use parking_lot::{RwLock, RwLockWriteGuard};
 use raw_window_handle::RawWindowHandle;
 use std::cmp;
 use std::collections::{HashMap, VecDeque};
-use std::ffi::c_void;
+use std::ffi::{c_void, CStr};
 use std::marker::PhantomData;
 use std::mem::{self, MaybeUninit};
 use std::ptr;
@@ -1284,62 +1284,168 @@ impl<P: Plugin> IAudioProcessor for Wrapper<P> {
 }
 
 impl<P: Plugin> IPlugView for WrapperView<P> {
-    unsafe fn is_platform_type_supported(&self, type_: vst3_com::base::FIDString) -> tresult {
-        todo!()
+    #[cfg(all(target_family = "unix", not(target_os = "macos")))]
+    unsafe fn is_platform_type_supported(&self, type_: vst3_sys::base::FIDString) -> tresult {
+        let type_ = CStr::from_ptr(type_);
+        match type_.to_str() {
+            Ok(type_) if type_ == VST3_PLATFORM_X11_WINDOW => kResultOk,
+            _ => {
+                nih_debug_assert_failure!("Invalid window handle type: {:?}", type_);
+                kResultFalse
+            }
+        }
     }
 
-    unsafe fn attached(&self, parent: *mut c_void, type_: vst3_com::base::FIDString) -> tresult {
-        todo!()
+    #[cfg(all(target_os = "macos"))]
+    unsafe fn is_platform_type_supported(&self, type_: vst3_sys::base::FIDString) -> tresult {
+        let type_ = CStr::from_ptr(type_);
+        match type_.to_str() {
+            Ok(type_) if type_ == VST3_PLATFORM_NSVIEW => kResultOk,
+            _ => {
+                nih_debug_assert_failure!("Invalid window handle type: {:?}", type_);
+                kResultFalse
+            }
+        }
+    }
+
+    #[cfg(all(target_os = "windows"))]
+    unsafe fn is_platform_type_supported(&self, type_: vst3_sys::base::FIDString) -> tresult {
+        let type_ = CStr::from_ptr(type_);
+        match type_.to_str() {
+            Ok(type_) if type_ == VST3_PLATFORM_HWND => kResultOk,
+            _ => {
+                nih_debug_assert_failure!("Invalid window handle type: {:?}", type_);
+                kResultFalse
+            }
+        }
+    }
+
+    unsafe fn attached(&self, parent: *mut c_void, type_: vst3_sys::base::FIDString) -> tresult {
+        let mut editor = self.editor.write();
+        if editor.is_none() {
+            let type_ = CStr::from_ptr(type_);
+            let handle = match type_.to_str() {
+                Ok(type_) if type_ == VST3_PLATFORM_X11_WINDOW => {
+                    let mut handle = raw_window_handle::XcbHandle::empty();
+                    handle.window = parent as usize as u32;
+                    RawWindowHandle::Xcb(handle)
+                }
+                Ok(type_) if type_ == VST3_PLATFORM_NSVIEW => {
+                    let mut handle = raw_window_handle::AppKitHandle::empty();
+                    handle.ns_view = parent;
+                    RawWindowHandle::AppKit(handle)
+                }
+                Ok(type_) if type_ == VST3_PLATFORM_HWND => {
+                    let mut handle = raw_window_handle::Win32Handle::empty();
+                    handle.hwnd = parent;
+                    RawWindowHandle::Win32(handle)
+                }
+                _ => {
+                    nih_debug_assert_failure!("Unknown window handle type: {:?}", type_);
+                    return kInvalidArgument;
+                }
+            };
+
+            *editor = self
+                .inner
+                .plugin
+                .write()
+                .create_editor(handle, self.inner.clone());
+            kResultOk
+        } else {
+            kResultFalse
+        }
     }
 
     unsafe fn removed(&self) -> tresult {
-        todo!()
+        let mut editor = self.editor.write();
+        if editor.is_some() {
+            *editor = None;
+            kResultOk
+        } else {
+            kResultFalse
+        }
     }
 
-    unsafe fn on_wheel(&self, distance: f32) -> tresult {
-        todo!()
+    unsafe fn on_wheel(&self, _distance: f32) -> tresult {
+        // We'll let the plugin use the OS' input mechamisms because not all DAWs (or very few
+        // actually) implement these functions
+        kResultOk
     }
 
     unsafe fn on_key_down(
         &self,
-        key: vst3_com::base::char16,
-        key_code: i16,
-        modifiers: i16,
+        _key: vst3_sys::base::char16,
+        _key_code: i16,
+        _modifiers: i16,
     ) -> tresult {
-        todo!()
+        kResultOk
     }
 
     unsafe fn on_key_up(
         &self,
-        key: vst3_com::base::char16,
-        key_code: i16,
-        modifiers: i16,
+        _key: vst3_sys::base::char16,
+        _key_code: i16,
+        _modifiers: i16,
     ) -> tresult {
-        todo!()
+        kResultOk
     }
 
-    unsafe fn get_size(&self, size: *mut vst3_com::gui::ViewRect) -> tresult {
-        todo!()
+    unsafe fn get_size(&self, size: *mut vst3_sys::gui::ViewRect) -> tresult {
+        check_null_ptr!(size);
+
+        // If the editor is already open, then take the size from the editor in case the plugin
+        // updates one but not the other
+        let (width, height) = match self.editor.read().as_ref() {
+            Some(editor) => editor.size(),
+            None => self
+                .inner
+                .plugin
+                .read()
+                .editor_size()
+                .expect("Wait, this returned a Some just now!?"),
+        };
+
+        *size = mem::zeroed();
+
+        let size = &mut *size;
+        size.left = 0;
+        size.right = width as i32;
+        size.top = 0;
+        size.bottom = height as i32;
+
+        kResultOk
     }
 
-    unsafe fn on_size(&self, new_size: *mut vst3_com::gui::ViewRect) -> tresult {
-        todo!()
+    unsafe fn on_size(&self, _new_size: *mut vst3_sys::gui::ViewRect) -> tresult {
+        // TODO: Implement resizing
+        kResultOk
     }
 
-    unsafe fn on_focus(&self, state: TBool) -> tresult {
-        todo!()
+    unsafe fn on_focus(&self, _state: TBool) -> tresult {
+        kResultOk
     }
 
-    unsafe fn set_frame(&self, frame: *mut c_void) -> tresult {
-        todo!()
+    unsafe fn set_frame(&self, _frame: *mut c_void) -> tresult {
+        // TODO: Implement resizing. We don't implement that right now, so we also don't need the
+        //       plug frame.
+        kResultOk
     }
 
     unsafe fn can_resize(&self) -> tresult {
-        todo!()
+        // TODO: Implement resizing
+        kResultFalse
     }
 
-    unsafe fn check_size_constraint(&self, rect: *mut vst3_com::gui::ViewRect) -> tresult {
-        todo!()
+    unsafe fn check_size_constraint(&self, rect: *mut vst3_sys::gui::ViewRect) -> tresult {
+        check_null_ptr!(rect);
+
+        // TODO: Add this with the resizing
+        if (*rect).right - (*rect).left > 0 && (*rect).bottom - (*rect).top > 0 {
+            kResultOk
+        } else {
+            kResultFalse
+        }
     }
 }
 
