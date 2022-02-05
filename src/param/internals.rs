@@ -27,11 +27,11 @@ pub use serde_json::from_str as deserialize_field;
 pub use serde_json::to_string as serialize_field;
 
 /// Describes a struct containing parameters and other persistent fields. The idea is that we can
-/// have a normal struct containing [FloatParam] and other parameter types with attributes assigning
-/// a unique identifier to each parameter. We can then build a mapping from those parameter IDs to
-/// the parameters using the [Params::param_map] function. That way we can have easy to work with
-/// JUCE-style parameter objects in the plugin without needing to manually register each parameter,
-/// like you would in JUCE.
+/// have a normal struct containing [super::FloatParam] and other parameter types with attributes
+/// assigning a unique identifier to each parameter. We can then build a mapping from those
+/// parameter IDs to the parameters using the [Params::param_map] function. That way we can have
+/// easy to work with JUCE-style parameter objects in the plugin without needing to manually
+/// register each parameter, like you would in JUCE.
 ///
 /// The other persistent parameters should be [PersistentField]s containing types that can be
 /// serialized and deserialized with Serde.

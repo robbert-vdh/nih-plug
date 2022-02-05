@@ -72,7 +72,8 @@ pub trait Param {
     /// Get the string representation for a normalized value. Used as part of the wrappers.
     fn string_to_normalized_value(&self, string: &str) -> Option<f32>;
 
-    /// Internal implementation detail for implementing [Params]. This should not be used directly.
+    /// Internal implementation detail for implementing [internals::Params]. This should not be used
+    /// directly.
     fn as_ptr(&self) -> internals::ParamPtr;
 }
 

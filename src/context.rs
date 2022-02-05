@@ -65,21 +65,22 @@ pub trait ProcessContext {
 // the actual callback within [MainThreadQueue::do_maybe_async].
 pub trait GuiContext {
     /// Inform the host that you will start automating a parmater. This needs to be called before
-    /// calling [set_parameter] for the specified parameter.
+    /// calling [Self::set_parameter()] for the specified parameter.
     fn begin_set_parameter<P: Param>(&self, param: &P);
 
     /// Set a parameter to the specified parameter value. You will need to call
-    /// [begin_set_parameter] before and [end_set_parameter] after calling this so the host can
-    /// properly record automation for the parameter. This can be called multiple times in a row
-    /// before calling [end_set_parameter], for instance when moving a slider around.
+    /// [Self::begin_set_parameter()] before and [Self::end_set_parameter()] after calling this so
+    /// the host can properly record automation for the parameter. This can be called multiple times
+    /// in a row before calling [Self::end_set_parameter()], for instance when moving a slider
+    /// around.
     ///
     /// This function assumes you're already calling this from a GUI thread. Calling any of these
     /// functions from any other thread may result in unexpected behavior.
     fn set_parameter<P: Param>(&self, param: &P, value: P::Plain);
 
     /// Inform the host that you are done automating a parameter. This needs to be called after one
-    /// or more [set_parameter] calls for a parameter so the host knows the automation gesture has
-    /// finished.
+    /// or more [Self::set_parameter()] calls for a parameter so the host knows the automation
+    /// gesture has finished.
     fn end_set_parameter<P: Param>(&self, param: &P);
 }
 

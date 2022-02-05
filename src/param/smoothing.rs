@@ -72,7 +72,7 @@ impl<T: Default> Smoother<T> {
         Default::default()
     }
 
-    /// Whether calling [next] will yield a new value or an old value. Useful if you need to
+    /// Whether calling [Self::next] will yield a new value or an old value. Useful if you need to
     /// recompute something wheenver this parameter changes.
     pub fn is_smoothing(&self) -> bool {
         self.steps_left > 0

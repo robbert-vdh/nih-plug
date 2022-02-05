@@ -27,7 +27,7 @@ pub use nih_plug_derive::Params;
 
 // And also re-export anything you'd need to build a plugin
 pub use buffer::Buffer;
-pub use context::ProcessContext;
+pub use context::{GuiContext, ProcessContext};
 pub use param::internals::Params;
 pub use param::range::Range;
 pub use param::smoothing::{Smoother, SmoothingStyle};
