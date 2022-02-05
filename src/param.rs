@@ -72,6 +72,14 @@ pub trait Param {
     /// Get the string representation for a normalized value. Used as part of the wrappers.
     fn string_to_normalized_value(&self, string: &str) -> Option<f32>;
 
+    /// Get the normalized value for a plain, unnormalized value, as a float. Used as part of the
+    /// wrappers.
+    fn preview_normalized(&self, plain: Self::Plain) -> f32;
+
+    /// Get the plain, unnormalized value for a normalized value, as a float. Used as part of the
+    /// wrappers.
+    fn preview_plain(&self, normalized: f32) -> Self::Plain;
+
     /// Internal implementation detail for implementing [internals::Params]. This should not be used
     /// directly.
     fn as_ptr(&self) -> internals::ParamPtr;
@@ -227,6 +235,14 @@ macro_rules! impl_plainparam {
                 Some(self.range.normalize(value))
             }
 
+            fn preview_normalized(&self, plain: Self::Plain) -> f32 {
+                self.range.normalize(plain)
+            }
+
+            fn preview_plain(&self, normalized: f32) -> Self::Plain {
+                self.range.unnormalize(normalized)
+            }
+
             fn as_ptr(&self) -> internals::ParamPtr {
                 internals::ParamPtr::$ty(self as *const $ty as *mut $ty)
             }
@@ -298,6 +314,18 @@ impl Param for BoolParam {
         }?;
 
         Some(if value { 1.0 } else { 0.0 })
+    }
+
+    fn preview_normalized(&self, plain: Self::Plain) -> f32 {
+        if plain {
+            1.0
+        } else {
+            0.0
+        }
+    }
+
+    fn preview_plain(&self, normalized: f32) -> Self::Plain {
+        normalized > 0.5
     }
 
     fn as_ptr(&self) -> internals::ParamPtr {

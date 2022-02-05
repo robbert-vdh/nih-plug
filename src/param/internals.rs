@@ -19,7 +19,7 @@
 use std::collections::HashMap;
 use std::pin::Pin;
 
-use super::{NormalizebleRange, Param};
+use super::Param;
 
 /// Re-export for use in the [Params] proc-macro.
 pub use serde_json::from_str as deserialize_field;
@@ -191,8 +191,8 @@ impl ParamPtr {
     /// still alive.
     pub unsafe fn preview_normalized(&self, plain: f32) -> f32 {
         match &self {
-            ParamPtr::FloatParam(p) => (**p).range.normalize(plain),
-            ParamPtr::IntParam(p) => (**p).range.normalize(plain as i32),
+            ParamPtr::FloatParam(p) => (**p).preview_normalized(plain),
+            ParamPtr::IntParam(p) => (**p).preview_normalized(plain as i32),
             ParamPtr::BoolParam(_) => plain,
         }
     }
@@ -206,8 +206,8 @@ impl ParamPtr {
     /// still alive.
     pub unsafe fn preview_plain(&self, normalized: f32) -> f32 {
         match &self {
-            ParamPtr::FloatParam(p) => (**p).range.unnormalize(normalized),
-            ParamPtr::IntParam(p) => (**p).range.unnormalize(normalized) as f32,
+            ParamPtr::FloatParam(p) => (**p).preview_plain(normalized),
+            ParamPtr::IntParam(p) => (**p).preview_plain(normalized) as f32,
             ParamPtr::BoolParam(_) => normalized,
         }
     }
