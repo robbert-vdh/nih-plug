@@ -40,7 +40,7 @@ use crate::param::internals::Params;
 /// - Outputting MIDI events
 /// - GUIs
 #[allow(unused_variables)]
-pub trait Plugin: Default + Send + Sync {
+pub trait Plugin: Default + Send + Sync + 'static {
     /// The type of the GUI editor instance belonging to this plugin. Use [NoEditor] when you don't
     /// need an editor. Make sure to implement both the [Self::create_editor()] and
     /// [Self::editor_size()] functions when you do add an editor.
