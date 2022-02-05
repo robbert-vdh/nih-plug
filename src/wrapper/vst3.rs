@@ -72,7 +72,7 @@ macro_rules! check_null_ptr {
     };
 }
 
-/// The same as [check_null_ptr], but with a custom message.
+/// The same as [check_null_ptr!], but with a custom message.
 macro_rules! check_null_ptr_msg {
     ($msg:expr, $ptr:expr $(, $ptrs:expr)* $(, )?) => {
         if $ptr.is_null() $(|| $ptrs.is_null())* {

@@ -41,7 +41,7 @@ pub fn midi_note_to_freq(pitch: u8) -> f32 {
     2.0f32.powf((pitch as f32 - 69.0) / 12.0) * 440.0
 }
 
-/// A version of [std::thread::Builder::spawn_unchecked] that works on the stable compiler.
+/// A version of [std::thread::Builder::spawn_unchecked()] that works on the stable compiler.
 /// Implementation courtesy of Yandros on the Rust Discord.
 pub(crate) trait ThreadSpawnUnchecked {
     unsafe fn spawn_unchecked_2<F, R>(self, f: F) -> std::io::Result<std::thread::JoinHandle<R>>

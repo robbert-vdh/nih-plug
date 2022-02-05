@@ -22,7 +22,7 @@ pub enum Range<T> {
     /// The values are uniformly distributed between `min` and `max`.
     Linear { min: T, max: T },
     /// The range is skewed by a factor. Values above 1.0 will make the end of the range wider,
-    /// while values between 0 and 1 will skew the range towards the start. Use [Range::skew_factor]
+    /// while values between 0 and 1 will skew the range towards the start. Use [Range::skew_factor()]
     /// for a more intuitively way to calculate the skew factor where positive values skew the range
     /// towards the end while negative values skew the range toward the start.
     Skewed { min: T, max: T, factor: f32 },

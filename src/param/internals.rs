@@ -29,7 +29,7 @@ pub use serde_json::to_string as serialize_field;
 /// Describes a struct containing parameters and other persistent fields. The idea is that we can
 /// have a normal struct containing [super::FloatParam] and other parameter types with attributes
 /// assigning a unique identifier to each parameter. We can then build a mapping from those
-/// parameter IDs to the parameters using the [Params::param_map] function. That way we can have
+/// parameter IDs to the parameters using the [Params::param_map()] function. That way we can have
 /// easy to work with JUCE-style parameter objects in the plugin without needing to manually
 /// register each parameter, like you would in JUCE.
 ///
@@ -54,13 +54,13 @@ pub trait Params {
 
     /// Serialize all fields marked with `#[persist = "stable_name"]` into a hash map containing
     /// JSON-representations of those fields so they can be written to the plugin's state and
-    /// recalled later. This uses [serialize_field] under the hood.
+    /// recalled later. This uses [serialize_field()] under the hood.
     fn serialize_fields(&self) -> HashMap<String, String>;
 
     /// Restore all fields marked with `#[persist = "stable_name"]` from a hashmap created by
-    /// [Self::serialize_fields]. All of thse fields should be wrapped in a [PersistentField] with
+    /// [Self::serialize_fields()]. All of thse fields should be wrapped in a [PersistentField] with
     /// thread safe interior mutability, like an `RwLock` or a `Mutex`. This gets called when the
-    /// plugin's state is being restored. This uses [deserialize_field] under the hood.
+    /// plugin's state is being restored. This uses [deserialize_field()] under the hood.
     fn deserialize_fields(&self, serialized: &HashMap<String, String>);
 }
 

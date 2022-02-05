@@ -36,8 +36,8 @@ pub(crate) struct State {
     /// parmaeter automation though, depending on how the host impelments that.
     pub params: HashMap<String, ParamValue>,
     /// Arbitrary fields that should be persisted together with the plugin's parameters. Any field
-    /// on the [Params] struct that's annotated with `#[persist = "stable_name"]` will be persisted
-    /// this way.
+    /// on the [crate::param::internals::Params] struct that's annotated with `#[persist =
+    /// "stable_name"]` will be persisted this way.
     ///
     /// The individual fields are also serialized as JSON so they can safely be restored
     /// independently of the other fields.

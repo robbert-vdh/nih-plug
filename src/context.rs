@@ -32,7 +32,7 @@ pub(crate) const TASK_QUEUE_CAPACITY: usize = 512;
 // TODO: ProcessContext for parameter automation and sending events
 
 /// General callbacks the plugin can make during its lifetime. This is passed to the plugin during
-/// [crate::plugin::Plugin::initialize] and as part of [crate::plugin::Plugin::process].
+/// [crate::plugin::Plugin::initialize()] and as part of [crate::plugin::Plugin::process()].
 //
 // # Safety
 //
@@ -57,7 +57,7 @@ pub trait ProcessContext {
 }
 
 /// Callbacks the plugin can make while handling its GUI, such as updating parameter values. This is
-/// passed to the plugin during [crate::plugin::Plugin::create_editor].
+/// passed to the plugin during [crate::plugin::Plugin::create_editor()].
 //
 // # Safety
 //

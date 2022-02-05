@@ -37,7 +37,7 @@ pub(crate) struct LinuxEventLoop<T, E> {
     /// queue.
     main_thread_id: ThreadId,
 
-    /// A thread that act as our worker thread. When [do_maybe_async] is called, this thread will be
+    /// A thread that act as our worker thread. When [Self::do_maybe_async()] is called, this thread will be
     /// woken up to execute the task on the executor. This is wrapped in an `Option` so the thread
     /// can be taken out of it and joined when this struct gets dropped.
     worker_thread: Option<JoinHandle<()>>,
