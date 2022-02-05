@@ -26,14 +26,16 @@ static A: assert_no_alloc::AllocDisabler = assert_no_alloc::AllocDisabler;
 
 /// A Rabin fingerprint based string hash for parameter ID strings.
 pub fn hash_param_id(id: &str) -> u32 {
-    let mut overflow;
-    let mut overflow2;
     let mut has_overflown = false;
     let mut hash: u32 = 0;
     for char in id.bytes() {
-        (hash, overflow) = hash.overflowing_mul(31);
-        (hash, overflow2) = hash.overflowing_add(char as u32);
-        has_overflown |= overflow || overflow2;
+        // No destructuring assignments on stable Rust yet, somehow that just works on nightly
+        // without needing to add a feature attribute
+        let (hash2, overflow2) = hash.overflowing_mul(31);
+        let (hash3, overflow3) = hash2.overflowing_add(char as u32);
+
+        hash = hash3;
+        has_overflown |= overflow2 || overflow3;
     }
 
     if has_overflown {
