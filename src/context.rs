@@ -24,6 +24,7 @@ mod linux;
 #[cfg(all(target_family = "unix", not(target_os = "macos")))]
 pub(crate) use linux::LinuxEventLoop as OsEventLoop;
 
+use crate::param::internals::ParamPtr;
 use crate::param::Param;
 use crate::plugin::NoteEvent;
 
@@ -63,10 +64,21 @@ pub trait ProcessContext {
 //
 // The implementing wrapper needs to be able to handle concurrent requests, and it should perform
 // the actual callback within [MainThreadQueue::do_maybe_async].
-pub trait GuiContext {
+//
+// TODO: Update documentation
+// TODO: Add the safe generic setter API
+pub trait GuiContext: Send + Sync {
+    /// TODO: Docuemnt safe API
+    fn setter(&self) -> ParamSetter
+    where
+        Self: Sized,
+    {
+        ParamSetter { context: self }
+    }
+
     /// Inform the host that you will start automating a parmater. This needs to be called before
     /// calling [Self::set_parameter()] for the specified parameter.
-    fn begin_set_parameter<P: Param>(&self, param: &P);
+    unsafe fn begin_set_parameter(&self, param: ParamPtr);
 
     /// Set a parameter to the specified parameter value. You will need to call
     /// [Self::begin_set_parameter()] before and [Self::end_set_parameter()] after calling this so
@@ -76,12 +88,47 @@ pub trait GuiContext {
     ///
     /// This function assumes you're already calling this from a GUI thread. Calling any of these
     /// functions from any other thread may result in unexpected behavior.
-    fn set_parameter<P: Param>(&self, param: &P, value: P::Plain);
+    // TODO: Move into helper
+    // fn set_parameter<P: Param>(&self, param: &P, value: P::Plain);
+    unsafe fn set_parameter_normalized(&self, param: ParamPtr, normalized: f32);
 
     /// Inform the host that you are done automating a parameter. This needs to be called after one
     /// or more [Self::set_parameter()] calls for a parameter so the host knows the automation
     /// gesture has finished.
-    fn end_set_parameter<P: Param>(&self, param: &P);
+    unsafe fn end_set_parameter(&self, param: ParamPtr);
+}
+
+/// A convenience struct for setting parameter values.
+// TODO: Document
+pub struct ParamSetter<'a> {
+    context: &'a dyn GuiContext,
+}
+
+impl ParamSetter<'_> {
+    /// Inform the host that you will start automating a parmater. This needs to be called before
+    /// calling [Self::set_parameter()] for the specified parameter.
+    pub fn begin_set_parameter<P: Param>(&self, param: &P) {
+        todo!()
+    }
+
+    /// Set a parameter to the specified parameter value. You will need to call
+    /// [Self::begin_set_parameter()] before and [Self::end_set_parameter()] after calling this so
+    /// the host can properly record automation for the parameter. This can be called multiple times
+    /// in a row before calling [Self::end_set_parameter()], for instance when moving a slider
+    /// around.
+    ///
+    /// This function assumes you're already calling this from a GUI thread. Calling any of these
+    /// functions from any other thread may result in unexpected behavior.
+    pub fn set_parameter<P: Param>(&self, param: &P, value: P::Plain) {
+        todo!()
+    }
+
+    /// Inform the host that you are done automating a parameter. This needs to be called after one
+    /// or more [Self::set_parameter()] calls for a parameter so the host knows the automation
+    /// gesture has finished.
+    pub fn end_set_parameter<P: Param>(&self, param: &P) {
+        todo!()
+    }
 }
 
 /// A trait describing the functionality of the platform-specific event loop that can execute tasks
