@@ -18,8 +18,8 @@
 extern crate nih_plug;
 
 use nih_plug::{
-    formatters, util, Buffer, BufferConfig, BusConfig, Plugin, ProcessContext, ProcessStatus,
-    Vst3Plugin,
+    formatters, util, Buffer, BufferConfig, BusConfig, NoEditor, Plugin, ProcessContext,
+    ProcessStatus, Vst3Plugin,
 };
 use nih_plug::{BoolParam, FloatParam, Param, Params, Range, Smoother, SmoothingStyle};
 use parking_lot::RwLock;
@@ -86,6 +86,8 @@ impl Default for GainParams {
 }
 
 impl Plugin for Gain {
+    type Editor = NoEditor;
+
     const NAME: &'static str = "Gain";
     const VENDOR: &'static str = "Moist Plugins GmbH";
     const URL: &'static str = "https://youtu.be/dQw4w9WgXcQ";

@@ -24,15 +24,15 @@ mod linux;
 #[cfg(all(target_family = "unix", not(target_os = "macos")))]
 pub(crate) use linux::LinuxEventLoop as OsEventLoop;
 
+use crate::param::Param;
 use crate::plugin::NoteEvent;
 
 pub(crate) const TASK_QUEUE_CAPACITY: usize = 512;
 
 // TODO: ProcessContext for parameter automation and sending events
-// TODO: GuiContext for GUI parameter automation and resizing
 
 /// General callbacks the plugin can make during its lifetime. This is passed to the plugin during
-/// [crate::plugin::Plugin::initialize].
+/// [crate::plugin::Plugin::initialize] and as part of [crate::plugin::Plugin::process].
 //
 // # Safety
 //
@@ -50,10 +50,37 @@ pub trait ProcessContext {
     ///       here)
     fn next_midi_event(&mut self) -> Option<NoteEvent>;
 
-    // // TODO: Add this next
-    // fn set_parameter<P>(&self, param: &P, value: P::Plain)
-    // where
-    //     P: Param;
+    // TODO: Add this, this works similar to [GuiContext::set_parameter] but it adds the parameter
+    //       change to a queue (or directly to the VST3 plugin's parameter output queues) instead of
+    //       using main thread host automation (and all the locks involved there).
+    // fn set_parameter<P: Param>(&self, param: &P, value: P::Plain);
+}
+
+/// Callbacks the plugin can make while handling its GUI, such as updating parameter values. This is
+/// passed to the plugin during [crate::plugin::Plugin::create_editor].
+//
+// # Safety
+//
+// The implementing wrapper needs to be able to handle concurrent requests, and it should perform
+// the actual callback within [MainThreadQueue::do_maybe_async].
+pub trait GuiContext {
+    /// Inform the host that you will start automating a parmater. This needs to be called before
+    /// calling [set_parameter] for the specified parameter.
+    fn begin_set_parameter<P: Param>(&self, param: &P);
+
+    /// Set a parameter to the specified parameter value. You will need to call
+    /// [begin_set_parameter] before and [end_set_parameter] after calling this so the host can
+    /// properly record automation for the parameter. This can be called multiple times in a row
+    /// before calling [end_set_parameter], for instance when moving a slider around.
+    ///
+    /// This function assumes you're already calling this from a GUI thread. Calling any of these
+    /// functions from any other thread may result in unexpected behavior.
+    fn set_parameter<P: Param>(&self, param: &P, value: P::Plain);
+
+    /// Inform the host that you are done automating a parameter. This needs to be called after one
+    /// or more [set_parameter] calls for a parameter so the host knows the automation gesture has
+    /// finished.
+    fn end_set_parameter<P: Param>(&self, param: &P);
 }
 
 /// A trait describing the functionality of the platform-specific event loop that can execute tasks

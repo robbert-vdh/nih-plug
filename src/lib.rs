@@ -32,7 +32,9 @@ pub use param::internals::Params;
 pub use param::range::Range;
 pub use param::smoothing::{Smoother, SmoothingStyle};
 pub use param::{BoolParam, FloatParam, IntParam, Param};
-pub use plugin::{BufferConfig, BusConfig, NoteEvent, Plugin, ProcessStatus, Vst3Plugin};
+pub use plugin::{
+    BufferConfig, BusConfig, Editor, NoEditor, NoteEvent, Plugin, ProcessStatus, Vst3Plugin,
+};
 
 // The rest is either internal or already re-exported
 mod buffer;

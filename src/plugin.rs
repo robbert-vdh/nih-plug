@@ -14,10 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use raw_window_handle::RawWindowHandle;
 use std::pin::Pin;
 
 use crate::buffer::Buffer;
-use crate::context::ProcessContext;
+use crate::context::{GuiContext, ProcessContext};
 use crate::param::internals::Params;
 
 /// Basic functionality that needs to be implemented by a plugin. The wrappers will use this to
@@ -39,6 +40,11 @@ use crate::param::internals::Params;
 /// - Outputting MIDI events
 /// - GUIs
 pub trait Plugin: Default + Send + Sync {
+    /// The type of the GUI editor instance belonging to this plugin. Use [NoEditor] when you don't
+    /// need an editor. Make sure to implement both the [create_editor] and [editor_size] functions
+    /// when you do add an editor.
+    type Editor: Editor;
+
     const NAME: &'static str;
     const VENDOR: &'static str;
     const URL: &'static str;
@@ -63,6 +69,31 @@ pub trait Plugin: Default + Send + Sync {
     /// `process()`. These parameters are identified by strings that should never change when the
     /// plugin receives an update.
     fn params(&self) -> Pin<&dyn Params>;
+
+    /// Create an editor for this plugin and embed it in the parent window. The idea is that you
+    /// take a reference to your [Params] in your editor to be able to read the current values. Then
+    /// whenever you need to change any of those values, you can use the methods on the [GuiContext]
+    /// that's passed to this function. When you change a parameter value there it will be
+    /// broadcasted to the host and also updated in your [Params] struct.
+    //
+    // TODO: Think of how this would work with the event loop. On Linux the wrapper must provide a
+    //       timer using VST3's `IRunLoop` interface, but on Window and macOS the window would
+    //       normally register its own timer. Right now we just ignore this because it would
+    //       otherwise be basically impossible to have this still be GUI-framework agnostic. Any
+    //       callback that deos involve actual GUI operations will still be spooled to the IRunLoop
+    //       instance.
+    fn create_editor(
+        &self,
+        _parent: RawWindowHandle,
+        _context: &impl GuiContext,
+    ) -> Option<Self::Editor> {
+        None
+    }
+
+    /// Return the current size of the plugin's editor, if it has one.
+    fn editor_size(&self) -> Option<(u32, u32)> {
+        None
+    }
 
     //
     // The following functions follow the lifetime of the plugin.
@@ -115,6 +146,29 @@ pub trait Vst3Plugin: Plugin {
     /// logner than that will be truncated. See the VST3 SDK for examples of common categories:
     /// <https://github.com/steinbergmedia/vst3_pluginterfaces/blob/2ad397ade5b51007860bedb3b01b8afd2c5f6fba/vst/ivstaudioprocessor.h#L49-L90>
     const VST3_CATEGORIES: &'static str;
+}
+
+/// An editor for a [Plugin]. If you don't have or need an editor, then you can use the [NoEditor]
+/// struct as a placeholder.
+pub trait Editor {
+    /// Called just before the window gets closed.
+    fn close(&self);
+
+    /// Return the (currnent) size of the editor in pixels as a `(width, height)` pair.
+    fn size(&self) -> (u32, u32);
+
+    // TODO: Add the things needed for DPI scaling
+    // TODO: Resizing
+}
+
+pub struct NoEditor;
+
+impl Editor for NoEditor {
+    fn close(&self) {}
+
+    fn size(&self) -> (u32, u32) {
+        (0, 0)
+    }
 }
 
 /// We only support a single main input and output bus at the moment.

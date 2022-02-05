@@ -18,8 +18,8 @@
 extern crate nih_plug;
 
 use nih_plug::{
-    formatters, util, Buffer, BufferConfig, BusConfig, Plugin, ProcessContext, ProcessStatus,
-    Vst3Plugin,
+    formatters, util, Buffer, BufferConfig, BusConfig, NoEditor, Plugin, ProcessContext,
+    ProcessStatus, Vst3Plugin,
 };
 use nih_plug::{BoolParam, FloatParam, Param, Params, Range, Smoother, SmoothingStyle};
 use std::f32::consts;
@@ -33,6 +33,8 @@ struct Sine {
 
     /// The current phase of the sine wave, always kept between in `[0, 1]`.
     phase: f32,
+
+    samples: f32,
 
     /// The frequency if the active note, if triggered by MIDI.
     midi_note_freq: f32,
@@ -62,6 +64,7 @@ impl Default for Sine {
             sample_rate: 1.0,
 
             phase: 0.0,
+            samples: 0.0,
             midi_note_freq: 1.0,
             midi_note_gain: Smoother::new(SmoothingStyle::Linear(5.0)),
         }
@@ -120,6 +123,8 @@ impl Sine {
 }
 
 impl Plugin for Sine {
+    type Editor = NoEditor;
+
     const NAME: &'static str = "Sine Test Tone";
     const VENDOR: &'static str = "Moist Plugins GmbH";
     const URL: &'static str = "https://youtu.be/dQw4w9WgXcQ";
@@ -158,6 +163,13 @@ impl Plugin for Sine {
             // Smoothing is optionally built into the parameters themselves
             let gain = self.params.gain.smoothed.next();
 
+            let offset =
+                ((self.samples / 100.0) + 1.0).log2() / (100.0f32 * 500.0 + 1.0).log2() * 500.0;
+            self.samples += 1.0;
+            if self.samples / 100.0 > 500.0 {
+                self.samples = 0.0;
+            }
+
             // This plugin can be either triggered by MIDI or controleld by a parameter
             let sine = if self.params.use_midi.value {
                 // Act on the next MIDI event
@@ -184,7 +196,7 @@ impl Plugin for Sine {
                 self.calculate_sine(self.midi_note_freq) * self.midi_note_gain.next()
             } else {
                 let frequency = self.params.frequency.smoothed.next();
-                self.calculate_sine(frequency)
+                self.calculate_sine(frequency + offset)
             };
 
             for sample in samples {

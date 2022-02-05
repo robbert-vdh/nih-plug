@@ -17,10 +17,11 @@ members = [
 [dependencies]
 nih_plug_derive = { path = "nih_plug_derive" }
 
-crossbeam = "0.8"
 cfg-if = "1.0"
+crossbeam = "0.8"
 lazy_static = "1.4"
 parking_lot = "0.12"
+raw-window-handle = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 vst3-sys = { git = "https://github.com/robbert-vdh/vst3-sys.git", branch = "fix/atomic-reference-count" }
