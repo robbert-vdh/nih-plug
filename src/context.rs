@@ -65,7 +65,7 @@ pub trait ProcessContext {
 //
 // The implementing wrapper can assume that everything is being called from the main thread. Since
 // NIH-plug doesn't own the GUI event loop, this invariant cannot be part of the interface.
-pub trait GuiContext: Send + Sync {
+pub trait GuiContext: Send + Sync + 'static {
     /// Retrieve a safe setter for updating the plugin's parameters. Modifying parameters here will
     /// broadcast the changes both to the host and to your plugin's
     /// [crate::param::internals::Params] object.

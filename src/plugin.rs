@@ -81,11 +81,11 @@ pub trait Plugin: Default + Send + Sync + 'static {
     //       otherwise be basically impossible to have this still be GUI-framework agnostic. Any
     //       callback that deos involve actual GUI operations will still be spooled to the IRunLoop
     //       instance.
-    fn create_editor<'a, 'context: 'a>(
-        &'a self,
+    fn create_editor(
+        &self,
         parent: EditorWindowHandle,
-        context: Arc<dyn GuiContext + 'context>,
-    ) -> Option<Box<dyn Editor + 'context>> {
+        context: Arc<dyn GuiContext>,
+    ) -> Option<Box<dyn Editor>> {
         None
     }
 
