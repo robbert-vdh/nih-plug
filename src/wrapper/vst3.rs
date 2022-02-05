@@ -51,6 +51,7 @@ use crate::plugin::{
 };
 use crate::wrapper::state::{ParamValue, State};
 use crate::wrapper::util::{hash_param_id, process_wrapper, strlcpy, u16strlcpy};
+use crate::EditorWindowHandle;
 
 // Alias needed for the VST3 attribute macro
 use vst3_sys as vst3_com;
@@ -1363,7 +1364,7 @@ impl<P: Plugin> IPlugView for WrapperView<P> {
                 .inner
                 .plugin
                 .write()
-                .create_editor(handle, self.inner.clone());
+                .create_editor(EditorWindowHandle { handle }, self.inner.clone());
             kResultOk
         } else {
             kResultFalse

@@ -34,7 +34,8 @@ pub use param::range::Range;
 pub use param::smoothing::{Smoother, SmoothingStyle};
 pub use param::{BoolParam, FloatParam, IntParam, Param};
 pub use plugin::{
-    BufferConfig, BusConfig, Editor, NoteEvent, Plugin, ProcessStatus, RawWindowHandle, Vst3Plugin,
+    BufferConfig, BusConfig, Editor, EditorWindowHandle, NoteEvent, Plugin, ProcessStatus,
+    Vst3Plugin,
 };
 
 // The rest is either internal or already re-exported

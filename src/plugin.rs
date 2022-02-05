@@ -14,15 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
 use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::buffer::Buffer;
 use crate::context::{GuiContext, ProcessContext};
 use crate::param::internals::Params;
-
-/// A raw window handle for platform and GUI framework agnostic editors.
-pub use raw_window_handle::RawWindowHandle;
 
 /// Basic functionality that needs to be implemented by a plugin. The wrappers will use this to
 /// expose the plugin in a particular plugin format.
@@ -85,7 +83,7 @@ pub trait Plugin: Default + Send + Sync + 'static {
     //       instance.
     fn create_editor<'a, 'context: 'a>(
         &'a self,
-        parent: RawWindowHandle,
+        parent: EditorWindowHandle,
         context: Arc<dyn GuiContext + 'context>,
     ) -> Option<Box<dyn Editor + 'context>> {
         None
@@ -160,6 +158,17 @@ pub trait Editor {
     //       itself. This would also need an associated `PREFERRED_FRAME_RATE` constant.
     // TODO: Add the things needed for DPI scaling
     // TODO: Resizing
+}
+
+/// A raw window handle for platform and GUI framework agnostic editors.
+pub struct EditorWindowHandle {
+    pub handle: RawWindowHandle,
+}
+
+unsafe impl HasRawWindowHandle for EditorWindowHandle {
+    fn raw_window_handle(&self) -> RawWindowHandle {
+        self.handle
+    }
 }
 
 /// We only support a single main input and output bus at the moment.
