@@ -150,7 +150,7 @@ pub trait Vst3Plugin: Plugin {
 }
 
 /// An editor for a [Plugin]. This object gets dropped when the host closes the editor.
-pub trait Editor: Send + Sync {
+pub trait Editor {
     /// Return the (currnent) size of the editor in pixels as a `(width, height)` pair.
     fn size(&self) -> (u32, u32);
 
