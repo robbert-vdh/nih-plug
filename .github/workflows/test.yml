@@ -1,0 +1,46 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      # Run when pushing version tags, since otherwise it's impossible to
+      # restart a successful build after pushing a tag
+      - '*.*.*'
+  pull_request:
+    branches:
+      - master
+
+defaults:
+  run:
+    # This otherwise gets run under dash which does not support brace expansion
+    shell: bash
+
+# TODO: Also test on Windows and macOS once we add the required event loops
+jobs:
+  build-all:
+    name: Build all components
+    runs-on: ubuntu-18.04
+    # TODO: At some point, add artifacts
+    steps:
+      - uses: actions/checkout@v2
+      # Needed for git-describe to do anything useful
+      - name: Fetch all git history
+        run: git fetch --force --prune --tags --unshallow
+      - name: Set up Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          default: true
+      - name: Build all targets
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --workspace --all-features
+      - name: Run the tests
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --workspace
