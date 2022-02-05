@@ -18,8 +18,8 @@
 extern crate nih_plug;
 
 use nih_plug::{
-    formatters, util, Buffer, BufferConfig, BusConfig, NoEditor, Plugin, ProcessContext,
-    ProcessStatus, Vst3Plugin,
+    formatters, util, Buffer, BufferConfig, BusConfig, Plugin, ProcessContext, ProcessStatus,
+    Vst3Plugin,
 };
 use nih_plug::{BoolParam, FloatParam, Param, Params, Range, Smoother, SmoothingStyle};
 use std::f32::consts;
@@ -123,8 +123,6 @@ impl Sine {
 }
 
 impl Plugin for Sine {
-    type Editor = NoEditor;
-
     const NAME: &'static str = "Sine Test Tone";
     const VENDOR: &'static str = "Moist Plugins GmbH";
     const URL: &'static str = "https://youtu.be/dQw4w9WgXcQ";

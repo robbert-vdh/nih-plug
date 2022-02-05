@@ -14,12 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use raw_window_handle::RawWindowHandle;
 use std::pin::Pin;
+use std::sync::Arc;
 
 use crate::buffer::Buffer;
 use crate::context::{GuiContext, ProcessContext};
 use crate::param::internals::Params;
+
+/// A raw window handle for platform and GUI framework agnostic editors.
+pub use raw_window_handle::RawWindowHandle;
 
 /// Basic functionality that needs to be implemented by a plugin. The wrappers will use this to
 /// expose the plugin in a particular plugin format.
@@ -41,11 +44,6 @@ use crate::param::internals::Params;
 /// - GUIs
 #[allow(unused_variables)]
 pub trait Plugin: Default + Send + Sync + 'static {
-    /// The type of the GUI editor instance belonging to this plugin. Use [NoEditor] when you don't
-    /// need an editor. Make sure to implement both the [Self::create_editor()] and
-    /// [Self::editor_size()] functions when you do add an editor.
-    type Editor: Editor;
-
     const NAME: &'static str;
     const VENDOR: &'static str;
     const URL: &'static str;
@@ -71,11 +69,13 @@ pub trait Plugin: Default + Send + Sync + 'static {
     /// plugin receives an update.
     fn params(&self) -> Pin<&dyn Params>;
 
-    /// Create an editor for this plugin and embed it in the parent window. The idea is that you
-    /// take a reference to your [Params] in your editor to be able to read the current values. Then
-    /// whenever you need to change any of those values, you can use the methods on the [GuiContext]
-    /// that's passed to this function. When you change a parameter value there it will be
-    /// broadcasted to the host and also updated in your [Params] struct.
+    /// Create an editor for this plugin and embed it in the parent window. A plugin editor will
+    /// likely want to interact with the plugin's parameters, so the idea is that you take a
+    /// reference to your [Params] object in your editor as well as the [GuiContext] that's passed
+    /// to this function. You can then read the parameter values directly from your [Params] object,
+    /// and modifying the values can be done using the functions on [GuiContext::setter()]. When you
+    /// change a parameter value that way it will be broadcasted to the host and also updated in
+    /// your [Params] struct.
     //
     // TODO: Think of how this would work with the event loop. On Linux the wrapper must provide a
     //       timer using VST3's `IRunLoop` interface, but on Window and macOS the window would
@@ -83,15 +83,16 @@ pub trait Plugin: Default + Send + Sync + 'static {
     //       otherwise be basically impossible to have this still be GUI-framework agnostic. Any
     //       callback that deos involve actual GUI operations will still be spooled to the IRunLoop
     //       instance.
-    fn create_editor(
-        &self,
+    fn create_editor<'a, 'context: 'a>(
+        &'a self,
         parent: RawWindowHandle,
-        context: &impl GuiContext,
-    ) -> Option<Self::Editor> {
+        context: Arc<dyn GuiContext + 'context>,
+    ) -> Option<Box<dyn Editor + 'context>> {
         None
     }
 
-    /// Return the current size of the plugin's editor, if it has one.
+    /// Return the current size of the plugin's editor, if it has one. This is also used to check
+    /// whether the plugin has an editor without creating one.
     fn editor_size(&self) -> Option<(u32, u32)> {
         None
     }
@@ -149,30 +150,17 @@ pub trait Vst3Plugin: Plugin {
 }
 
 /// An editor for a [Plugin]. The [Drop] implementation gets called when the host closes the editor.
-/// If you don't have or need an editor, then you can use the [NoEditor] struct as a placeholder.
 //
 // XXX: Requiring a [Drop] bound is a bit unorthodox, but together with [Plugin::create_editor] it
 //      encodes the lifecycle of an editor perfectly as you cannot have duplicate (or missing)
 //      initialize and close calls. Maybe think this over again later.
 #[allow(drop_bounds)]
-pub trait Editor: Drop {
+pub trait Editor: Drop + Send + Sync {
     /// Return the (currnent) size of the editor in pixels as a `(width, height)` pair.
     fn size(&self) -> (u32, u32);
 
     // TODO: Add the things needed for DPI scaling
     // TODO: Resizing
-}
-
-pub struct NoEditor;
-
-impl Editor for NoEditor {
-    fn size(&self) -> (u32, u32) {
-        (0, 0)
-    }
-}
-
-impl Drop for NoEditor {
-    fn drop(&mut self) {}
 }
 
 /// We only support a single main input and output bus at the moment.
