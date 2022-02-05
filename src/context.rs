@@ -115,7 +115,7 @@ impl ParamSetter<'_> {
     /// Inform the host that you will start automating a parmater. This needs to be called before
     /// calling [Self::set_parameter()] for the specified parameter.
     pub fn begin_set_parameter<P: Param>(&self, param: &P) {
-        todo!()
+        unsafe { self.context.raw_begin_set_parameter(param.as_ptr()) };
     }
 
     /// Set a parameter to the specified parameter value. You will need to call
@@ -127,14 +127,16 @@ impl ParamSetter<'_> {
     /// This function assumes you're already calling this from a GUI thread. Calling any of these
     /// functions from any other thread may result in unexpected behavior.
     pub fn set_parameter<P: Param>(&self, param: &P, value: P::Plain) {
-        todo!()
+        let ptr = param.as_ptr();
+        let normalized = param.preview_normalized(value);
+        unsafe { self.context.raw_set_parameter_normalized(ptr, normalized) };
     }
 
     /// Inform the host that you are done automating a parameter. This needs to be called after one
     /// or more [Self::set_parameter()] calls for a parameter so the host knows the automation
     /// gesture has finished.
     pub fn end_set_parameter<P: Param>(&self, param: &P) {
-        todo!()
+        unsafe { self.context.raw_end_set_parameter(param.as_ptr()) };
     }
 }
 
