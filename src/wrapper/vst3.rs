@@ -21,12 +21,12 @@
 use crossbeam::atomic::AtomicCell;
 use lazy_static::lazy_static;
 use parking_lot::{RwLock, RwLockWriteGuard};
+use raw_window_handle::RawWindowHandle;
 use std::cmp;
 use std::collections::{HashMap, VecDeque};
 use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::mem::{self, MaybeUninit};
-use std::pin::Pin;
 use std::ptr;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
@@ -41,11 +41,13 @@ use vst3_sys::VST3;
 use widestring::U16CStr;
 
 use crate::buffer::Buffer;
-use crate::context::{EventLoop, MainThreadExecutor, OsEventLoop, ProcessContext};
+use crate::context::{EventLoop, GuiContext, MainThreadExecutor, OsEventLoop, ProcessContext};
 use crate::param::internals::ParamPtr;
 use crate::param::range::Range;
 use crate::param::Param;
-use crate::plugin::{BufferConfig, BusConfig, NoteEvent, Plugin, ProcessStatus, Vst3Plugin};
+use crate::plugin::{
+    BufferConfig, BusConfig, Editor, NoteEvent, Plugin, ProcessStatus, Vst3Plugin,
+};
 use crate::wrapper::state::{ParamValue, State};
 use crate::wrapper::util::{hash_param_id, process_wrapper, strlcpy, u16strlcpy};
 
@@ -87,7 +89,8 @@ macro_rules! check_null_ptr_msg {
 /// its own struct.
 struct WrapperInner<P: Plugin> {
     /// The wrapped plugin instance.
-    plugin: Pin<Box<RwLock<P>>>,
+    plugin: Box<RwLock<P>>,
+    editor: RwLock<Option<Box<dyn Editor>>>,
 
     /// The host's `IComponentHandler` instance, if passed through
     /// `IEditController::set_component_handler`.
@@ -173,6 +176,24 @@ impl<P: Plugin> ProcessContext for WrapperProcessContext<'_, P> {
     }
 }
 
+// We can't use a nice standalone context object for this as we don't have any control over the
+// lifetime since we currently try to stay GUI framework agnostic. Because of that, the only
+// alternative is to pass an `Arc<Self as GuiContext>` to the plugin and hope it doesn't do anything
+// weird with it.
+impl<P: Plugin> GuiContext for WrapperInner<P> {
+    unsafe fn raw_begin_set_parameter(&self, param: ParamPtr) {
+        todo!()
+    }
+
+    unsafe fn raw_set_parameter_normalized(&self, param: ParamPtr, normalized: f32) {
+        todo!()
+    }
+
+    unsafe fn raw_end_set_parameter(&self, param: ParamPtr) {
+        todo!()
+    }
+}
+
 /// Tasks that can be sent from the plugin to be executed on the main thread in a non-blocking
 /// realtime safe way (either a random thread or `IRunLoop` on Linux, the OS' message loop on
 /// Windows and macOS).
@@ -214,7 +235,8 @@ impl<P: Plugin> WrapperInner<P> {
     #[allow(unused_unsafe)]
     pub fn new() -> Arc<Self> {
         let mut wrapper = Self {
-            plugin: Box::pin(RwLock::default()),
+            plugin: Box::new(RwLock::default()),
+            editor: RwLock::new(None),
 
             component_handler: RwLock::new(None),
 
@@ -880,7 +902,7 @@ impl<P: Plugin> IEditController for Wrapper<P> {
 
     unsafe fn create_view(&self, _name: vst3_sys::base::FIDString) -> *mut c_void {
         // We currently don't support GUIs
-        std::ptr::null_mut()
+        ptr::null_mut()
     }
 }
 
