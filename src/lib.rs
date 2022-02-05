@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-// TODO: Once everything is more fleshed out, document the basic usage of this library
+// TODO: Once everything is more fleshed out, document the basic usage of this library and
+//       restructure these re-exports into a more useful prelude
 
 #[macro_use]
 pub mod debug;
@@ -27,7 +28,7 @@ pub use nih_plug_derive::Params;
 
 // And also re-export anything you'd need to build a plugin
 pub use buffer::Buffer;
-pub use context::{GuiContext, ProcessContext};
+pub use context::{GuiContext, ParamSetter, ProcessContext};
 pub use param::internals::Params;
 pub use param::range::Range;
 pub use param::smoothing::{Smoother, SmoothingStyle};

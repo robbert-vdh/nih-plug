@@ -67,8 +67,8 @@ pub trait ProcessContext {
 // NIH-plug doesn't own the GUI event loop, this invariant cannot be part of the interface.
 pub trait GuiContext: Send + Sync {
     /// Retrieve a safe setter for updating the plugin's parameters. Modifying parameters here will
-    /// broadcast the changes both to the host and to your plugin's [crate::param::internal::Params]
-    /// object.
+    /// broadcast the changes both to the host and to your plugin's
+    /// [crate::param::internals::Params] object.
     fn setter(&self) -> ParamSetter
     where
         Self: Sized,
@@ -105,7 +105,7 @@ pub trait GuiContext: Send + Sync {
 }
 
 /// A convenience helper for setting parameter values. Any changes made here will be broadcasted to
-/// the host and reflected in the plugin's [crate::param::internal::Params] object. These functions
+/// the host and reflected in the plugin's [crate::param::internals::Params] object. These functions
 /// should only be called from the main thread.
 pub struct ParamSetter<'a> {
     context: &'a dyn GuiContext,
