@@ -148,12 +148,14 @@ pub trait Vst3Plugin: Plugin {
     const VST3_CATEGORIES: &'static str;
 }
 
-/// An editor for a [Plugin]. If you don't have or need an editor, then you can use the [NoEditor]
-/// struct as a placeholder.
-pub trait Editor {
-    /// Called just before the window gets closed.
-    fn close(&self);
-
+/// An editor for a [Plugin]. The [Drop] implementation gets called when the host closes the editor.
+/// If you don't have or need an editor, then you can use the [NoEditor] struct as a placeholder.
+//
+// XXX: Requiring a [Drop] bound is a bit unorthodox, but together with [Plugin::create_editor] it
+//      encodes the lifecycle of an editor perfectly as you cannot have duplicate (or missing)
+//      initialize and close calls. Maybe think this over again later.
+#[allow(drop_bounds)]
+pub trait Editor: Drop {
     /// Return the (currnent) size of the editor in pixels as a `(width, height)` pair.
     fn size(&self) -> (u32, u32);
 
@@ -164,11 +166,13 @@ pub trait Editor {
 pub struct NoEditor;
 
 impl Editor for NoEditor {
-    fn close(&self) {}
-
     fn size(&self) -> (u32, u32) {
         (0, 0)
     }
+}
+
+impl Drop for NoEditor {
+    fn drop(&mut self) {}
 }
 
 /// We only support a single main input and output bus at the moment.
