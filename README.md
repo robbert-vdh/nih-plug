@@ -14,6 +14,9 @@ for an incomplete list of missing functionality.
 
 ## Building
 
+NIH-plug doesn't use any unstable features, and works with the latest stable
+Rust compiler.
+
 After installing [Rust](https://rustup.rs/) you can compile any of the plugins
 in the `plugins` directory in the following way, replacing `gain` with the name
 of the plugin:
