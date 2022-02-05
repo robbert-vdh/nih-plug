@@ -28,6 +28,17 @@ jobs:
       # Needed for git-describe to do anything useful
       - name: Fetch all git history
         run: git fetch --force --prune --tags --unshallow
+
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
       - name: Set up Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
