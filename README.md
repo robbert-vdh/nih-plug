@@ -1,4 +1,6 @@
-# NIH plugs
+# NIH-plug
+
+[![Tests](https://github.com/robbert-vdh/nih-plugs/actions/workflows/test.yml/badge.svg)](https://github.com/robbert-vdh/nih-plugs/actions/workflows/test.yml)
 
 Because of course we need to remake everything from scratch!
 
