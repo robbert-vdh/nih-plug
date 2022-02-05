@@ -26,6 +26,7 @@ use std::sync::Arc;
 
 /// Re-export for convenience.
 pub use crossbeam::atomic::AtomicCell;
+pub use egui;
 
 /// Create an [Editor] instance using an [::egui] GUI. The size passed to this function is the GUI's
 /// intiial size, and this is kept in sync whenever the GUI gets resized. You should return the same
