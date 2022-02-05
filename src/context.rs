@@ -90,14 +90,15 @@ pub trait GuiContext {
 /// thread.
 ///
 /// This is never used generically, but having this as a trait will cause any missing functions on
-/// an implementation to show up as compiler errors even when using a different platform.
+/// an implementation to show up as compiler errors even when using a different platform. And since
+/// the tasks and executor will be sent to a thread, they need to have static lifetimes.
 ///
 /// TODO: At some point rethink the design to make it possible to have a singleton message queue for
 ///       all instances of a plugin.
 pub(crate) trait EventLoop<T, E>
 where
-    T: Send,
-    E: MainThreadExecutor<T>,
+    T: Send + 'static,
+    E: MainThreadExecutor<T> + 'static,
 {
     /// Create and start a new event loop. The thread this is called on will be designated as the
     /// main thread, so this should be called when constructing the wrapper.

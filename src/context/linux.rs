@@ -24,7 +24,6 @@ use std::thread::{self, JoinHandle, ThreadId};
 
 use super::{EventLoop, MainThreadExecutor};
 use crate::nih_log;
-use crate::util::ThreadSpawnUnchecked;
 
 /// See [super::EventLoop].
 pub(crate) struct LinuxEventLoop<T, E> {
@@ -56,8 +55,8 @@ enum Message<T> {
 
 impl<T, E> EventLoop<T, E> for LinuxEventLoop<T, E>
 where
-    T: Send,
-    E: MainThreadExecutor<T>,
+    T: Send + 'static,
+    E: MainThreadExecutor<T> + 'static,
 {
     fn new_and_spawn(executor: Weak<E>) -> Self {
         let (sender, receiver) = channel::bounded(super::TASK_QUEUE_CAPACITY);
@@ -66,17 +65,12 @@ where
             executor: executor.clone(),
             main_thread_id: thread::current().id(),
             // With our drop implementation we guarentee that this thread never outlives this struct
-            worker_thread: Some(unsafe {
+            worker_thread: Some(
                 thread::Builder::new()
                     .name(String::from("worker"))
-                    // The worker thread gets joined when this struct gets dropped, and if this
-                    // struct never gets dropped it just sits there idly. Panics cannot be unwound,
-                    // but in plugin-land we have bigger worries than that.
-                    // This is the same as the `.spawn_unchecked()` function, but without requiring
-                    // a nightly compiler.
-                    .spawn_unchecked_2(move || worker_thread(receiver, executor))
-                    .expect("Could not spawn worker thread")
-            }),
+                    .spawn(move || worker_thread(receiver, executor))
+                    .expect("Could not spawn worker thread"),
+            ),
             worker_thread_channel: sender,
         }
     }
