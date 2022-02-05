@@ -63,12 +63,15 @@ pub use vst3_sys::sys::GUID;
 const VST3_SDK_VERSION: &str = "VST 3.6.14";
 
 // Window handle type constants missing from vst3-sys
+#[allow(unused)]
 const VST3_PLATFORM_HWND: &str = "HWND";
 #[allow(unused)]
 const VST3_PLATFORM_HIVIEW: &str = "HIView";
+#[allow(unused)]
 const VST3_PLATFORM_NSVIEW: &str = "NSView";
 #[allow(unused)]
 const VST3_PLATFORM_UIVIEW: &str = "UIView";
+#[allow(unused)]
 const VST3_PLATFORM_X11_WINDOW: &str = "X11EmbedWindowID";
 
 /// Right now the wrapper adds its own bypass parameter.
