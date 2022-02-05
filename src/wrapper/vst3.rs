@@ -1124,167 +1124,161 @@ impl<P: Plugin> IAudioProcessor for Wrapper<P> {
     unsafe fn process(&self, data: *mut vst3_sys::vst::ProcessData) -> tresult {
         check_null_ptr!(data);
 
-        // Panic on allocations if the `assert_process_allocs` feature has been enabled, and make
-        // sure that FTZ is set up correctly
-        process_wrapper(|| {
-            // We need to handle incoming automation first
-            let data = &*data;
-            let sample_rate = self
-                .inner
-                .current_buffer_config
-                .load()
-                .map(|c| c.sample_rate);
-            if let Some(param_changes) = data.input_param_changes.upgrade() {
-                let num_param_queues = param_changes.get_parameter_count();
-                for change_queue_idx in 0..num_param_queues {
-                    if let Some(param_change_queue) =
-                        param_changes.get_parameter_data(change_queue_idx).upgrade()
-                    {
-                        let param_hash = param_change_queue.get_parameter_id();
-                        let num_changes = param_change_queue.get_point_count();
-
-                        // TODO: Handle sample accurate parameter changes, possibly in a similar way to
-                        //       the smoothing
-                        let mut sample_offset = 0i32;
-                        let mut value = 0.0f64;
-                        if num_changes > 0
-                            && param_change_queue.get_point(
-                                num_changes - 1,
-                                &mut sample_offset,
-                                &mut value,
-                            ) == kResultOk
-                        {
-                            self.inner.set_normalized_value_by_hash(
-                                param_hash,
-                                value as f32,
-                                sample_rate,
-                            );
-                        }
-                    }
-                }
-            }
-
-            // And also incoming note events if the plugin accepts MDII
-            if P::ACCEPTS_MIDI {
-                let mut input_events = self.inner.input_events.write();
-                if let Some(events) = data.input_events.upgrade() {
-                    let num_events = events.get_event_count();
-
-                    input_events.clear();
-                    let mut event: MaybeUninit<_> = MaybeUninit::uninit();
-                    for i in 0..num_events {
-                        nih_debug_assert_eq!(events.get_event(i, event.as_mut_ptr()), kResultOk);
-                        let event = event.assume_init();
-                        let timing = event.sample_offset as u32;
-                        if event.type_ == vst3_sys::vst::EventTypes::kNoteOnEvent as u16 {
-                            let event = event.event.note_on;
-                            input_events.push_back(NoteEvent::NoteOn {
-                                timing,
-                                channel: event.channel as u8,
-                                note: event.pitch as u8,
-                                velocity: (event.velocity * 127.0).round() as u8,
-                            });
-                        } else if event.type_ == vst3_sys::vst::EventTypes::kNoteOffEvent as u16 {
-                            let event = event.event.note_off;
-                            input_events.push_back(NoteEvent::NoteOff {
-                                timing,
-                                channel: event.channel as u8,
-                                note: event.pitch as u8,
-                                velocity: (event.velocity * 127.0).round() as u8,
-                            });
-                        }
-                    }
-                }
-            }
-
-            // It's possible the host only wanted to send new parameter values
-            if data.num_outputs == 0 {
-                nih_log!("VST3 parameter flush");
-                return kResultOk;
-            }
-
-            // The setups we suppport are:
-            // - 1 input bus
-            // - 1 output bus
-            // - 1 input bus and 1 output bus
-            nih_debug_assert!(
-                data.num_inputs >= 0
-                    && data.num_inputs <= 1
-                    && data.num_outputs >= 0
-                    && data.num_outputs <= 1,
-                "The host provides more than one input or output bus"
-            );
-            nih_debug_assert_eq!(
-                data.symbolic_sample_size,
-                vst3_sys::vst::SymbolicSampleSizes::kSample32 as i32
-            );
-            nih_debug_assert!(data.num_samples >= 0);
-
-            let num_output_channels = (*data.outputs).num_channels as usize;
-            check_null_ptr_msg!(
-                "Process output pointer is null",
-                data.outputs,
-                (*data.outputs).buffers,
-            );
-
-            // This vector has been reallocated to contain enough slices as there are output
-            // channels
-            let mut output_buffer = self.inner.output_buffer.write();
-            {
-                let output_slices = output_buffer.as_raw_vec();
-                nih_debug_assert_eq!(num_output_channels, output_slices.len());
-                for (output_channel_idx, output_channel_slice) in
-                    output_slices.iter_mut().enumerate()
+        // We need to handle incoming automation first
+        let data = &*data;
+        let sample_rate = self
+            .inner
+            .current_buffer_config
+            .load()
+            .map(|c| c.sample_rate);
+        if let Some(param_changes) = data.input_param_changes.upgrade() {
+            let num_param_queues = param_changes.get_parameter_count();
+            for change_queue_idx in 0..num_param_queues {
+                if let Some(param_change_queue) =
+                    param_changes.get_parameter_data(change_queue_idx).upgrade()
                 {
-                    // SAFETY: These pointers may not be valid outside of this function even though
-                    // their lifetime is equal to this structs. This is still safe because they are
-                    // only dereferenced here later as part of this process function.
-                    *output_channel_slice = std::slice::from_raw_parts_mut(
-                        *((*data.outputs).buffers as *mut *mut f32).add(output_channel_idx),
-                        data.num_samples as usize,
-                    );
-                }
-            }
+                    let param_hash = param_change_queue.get_parameter_id();
+                    let num_changes = param_change_queue.get_point_count();
 
-            // Most hosts process data in place, in which case we don't need to do any copying
-            // ourselves. If the pointers do not alias, then we'll do the copy here and then the
-            // plugin can just do normal in place processing.
-            if !data.inputs.is_null() {
-                let num_input_channels = (*data.inputs).num_channels as usize;
-                nih_debug_assert!(
-                    num_input_channels <= num_output_channels,
-                    "Stereo to mono and similar configurations are not supported"
-                );
-                for input_channel_idx in 0..cmp::min(num_input_channels, num_output_channels) {
-                    let output_channel_ptr =
-                        *((*data.outputs).buffers as *mut *mut f32).add(input_channel_idx);
-                    let input_channel_ptr =
-                        *((*data.inputs).buffers as *const *const f32).add(input_channel_idx);
-                    if input_channel_ptr != output_channel_ptr {
-                        ptr::copy_nonoverlapping(
-                            input_channel_ptr,
-                            output_channel_ptr,
-                            data.num_samples as usize,
+                    // TODO: Handle sample accurate parameter changes, possibly in a similar way to
+                    //       the smoothing
+                    let mut sample_offset = 0i32;
+                    let mut value = 0.0f64;
+                    if num_changes > 0
+                        && param_change_queue.get_point(
+                            num_changes - 1,
+                            &mut sample_offset,
+                            &mut value,
+                        ) == kResultOk
+                    {
+                        self.inner.set_normalized_value_by_hash(
+                            param_hash,
+                            value as f32,
+                            sample_rate,
                         );
                     }
                 }
             }
+        }
 
-            match self
-                .inner
-                .plugin
-                .write()
-                // SAFETY: Same here
-                .process(&mut output_buffer, &mut self.inner.make_process_context())
-            {
+        // And also incoming note events if the plugin accepts MDII
+        if P::ACCEPTS_MIDI {
+            let mut input_events = self.inner.input_events.write();
+            if let Some(events) = data.input_events.upgrade() {
+                let num_events = events.get_event_count();
+
+                input_events.clear();
+                let mut event: MaybeUninit<_> = MaybeUninit::uninit();
+                for i in 0..num_events {
+                    nih_debug_assert_eq!(events.get_event(i, event.as_mut_ptr()), kResultOk);
+                    let event = event.assume_init();
+                    let timing = event.sample_offset as u32;
+                    if event.type_ == vst3_sys::vst::EventTypes::kNoteOnEvent as u16 {
+                        let event = event.event.note_on;
+                        input_events.push_back(NoteEvent::NoteOn {
+                            timing,
+                            channel: event.channel as u8,
+                            note: event.pitch as u8,
+                            velocity: (event.velocity * 127.0).round() as u8,
+                        });
+                    } else if event.type_ == vst3_sys::vst::EventTypes::kNoteOffEvent as u16 {
+                        let event = event.event.note_off;
+                        input_events.push_back(NoteEvent::NoteOff {
+                            timing,
+                            channel: event.channel as u8,
+                            note: event.pitch as u8,
+                            velocity: (event.velocity * 127.0).round() as u8,
+                        });
+                    }
+                }
+            }
+        }
+
+        // It's possible the host only wanted to send new parameter values
+        if data.num_outputs == 0 {
+            nih_log!("VST3 parameter flush");
+            return kResultOk;
+        }
+
+        // The setups we suppport are:
+        // - 1 input bus
+        // - 1 output bus
+        // - 1 input bus and 1 output bus
+        nih_debug_assert!(
+            data.num_inputs >= 0
+                && data.num_inputs <= 1
+                && data.num_outputs >= 0
+                && data.num_outputs <= 1,
+            "The host provides more than one input or output bus"
+        );
+        nih_debug_assert_eq!(
+            data.symbolic_sample_size,
+            vst3_sys::vst::SymbolicSampleSizes::kSample32 as i32
+        );
+        nih_debug_assert!(data.num_samples >= 0);
+
+        let num_output_channels = (*data.outputs).num_channels as usize;
+        check_null_ptr_msg!(
+            "Process output pointer is null",
+            data.outputs,
+            (*data.outputs).buffers,
+        );
+
+        // This vector has been reallocated to contain enough slices as there are output
+        // channels
+        let mut output_buffer = self.inner.output_buffer.write();
+        {
+            let output_slices = output_buffer.as_raw_vec();
+            nih_debug_assert_eq!(num_output_channels, output_slices.len());
+            for (output_channel_idx, output_channel_slice) in output_slices.iter_mut().enumerate() {
+                // SAFETY: These pointers may not be valid outside of this function even though
+                // their lifetime is equal to this structs. This is still safe because they are
+                // only dereferenced here later as part of this process function.
+                *output_channel_slice = std::slice::from_raw_parts_mut(
+                    *((*data.outputs).buffers as *mut *mut f32).add(output_channel_idx),
+                    data.num_samples as usize,
+                );
+            }
+        }
+
+        // Most hosts process data in place, in which case we don't need to do any copying
+        // ourselves. If the pointers do not alias, then we'll do the copy here and then the plugin
+        // can just do normal in place processing.
+        if !data.inputs.is_null() {
+            let num_input_channels = (*data.inputs).num_channels as usize;
+            nih_debug_assert!(
+                num_input_channels <= num_output_channels,
+                "Stereo to mono and similar configurations are not supported"
+            );
+            for input_channel_idx in 0..cmp::min(num_input_channels, num_output_channels) {
+                let output_channel_ptr =
+                    *((*data.outputs).buffers as *mut *mut f32).add(input_channel_idx);
+                let input_channel_ptr =
+                    *((*data.inputs).buffers as *const *const f32).add(input_channel_idx);
+                if input_channel_ptr != output_channel_ptr {
+                    ptr::copy_nonoverlapping(
+                        input_channel_ptr,
+                        output_channel_ptr,
+                        data.num_samples as usize,
+                    );
+                }
+            }
+        }
+
+        let mut plugin = self.inner.plugin.write();
+        let mut context = self.inner.make_process_context();
+        // Panic on allocations if the `assert_process_allocs` feature has been enabled, and make
+        // sure that FTZ is set up correctly
+        process_wrapper(
+            move || match plugin.process(&mut output_buffer, &mut context) {
                 ProcessStatus::Error(err) => {
                     nih_debug_assert_failure!("Process error: {}", err);
 
                     kResultFalse
                 }
                 _ => kResultOk,
-            }
-        })
+            },
+        )
     }
 
     unsafe fn get_tail_samples(&self) -> u32 {
