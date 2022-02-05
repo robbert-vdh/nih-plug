@@ -1335,20 +1335,23 @@ impl<P: Plugin> IPlugView for WrapperView<P> {
         if editor.is_none() {
             let type_ = CStr::from_ptr(type_);
             let handle = match type_.to_str() {
+                #[cfg(all(target_family = "unix", not(target_os = "macos")))]
                 Ok(type_) if type_ == VST3_PLATFORM_X11_WINDOW => {
-                    let mut handle = raw_window_handle::XcbHandle::empty();
+                    let mut handle = raw_window_handle::unix::XcbHandle::empty();
                     handle.window = parent as usize as u32;
                     RawWindowHandle::Xcb(handle)
                 }
+                #[cfg(all(target_os = "macos"))]
                 Ok(type_) if type_ == VST3_PLATFORM_NSVIEW => {
-                    let mut handle = raw_window_handle::AppKitHandle::empty();
+                    let mut handle = raw_window_handle::macos::MacOSHandle::empty();
                     handle.ns_view = parent;
-                    RawWindowHandle::AppKit(handle)
+                    RawWindowHandle::MacOS(handle)
                 }
+                #[cfg(all(target_os = "windows"))]
                 Ok(type_) if type_ == VST3_PLATFORM_HWND => {
-                    let mut handle = raw_window_handle::Win32Handle::empty();
+                    let mut handle = raw_window_handle::windows::WindowsHandle::empty();
                     handle.hwnd = parent;
-                    RawWindowHandle::Win32(handle)
+                    RawWindowHandle::Windows(handle)
                 }
                 _ => {
                     nih_debug_assert_failure!("Unknown window handle type: {:?}", type_);
