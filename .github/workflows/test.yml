@@ -29,6 +29,11 @@ jobs:
       - name: Fetch all git history
         run: git fetch --force --prune --tags --unshallow
 
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxcb-dev libgl-dev
+
       - uses: actions/cache@v2
         with:
           path: |
