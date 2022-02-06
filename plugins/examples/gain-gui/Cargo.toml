@@ -1,0 +1,14 @@
+[package]
+name = "gain_gui"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+nih_plug = { path = "../../../", features = ["assert_process_allocs"] }
+nih_plug_egui = { path = "../../../nih_plug_egui" }
+
+atomic_float = "0.1"

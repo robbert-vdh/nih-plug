@@ -39,7 +39,6 @@ use crate::param::internals::Params;
 /// - Outputting parameter changes from the plugin
 /// - MIDI CC handling
 /// - Outputting MIDI events
-/// - GUIs
 #[allow(unused_variables)]
 pub trait Plugin: Default + Send + Sync + 'static {
     const NAME: &'static str;

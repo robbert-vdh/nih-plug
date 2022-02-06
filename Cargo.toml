@@ -16,6 +16,7 @@ members = [
   "xtask",
 
   "plugins/examples/gain",
+  "plugins/examples/gain-gui",
   "plugins/examples/sine",
 ]
 
