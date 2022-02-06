@@ -106,11 +106,10 @@ impl Plugin for Gain {
         let peak_meter = self.peak_meter.clone();
         create_egui_editor(
             parent,
-            context,
             self.editor_size.clone(),
             (),
-            move |egui_ctx, nih_ctx, _state| {
-                let setter = ParamSetter::new(nih_ctx);
+            move |egui_ctx, _state| {
+                let setter = ParamSetter::new(context.as_ref());
 
                 egui::CentralPanel::default().show(egui_ctx, |ui| {
                     ui.allocate_space(egui::Vec2::splat(3.0));

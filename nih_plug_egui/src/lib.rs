@@ -21,7 +21,7 @@
 use baseview::{Size, WindowHandle, WindowOpenOptions, WindowScalePolicy};
 use egui::CtxRef;
 use egui_baseview::{EguiWindow, RenderSettings, Settings};
-use nih_plug::{Editor, EditorWindowHandle, GuiContext};
+use nih_plug::{Editor, EditorWindowHandle};
 use std::sync::Arc;
 
 /// Re-export for convenience.
@@ -36,18 +36,16 @@ pub use egui;
 //       to the user
 // TODO: Provide 'advanced' versions that expose more of the low level settings and details here
 // TODO: DPI scaling, this needs to be implemented on the framework level
-pub fn create_egui_editor<'context, T, U>(
+pub fn create_egui_editor<T, U>(
     parent: EditorWindowHandle,
-    context: Arc<dyn GuiContext + 'context>,
     size: Arc<AtomicCell<(u32, u32)>>,
     initial_state: T,
     mut update: U,
-) -> Option<Box<dyn Editor + 'context>>
+) -> Option<Box<dyn Editor>>
 where
     T: 'static + Send,
-    U: FnMut(&CtxRef, &dyn GuiContext, &mut T) + 'static + Send,
+    U: FnMut(&CtxRef, &mut T) + 'static + Send,
 {
-    // TODO: Also pass the context reference to the update callback
     let (width, height) = size.load();
     let window = EguiWindow::open_parented(
         &parent,
@@ -78,7 +76,7 @@ where
         },
         initial_state,
         |_, _, _| {},
-        move |ctx, _, state| update(ctx, context.as_ref(), state),
+        move |ctx, _, state| update(ctx, state),
     );
 
     // There's no error handling here, so let's just pray it worked
