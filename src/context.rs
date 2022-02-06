@@ -20,9 +20,15 @@ use std::sync::Weak;
 
 #[cfg(all(target_family = "unix", not(target_os = "macos")))]
 mod linux;
+#[cfg(target_os = "windows")]
+mod windows;
 
 #[cfg(all(target_family = "unix", not(target_os = "macos")))]
-pub(crate) use linux::LinuxEventLoop as OsEventLoop;
+pub(crate) use self::linux::LinuxEventLoop as OsEventLoop;
+#[cfg(target_os = "windows")]
+pub(crate) use self::windows::WindowsEventLoop as OsEventLoop;
+#[cfg(target_os = "macos")]
+compile_error!("The macOS event loop has not yet been implemented");
 
 use crate::param::internals::ParamPtr;
 use crate::param::Param;
