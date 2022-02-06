@@ -14,9 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use parking_lot::RwLockWriteGuard;
 use std::cmp;
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::mem::{self, MaybeUninit};
@@ -33,6 +32,7 @@ use vst3_sys::vst::{
 use vst3_sys::VST3;
 use widestring::U16CStr;
 
+mod context;
 mod inner;
 #[macro_use]
 mod util;
@@ -41,7 +41,6 @@ mod view;
 use self::inner::WrapperInner;
 use self::util::{VstPtr, BYPASS_PARAM_HASH};
 use self::view::WrapperView;
-use crate::context::{EventLoop, ProcessContext};
 use crate::param::internals::ParamPtr;
 use crate::param::range::Range;
 use crate::param::Param;
@@ -61,32 +60,6 @@ const VST3_SDK_VERSION: &str = "VST 3.6.14";
 #[VST3(implements(IComponent, IEditController, IAudioProcessor))]
 struct Wrapper<P: Plugin> {
     inner: Arc<WrapperInner<P>>,
-}
-
-/// A [ProcessContext] implementation for the wrapper. This is a separate object so it can hold on
-/// to lock guards for event queues. Otherwise reading these events would require constant
-/// unnecessary atomic operations to lock the uncontested RwLocks.
-pub(crate) struct WrapperProcessContext<'a, P: Plugin> {
-    inner: &'a WrapperInner<P>,
-    input_events_guard: RwLockWriteGuard<'a, VecDeque<NoteEvent>>,
-}
-
-impl<P: Plugin> ProcessContext for WrapperProcessContext<'_, P> {
-    fn set_latency_samples(&self, samples: u32) {
-        // Only trigger a restart if it's actually needed
-        let old_latency = self.inner.current_latency.swap(samples, Ordering::SeqCst);
-        if old_latency != samples {
-            let task_posted = unsafe { self.inner.event_loop.read().assume_init_ref() }
-                .do_maybe_async(inner::Task::TriggerRestart(
-                    vst3_sys::vst::RestartFlags::kLatencyChanged as i32,
-                ));
-            nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
-        }
-    }
-
-    fn next_midi_event(&mut self) -> Option<NoteEvent> {
-        self.input_events_guard.pop_front()
-    }
 }
 
 impl<P: Plugin> Wrapper<P> {

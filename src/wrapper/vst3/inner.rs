@@ -23,8 +23,8 @@ use std::sync::Arc;
 use vst3_sys::base::{kInvalidArgument, kResultOk, tresult};
 use vst3_sys::vst::IComponentHandler;
 
+use super::context::WrapperProcessContext;
 use super::util::{VstPtr, BYPASS_PARAM_HASH, BYPASS_PARAM_ID};
-use super::WrapperProcessContext;
 use crate::buffer::Buffer;
 use crate::context::{EventLoop, GuiContext, MainThreadExecutor, OsEventLoop};
 use crate::param::internals::ParamPtr;
