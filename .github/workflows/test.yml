@@ -32,7 +32,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxcb1-dev libgl-dev
+          sudo apt-get install -y libxcb1-dev libgl-dev libxcursor-dev
 
       - uses: actions/cache@v2
         with:
