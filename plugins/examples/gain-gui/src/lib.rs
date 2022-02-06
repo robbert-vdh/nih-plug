@@ -32,14 +32,14 @@ struct Gain {
     params: Pin<Arc<GainParams>>,
     editor_size: Arc<AtomicCell<(u32, u32)>>,
 
-    /// Needed to normalize the VU meter's response based on the sample rate.
-    vu_meter_decay_weight: f32,
-    /// The current data for the VU meter (which technically isn't a VU meter). This is stored as an
-    /// [Arc] so we can share it between the GUI and the audio processing parts. If you have more
-    /// state to share, then it's a good idea to put all of that in a struct behind a single `Arc`.
+    /// Needed to normalize the peak meter's response based on the sample rate.
+    peak_meter_decay_weight: f32,
+    /// The current data for the peak meter. This is stored as an [Arc] so we can share it between
+    /// the GUI and the audio processing parts. If you have more state to share, then it's a good
+    /// idea to put all of that in a struct behind a single `Arc`.
     ///
     /// This is stored as voltage gain.
-    vu_meter: Arc<AtomicF32>,
+    peak_meter: Arc<AtomicF32>,
 }
 
 #[derive(Params)]
@@ -54,8 +54,8 @@ impl Default for Gain {
             params: Arc::pin(GainParams::default()),
             editor_size: Arc::new(AtomicCell::new((300, 100))),
 
-            vu_meter_decay_weight: 1.0,
-            vu_meter: Arc::new(AtomicF32::new(util::MINUS_INFINITY_DB)),
+            peak_meter_decay_weight: 1.0,
+            peak_meter: Arc::new(AtomicF32::new(util::MINUS_INFINITY_DB)),
         }
     }
 }
@@ -103,7 +103,7 @@ impl Plugin for Gain {
         context: Arc<dyn GuiContext>,
     ) -> Option<Box<dyn Editor>> {
         let params = self.params.clone();
-        let vu_meter = self.vu_meter.clone();
+        let peak_meter = self.peak_meter.clone();
         create_egui_editor(
             parent,
             context,
@@ -135,19 +135,20 @@ impl Plugin for Gain {
                     );
 
                     // TODO: Add a proper custom widget instead of reusing a progress bar
-                    let vu_meter =
-                        util::gain_to_db(vu_meter.load(std::sync::atomic::Ordering::Relaxed));
-                    let vu_meter_text = if vu_meter > util::MINUS_INFINITY_DB {
-                        format!("{:.0} dBFS", vu_meter)
+                    let peak_meter =
+                        util::gain_to_db(peak_meter.load(std::sync::atomic::Ordering::Relaxed));
+                    let peak_meter_text = if peak_meter > util::MINUS_INFINITY_DB {
+                        format!("{:.0} dBFS", peak_meter)
                     } else {
                         String::from("-inf dBFS")
                     };
 
-                    let vu_meter_normalized =
-                        (vu_meter - util::MINUS_INFINITY_DB) / -util::MINUS_INFINITY_DB;
+                    let peak_meter_normalized =
+                        (peak_meter - util::MINUS_INFINITY_DB) / -util::MINUS_INFINITY_DB;
                     ui.allocate_space(egui::Vec2::splat(2.0));
                     ui.add(
-                        egui::widgets::ProgressBar::new(vu_meter_normalized).text(vu_meter_text),
+                        egui::widgets::ProgressBar::new(peak_meter_normalized)
+                            .text(peak_meter_text),
                     );
                 });
             },
@@ -170,7 +171,7 @@ impl Plugin for Gain {
         _context: &mut impl ProcessContext,
     ) -> bool {
         // TODO: How do you tie this exponential decay to an actual time span?
-        self.vu_meter_decay_weight = 0.999f32.powf(44_100.0 / buffer_config.sample_rate);
+        self.peak_meter_decay_weight = 0.999f32.powf(44_100.0 / buffer_config.sample_rate);
 
         true
     }
@@ -181,27 +182,26 @@ impl Plugin for Gain {
         _context: &mut impl ProcessContext,
     ) -> ProcessStatus {
         for samples in buffer.iter_mut() {
-            let gain = self.params.gain.smoothed.next();
-
             let mut amplitude = 0.0;
             let num_samples = samples.len();
+
+            let gain = self.params.gain.smoothed.next();
             for sample in samples {
                 *sample *= util::db_to_gain(gain);
                 amplitude += *sample;
             }
 
-            // This is technically not really a VU meter but just an arbitrary digital peak meter
             amplitude /= num_samples as f32;
-            let current_vu_meter = self.vu_meter.load(std::sync::atomic::Ordering::Relaxed);
-            let new_vu_meter = if amplitude > current_vu_meter {
+            let current_peak_meter = self.peak_meter.load(std::sync::atomic::Ordering::Relaxed);
+            let new_peak_meter = if amplitude > current_peak_meter {
                 amplitude
             } else {
-                current_vu_meter * self.vu_meter_decay_weight
-                    + amplitude * (1.0 - self.vu_meter_decay_weight)
+                current_peak_meter * self.peak_meter_decay_weight
+                    + amplitude * (1.0 - self.peak_meter_decay_weight)
             };
 
-            self.vu_meter
-                .store(new_vu_meter, std::sync::atomic::Ordering::Relaxed)
+            self.peak_meter
+                .store(new_peak_meter, std::sync::atomic::Ordering::Relaxed)
         }
 
         ProcessStatus::Normal
