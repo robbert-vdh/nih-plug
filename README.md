@@ -2,8 +2,6 @@
 
 [![Tests](https://github.com/robbert-vdh/nih-plugs/actions/workflows/test.yml/badge.svg)](https://github.com/robbert-vdh/nih-plugs/actions/workflows/test.yml)
 
-Because of course we need to remake everything from scratch!
-
 This is a work in progress JUCE-lite-lite written in Rust to do some experiments
 with. The idea is to have a statefull but simple plugin API that gets rid of as
 much unnecessary ceremony wherever possible, while also keeping the amount of
@@ -11,6 +9,13 @@ magic to minimum. Since this is not quite meant for general use just yet, the
 plugin API is limited to the functionality I needed and I'll expose more
 functionality as I need it. See the documentation comment in the `Plugin` trait
 for an incomplete list of missing functionality.
+
+## Current status
+
+It actually mostly work! There's still lots of small things to implement, but
+the core functionality and including basic GUI support are there. That is, when
+using Linux. Currently the event loop has not yet been implemented for Windows
+and macOS.
 
 ## Building
 
