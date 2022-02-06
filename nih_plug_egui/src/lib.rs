@@ -20,7 +20,7 @@
 
 use baseview::{Size, WindowHandle, WindowOpenOptions, WindowScalePolicy};
 use egui::CtxRef;
-use egui_baseview::{EguiWindow, Queue, RenderSettings, Settings};
+use egui_baseview::{EguiWindow, RenderSettings, Settings};
 use nih_plug::{Editor, EditorWindowHandle, GuiContext};
 use std::sync::Arc;
 
