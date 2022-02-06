@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crossbeam::atomic::AtomicCell;
+use std::sync::atomic::{AtomicU32, Ordering};
+
 /// Controls if and how parameters gets smoothed.
 pub enum SmoothingStyle {
     /// No smoothing is applied. The parameter's `value` field contains the latest sample value
@@ -31,17 +34,20 @@ pub enum SmoothingStyle {
 }
 
 /// A smoother, providing a smoothed value for each sample.
+//
+// TODO: We need to use atomics here so we can share the params object with the GUI. Is there a
+//       better alternative to allow the process function to mutate these smoothers?
 pub struct Smoother<T> {
     /// The kind of snoothing that needs to be applied, if any.
     style: SmoothingStyle,
     /// The number of steps of smoothing left to take.
-    steps_left: u32,
+    steps_left: AtomicU32,
     /// The amount we should adjust the current value each sample to be able to reach the target in
     /// the specified tiem frame. This is also a floating point number to keep the smoothing
     /// uniform.
     step_size: f32,
     /// The value for the current sample. Always stored as floating point for obvious reasons.
-    current: f32,
+    current: AtomicCell<f32>,
     /// The value we're smoothing towards
     target: T,
 }
@@ -50,9 +56,9 @@ impl<T: Default> Default for Smoother<T> {
     fn default() -> Self {
         Self {
             style: SmoothingStyle::None,
-            steps_left: 0,
+            steps_left: AtomicU32::new(0),
             step_size: Default::default(),
-            current: 0.0,
+            current: AtomicCell::new(0.0),
             target: Default::default(),
         }
     }
@@ -75,7 +81,7 @@ impl<T: Default> Smoother<T> {
     /// Whether calling [Self::next()] will yield a new value or an old value. Useful if you need to
     /// recompute something wheenver this parameter changes.
     pub fn is_smoothing(&self) -> bool {
-        self.steps_left > 0
+        self.steps_left.load(Ordering::Relaxed) > 0
     }
 }
 
@@ -85,49 +91,56 @@ impl Smoother<f32> {
     /// Reset the smoother the specified value.
     pub fn reset(&mut self, value: f32) {
         self.target = value;
-        self.current = value;
-        self.steps_left = 0;
+        self.current.store(value);
+        self.steps_left.store(0, Ordering::Relaxed);
     }
 
     /// Set the target value.
     pub fn set_target(&mut self, sample_rate: f32, target: f32) {
         self.target = target;
-        self.steps_left = match self.style {
+
+        let steps_left = match self.style {
             SmoothingStyle::None => 1,
             SmoothingStyle::Linear(time) | SmoothingStyle::Logarithmic(time) => {
                 (sample_rate * time / 1000.0).round() as u32
             }
         };
+        self.steps_left.store(steps_left, Ordering::Relaxed);
+
+        let current = self.current.load();
         self.step_size = match self.style {
             SmoothingStyle::None => 0.0,
-            SmoothingStyle::Linear(_) => (self.target - self.current) / self.steps_left as f32,
+            SmoothingStyle::Linear(_) => (self.target - current) / steps_left as f32,
             SmoothingStyle::Logarithmic(_) => {
                 // We need to solve `current * (step_size ^ steps_left) = target` for
                 // `step_size`
-                nih_debug_assert_ne!(self.current, 0.0);
-                (self.target / self.current).powf((self.steps_left as f32).recip())
+                nih_debug_assert_ne!(current, 0.0);
+                (self.target / current).powf((steps_left as f32).recip())
             }
         };
     }
 
     // Yes, Clippy, like I said, this was intentional
     #[allow(clippy::should_implement_trait)]
-    pub fn next(&mut self) -> f32 {
-        if self.steps_left > 1 {
+    pub fn next(&self) -> f32 {
+        if self.steps_left.load(Ordering::Relaxed) > 1 {
+            let current = self.current.load();
+
             // The number of steps usually won't fit exactly, so make sure we don't do weird things
             // with overshoots or undershoots
-            self.steps_left -= 1;
-            if self.steps_left == 0 {
-                self.current = self.target;
+            let old_steps_left = self.steps_left.fetch_sub(1, Ordering::Relaxed);
+            let new = if old_steps_left == 1 {
+                self.target
             } else {
                 match &self.style {
-                    SmoothingStyle::None => self.current = self.target,
-                    SmoothingStyle::Linear(_) => self.current += self.step_size,
-                    SmoothingStyle::Logarithmic(_) => self.current *= self.step_size,
-                };
-            }
+                    SmoothingStyle::None => self.target,
+                    SmoothingStyle::Linear(_) => current + self.step_size,
+                    SmoothingStyle::Logarithmic(_) => current * self.step_size,
+                }
+            };
+            self.current.store(new);
 
-            self.current
+            new
         } else {
             self.target
         }
@@ -138,45 +151,52 @@ impl Smoother<i32> {
     /// Reset the smoother the specified value.
     pub fn reset(&mut self, value: i32) {
         self.target = value;
-        self.current = value as f32;
-        self.steps_left = 0;
+        self.current.store(value as f32);
+        self.steps_left.store(0, Ordering::Relaxed);
     }
 
     pub fn set_target(&mut self, sample_rate: f32, target: i32) {
         self.target = target;
-        self.steps_left = match self.style {
+
+        let steps_left = match self.style {
             SmoothingStyle::None => 1,
             SmoothingStyle::Linear(time) | SmoothingStyle::Logarithmic(time) => {
                 (sample_rate * time / 1000.0).round() as u32
             }
         };
+        self.steps_left.store(steps_left, Ordering::Relaxed);
+
+        let current = self.current.load();
         self.step_size = match self.style {
             SmoothingStyle::None => 0.0,
-            SmoothingStyle::Linear(_) => {
-                (self.target as f32 - self.current) / self.steps_left as f32
-            }
+            SmoothingStyle::Linear(_) => (self.target as f32 - current) / steps_left as f32,
             SmoothingStyle::Logarithmic(_) => {
-                nih_debug_assert_ne!(self.current, 0.0);
-                (self.target as f32 / self.current).powf((self.steps_left as f32).recip())
+                nih_debug_assert_ne!(current, 0.0);
+                (self.target as f32 / current).powf((steps_left as f32).recip())
             }
         };
     }
 
     #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> i32 {
-        if self.steps_left > 1 {
-            self.steps_left -= 1;
-            if self.steps_left == 0 {
-                self.current = self.target as f32;
+        if self.steps_left.load(Ordering::Relaxed) > 1 {
+            let current = self.current.load();
+
+            // The number of steps usually won't fit exactly, so make sure we don't do weird things
+            // with overshoots or undershoots
+            let old_steps_left = self.steps_left.fetch_sub(1, Ordering::Relaxed);
+            let new = if old_steps_left == 1 {
+                self.target as f32
             } else {
                 match &self.style {
-                    SmoothingStyle::None => self.current = self.target as f32,
-                    SmoothingStyle::Linear(_) => self.current += self.step_size,
-                    SmoothingStyle::Logarithmic(_) => self.current *= self.step_size,
-                };
-            }
+                    SmoothingStyle::None => self.target as f32,
+                    SmoothingStyle::Linear(_) => current + self.step_size,
+                    SmoothingStyle::Logarithmic(_) => current * self.step_size,
+                }
+            };
+            self.current.store(new);
 
-            self.current.round() as i32
+            new.round() as i32
         } else {
             self.target
         }
