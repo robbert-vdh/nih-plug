@@ -142,8 +142,7 @@ impl Plugin for Gain {
                         String::from("-inf dBFS")
                     };
 
-                    let peak_meter_normalized =
-                        (peak_meter - util::MINUS_INFINITY_DB) / -util::MINUS_INFINITY_DB;
+                    let peak_meter_normalized = (peak_meter + 40.0) / 40.0;
                     ui.allocate_space(egui::Vec2::splat(2.0));
                     ui.add(
                         egui::widgets::ProgressBar::new(peak_meter_normalized)
