@@ -66,18 +66,8 @@ pub trait ProcessContext {
 // The implementing wrapper can assume that everything is being called from the main thread. Since
 // NIH-plug doesn't own the GUI event loop, this invariant cannot be part of the interface.
 pub trait GuiContext: Send + Sync + 'static {
-    /// Retrieve a safe setter for updating the plugin's parameters. Modifying parameters here will
-    /// broadcast the changes both to the host and to your plugin's
-    /// [crate::param::internals::Params] object.
-    fn setter(&self) -> ParamSetter
-    where
-        Self: Sized,
-    {
-        ParamSetter { context: self }
-    }
-
-    /// Inform the host a parameter will be automated. Use [ParamSetter::begin_set_parameter]
-    /// instead for a safe, user friendly API.
+    /// Inform the host a parameter will be automated. Create a [ParamSetter] and use
+    /// [ParamSetter::begin_set_parameter] instead for a safe, user friendly API.
     ///
     /// # Safety
     ///
@@ -85,8 +75,8 @@ pub trait GuiContext: Send + Sync + 'static {
     /// mostly marked as unsafe for API reasons.
     unsafe fn raw_begin_set_parameter(&self, param: ParamPtr);
 
-    /// Inform the host a parameter is being automated with an already normalized value. Use
-    /// [ParamSetter::set_parameter] instead for a safe, user friendly API.
+    /// Inform the host a parameter is being automated with an already normalized value. Create a
+    /// [ParamSetter] and use [ParamSetter::set_parameter] instead for a safe, user friendly API.
     ///
     /// # Safety
     ///
@@ -94,8 +84,8 @@ pub trait GuiContext: Send + Sync + 'static {
     /// mostly marked as unsafe for API reasons.
     unsafe fn raw_set_parameter_normalized(&self, param: ParamPtr, normalized: f32);
 
-    /// Inform the host a parameter has been automated. Use [ParamSetter::end_set_parameter] instead
-    /// for a safe, user friendly API.
+    /// Inform the host a parameter has been automated. Create a [ParamSetter] and use
+    /// [ParamSetter::end_set_parameter] instead for a safe, user friendly API.
     ///
     /// # Safety
     ///
@@ -111,7 +101,11 @@ pub struct ParamSetter<'a> {
     context: &'a dyn GuiContext,
 }
 
-impl ParamSetter<'_> {
+impl<'a> ParamSetter<'a> {
+    pub fn new(context: &'a dyn GuiContext) -> Self {
+        Self { context }
+    }
+
     /// Inform the host that you will start automating a parmater. This needs to be called before
     /// calling [Self::set_parameter()] for the specified parameter.
     pub fn begin_set_parameter<P: Param>(&self, param: &P) {
