@@ -1364,6 +1364,10 @@ impl<P: Plugin> IPlugView for WrapperView<P> {
                 }
             };
 
+            // FIXME: On second thought, this needs some reworking. Needing a read lock on the
+            //        plugin's object means that the process call (which requires a write lock) will
+            //        be blocked. The better API will be to move the create function to the `Editor`
+            //        struct, so we can already fetch that during initialization.
             *editor = self
                 .inner
                 .plugin

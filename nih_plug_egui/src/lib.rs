@@ -35,7 +35,6 @@ pub use egui;
 /// your plugin' [nih_plug::Plugin::editor_size()] implementation.
 //
 // TODO: DPI scaling, this needs to be implemented on the framework level
-// TODO: Opening the GUI causes an xrun, why?
 pub fn create_egui_editor<T, U>(
     parent: EditorWindowHandle,
     size: Arc<AtomicCell<(u32, u32)>>,
