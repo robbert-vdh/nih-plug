@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crossbeam::atomic::AtomicCell;
+use atomic_float::AtomicF32;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 /// Controls if and how parameters gets smoothed.
@@ -47,7 +47,7 @@ pub struct Smoother<T> {
     /// uniform.
     step_size: f32,
     /// The value for the current sample. Always stored as floating point for obvious reasons.
-    current: AtomicCell<f32>,
+    current: AtomicF32,
     /// The value we're smoothing towards
     target: T,
 }
@@ -58,7 +58,7 @@ impl<T: Default> Default for Smoother<T> {
             style: SmoothingStyle::None,
             steps_left: AtomicU32::new(0),
             step_size: Default::default(),
-            current: AtomicCell::new(0.0),
+            current: AtomicF32::new(0.0),
             target: Default::default(),
         }
     }
@@ -91,7 +91,7 @@ impl Smoother<f32> {
     /// Reset the smoother the specified value.
     pub fn reset(&mut self, value: f32) {
         self.target = value;
-        self.current.store(value);
+        self.current.store(value, Ordering::Relaxed);
         self.steps_left.store(0, Ordering::Relaxed);
     }
 
@@ -107,7 +107,7 @@ impl Smoother<f32> {
         };
         self.steps_left.store(steps_left, Ordering::Relaxed);
 
-        let current = self.current.load();
+        let current = self.current.load(Ordering::Relaxed);
         self.step_size = match self.style {
             SmoothingStyle::None => 0.0,
             SmoothingStyle::Linear(_) => (self.target - current) / steps_left as f32,
@@ -124,7 +124,7 @@ impl Smoother<f32> {
     #[allow(clippy::should_implement_trait)]
     pub fn next(&self) -> f32 {
         if self.steps_left.load(Ordering::Relaxed) > 1 {
-            let current = self.current.load();
+            let current = self.current.load(Ordering::Relaxed);
 
             // The number of steps usually won't fit exactly, so make sure we don't do weird things
             // with overshoots or undershoots
@@ -138,7 +138,7 @@ impl Smoother<f32> {
                     SmoothingStyle::Logarithmic(_) => current * self.step_size,
                 }
             };
-            self.current.store(new);
+            self.current.store(new, Ordering::Relaxed);
 
             new
         } else {
@@ -151,7 +151,7 @@ impl Smoother<i32> {
     /// Reset the smoother the specified value.
     pub fn reset(&mut self, value: i32) {
         self.target = value;
-        self.current.store(value as f32);
+        self.current.store(value as f32, Ordering::Relaxed);
         self.steps_left.store(0, Ordering::Relaxed);
     }
 
@@ -166,7 +166,7 @@ impl Smoother<i32> {
         };
         self.steps_left.store(steps_left, Ordering::Relaxed);
 
-        let current = self.current.load();
+        let current = self.current.load(Ordering::Relaxed);
         self.step_size = match self.style {
             SmoothingStyle::None => 0.0,
             SmoothingStyle::Linear(_) => (self.target as f32 - current) / steps_left as f32,
@@ -180,7 +180,7 @@ impl Smoother<i32> {
     #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> i32 {
         if self.steps_left.load(Ordering::Relaxed) > 1 {
-            let current = self.current.load();
+            let current = self.current.load(Ordering::Relaxed);
 
             // The number of steps usually won't fit exactly, so make sure we don't do weird things
             // with overshoots or undershoots
@@ -194,7 +194,7 @@ impl Smoother<i32> {
                     SmoothingStyle::Logarithmic(_) => current * self.step_size,
                 }
             };
-            self.current.store(new);
+            self.current.store(new, Ordering::Relaxed);
 
             new.round() as i32
         } else {
