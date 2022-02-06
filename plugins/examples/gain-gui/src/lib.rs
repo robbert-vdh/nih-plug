@@ -137,7 +137,7 @@ impl Plugin for Gain {
                     let peak_meter =
                         util::gain_to_db(peak_meter.load(std::sync::atomic::Ordering::Relaxed));
                     let peak_meter_text = if peak_meter > util::MINUS_INFINITY_DB {
-                        format!("{:.0} dBFS", peak_meter)
+                        format!("{:.1} dBFS", peak_meter)
                     } else {
                         String::from("-inf dBFS")
                     };
@@ -170,7 +170,7 @@ impl Plugin for Gain {
         _context: &mut impl ProcessContext,
     ) -> bool {
         // TODO: How do you tie this exponential decay to an actual time span?
-        self.peak_meter_decay_weight = 0.999f32.powf(44_100.0 / buffer_config.sample_rate);
+        self.peak_meter_decay_weight = 0.9992f32.powf(44_100.0 / buffer_config.sample_rate);
 
         true
     }
