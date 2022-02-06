@@ -20,7 +20,7 @@
 
 use baseview::{Size, WindowHandle, WindowOpenOptions, WindowScalePolicy};
 use egui::CtxRef;
-use egui_baseview::{EguiWindow, RenderSettings, Settings};
+use egui_baseview::{EguiWindow, Queue, RenderSettings, Settings};
 use nih_plug::{Editor, EditorWindowHandle, GuiContext};
 use std::sync::Arc;
 
@@ -45,12 +45,8 @@ pub fn create_egui_editor<'context, T, U>(
 ) -> Option<Box<dyn Editor + 'context>>
 where
     T: 'static + Send,
-    U: FnMut(&CtxRef, &dyn GuiContext, &mut T) + 'static + Send + Clone,
+    U: FnMut(&CtxRef, &dyn GuiContext, &mut T) + 'static + Send,
 {
-    // For convenience we'll make the same closure for the update and the build functions.
-    let mut build = update.clone();
-    let context_build = context.clone();
-
     // TODO: Also pass the context reference to the update callback
     let (width, height) = size.load();
     let window = EguiWindow::open_parented(
@@ -81,7 +77,7 @@ where
             },
         },
         initial_state,
-        move |ctx, _, state| build(ctx, context_build.as_ref(), state),
+        |_, _, _| {},
         move |ctx, _, state| update(ctx, context.as_ref(), state),
     );
 
