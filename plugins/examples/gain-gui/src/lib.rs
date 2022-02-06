@@ -19,8 +19,8 @@ extern crate nih_plug;
 
 use atomic_float::AtomicF32;
 use nih_plug::{
-    formatters, util, Buffer, BufferConfig, BusConfig, Editor, EditorWindowHandle, GuiContext,
-    ParamSetter, Plugin, ProcessContext, ProcessStatus, Vst3Plugin,
+    formatters, util, Buffer, BufferConfig, BusConfig, Editor, Plugin, ProcessContext,
+    ProcessStatus, Vst3Plugin,
 };
 use nih_plug::{FloatParam, Param, Params, Range, Smoother, SmoothingStyle};
 use nih_plug_egui::{create_egui_editor, egui, AtomicCell};
@@ -97,20 +97,13 @@ impl Plugin for Gain {
         self.params.as_ref()
     }
 
-    fn create_editor(
-        &self,
-        parent: EditorWindowHandle,
-        context: Arc<dyn GuiContext>,
-    ) -> Option<Box<dyn Editor>> {
+    fn editor(&self) -> Option<Box<dyn Editor>> {
         let params = self.params.clone();
         let peak_meter = self.peak_meter.clone();
         create_egui_editor(
-            parent,
             self.editor_size.clone(),
             (),
-            move |egui_ctx, _state| {
-                let setter = ParamSetter::new(context.as_ref());
-
+            move |egui_ctx, setter, _state| {
                 egui::CentralPanel::default().show(egui_ctx, |ui| {
                     ui.allocate_space(egui::Vec2::splat(3.0));
                     ui.label("Gain");
@@ -151,10 +144,6 @@ impl Plugin for Gain {
                 });
             },
         )
-    }
-
-    fn editor_size(&self) -> Option<(u32, u32)> {
-        Some(self.editor_size.load())
     }
 
     fn accepts_bus_config(&self, config: &BusConfig) -> bool {

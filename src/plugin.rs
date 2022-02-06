@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
+use std::any::Any;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -66,31 +67,12 @@ pub trait Plugin: Default + Send + Sync + 'static {
     /// plugin receives an update.
     fn params(&self) -> Pin<&dyn Params>;
 
-    /// Create an editor for this plugin and embed it in the parent window. A plugin editor will
-    /// likely want to interact with the plugin's parameters, so the idea is that you take a
-    /// reference to your [Params] object in your editor as well as the [GuiContext] that's passed
-    /// to this function. You can then read the parameter values directly from your [Params] object,
-    /// and modifying the values can be done using the functions on [GuiContext::setter()]. When you
-    /// change a parameter value that way it will be broadcasted to the host and also updated in
-    /// your [Params] struct.
-    //
-    // TODO: Think of how this would work with the event loop. On Linux the wrapper must provide a
-    //       timer using VST3's `IRunLoop` interface, but on Window and macOS the window would
-    //       normally register its own timer. Right now we just ignore this because it would
-    //       otherwise be basically impossible to have this still be GUI-framework agnostic. Any
-    //       callback that deos involve actual GUI operations will still be spooled to the IRunLoop
-    //       instance.
-    fn create_editor(
-        &self,
-        parent: EditorWindowHandle,
-        context: Arc<dyn GuiContext>,
-    ) -> Option<Box<dyn Editor>> {
-        None
-    }
-
-    /// Return the current size of the plugin's editor, if it has one. This is also used to check
-    /// whether the plugin has an editor without creating one.
-    fn editor_size(&self) -> Option<(u32, u32)> {
+    /// The plugin's editor, if it has one. The actual editor instance is created in
+    /// [Editor::spawn]. A plugin editor likely wants to interact with the plugin's parameters and
+    /// other shared data, so you'll need to move [Arc] pointing to any data you want to access into
+    /// the editor. You can later modify the parameters through the [GuiContext] and [ParamSetter]
+    /// after the editor GUI has been created.
+    fn editor(&self) -> Option<Box<dyn Editor>> {
         None
     }
 
@@ -146,8 +128,26 @@ pub trait Vst3Plugin: Plugin {
     const VST3_CATEGORIES: &'static str;
 }
 
-/// An editor for a [Plugin]. This object gets dropped when the host closes the editor.
-pub trait Editor {
+/// An editor for a [Plugin].
+pub trait Editor: Send + Sync {
+    /// Create an instance of the plugin's editor and embed it in the parent window. As explained in
+    /// [Plugin::editor], you can then read the parameter values directly from your [Params] object,
+    /// and modifying the values can be done using the functions on the [ParamSetter]. When you
+    /// change a parameter value that way it will be broadcasted to the host and also updated in
+    /// your [Params] struct.
+    ///
+    /// This function should return a handle to the editor, which will be dropped when the editor
+    /// gets closed. Implement the [Drop] trait on the returned handle if you need to explicitly
+    /// handle the editor's closing behavior.
+    //
+    // TODO: Think of how this would work with the event loop. On Linux the wrapper must provide a
+    //       timer using VST3's `IRunLoop` interface, but on Window and macOS the window would
+    //       normally register its own timer. Right now we just ignore this because it would
+    //       otherwise be basically impossible to have this still be GUI-framework agnostic. Any
+    //       callback that deos involve actual GUI operations will still be spooled to the IRunLoop
+    //       instance.
+    fn spawn(&self, parent: ParentWindowHandle, context: Arc<dyn GuiContext>) -> Box<dyn Any>;
+
     /// Return the (currnent) size of the editor in pixels as a `(width, height)` pair.
     fn size(&self) -> (u32, u32);
 
@@ -160,11 +160,11 @@ pub trait Editor {
 }
 
 /// A raw window handle for platform and GUI framework agnostic editors.
-pub struct EditorWindowHandle {
+pub struct ParentWindowHandle {
     pub handle: RawWindowHandle,
 }
 
-unsafe impl HasRawWindowHandle for EditorWindowHandle {
+unsafe impl HasRawWindowHandle for ParentWindowHandle {
     fn raw_window_handle(&self) -> RawWindowHandle {
         self.handle
     }

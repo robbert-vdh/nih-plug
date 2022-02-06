@@ -300,6 +300,7 @@ dependencies = [
 [[package]]
 name = "egui-baseview"
 version = "0.0.0"
+source = "git+https://github.com/robbert-vdh/egui-baseview.git?branch=fix/update-dependencies#161c831ded1289eb63d6cd530ac4574e6d8f351a"
 dependencies = [
  "baseview",
  "copypasta",
@@ -533,6 +534,7 @@ dependencies = [
  "egui",
  "egui-baseview",
  "nih_plug",
+ "parking_lot",
 ]
 
 [[package]]

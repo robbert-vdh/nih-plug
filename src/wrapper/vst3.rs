@@ -22,6 +22,7 @@ use crossbeam::atomic::AtomicCell;
 use lazy_static::lazy_static;
 use parking_lot::{RwLock, RwLockWriteGuard};
 use raw_window_handle::RawWindowHandle;
+use std::any::Any;
 use std::cmp;
 use std::collections::{HashMap, VecDeque};
 use std::ffi::{c_void, CStr};
@@ -51,7 +52,7 @@ use crate::plugin::{
 };
 use crate::wrapper::state::{ParamValue, State};
 use crate::wrapper::util::{hash_param_id, process_wrapper, strlcpy, u16strlcpy};
-use crate::EditorWindowHandle;
+use crate::ParentWindowHandle;
 
 // Alias needed for the VST3 attribute macro
 use vst3_sys as vst3_com;
@@ -104,7 +105,11 @@ macro_rules! check_null_ptr_msg {
 /// its own struct.
 struct WrapperInner<P: Plugin> {
     /// The wrapped plugin instance.
-    plugin: Box<RwLock<P>>,
+    plugin: RwLock<P>,
+    /// The plugin's editor, if it has one. This object does not do anything on its own, but we need
+    /// to instantiate this in advance so we don't need to lock the entire [Plugin] object when
+    /// creating an editor.
+    editor: Option<Arc<dyn Editor>>,
 
     /// The host's `IComponentHandler` instance, if passed through
     /// `IEditController::set_component_handler`.
@@ -173,7 +178,8 @@ pub(crate) struct Wrapper<P: Plugin> {
 #[VST3(implements(IPlugView))]
 struct WrapperView<P: Plugin> {
     inner: Arc<WrapperInner<P>>,
-    editor: RwLock<Option<Box<dyn Editor>>>,
+    editor: Arc<dyn Editor>,
+    editor_handle: RwLock<Option<Box<dyn Any>>>,
 }
 
 /// A [ProcessContext] implementation for the wrapper. This is a separate object so it can hold on
@@ -298,8 +304,12 @@ impl<P: Plugin> WrapperInner<P> {
     //      confused by all of these vtables
     #[allow(unused_unsafe)]
     pub fn new() -> Arc<Self> {
+        let plugin = RwLock::new(P::default());
+        let editor = plugin.read().editor().map(Arc::from);
+
         let mut wrapper = Self {
-            plugin: Box::new(RwLock::default()),
+            plugin,
+            editor,
 
             component_handler: RwLock::new(None),
 
@@ -425,8 +435,8 @@ impl<P: Plugin> Wrapper<P> {
 }
 
 impl<P: Plugin> WrapperView<P> {
-    pub fn new(inner: Arc<WrapperInner<P>>) -> Box<Self> {
-        Self::allocate(inner, RwLock::new(None))
+    pub fn new(inner: Arc<WrapperInner<P>>, editor: Arc<dyn Editor>) -> Box<Self> {
+        Self::allocate(inner, editor, RwLock::new(None))
     }
 }
 
@@ -977,10 +987,9 @@ impl<P: Plugin> IEditController for Wrapper<P> {
     unsafe fn create_view(&self, _name: vst3_sys::base::FIDString) -> *mut c_void {
         // Without specialization this is the least redundant way to check if the plugin has an
         // editor. The default implementation returns a None here.
-        match self.inner.plugin.read().editor_size() {
-            Some(_) => {
-                Box::into_raw(WrapperView::<P>::new(self.inner.clone())) as *mut vst3_sys::c_void
-            }
+        match &self.inner.editor {
+            Some(editor) => Box::into_raw(WrapperView::new(self.inner.clone(), editor.clone()))
+                as *mut vst3_sys::c_void,
             None => ptr::null_mut(),
         }
     }
@@ -1275,7 +1284,7 @@ impl<P: Plugin> IAudioProcessor for Wrapper<P> {
                 }
             }
 
-            let mut plugin = self.inner.plugin.write();
+            let plugin = &mut *self.inner.plugin.data_ptr();
             let mut context = self.inner.make_process_context();
             match plugin.process(&mut output_buffer, &mut context) {
                 ProcessStatus::Error(err) => {
@@ -1336,8 +1345,8 @@ impl<P: Plugin> IPlugView for WrapperView<P> {
     }
 
     unsafe fn attached(&self, parent: *mut c_void, type_: vst3_sys::base::FIDString) -> tresult {
-        let mut editor = self.editor.write();
-        if editor.is_none() {
+        let mut editor_handle = self.editor_handle.write();
+        if editor_handle.is_none() {
             let type_ = CStr::from_ptr(type_);
             let handle = match type_.to_str() {
                 #[cfg(all(target_family = "unix", not(target_os = "macos")))]
@@ -1364,15 +1373,10 @@ impl<P: Plugin> IPlugView for WrapperView<P> {
                 }
             };
 
-            // FIXME: On second thought, this needs some reworking. Needing a read lock on the
-            //        plugin's object means that the process call (which requires a write lock) will
-            //        be blocked. The better API will be to move the create function to the `Editor`
-            //        struct, so we can already fetch that during initialization.
-            *editor = self
-                .inner
-                .plugin
-                .read()
-                .create_editor(EditorWindowHandle { handle }, self.inner.clone());
+            *editor_handle = Some(
+                self.editor
+                    .spawn(ParentWindowHandle { handle }, self.inner.clone()),
+            );
             kResultOk
         } else {
             kResultFalse
@@ -1380,9 +1384,9 @@ impl<P: Plugin> IPlugView for WrapperView<P> {
     }
 
     unsafe fn removed(&self) -> tresult {
-        let mut editor = self.editor.write();
-        if editor.is_some() {
-            *editor = None;
+        let mut editor_handle = self.editor_handle.write();
+        if editor_handle.is_some() {
+            *editor_handle = None;
             kResultOk
         } else {
             kResultFalse
@@ -1416,20 +1420,9 @@ impl<P: Plugin> IPlugView for WrapperView<P> {
     unsafe fn get_size(&self, size: *mut vst3_sys::gui::ViewRect) -> tresult {
         check_null_ptr!(size);
 
-        // If the editor is already open, then take the size from the editor in case the plugin
-        // updates one but not the other
-        let (width, height) = match self.editor.read().as_ref() {
-            Some(editor) => editor.size(),
-            None => self
-                .inner
-                .plugin
-                .read()
-                .editor_size()
-                .expect("Wait, this returned a Some just now!?"),
-        };
-
         *size = mem::zeroed();
 
+        let (width, height) = self.editor.size();
         let size = &mut *size;
         size.left = 0;
         size.right = width as i32;

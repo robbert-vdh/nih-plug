@@ -15,3 +15,4 @@ crossbeam = "0.8"
 egui = "0.16"
 # Upstream doesn't work with the current baseview and egui versions
 egui-baseview = { git = "https://github.com/robbert-vdh/egui-baseview.git", branch = "fix/update-dependencies" }
+parking_lot = "0.12"
