@@ -92,7 +92,14 @@ impl<'outer, 'inner> Iterator for Samples<'outer, 'inner> {
             None
         }
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = self.buffers[0].len() - self.current_sample;
+        (remaining, Some(remaining))
+    }
 }
+
+impl<'outer, 'inner> ExactSizeIterator for Samples<'outer, 'inner> {}
 
 /// An iterator over the channel data for a sample, yielded by [Samples].
 pub struct Channels<'outer, 'inner> {
@@ -124,4 +131,11 @@ impl<'outer, 'inner> Iterator for Channels<'outer, 'inner> {
             None
         }
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = self.buffers0.len() - self.current_channel;
+        (remaining, Some(remaining))
+    }
 }
+
+impl<'outer, 'inner> ExactSizeIterator for Channels<'outer, 'inner> {}
