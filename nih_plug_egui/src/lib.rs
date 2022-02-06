@@ -36,7 +36,6 @@ pub use egui;
 //
 // TODO: DPI scaling, this needs to be implemented on the framework level
 // TODO: Opening the GUI causes an xrun, why?
-// TODO: The current version of egui-baseview causes a SIGABRT you when you close the GUI
 pub fn create_egui_editor<T, U>(
     parent: EditorWindowHandle,
     size: Arc<AtomicCell<(u32, u32)>>,
@@ -90,10 +89,7 @@ where
 
     // There's no error handling here, so let's just pray it worked
     if window.is_open() {
-        Some(Box::new(EguiEditor {
-            _window: window,
-            size,
-        }))
+        Some(Box::new(EguiEditor { window, size }))
     } else {
         None
     }
@@ -101,7 +97,7 @@ where
 
 /// An [Editor] implementation that calls an egui draw loop.
 pub struct EguiEditor {
-    _window: WindowHandle,
+    window: WindowHandle,
     size: Arc<AtomicCell<(u32, u32)>>,
 }
 
@@ -113,5 +109,12 @@ unsafe impl Sync for EguiEditor {}
 impl Editor for EguiEditor {
     fn size(&self) -> (u32, u32) {
         self.size.load()
+    }
+}
+
+impl Drop for EguiEditor {
+    fn drop(&mut self) {
+        // XXX: This should automatically happen when the handle gets dropped, but apparently not
+        self.window.close();
     }
 }
