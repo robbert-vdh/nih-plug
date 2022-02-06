@@ -133,7 +133,7 @@ impl<'outer, 'inner> Iterator for Channels<'outer, 'inner> {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let remaining = self.buffers0.len() - self.current_channel;
+        let remaining = self.buffers.len() - self.current_channel;
         (remaining, Some(remaining))
     }
 }
