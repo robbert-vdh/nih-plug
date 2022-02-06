@@ -28,13 +28,12 @@ use std::sync::Arc;
 pub use crossbeam::atomic::AtomicCell;
 pub use egui;
 
-/// Create an [Editor] instance using an [::egui] GUI. The size passed to this function is the GUI's
-/// intiial size, and this is kept in sync whenever the GUI gets resized. You should return the same
-/// size value in your plugin' [nih_plug::Plugin::editor_size()] implementation..
+/// Create an [Editor] instance using an [::egui] GUI. Using the state is optional, but it can be
+/// useful for keeping track of some temporary GUI-only settings. See the `gui_gain` example for
+/// more information on how to use this. The size passed to this function is the GUI's intiial size,
+/// and this is kept in sync whenever the GUI gets resized. You should return the same size value in
+/// your plugin' [nih_plug::Plugin::editor_size()] implementation.
 //
-// TODO: Figure out if the build function and [Queue] things we're omitting now are actually useful
-//       to the user
-// TODO: Provide 'advanced' versions that expose more of the low level settings and details here
 // TODO: DPI scaling, this needs to be implemented on the framework level
 pub fn create_egui_editor<T, U>(
     parent: EditorWindowHandle,
@@ -76,7 +75,15 @@ where
         },
         initial_state,
         |_, _, _| {},
-        move |ctx, _, state| update(ctx, state),
+        move |egui_ctx, queue, state| {
+            // For now, just always redraw. Most plugin GUIs have meters, and those almost always
+            // need a redraw. Later we can try to be a bit more sophisticated about this. Without
+            // this we would also have a blank GUI when it gets first opened because most DAWs open
+            // their GUI while the window is still unmapped.
+            // TODO: Are there other useful parts of this queue we could pass to thep lugin?
+            queue.request_repaint();
+            update(egui_ctx, state);
+        },
     );
 
     // There's no error handling here, so let's just pray it worked
