@@ -1365,7 +1365,7 @@ impl<P: Plugin> IPlugView for WrapperView<P> {
             *editor = self
                 .inner
                 .plugin
-                .write()
+                .read()
                 .create_editor(EditorWindowHandle { handle }, self.inner.clone());
             kResultOk
         } else {
