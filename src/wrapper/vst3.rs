@@ -42,6 +42,9 @@ use vst3_sys::vst::{
 use vst3_sys::VST3;
 use widestring::U16CStr;
 
+#[macro_use]
+mod util;
+
 use crate::buffer::Buffer;
 use crate::context::{EventLoop, GuiContext, MainThreadExecutor, OsEventLoop, ProcessContext};
 use crate::param::internals::ParamPtr;
@@ -81,23 +84,6 @@ const VST3_PLATFORM_X11_WINDOW: &str = "X11EmbedWindowID";
 const BYPASS_PARAM_ID: &str = "bypass";
 lazy_static! {
     static ref BYPASS_PARAM_HASH: u32 = hash_param_id(BYPASS_PARAM_ID);
-}
-
-/// Early exit out of a VST3 function when one of the passed pointers is null
-macro_rules! check_null_ptr {
-    ($ptr:expr $(, $ptrs:expr)* $(, )?) => {
-        check_null_ptr_msg!("Null pointer passed to function", $ptr $(, $ptrs)*)
-    };
-}
-
-/// The same as [check_null_ptr!], but with a custom message.
-macro_rules! check_null_ptr_msg {
-    ($msg:expr, $ptr:expr $(, $ptrs:expr)* $(, )?) => {
-        if $ptr.is_null() $(|| $ptrs.is_null())* {
-            nih_debug_assert_failure!($msg);
-            return kInvalidArgument;
-        }
-    };
 }
 
 /// The actual wrapper bits. We need this as an `Arc<T>` so we can safely use our event loop API.
