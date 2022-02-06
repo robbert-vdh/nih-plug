@@ -1097,13 +1097,13 @@ macro_rules! nih_export_vst3 {
         // https://github.com/steinbergmedia/vst3_public_sdk/blob/bc459feee68803346737901471441fd4829ec3f9/source/main/dllmain.cpp#L59-L60
         #[no_mangle]
         #[cfg(target_os = "windows")]
-        pub extern "system" fn InitModule() -> bool {
+        pub extern "system" fn InitDll() -> bool {
             true
         }
 
         #[no_mangle]
         #[cfg(target_os = "windows")]
-        pub extern "system" fn DeinitModule() -> bool {
+        pub extern "system" fn ExitDll() -> bool {
             true
         }
     };
