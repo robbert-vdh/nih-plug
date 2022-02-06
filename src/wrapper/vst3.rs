@@ -225,13 +225,18 @@ impl<P: Plugin> GuiContext for WrapperInner<P> {
         match &*self.component_handler.read() {
             Some(handler) => match self.param_ptr_to_hash.get(&param) {
                 Some(hash) => {
-                    // XXX: The host will also report this value to the plugin, this may cause fun
-                    //      behaviour with rapid parameter changes. How does JUCE handle this?
-                    self.set_normalized_value_by_hash(
-                        *hash,
-                        normalized,
-                        self.current_buffer_config.load().map(|c| c.sample_rate),
-                    );
+                    // Only update the parameters manually if the host is not processing audio. If
+                    // the plugin is currently processing audio, the host will pass this change back
+                    // to the plugin in the audio callback. This also prevents the values from
+                    // changing in the middle of the process callback, which would be unsound.
+                    if !self.is_processing.load(Ordering::SeqCst) {
+                        self.set_normalized_value_by_hash(
+                            *hash,
+                            normalized,
+                            self.current_buffer_config.load().map(|c| c.sample_rate),
+                        );
+                    }
+
                     handler.perform_edit(*hash, normalized as f64);
                 }
                 None => nih_debug_assert_failure!("Unknown parameter: {:?}", param),
