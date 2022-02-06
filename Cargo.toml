@@ -42,3 +42,7 @@ default = []
 # Enabling this feature will cause the plugin to terminate when allocations
 # occur in the processing function while compiling in debug mode.
 assert_process_allocs = ["assert_no_alloc"]
+
+# Upstream baseview doesn't work in REAPER because of mismatching visuals
+[patch."https://github.com/RustAudio/baseview.git"]
+baseview = { git = "https://github.com/prokopyl/baseview.git", rev = "6f7068e4f3391b7f977f8595619d4fe2c1dfd84f" }

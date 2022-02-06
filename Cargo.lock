@@ -62,7 +62,7 @@ checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
 [[package]]
 name = "baseview"
 version = "0.1.0"
-source = "git+https://github.com/RustAudio/baseview.git#004065e9a43e79751040879c572d95b9b63e0edc"
+source = "git+https://github.com/prokopyl/baseview.git?rev=6f7068e4f3391b7f977f8595619d4fe2c1dfd84f#6f7068e4f3391b7f977f8595619d4fe2c1dfd84f"
 dependencies = [
  "cocoa",
  "core-foundation",
