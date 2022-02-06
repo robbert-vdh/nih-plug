@@ -919,21 +919,13 @@ impl<P: Plugin> IAudioProcessor for Wrapper<P> {
 #[doc(hidden)]
 #[VST3(implements(IPluginFactory, IPluginFactory2, IPluginFactory3))]
 pub struct Factory<P: Vst3Plugin> {
-    /// The exposed plugin's GUID. Instead of generating this, we'll just let the programmer decide
-    /// on their own.
-    cid: GUID,
     /// The type will be used for constructing plugin instances later.
     _phantom: PhantomData<P>,
 }
 
 impl<P: Vst3Plugin> Factory<P> {
     pub fn new() -> Box<Self> {
-        Self::allocate(
-            GUID {
-                data: P::VST3_CLASS_ID,
-            },
-            PhantomData::default(),
-        )
+        Self::allocate(PhantomData::default())
     }
 }
 
@@ -965,7 +957,7 @@ impl<P: Vst3Plugin> IPluginFactory for Factory<P> {
         *info = mem::zeroed();
 
         let info = &mut *info;
-        info.cid = self.cid;
+        info.cid.data = P::VST3_CLASS_ID;
         info.cardinality = vst3_sys::base::ClassCardinality::kManyInstances as i32;
         strlcpy(&mut info.category, "Audio Module Class");
         strlcpy(&mut info.name, P::NAME);
@@ -981,7 +973,7 @@ impl<P: Vst3Plugin> IPluginFactory for Factory<P> {
     ) -> tresult {
         check_null_ptr!(cid, obj);
 
-        if *cid != self.cid {
+        if (*cid).data != P::VST3_CLASS_ID {
             return kNoInterface;
         }
 
@@ -1004,7 +996,7 @@ impl<P: Vst3Plugin> IPluginFactory2 for Factory<P> {
         *info = mem::zeroed();
 
         let info = &mut *info;
-        info.cid = self.cid;
+        info.cid.data = P::VST3_CLASS_ID;
         info.cardinality = vst3_sys::base::ClassCardinality::kManyInstances as i32;
         strlcpy(&mut info.category, "Audio Module Class");
         strlcpy(&mut info.name, P::NAME);
@@ -1031,7 +1023,7 @@ impl<P: Vst3Plugin> IPluginFactory3 for Factory<P> {
         *info = mem::zeroed();
 
         let info = &mut *info;
-        info.cid = self.cid;
+        info.cid.data = P::VST3_CLASS_ID;
         info.cardinality = vst3_sys::base::ClassCardinality::kManyInstances as i32;
         strlcpy(&mut info.category, "Audio Module Class");
         u16strlcpy(&mut info.name, P::NAME);
