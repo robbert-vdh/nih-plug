@@ -62,14 +62,14 @@ checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
 [[package]]
 name = "baseview"
 version = "0.1.0"
-source = "git+https://github.com/RustAudio/baseview.git#a8010016fb92a4b9307da3fbe5d4d97c873feb0e"
+source = "git+https://github.com/robbert-vdh/baseview.git?branch=feature/merge-raw-gl-context#2f7f177be8c039352ce9aa351cb55aa7ed624e1e"
 dependencies = [
  "cocoa",
  "core-foundation",
  "keyboard-types",
  "nix",
  "objc",
- "raw-window-handle 0.3.4",
+ "raw-window-handle",
  "uuid",
  "winapi",
  "x11",
@@ -158,9 +158,9 @@ dependencies = [
 
 [[package]]
 name = "core-foundation"
-version = "0.9.2"
+version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6888e10551bb93e424d8df1d07f1a8b4fceb0001a3a4b048bfc47554946f47b3"
+checksum = "194a7a9e6de53fa55116934067c844d9d749312f75c6f6d0980e8c252f8c2146"
 dependencies = [
  "core-foundation-sys",
  "libc",
@@ -300,15 +300,14 @@ dependencies = [
 [[package]]
 name = "egui-baseview"
 version = "0.0.0"
-source = "git+https://github.com/robbert-vdh/egui-baseview.git?branch=fix/update-dependencies#9234744bc4ddfa5252fd220f2d5f24bb9d9fa66d"
+source = "git+https://github.com/robbert-vdh/egui-baseview.git?branch=fix/update-dependencies#240be386214a0d9f0e6bbd1c721c4b381ddf3628"
 dependencies = [
  "baseview",
  "copypasta",
  "egui",
  "gl",
  "keyboard-types",
- "raw-gl-context",
- "raw-window-handle 0.3.4",
+ "raw-window-handle",
 ]
 
 [[package]]
@@ -510,7 +509,7 @@ dependencies = [
  "lazy_static",
  "nih_plug_derive",
  "parking_lot",
- "raw-window-handle 0.3.4",
+ "raw-window-handle",
  "serde",
  "serde_json",
  "vst3-sys",
@@ -666,30 +665,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "864d3e96a899863136fc6e99f3d7cae289dafe43bf2c5ac19b70df7210c0a145"
 dependencies = [
  "proc-macro2",
-]
-
-[[package]]
-name = "raw-gl-context"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4590d88b5f7f4a7b140a2bbb90085c2c3c9ac80832e53521a47c6a4ac1adbc3"
-dependencies = [
- "cocoa",
- "core-foundation",
- "objc",
- "raw-window-handle 0.3.4",
- "winapi",
- "x11",
-]
-
-[[package]]
-name = "raw-window-handle"
-version = "0.3.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e28f55143d0548dad60bb4fbdc835a3d7ac6acc3324506450c5fdd6e42903a76"
-dependencies = [
- "libc",
- "raw-window-handle 0.4.2",
 ]
 
 [[package]]

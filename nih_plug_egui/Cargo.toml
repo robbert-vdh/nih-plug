@@ -10,7 +10,7 @@ description = "An adapter to use egui GUIs with NIH-plug"
 [dependencies]
 nih_plug = { path = ".." }
 
-baseview = { git = "https://github.com/RustAudio/baseview.git" }
+baseview = { git = "https://github.com/robbert-vdh/baseview.git", branch = "feature/merge-raw-gl-context" }
 crossbeam = "0.8"
 egui = "0.16"
 # Upstream doesn't work with the current baseview and egui versions

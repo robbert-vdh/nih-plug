@@ -18,9 +18,10 @@
 //!
 //! TODO: Proper usage example
 
+use baseview::gl::GlConfig;
 use baseview::{Size, WindowHandle, WindowOpenOptions, WindowScalePolicy};
 use egui::CtxRef;
-use egui_baseview::{EguiWindow, RenderSettings, Settings};
+use egui_baseview::EguiWindow;
 use nih_plug::{Editor, ParamSetter, ParentWindowHandle};
 use parking_lot::RwLock;
 use std::sync::Arc;
@@ -77,22 +78,18 @@ where
         let (width, height) = self.size.load();
         let window = EguiWindow::open_parented(
             &parent,
-            Settings {
-                window: WindowOpenOptions {
-                    title: String::from("egui window"),
-                    size: Size::new(width as f64, height as f64),
-                    // TODO: What happens when we use the system scale factor here? I'd assume this
-                    //       would work everywhere, even if the window may be tiny in some cases.
-                    scale: WindowScalePolicy::ScaleFactor(1.0),
-                },
-                render_settings: RenderSettings {
+            WindowOpenOptions {
+                title: String::from("egui window"),
+                size: Size::new(width as f64, height as f64),
+                // TODO: What happens when we use the system scale factor here? I'd assume this
+                //       would work everywhere, even if the window may be tiny in some cases.
+                scale: WindowScalePolicy::ScaleFactor(1.0),
+                gl_config: Some(GlConfig {
                     version: (3, 2),
                     red_bits: 8,
                     blue_bits: 8,
                     green_bits: 8,
-                    // If the window was not created with the correct visual, then specifying 8 bits
-                    // here will cause creating the context to fail
-                    alpha_bits: 0,
+                    alpha_bits: 8,
                     depth_bits: 24,
                     stencil_bits: 8,
                     samples: None,
@@ -100,7 +97,7 @@ where
                     double_buffer: true,
                     vsync: true,
                     ..Default::default()
-                },
+                }),
             },
             state,
             |_, _, _| {},
@@ -115,7 +112,8 @@ where
                 queue.request_repaint();
                 (update)(egui_ctx, &setter, &mut state.write());
             },
-        );
+        )
+        .expect("We provided an OpenGL config, did we not?");
 
         Box::new(EguiEditorHandle { window })
     }
