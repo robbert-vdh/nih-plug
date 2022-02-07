@@ -37,6 +37,7 @@ pub use egui;
 /// your parameters struct.
 //
 // TODO: DPI scaling, this needs to be implemented on the framework level
+// TODO: Add some way for the plugin to check whether the GUI is open
 pub fn create_egui_editor<T, U>(
     size: Arc<AtomicCell<(u32, u32)>>,
     initial_state: T,
