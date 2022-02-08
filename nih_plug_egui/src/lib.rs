@@ -80,7 +80,8 @@ impl EguiState {
     }
 
     /// Whether the GUI is currently visible.
-    pub fn open(&self) -> bool {
+    // Called `is_open()` instead of `open()` to avoid the ambiguity.
+    pub fn is_open(&self) -> bool {
         self.open.load(Ordering::Acquire)
     }
 }
