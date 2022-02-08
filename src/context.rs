@@ -98,6 +98,16 @@ pub trait GuiContext: Send + Sync + 'static {
     /// The implementing function still needs to check if `param` actually exists. This function is
     /// mostly marked as unsafe for API reasons.
     unsafe fn raw_end_set_parameter(&self, param: ParamPtr);
+
+    /// Retrieve the default value for a parameter, in case you forgot. This does not perform a
+    /// callback Create a [ParamSetter] and use [ParamSetter::default_param_value] instead for a
+    /// safe, user friendly API.
+    ///
+    /// # Safety
+    ///
+    /// The implementing function still needs to check if `param` actually exists. This function is
+    /// mostly marked as unsafe for API reasons.
+    unsafe fn raw_default_normalized_param_value(&self, param: ParamPtr) -> f32;
 }
 
 /// A convenience helper for setting parameter values. Any changes made here will be broadcasted to
@@ -137,6 +147,16 @@ impl<'a> ParamSetter<'a> {
     /// gesture has finished.
     pub fn end_set_parameter<P: Param>(&self, param: &P) {
         unsafe { self.context.raw_end_set_parameter(param.as_ptr()) };
+    }
+
+    /// Retrieve the default value for a parameter, in case you forgot. This is useful when
+    /// implementing GUIs, and it does not perform a callback.
+    fn raw_default_normalized_param_value<P: Param>(&self, param: &P) -> P::Plain {
+        let normalized = unsafe {
+            self.context
+                .raw_default_normalized_param_value(param.as_ptr())
+        };
+        param.preview_plain(normalized)
     }
 }
 

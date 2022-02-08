@@ -88,8 +88,9 @@ pub(crate) struct WrapperInner<P: Plugin> {
     /// addresses will remain stable, as they are obtained from a pinned object.
     pub param_by_hash: HashMap<u32, ParamPtr>,
     /// The default normalized parameter value for every parameter in `param_ids`. We need to store
-    /// this in case the host requeries the parmaeter later.
-    pub param_defaults_normalized: Vec<f32>,
+    /// this in case the host requeries the parmaeter later. This is also indexed by the hash so we
+    /// can retrieve them later for the UI if needed.
+    pub param_defaults_normalized: HashMap<u32, f32>,
     /// Mappings from string parameter indentifiers to parameter hashes. Useful for debug logging
     /// and when storing and restorign plugin state.
     pub param_id_to_hash: HashMap<&'static str, u32>,
@@ -143,7 +144,7 @@ impl<P: Plugin> WrapperInner<P> {
 
             param_hashes: Vec::new(),
             param_by_hash: HashMap::new(),
-            param_defaults_normalized: Vec::new(),
+            param_defaults_normalized: HashMap::new(),
             param_id_to_hash: HashMap::new(),
             param_ptr_to_hash: HashMap::new(),
         };
@@ -178,7 +179,7 @@ impl<P: Plugin> WrapperInner<P> {
             .collect();
         wrapper.param_defaults_normalized = param_id_hashes_ptrs
             .iter()
-            .map(|&(_, _, ptr)| unsafe { ptr.normalized_value() })
+            .map(|&(_, hash, ptr)| (hash, unsafe { ptr.normalized_value() }))
             .collect();
         wrapper.param_id_to_hash = param_id_hashes_ptrs
             .iter()
@@ -290,6 +291,16 @@ impl<P: Plugin> GuiContext for WrapperInner<P> {
                 None => nih_debug_assert_failure!("Unknown parameter: {:?}", param),
             },
             None => nih_debug_assert_failure!("Component handler not yet set"),
+        }
+    }
+
+    unsafe fn raw_default_normalized_param_value(&self, param: ParamPtr) -> f32 {
+        match self.param_ptr_to_hash.get(&param) {
+            Some(hash) => self.param_defaults_normalized[hash],
+            None => {
+                nih_debug_assert_failure!("Unknown parameter: {:?}", param);
+                0.5
+            }
         }
     }
 }

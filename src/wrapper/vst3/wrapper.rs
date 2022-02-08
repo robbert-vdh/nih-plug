@@ -431,7 +431,7 @@ impl<P: Plugin> IEditController for Wrapper<P> {
                 | vst3_sys::vst::ParameterFlags::kIsBypass as i32;
         } else {
             let param_hash = &self.inner.param_hashes[param_index as usize];
-            let default_value = &self.inner.param_defaults_normalized[param_index as usize];
+            let default_value = &self.inner.param_defaults_normalized[param_hash];
             let param_ptr = &self.inner.param_by_hash[param_hash];
 
             info.id = *param_hash;
