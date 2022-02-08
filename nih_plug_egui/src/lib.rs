@@ -1,22 +1,6 @@
-// nih-plug: plugins, but rewritten in Rust
-// Copyright (C) 2022 Robbert van der Helm
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
 //! [egui](https://github.com/emilk/egui) editor support for NIH plug.
 //!
-//! TODO: Proper usage example
+//! TODO: Proper usage example, for now check out the gain_gui example
 
 use baseview::gl::GlConfig;
 use baseview::{Size, WindowHandle, WindowOpenOptions, WindowScalePolicy};
@@ -30,6 +14,8 @@ use std::sync::Arc;
 
 /// Re-export for convenience.
 pub use egui;
+
+pub mod widgets;
 
 /// Create an [Editor] instance using an [::egui] GUI. Using the user state parameter is optional,
 /// but it can be useful for keeping track of some temporary GUI-only settings. See the `gui_gain`
