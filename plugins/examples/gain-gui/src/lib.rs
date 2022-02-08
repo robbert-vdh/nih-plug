@@ -178,17 +178,21 @@ impl Plugin for Gain {
                 amplitude += *sample;
             }
 
-            amplitude = (amplitude / num_samples as f32).abs();
-            let current_peak_meter = self.peak_meter.load(std::sync::atomic::Ordering::Relaxed);
-            let new_peak_meter = if amplitude > current_peak_meter {
-                amplitude
-            } else {
-                current_peak_meter * self.peak_meter_decay_weight
-                    + amplitude * (1.0 - self.peak_meter_decay_weight)
-            };
+            // To save resources, a plugin can (and probably should!) only perform expensive
+            // calculations that are only displayed on the GUI while the GUI is open
+            if self.editor_state.open() {
+                amplitude = (amplitude / num_samples as f32).abs();
+                let current_peak_meter = self.peak_meter.load(std::sync::atomic::Ordering::Relaxed);
+                let new_peak_meter = if amplitude > current_peak_meter {
+                    amplitude
+                } else {
+                    current_peak_meter * self.peak_meter_decay_weight
+                        + amplitude * (1.0 - self.peak_meter_decay_weight)
+                };
 
-            self.peak_meter
-                .store(new_peak_meter, std::sync::atomic::Ordering::Relaxed)
+                self.peak_meter
+                    .store(new_peak_meter, std::sync::atomic::Ordering::Relaxed)
+            }
         }
 
         ProcessStatus::Normal
