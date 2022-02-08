@@ -139,6 +139,9 @@ pub trait Editor: Send + Sync {
     /// This function should return a handle to the editor, which will be dropped when the editor
     /// gets closed. Implement the [Drop] trait on the returned handle if you need to explicitly
     /// handle the editor's closing behavior.
+    ///
+    /// The wrapper guarantees that a previous handle has been dropped before this function is
+    /// called again.
     //
     // TODO: Think of how this would work with the event loop. On Linux the wrapper must provide a
     //       timer using VST3's `IRunLoop` interface, but on Window and macOS the window would
