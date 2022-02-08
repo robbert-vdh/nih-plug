@@ -20,6 +20,7 @@
 
 use baseview::gl::GlConfig;
 use baseview::{Size, WindowHandle, WindowOpenOptions, WindowScalePolicy};
+use crossbeam::atomic::AtomicCell;
 use egui::CtxRef;
 use egui_baseview::EguiWindow;
 use nih_plug::{Editor, ParamSetter, ParentWindowHandle};
@@ -28,7 +29,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 /// Re-export for convenience.
-pub use crossbeam::atomic::AtomicCell;
 pub use egui;
 
 /// Create an [Editor] instance using an [::egui] GUI. Using the user state parameter is optional,
