@@ -23,14 +23,14 @@ use nih_plug::{
     ProcessStatus, Vst3Plugin,
 };
 use nih_plug::{FloatParam, Param, Params, Range, Smoother, SmoothingStyle};
-use nih_plug_egui::{create_egui_editor, egui, AtomicCell};
+use nih_plug_egui::{create_egui_editor, egui, EguiState};
 use std::pin::Pin;
 use std::sync::Arc;
 
 /// This is mostly identical to the gain example, minus some fluff, and with a GUI.
 struct Gain {
     params: Pin<Arc<GainParams>>,
-    editor_size: Arc<AtomicCell<(u32, u32)>>,
+    editor_state: Arc<EguiState>,
 
     /// Needed to normalize the peak meter's response based on the sample rate.
     peak_meter_decay_weight: f32,
@@ -52,7 +52,7 @@ impl Default for Gain {
     fn default() -> Self {
         Self {
             params: Arc::pin(GainParams::default()),
-            editor_size: Arc::new(AtomicCell::new((300, 100))),
+            editor_state: EguiState::from_size(300, 100),
 
             peak_meter_decay_weight: 1.0,
             peak_meter: Arc::new(AtomicF32::new(util::MINUS_INFINITY_DB)),
@@ -101,7 +101,7 @@ impl Plugin for Gain {
         let params = self.params.clone();
         let peak_meter = self.peak_meter.clone();
         create_egui_editor(
-            self.editor_size.clone(),
+            self.editor_state.clone(),
             (),
             move |egui_ctx, setter, _state| {
                 egui::CentralPanel::default().show(egui_ctx, |ui| {
