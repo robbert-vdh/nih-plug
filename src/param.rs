@@ -87,6 +87,16 @@ pub trait Param {
 
 /// A numerical parameter that's stored unnormalized. The range is used for the normalization
 /// process.
+//
+// XXX: To keep the API simple and to allow the optimizer to do its thing, the values are stored as
+//      plain primitive values that are modified through the `*mut` pointers from the plugin's
+//      `Params` object. Technically modifying these while the GUI is open is unsound. We could
+//      remedy this by changing `value` to be an atomic type and adding a function also called
+//      `value()` to load that value, but in practice that should not be necessary if we don't do
+//      anything crazy other than modifying this value. On both AArch64 and x86(_64) reads and
+//      writes to naturally aligned values up to word size are atomic, so there's no risk of reading
+//      a partially written to value here. We should probably reconsider this at some point though.
+#[repr(C, align(4))]
 pub struct PlainParam<T> {
     /// The field's current plain, unnormalized value. Should be initialized with the default value.
     /// Storing parameter values like this instead of in a single contiguous array is bad for cache
@@ -116,6 +126,7 @@ pub struct PlainParam<T> {
 }
 
 /// A simple boolean parmaeter.
+#[repr(C, align(4))]
 pub struct BoolParam {
     /// The field's current, normalized value. Should be initialized with the default value.
     pub value: bool,
