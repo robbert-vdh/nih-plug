@@ -62,7 +62,7 @@ checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 [[package]]
 name = "baseview"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/baseview.git?branch=feature/merge-raw-gl-context#43860aba84a7303eed47dfafefcee6dde952afc4"
+source = "git+https://github.com/robbert-vdh/baseview.git?branch=feature/mouse-event-modifiers#4bfe91040abaa72e646931ca4447fcc7760b4178"
 dependencies = [
  "cocoa",
  "core-foundation",
@@ -300,7 +300,7 @@ dependencies = [
 [[package]]
 name = "egui-baseview"
 version = "0.0.0"
-source = "git+https://github.com/robbert-vdh/egui-baseview.git?branch=fix/update-dependencies#240be386214a0d9f0e6bbd1c721c4b381ddf3628"
+source = "git+https://github.com/robbert-vdh/egui-baseview.git?branch=fix/update-dependencies#3893ef0e369fc64170c1cc1f37426809d81da31b"
 dependencies = [
  "baseview",
  "copypasta",
