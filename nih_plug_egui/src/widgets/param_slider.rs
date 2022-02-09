@@ -7,7 +7,7 @@ use nih_plug::{Param, ParamSetter};
 /// and can get values for it.
 ///
 /// TODO: Vertical orientation
-/// TODO: (before I forget) mouse scrolling, ctrl+click and double click to reset
+/// TODO: Check below for more input methods that should be added
 pub struct ParamSlider<'a, P: Param> {
     param: &'a P,
     setter: &'a ParamSetter<'a>,
@@ -78,17 +78,23 @@ impl<P: Param> Widget for ParamSlider<'_, P> {
             .inner;
 
         // Handle user input
-        // TODO: As mentioned above, handle double click and ctrl+click, maybe also value entry
+        // TODO: Optionally (since it can be annoying) add scrolling behind a builder option
+        // TODO: Optionally add alt+click for value entry?
         // TODO: Handle shift+drag being more granular
         if response.drag_started() {
             self.begin_drag();
         }
         if let Some(click_pos) = response.interact_pointer_pos() {
-            let proportion =
-                egui::emath::remap_clamp(click_pos.x, response.rect.x_range(), 0.0..=1.0) as f64;
-            self.set_normalized_value(proportion as f32);
+            // Like double clicking, Ctrl+Click should reset the parameter
+            if ui.input().modifiers.command {
+                self.reset_param();
+            } else {
+                let proportion =
+                    egui::emath::remap_clamp(click_pos.x, response.rect.x_range(), 0.0..=1.0)
+                        as f64;
+                self.set_normalized_value(proportion as f32);
+            }
         }
-        // TODO: Also handle ctrl+click
         if response.double_clicked() {
             self.reset_param();
         }
