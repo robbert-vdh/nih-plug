@@ -142,6 +142,14 @@ impl<'a> ParamSetter<'a> {
         unsafe { self.context.raw_set_parameter_normalized(ptr, normalized) };
     }
 
+    /// Set a parameter to an already normalized value. Works exactly the same as
+    /// [Self::set_parameter] and needs to follow the same rules, but this may be useful when
+    /// implementigna a GUI.
+    pub fn set_parameter_normalized<P: Param>(&self, param: &P, normalized: f32) {
+        let ptr = param.as_ptr();
+        unsafe { self.context.raw_set_parameter_normalized(ptr, normalized) };
+    }
+
     /// Inform the host that you are done automating a parameter. This needs to be called after one
     /// or more [Self::set_parameter()] calls for a parameter so the host knows the automation
     /// gesture has finished.
