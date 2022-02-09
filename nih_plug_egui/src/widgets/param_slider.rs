@@ -26,7 +26,14 @@ impl<'a, P: Param> ParamSlider<'a, P> {
     fn set_normalized_value(&self, normalized: f32) {
         // TODO: The gesture should start on mouse down and end up mouse up
         self.setter.begin_set_parameter(self.param);
-        self.setter.set_parameter_normalized(self.param, normalized);
+
+        // This snaps to the nearest plain value if the parameter is stepped in some wayA
+        // TODO: As an optimization, we could add a `const CONTINUOUS: bool` to the parameter to
+        //       avoid this normalized->plain->normalized conversion for parameters that don't need
+        //       it
+        let value = self.param.preview_plain(normalized);
+        self.setter.set_parameter(self.param, value);
+
         self.setter.end_set_parameter(self.param);
     }
 }
