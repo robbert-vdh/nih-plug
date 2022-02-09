@@ -125,6 +125,7 @@ impl Plugin for Gain {
                     // It's not yet fully implemented, as the text is missing.
                     ui.label("Gain (now linked to some random skewed int)");
                     ui.add(widgets::ParamSlider::for_param(&params.some_int, setter));
+                    ui.add(widgets::ParamSlider::for_param(&params.gain, setter));
 
                     // This is a simple naieve version of a parameter slider that's not aware of how
                     // the parmaeters work

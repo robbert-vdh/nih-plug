@@ -533,6 +533,7 @@ dependencies = [
  "crossbeam",
  "egui",
  "egui-baseview",
+ "lazy_static",
  "nih_plug",
  "parking_lot",
 ]
