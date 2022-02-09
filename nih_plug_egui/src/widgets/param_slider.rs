@@ -1,23 +1,21 @@
 use egui::{vec2, Color32, Response, Sense, Stroke, TextStyle, Ui, Widget};
 
-use nih_plug::{FloatParam, Param, ParamSetter};
+use nih_plug::{Param, ParamSetter};
 
 /// A slider widget similar to [egui::widgets::Slider] that knows about NIH-plug parameters ranges
 /// and can get values for it.
 ///
-/// TODO: To keep things simple this currently only supports FloatParam, but it should be generic
-///       over any kind of parameter
 /// TODO: Vertical orientation
 /// TODO: (before I forget) mouse scrolling, ctrl+click and double click to reset
-pub struct ParamSlider<'a> {
-    param: &'a FloatParam,
+pub struct ParamSlider<'a, P: Param> {
+    param: &'a P,
     setter: &'a ParamSetter<'a>,
 }
 
-impl<'a> ParamSlider<'a> {
+impl<'a, P: Param> ParamSlider<'a, P> {
     /// Create a new slider for a parameter. Use the other methods to modify the slider before
     /// passing it to [Ui::add()].
-    pub fn for_param(param: &'a FloatParam, setter: &'a ParamSetter<'a>) -> Self {
+    pub fn for_param(param: &'a P, setter: &'a ParamSetter<'a>) -> Self {
         Self { param, setter }
     }
 
@@ -33,7 +31,7 @@ impl<'a> ParamSlider<'a> {
     }
 }
 
-impl Widget for ParamSlider<'_> {
+impl<P: Param> Widget for ParamSlider<'_, P> {
     fn ui(self, ui: &mut Ui) -> Response {
         // Allocate space, but add some padding on the top and bottom to make it look a bit slimmer.
         let height = ui
