@@ -157,14 +157,18 @@ impl<'a> ParamSetter<'a> {
         unsafe { self.context.raw_end_set_parameter(param.as_ptr()) };
     }
 
-    /// Retrieve the default value for a parameter, in case you forgot. This is useful when
-    /// implementing GUIs, and it does not perform a callback.
-    fn raw_default_normalized_param_value<P: Param>(&self, param: &P) -> P::Plain {
-        let normalized = unsafe {
+    /// Retrieve the default value for a parameter, in case you forgot. The value is already
+    /// normalized to `[0, 1]`. This is useful when implementing GUIs, and it does not perform a callback.
+    pub fn default_normalized_param_value<P: Param>(&self, param: &P) -> f32 {
+        unsafe {
             self.context
                 .raw_default_normalized_param_value(param.as_ptr())
-        };
-        param.preview_plain(normalized)
+        }
+    }
+
+    /// The same as [Self::default_normalized_param_value], but without the normalization.
+    pub fn default_param_value<P: Param>(&self, param: &P) -> P::Plain {
+        param.preview_plain(self.default_normalized_param_value(param))
     }
 }
 

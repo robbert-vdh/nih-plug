@@ -37,6 +37,13 @@ impl<'a, P: Param> ParamSlider<'a, P> {
         self.setter.set_parameter(self.param, value);
     }
 
+    // This still needs to be part of a drag gestur
+    fn reset_param(&self) {
+        let normalized_default = self.setter.default_normalized_param_value(self.param);
+        self.setter
+            .set_parameter_normalized(self.param, normalized_default);
+    }
+
     fn end_drag(&self) {
         self.setter.end_set_parameter(self.param);
     }
@@ -70,6 +77,7 @@ impl<P: Param> Widget for ParamSlider<'_, P> {
 
         // Handle user input
         // TODO: As mentioned above, handle double click and ctrl+click, maybe also value entry
+        // TODO: Handle shift+drag being more granular
         if response.drag_started() {
             self.begin_drag();
         }
@@ -77,6 +85,10 @@ impl<P: Param> Widget for ParamSlider<'_, P> {
             let proportion =
                 egui::emath::remap_clamp(click_pos.x, response.rect.x_range(), 0.0..=1.0) as f64;
             self.set_normalized_value(proportion as f32);
+        }
+        // TODO: Also handle ctrl+click
+        if response.double_clicked() {
+            self.reset_param();
         }
         if response.drag_released() {
             self.end_drag();
