@@ -58,6 +58,10 @@ impl<'a, P: Param> ParamSlider<'a, P> {
             .set_parameter_normalized(self.param, normalized_default);
     }
 
+    // TODO: egui-baseview doesn't seem to (re)set the modifiers correctly in some cases. For
+    //       instance, dragging outside of a window, pressing or releasing shift, and then moving back
+    //       into the window causes the old state to be stuck. Presumably it only modifies this based on
+    //       keybaord events and not based on mouse events.
     fn granular_drag(&self, ui: &Ui, drag_delta: Vec2) {
         // Remember the intial position when we started with the granular drag. This value gets
         // reset whenever we have a normal itneraction with the slider.
