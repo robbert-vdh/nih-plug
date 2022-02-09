@@ -29,8 +29,8 @@ pub mod smoothing;
 pub type FloatParam = PlainParam<f32>;
 pub type IntParam = PlainParam<i32>;
 
-/// Describes a single parmaetre of any type.
-pub trait Param {
+/// Describes a single parameter of any type.
+pub trait Param: Display {
     /// The plain parameter type.
     type Plain;
 
