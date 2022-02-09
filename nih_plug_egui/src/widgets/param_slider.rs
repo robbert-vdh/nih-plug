@@ -74,20 +74,8 @@ impl<P: Param> Widget for ParamSlider<'_, P> {
             self.begin_drag();
         }
         if let Some(click_pos) = response.interact_pointer_pos() {
-            let aim_radius = ui.input().aim_radius();
-            let proportion = egui::emath::smart_aim::best_in_range_f64(
-                egui::emath::remap_clamp(
-                    click_pos.x - aim_radius,
-                    response.rect.x_range(),
-                    0.0..=1.0,
-                ) as f64,
-                egui::emath::remap_clamp(
-                    click_pos.x + aim_radius,
-                    response.rect.x_range(),
-                    0.0..=1.0,
-                ) as f64,
-            );
-
+            let proportion =
+                egui::emath::remap_clamp(click_pos.x, response.rect.x_range(), 0.0..=1.0) as f64;
             self.set_normalized_value(proportion as f32);
         }
         if response.drag_released() {
