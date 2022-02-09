@@ -56,7 +56,7 @@ impl Default for Gain {
     fn default() -> Self {
         Self {
             params: Arc::pin(GainParams::default()),
-            editor_state: EguiState::from_size(300, 100),
+            editor_state: EguiState::from_size(300, 180),
 
             peak_meter_decay_weight: 1.0,
             peak_meter: Arc::new(AtomicF32::new(util::MINUS_INFINITY_DB)),
@@ -123,10 +123,15 @@ impl Plugin for Gain {
                     // This is a fancy widget that can get all the information it needs to properly
                     // display and modify the parameter from the parametr itself
                     // It's not yet fully implemented, as the text is missing.
-                    ui.label("Gain (now linked to some random skewed int)");
+                    ui.label("Some random wierdly distributed integer");
                     ui.add(widgets::ParamSlider::for_param(&params.some_int, setter));
+
+                    ui.label("Gain");
                     ui.add(widgets::ParamSlider::for_param(&params.gain, setter));
 
+                    ui.label(
+                        "Also gain, but with a lame widget. Can't even render the value correctly!",
+                    );
                     // This is a simple naieve version of a parameter slider that's not aware of how
                     // the parmaeters work
                     ui.add(
