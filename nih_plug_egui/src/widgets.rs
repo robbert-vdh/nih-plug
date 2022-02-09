@@ -6,6 +6,7 @@
 //! to copy the widgets and modify them to your personal taste.
 
 mod param_slider;
+pub mod util;
 
 pub use param_slider::ParamSlider;
 
