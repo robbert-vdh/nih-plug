@@ -24,17 +24,20 @@ impl<'a, P: Param> ParamSlider<'a, P> {
         self.param.normalized_value()
     }
 
-    fn set_normalized_value(&self, normalized: f32) {
-        // TODO: The gesture should start on mouse down and end up mouse up
+    fn begin_drag(&self) {
         self.setter.begin_set_parameter(self.param);
+    }
 
+    fn set_normalized_value(&self, normalized: f32) {
         // This snaps to the nearest plain value if the parameter is stepped in some wayA
         // TODO: As an optimization, we could add a `const CONTINUOUS: bool` to the parameter to
         //       avoid this normalized->plain->normalized conversion for parameters that don't need
         //       it
         let value = self.param.preview_plain(normalized);
         self.setter.set_parameter(self.param, value);
+    }
 
+    fn end_drag(&self) {
         self.setter.end_set_parameter(self.param);
     }
 }
@@ -66,7 +69,10 @@ impl<P: Param> Widget for ParamSlider<'_, P> {
             .inner;
 
         // Handle user input
-        // TODO: We only show the position now
+        // TODO: As mentioned above, handle double click and ctrl+click, maybe also value entry
+        if response.drag_started() {
+            self.begin_drag();
+        }
         if let Some(click_pos) = response.interact_pointer_pos() {
             let aim_radius = ui.input().aim_radius();
             let proportion = egui::emath::smart_aim::best_in_range_f64(
@@ -83,6 +89,9 @@ impl<P: Param> Widget for ParamSlider<'_, P> {
             );
 
             self.set_normalized_value(proportion as f32);
+        }
+        if response.drag_released() {
+            self.end_drag();
         }
 
         // And finally draw the thing
