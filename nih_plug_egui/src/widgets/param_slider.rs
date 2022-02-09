@@ -91,15 +91,17 @@ impl<P: Param> Widget for ParamSlider<'_, P> {
                 .rect_filled(response.rect, 0.0, ui.visuals().widgets.inactive.bg_fill);
 
             let filled_proportion = self.normalized_value();
-            let mut filled_rect = response.rect;
-            filled_rect.set_width(response.rect.width() * filled_proportion);
-            let filled_bg = if response.dragged() {
-                // TODO: Use something that works with a light theme
-                Color32::DARK_GRAY
-            } else {
-                ui.visuals().selection.bg_fill
-            };
-            ui.painter().rect_filled(filled_rect, 0.0, filled_bg);
+            if filled_proportion > 0.0 {
+                let mut filled_rect = response.rect;
+                filled_rect.set_width(response.rect.width() * filled_proportion);
+                let filled_bg = if response.dragged() {
+                    // TODO: Use something that works with a light theme
+                    Color32::DARK_GRAY
+                } else {
+                    ui.visuals().selection.bg_fill
+                };
+                ui.painter().rect_filled(filled_rect, 0.0, filled_bg);
+            }
 
             ui.painter().rect_stroke(
                 response.rect,
