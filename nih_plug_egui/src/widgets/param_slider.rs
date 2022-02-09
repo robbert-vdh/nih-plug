@@ -29,12 +29,14 @@ impl<'a, P: Param> ParamSlider<'a, P> {
     }
 
     fn set_normalized_value(&self, normalized: f32) {
-        // This snaps to the nearest plain value if the parameter is stepped in some wayA
-        // TODO: As an optimization, we could add a `const CONTINUOUS: bool` to the parameter to
-        //       avoid this normalized->plain->normalized conversion for parameters that don't need
-        //       it
-        let value = self.param.preview_plain(normalized);
-        self.setter.set_parameter(self.param, value);
+        if normalized != self.normalized_value() {
+            // This snaps to the nearest plain value if the parameter is stepped in some wayA
+            // TODO: As an optimization, we could add a `const CONTINUOUS: bool` to the parameter to
+            //       avoid this normalized->plain->normalized conversion for parameters that don't need
+            //       it
+            let value = self.param.preview_plain(normalized);
+            self.setter.set_parameter(self.param, value);
+        }
     }
 
     // This still needs to be part of a drag gestur
