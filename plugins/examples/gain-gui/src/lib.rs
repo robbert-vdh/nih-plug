@@ -19,11 +19,11 @@ extern crate nih_plug;
 
 use atomic_float::AtomicF32;
 use nih_plug::{
-    formatters, util, Buffer, BufferConfig, BusConfig, Editor, Plugin, ProcessContext,
+    formatters, util, Buffer, BufferConfig, BusConfig, Editor, IntParam, Plugin, ProcessContext,
     ProcessStatus, Vst3Plugin,
 };
 use nih_plug::{FloatParam, Param, Params, Range, Smoother, SmoothingStyle};
-use nih_plug_egui::{create_egui_editor, egui, EguiState};
+use nih_plug_egui::{create_egui_editor, egui, widgets, EguiState};
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -46,6 +46,10 @@ struct Gain {
 struct GainParams {
     #[id = "gain"]
     pub gain: FloatParam,
+
+    // TODO: Remove this parameter when we're done implementing the widgets
+    #[id = "foobar"]
+    pub some_int: IntParam,
 }
 
 impl Default for Gain {
@@ -76,6 +80,17 @@ impl Default for GainParams {
                 value_to_string: formatters::f32_rounded(2),
                 string_to_value: None,
             },
+            some_int: IntParam {
+                value: 3,
+                smoothed: Smoother::none(),
+                name: "Something",
+                range: Range::Skewed {
+                    min: 0,
+                    max: 3,
+                    factor: Range::skew_factor(1.0),
+                },
+                ..Default::default()
+            },
         }
     }
 }
@@ -105,16 +120,18 @@ impl Plugin for Gain {
             (),
             move |egui_ctx, setter, _state| {
                 egui::CentralPanel::default().show(egui_ctx, |ui| {
-                    ui.allocate_space(egui::Vec2::splat(3.0));
-                    ui.label("Gain");
+                    // This is a fancy widget that can get all the information it needs to properly
+                    // display and modify the parameter from the parametr itself
+                    // It's not yet fully implemented, as the text is missing.
+                    ui.label("Gain (now linked to some random skewed int)");
+                    ui.add(widgets::ParamSlider::for_param(&params.some_int, setter));
 
-                    // TODO: Create a custom widget that can do all of the parameter handling and
-                    //       works with nonlinear ranges
+                    // This is a simple naieve version of a parameter slider that's not aware of how
+                    // the parmaeters work
                     ui.add(
                         egui::widgets::Slider::from_get_set(-30.0..=30.0, |new_value| {
                             match new_value {
                                 Some(new_value) => {
-                                    // TODO: Gestures?
                                     setter.begin_set_parameter(&params.gain);
                                     setter.set_parameter(&params.gain, new_value as f32);
                                     setter.end_set_parameter(&params.gain);
