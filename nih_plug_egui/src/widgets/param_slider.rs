@@ -1,5 +1,6 @@
-use egui::{vec2, Color32, Response, Sense, Stroke, TextStyle, Ui, Widget};
+use egui::{vec2, Response, Sense, Stroke, TextStyle, Ui, Widget};
 
+use super::util;
 use nih_plug::{Param, ParamSetter};
 
 /// A slider widget similar to [egui::widgets::Slider] that knows about NIH-plug parameters ranges
@@ -95,8 +96,7 @@ impl<P: Param> Widget for ParamSlider<'_, P> {
                 let mut filled_rect = response.rect;
                 filled_rect.set_width(response.rect.width() * filled_proportion);
                 let filled_bg = if response.dragged() {
-                    // TODO: Use something that works with a light theme
-                    Color32::DARK_GRAY
+                    util::add_hsv(ui.visuals().selection.bg_fill, 0.0, -0.1, 0.1)
                 } else {
                     ui.visuals().selection.bg_fill
                 };
