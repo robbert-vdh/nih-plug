@@ -84,7 +84,7 @@ impl<'a, P: Param> ParamSlider<'a, P> {
         ui.memory()
             .data
             .get_temp(*DRAG_NORMALIZED_START_VALUE_MEMORY_ID)
-            .unwrap_or(0.0)
+            .unwrap_or(0.5)
     }
 
     fn set_drag_normalized_start_value_memory(ui: &Ui, amount: f32) {
@@ -103,38 +103,11 @@ impl<'a, P: Param> ParamSlider<'a, P> {
     fn set_drag_amount_memory(ui: &Ui, amount: f32) {
         ui.memory().data.insert_temp(*DRAG_AMOUNT_MEMORY_ID, amount);
     }
-}
 
-impl<P: Param> Widget for ParamSlider<'_, P> {
-    fn ui(self, ui: &mut Ui) -> Response {
-        // Allocate space, but add some padding on the top and bottom to make it look a bit slimmer.
-        let height = ui
-            .fonts()
-            .row_height(TextStyle::Body)
-            .max(ui.spacing().interact_size.y);
-        let slider_height = ui.painter().round_to_pixel(height * 0.65);
-        let response = ui
-            .vertical(|ui| {
-                ui.allocate_space(vec2(
-                    ui.spacing().slider_width,
-                    (height - slider_height) / 2.0,
-                ));
-                let response = ui.allocate_response(
-                    vec2(ui.spacing().slider_width, slider_height),
-                    Sense::click_and_drag(),
-                );
-                ui.allocate_space(vec2(
-                    ui.spacing().slider_width,
-                    (height - slider_height) / 2.0,
-                ));
-                response
-            })
-            .inner;
-
+    fn slider_ui(&self, ui: &Ui, response: &Response) {
         // Handle user input
         // TODO: Optionally (since it can be annoying) add scrolling behind a builder option
         // TODO: Optionally add alt+click for value entry?
-        // TODO: Handle shift+drag being more granular
         if response.drag_started() {
             // When beginning a drag or dragging normally, reset the memory used to keep track of
             // our granular drag
@@ -186,9 +159,38 @@ impl<P: Param> Widget for ParamSlider<'_, P> {
                 0.0,
                 Stroke::new(1.0, ui.visuals().widgets.active.bg_fill),
             );
-
-            // TODO: Render the text
         }
+    }
+}
+
+impl<P: Param> Widget for ParamSlider<'_, P> {
+    fn ui(self, ui: &mut Ui) -> Response {
+        // Allocate space, but add some padding on the top and bottom to make it look a bit slimmer.
+        let height = ui
+            .fonts()
+            .row_height(TextStyle::Body)
+            .max(ui.spacing().interact_size.y);
+        let slider_height = ui.painter().round_to_pixel(height * 0.65);
+        let response = ui
+            .vertical(|ui| {
+                ui.allocate_space(vec2(
+                    ui.spacing().slider_width,
+                    (height - slider_height) / 2.0,
+                ));
+                let response = ui.allocate_response(
+                    vec2(ui.spacing().slider_width, slider_height),
+                    Sense::click_and_drag(),
+                );
+                ui.allocate_space(vec2(
+                    ui.spacing().slider_width,
+                    (height - slider_height) / 2.0,
+                ));
+                response
+            })
+            .inner;
+
+        // TODO: Render the text
+        self.slider_ui(ui, &response);
 
         response
     }
