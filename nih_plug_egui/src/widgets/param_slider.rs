@@ -20,16 +20,30 @@ lazy_static! {
 /// TODO: Check below for more input methods that should be added
 /// TODO: Decouple the logic from the drawing so we can also do things like nobs without having to
 ///       repeat everything
+/// TODO: Add WidgetInfo annotations for accessibility
+#[must_use = "You should put this widget in an ui with `ui.add(widget);`"]
 pub struct ParamSlider<'a, P: Param> {
     param: &'a P,
     setter: &'a ParamSetter<'a>,
+
+    draw_value: bool,
 }
 
 impl<'a, P: Param> ParamSlider<'a, P> {
     /// Create a new slider for a parameter. Use the other methods to modify the slider before
     /// passing it to [Ui::add()].
     pub fn for_param(param: &'a P, setter: &'a ParamSetter<'a>) -> Self {
-        Self { param, setter }
+        Self {
+            param,
+            setter,
+            draw_value: true,
+        }
+    }
+
+    /// Don't draw the text slider's current value after the slider.
+    pub fn without_value(mut self) -> Self {
+        self.draw_value = false;
+        self
     }
 
     fn normalized_value(&self) -> f32 {
@@ -104,7 +118,7 @@ impl<'a, P: Param> ParamSlider<'a, P> {
         ui.memory().data.insert_temp(*DRAG_AMOUNT_MEMORY_ID, amount);
     }
 
-    fn slider_ui(&self, ui: &Ui, response: &Response) {
+    fn slider_ui(&self, ui: &mut Ui, response: &Response) {
         // Handle user input
         // TODO: Optionally (since it can be annoying) add scrolling behind a builder option
         // TODO: Optionally add alt+click for value entry?
@@ -161,37 +175,75 @@ impl<'a, P: Param> ParamSlider<'a, P> {
             );
         }
     }
+
+    fn value_ui(&self, ui: &mut Ui) {
+        let visuals = ui.visuals().widgets.inactive;
+        let should_draw_frame = ui.visuals().button_frame;
+        let padding = ui.spacing().button_padding;
+
+        let text = ui.painter().layout(
+            format!("{}", self.param),
+            TextStyle::Button,
+            visuals.text_color(),
+            ui.available_width() - (padding.x * 2.0),
+        );
+
+        let (_, rect) = ui.allocate_space(text.size() + (padding * 2.0));
+        if ui.is_rect_visible(rect) {
+            if should_draw_frame {
+                let fill = visuals.bg_fill;
+                let stroke = visuals.bg_stroke;
+                ui.painter().rect(
+                    rect.expand(visuals.expansion),
+                    visuals.corner_radius,
+                    fill,
+                    stroke,
+                );
+            }
+
+            let text_pos = ui
+                .layout()
+                .align_size_within_rect(text.size(), rect.shrink2(padding))
+                .min;
+            ui.painter().galley(text_pos, text);
+        }
+    }
 }
 
 impl<P: Param> Widget for ParamSlider<'_, P> {
     fn ui(self, ui: &mut Ui) -> Response {
-        // Allocate space, but add some padding on the top and bottom to make it look a bit slimmer.
-        let height = ui
-            .fonts()
-            .row_height(TextStyle::Body)
-            .max(ui.spacing().interact_size.y);
-        let slider_height = ui.painter().round_to_pixel(height * 0.65);
-        let response = ui
-            .vertical(|ui| {
-                ui.allocate_space(vec2(
-                    ui.spacing().slider_width,
-                    (height - slider_height) / 2.0,
-                ));
-                let response = ui.allocate_response(
-                    vec2(ui.spacing().slider_width, slider_height),
-                    Sense::click_and_drag(),
-                );
-                ui.allocate_space(vec2(
-                    ui.spacing().slider_width,
-                    (height - slider_height) / 2.0,
-                ));
-                response
-            })
-            .inner;
+        ui.horizontal(|ui| {
+            // Allocate space, but add some padding on the top and bottom to make it look a bit slimmer.
+            let height = ui
+                .fonts()
+                .row_height(TextStyle::Body)
+                .max(ui.spacing().interact_size.y);
+            let slider_height = ui.painter().round_to_pixel(height * 0.65);
+            let response = ui
+                .vertical(|ui| {
+                    ui.allocate_space(vec2(
+                        ui.spacing().slider_width,
+                        (height - slider_height) / 2.0,
+                    ));
+                    let response = ui.allocate_response(
+                        vec2(ui.spacing().slider_width, slider_height),
+                        Sense::click_and_drag(),
+                    );
+                    ui.allocate_space(vec2(
+                        ui.spacing().slider_width,
+                        (height - slider_height) / 2.0,
+                    ));
+                    response
+                })
+                .inner;
 
-        // TODO: Render the text
-        self.slider_ui(ui, &response);
+            self.slider_ui(ui, &response);
+            if self.draw_value {
+                self.value_ui(ui);
+            }
 
-        response
+            response
+        })
+        .inner
     }
 }
