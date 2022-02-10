@@ -12,10 +12,10 @@ for an incomplete list of missing functionality.
 
 ## Current status
 
-It actually mostly work! There's still lots of small things to implement, but
-the core functionality and including basic GUI support are there. That is, when
-using Linux. Currently the event loop has not yet been implemented for Windows
-and macOS.
+It actually works! There's still lots of small things to implement, but the core
+functionality and including basic GUI support are there. Currently the event
+loop has not yet been implemented for macOS, and the Windows version should work
+great but it has only been tested under Wine.
 
 ## Building
 

@@ -29,14 +29,25 @@ use windows::Win32::System::{
     LibraryLoader::GetModuleHandleA, Performance::QueryPerformanceCounter,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CloseWindow, CreateWindowExA, DefWindowProcA, RegisterClassExA, UnregisterClassA, HMENU,
-    WINDOW_EX_STYLE, WINDOW_STYLE, WNDCLASSEXA,
+    CloseWindow, CreateWindowExA, DefWindowProcA, GetWindowLongPtrA, PostMessageA,
+    RegisterClassExA, SetWindowLongPtrA, UnregisterClassA, CREATESTRUCTA, GWLP_USERDATA, HMENU,
+    WINDOW_EX_STYLE, WINDOW_STYLE, WM_CREATE, WM_DESTROY, WM_USER, WNDCLASSEXA,
 };
 
 use super::{EventLoop, MainThreadExecutor};
 use crate::nih_log;
 
-compile_error!("The Windows event loop has not yet been fully implemented");
+/// The custom message ID for our notify event. If the hidden event loop window receives this, then
+/// it knows it should start polling events.
+const NOTIFY_MESSAGE_ID: u32 = WM_USER;
+
+/// A type erased function passed to the window so it can poll for events. We can't pass the tasks
+/// queue and executor to the window callback sicne the callback wouldn't know what types they are,
+/// but we can wrap the polling loop in a closure and pass that instead.
+///
+/// This needs to be double boxed when passed to the function since fat pointers canont be directly
+/// casted from a regular pointer.
+type PollCallback = Box<dyn Fn()>;
 
 /// See [super::EventLoop].
 pub(crate) struct WindowsEventLoop<T, E> {
@@ -86,6 +97,28 @@ where
         };
         assert_ne!(unsafe { RegisterClassExA(&class) }, 0);
 
+        // This will be called by the hidden event loop when it gets woken up to process events. We
+        // can't pass the tasks queue and the executor to it directly, so this is a simple type
+        // erased version of the polling loop.
+        let callback: PollCallback = {
+            let executor = executor.clone();
+            let tasks = tasks.clone();
+
+            Box::new(move || {
+                let executor = match executor.upgrade() {
+                    Some(e) => e,
+                    None => {
+                        nih_debug_assert_failure!("Executor died before the message loop exited");
+                        return;
+                    }
+                };
+
+                while let Some(task) = tasks.pop() {
+                    unsafe { executor.execute(task) };
+                }
+            })
+        };
+
         let window = unsafe {
             CreateWindowExA(
                 WINDOW_EX_STYLE(0),
@@ -99,7 +132,10 @@ where
                 HWND(0),
                 HMENU(0),
                 HINSTANCE(0),
-                Arc::into_raw(tasks.clone()) as *const c_void,
+                // NOTE: We're boxing a box here. As mentioend in [PollCallback], we c an't directly
+                //       pass around fat poitners, so we need a normal pointer to a fat pointer to
+                //       be able to call this and deallocate it later
+                Box::into_raw(Box::new(callback)) as *const c_void,
             )
         };
         assert!(!window.is_invalid());
@@ -128,7 +164,11 @@ where
         } else {
             let success = self.tasks.push(task).is_ok();
             if success {
-                todo!("Wake up the window");
+                // Instead of polling on a timer, we can just wake up the window whenever there's a
+                // new message.
+                unsafe {
+                    PostMessageA(self.message_window, NOTIFY_MESSAGE_ID, WPARAM(0), LPARAM(0))
+                };
             }
 
             success
@@ -158,10 +198,40 @@ unsafe extern "system" fn window_proc(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> LRESULT {
-    eprintln!("Hello from the window proc!");
+    match message {
+        WM_CREATE => {
+            let create_params = lparam.0 as *const CREATESTRUCTA;
+            assert!(!create_params.is_null());
 
-    todo!("Clean up the Arc (that got turned into a raw pointe) with the window");
-    todo!("Handle messages");
+            let poll_callback = (*create_params).lpCreateParams as *mut PollCallback;
+            assert!(!poll_callback.is_null());
+            dbg!(poll_callback);
+
+            // Store this for later use
+            SetWindowLongPtrA(handle, GWLP_USERDATA, poll_callback as isize);
+        }
+        NOTIFY_MESSAGE_ID => {
+            let callback = GetWindowLongPtrA(handle, GWLP_USERDATA) as *mut PollCallback;
+            if callback.is_null() {
+                nih_debug_assert_failure!(
+                    "The notify function got called before the window was created"
+                );
+                return LRESULT(0);
+            }
+
+            dbg!(callback);
+            // This callback function just keeps popping off and handling tasks from the tasks queue
+            // until there's nothing left
+            (*callback)();
+        }
+        WM_DESTROY => {
+            // Make sure to deallocate the polling callback we stored earlier
+            let _the_bodies_hit_the_floor =
+                Box::from_raw(GetWindowLongPtrA(handle, GWLP_USERDATA) as *mut PollCallback);
+            SetWindowLongPtrA(handle, GWLP_USERDATA, 0);
+        }
+        _ => (),
+    }
 
     DefWindowProcA(handle, message, wparam, lparam)
 }

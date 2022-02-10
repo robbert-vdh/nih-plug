@@ -207,6 +207,11 @@ where
 
 /// Something that can execute tasks of type `T`.
 pub(crate) trait MainThreadExecutor<T>: Send + Sync {
-    /// Execute a task on the current thread. This shoudl only be called from the main thread.
+    /// Execute a task on the current thread. This should only be called from the main thread.
+    ///
+    /// # Safety
+    ///
+    /// This is not actually unsafe in the typical Rust sense. But the implemnting function will
+    /// assume (and can only assume) that this is called from the main thread.
     unsafe fn execute(&self, task: T);
 }
