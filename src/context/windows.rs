@@ -205,7 +205,6 @@ unsafe extern "system" fn window_proc(
 
             let poll_callback = (*create_params).lpCreateParams as *mut PollCallback;
             assert!(!poll_callback.is_null());
-            dbg!(poll_callback);
 
             // Store this for later use
             SetWindowLongPtrA(handle, GWLP_USERDATA, poll_callback as isize);
@@ -219,7 +218,6 @@ unsafe extern "system" fn window_proc(
                 return LRESULT(0);
             }
 
-            dbg!(callback);
             // This callback function just keeps popping off and handling tasks from the tasks queue
             // until there's nothing left
             (*callback)();

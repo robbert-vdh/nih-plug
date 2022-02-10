@@ -217,7 +217,7 @@ mod tests {
         // the expected time.
         smoother.set_target(100.0, 20.0);
         for _ in 0..(10 - 2) {
-            dbg!(smoother.next());
+            smoother.next();
         }
         assert_ne!(smoother.next(), 20.0);
         assert_eq!(smoother.next(), 20.0);
@@ -232,7 +232,7 @@ mod tests {
         // Integers are rounded, but with these values we can still test this
         smoother.set_target(100.0, 20);
         for _ in 0..(10 - 2) {
-            dbg!(smoother.next());
+            smoother.next();
         }
         assert_ne!(smoother.next(), 20);
         assert_eq!(smoother.next(), 20);
@@ -248,7 +248,7 @@ mod tests {
         // the expected time.
         smoother.set_target(100.0, 20.0);
         for _ in 0..(10 - 2) {
-            dbg!(smoother.next());
+            smoother.next();
         }
         assert_ne!(smoother.next(), 20.0);
         assert_eq!(smoother.next(), 20.0);
@@ -263,7 +263,7 @@ mod tests {
         // Integers are rounded, but with these values we can still test this
         smoother.set_target(100.0, 20);
         for _ in 0..(10 - 2) {
-            dbg!(smoother.next());
+            smoother.next();
         }
         assert_ne!(smoother.next(), 20);
         assert_eq!(smoother.next(), 20);
