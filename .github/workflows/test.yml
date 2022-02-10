@@ -17,11 +17,14 @@ defaults:
     # This otherwise gets run under dash which does not support brace expansion
     shell: bash
 
-# TODO: Also test on Windows and macOS once we add the required event loops
+# TODO: Also test on macOS once we add the event loop there
 jobs:
   build-all:
+    strategy:
+      matrix:
+        os: [ubuntu-18.04, windows-latest]
     name: Build all components
-    runs-on: ubuntu-18.04
+    runs-on: ${{ matrix.os }}
     # TODO: At some point, add artifacts
     steps:
       - uses: actions/checkout@v2
@@ -30,6 +33,7 @@ jobs:
         run: git fetch --force --prune --tags --unshallow
 
       - name: Install dependencies
+        if: startsWith(matrix.os, 'ubuntu')
         run: |
           sudo apt-get update
           sudo apt-get install -y libgl-dev libxcb1-dev libxcb-icccm4-dev libxcursor-dev libxkbcommon-dev libxcb-shape0-dev libxcb-xfixes0-dev
