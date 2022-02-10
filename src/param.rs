@@ -29,6 +29,10 @@ pub mod smoothing;
 pub type FloatParam = PlainParam<f32>;
 pub type IntParam = PlainParam<i32>;
 
+// TODO: Instead of having just structs with public fields and a Default instance, consider also
+//       adding `new` functions that take just the essentials (name, default value, range) and then
+//       have builders for the other fields. That might make the params object a bit less verbose.
+
 /// Describes a single parameter of any type.
 pub trait Param: Display {
     /// The plain parameter type.
