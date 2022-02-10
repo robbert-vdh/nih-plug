@@ -15,7 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 //! An event loop for windows, using an invisible window to hook into the host's message loop. This
-//! has only been tested under Wine.
+//! has only been tested under Wine with [yabridge](https://github.com/robbert-vdh/yabridge).
 
 use crossbeam::queue::ArrayQueue;
 use std::ffi::{c_void, CString};

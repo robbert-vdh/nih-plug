@@ -15,7 +15,8 @@ for an incomplete list of missing functionality.
 It actually works! There's still lots of small things to implement, but the core
 functionality and including basic GUI support are there. Currently the event
 loop has not yet been implemented for macOS, and the Windows version should work
-great but it has only been tested under Wine.
+great but it has only been tested under Wine with
+[yabridge](https://github.com/robbert-vdh/yabridge).
 
 ## Building
 
