@@ -31,6 +31,8 @@ parking_lot = "0.12"
 raw-window-handle = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+# This contains a number of fixes for the reference counting, cross compilation
+# support, and an incorrect return type
 vst3-sys = { git = "https://github.com/robbert-vdh/vst3-sys.git", branch = "fix/atomic-reference-count" }
 widestring = "1.0.0-beta.1"
 
