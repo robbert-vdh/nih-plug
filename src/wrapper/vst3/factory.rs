@@ -72,7 +72,7 @@ impl<P: Vst3Plugin> IPluginFactory for Factory<P> {
         *info = mem::zeroed();
 
         let info = &mut *info;
-        info.cid.data = P::VST3_CLASS_ID;
+        info.cid.data = P::PLATFORM_VST3_CLASS_ID;
         info.cardinality = vst3_sys::base::ClassCardinality::kManyInstances as i32;
         strlcpy(&mut info.category, "Audio Module Class");
         strlcpy(&mut info.name, P::NAME);
@@ -88,7 +88,7 @@ impl<P: Vst3Plugin> IPluginFactory for Factory<P> {
     ) -> tresult {
         check_null_ptr!(cid, obj);
 
-        if (*cid).data != P::VST3_CLASS_ID {
+        if (*cid).data != P::PLATFORM_VST3_CLASS_ID {
             return kNoInterface;
         }
 
@@ -111,7 +111,7 @@ impl<P: Vst3Plugin> IPluginFactory2 for Factory<P> {
         *info = mem::zeroed();
 
         let info = &mut *info;
-        info.cid.data = P::VST3_CLASS_ID;
+        info.cid.data = P::PLATFORM_VST3_CLASS_ID;
         info.cardinality = vst3_sys::base::ClassCardinality::kManyInstances as i32;
         strlcpy(&mut info.category, "Audio Module Class");
         strlcpy(&mut info.name, P::NAME);
@@ -138,7 +138,7 @@ impl<P: Vst3Plugin> IPluginFactory3 for Factory<P> {
         *info = mem::zeroed();
 
         let info = &mut *info;
-        info.cid.data = P::VST3_CLASS_ID;
+        info.cid.data = P::PLATFORM_VST3_CLASS_ID;
         info.cardinality = vst3_sys::base::ClassCardinality::kManyInstances as i32;
         strlcpy(&mut info.category, "Audio Module Class");
         u16strlcpy(&mut info.name, P::NAME);
