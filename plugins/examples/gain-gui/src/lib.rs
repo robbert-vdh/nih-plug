@@ -6,7 +6,7 @@ use nih_plug::{
     formatters, util, Buffer, BufferConfig, BusConfig, Editor, IntParam, Plugin, ProcessContext,
     ProcessStatus, Vst3Plugin,
 };
-use nih_plug::{FloatParam, Params, Range, Smoother, SmoothingStyle};
+use nih_plug::{FloatParam, Params, Range, SmoothingStyle};
 use nih_plug_egui::{create_egui_editor, egui, widgets, EguiState};
 use std::pin::Pin;
 use std::sync::Arc;
