@@ -125,6 +125,12 @@ impl<'outer, 'inner> Iterator for Channels<'outer, 'inner> {
 impl<'outer, 'inner> ExactSizeIterator for Channels<'outer, 'inner> {}
 
 impl<'outer, 'inner> Channels<'outer, 'inner> {
+    /// A resetting iterator. This lets you iterate over the same channels multiple times.
+    pub fn reset_iter(&mut self) -> &mut Self {
+        self.current_channel = 0;
+        self
+    }
+
     /// Access a sample by index. Useful when you would otehrwise iterate over this 'Channels'
     /// iterator multiple times.
     #[inline]
