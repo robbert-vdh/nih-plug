@@ -23,6 +23,8 @@ use nih_plug::{
 };
 use std::pin::Pin;
 
+mod filter;
+
 struct Diopser {
     params: Pin<Box<DiopserParams>>,
 }
