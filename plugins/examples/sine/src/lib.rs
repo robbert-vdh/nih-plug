@@ -5,7 +5,7 @@ use nih_plug::{
     formatters, util, Buffer, BufferConfig, BusConfig, Plugin, ProcessContext, ProcessStatus,
     Vst3Plugin,
 };
-use nih_plug::{BoolParam, FloatParam, Param, Params, Range, Smoother, SmoothingStyle};
+use nih_plug::{BoolParam, FloatParam, Params, Range, Smoother, SmoothingStyle};
 use std::f32::consts;
 use std::pin::Pin;
 

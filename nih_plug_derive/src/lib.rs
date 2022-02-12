@@ -176,6 +176,9 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
             fn param_map(
                 self: std::pin::Pin<&Self>,
             ) -> std::collections::HashMap<&'static str, nih_plug::param::internals::ParamPtr> {
+                // This may not be in scope otherwise
+                use ::nih_plug::Param;
+
                 let mut param_map = std::collections::HashMap::new();
 
                 #(#param_mapping_insert_tokens)*
