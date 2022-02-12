@@ -2,6 +2,7 @@ extern crate proc_macro;
 
 use proc_macro::TokenStream;
 use quote::quote;
+use std::collections::HashSet;
 use syn::spanned::Spanned;
 
 #[proc_macro_derive(Params, attributes(id, persist))]
@@ -32,6 +33,10 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
     let mut param_id_string_tokens = Vec::new();
     let mut field_serialize_tokens = Vec::new();
     let mut field_deserialize_tokens = Vec::new();
+
+    // We'll also enforce that there are no duplicate keys at compile time
+    let mut param_ids = HashSet::new();
+    let mut persist_ids = HashSet::new();
     for field in fields.named {
         let field_name = match &field.ident {
             Some(ident) => ident,
@@ -93,6 +98,15 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
 
         match (id_attr, persist_attr) {
             (Some(param_id), None) => {
+                if !param_ids.insert(param_id.clone()) {
+                    return syn::Error::new(
+                        field.span(),
+                        "Multiple fields with the same parameter ID found",
+                    )
+                    .to_compile_error()
+                    .into();
+                }
+
                 // The specific parameter types know how to convert themselves into the correct ParamPtr
                 // variant
                 param_mapping_insert_tokens
@@ -100,6 +114,15 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                 param_id_string_tokens.push(quote! { #param_id, });
             }
             (None, Some(stable_name)) => {
+                if !persist_ids.insert(stable_name.clone()) {
+                    return syn::Error::new(
+                        field.span(),
+                        "Multiple persisted fields with the same ID found",
+                    )
+                    .to_compile_error()
+                    .into();
+                }
+
                 // We don't know anything about the field types, but because we can generate this
                 // function we get type erasure for free since we only need to worry about byte
                 // vectors
