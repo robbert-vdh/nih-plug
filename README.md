@@ -26,7 +26,7 @@ There are currently no automated builds available, so check the
 [building](#building) section for instructions on how to compile these plugins
 yourself.
 
-- [**diopser**](plugins/diopser) is a totally original phase rotation plugin.
+- [**Diopser**](plugins/diopser) is a totally original phase rotation plugin.
   Useful for oomphing up kickdrums and basses, transforming synths into their
   evil phase-y cousin, and making everything sound like a cheap Sci-Fi laser
   beam.
