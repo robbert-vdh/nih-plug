@@ -198,7 +198,7 @@ impl Plugin for Diopser {
             for filter_idx in 0..self.params.filter_stages.value as usize {
                 // Because of this filter_idx outer loop we can't directly iterate over
                 // `channel_samples` as the iterator would be empty after the first loop
-                for (sample, filters) in channel_samples.reset_iter().zip(self.filters.iter_mut()) {
+                for (sample, filters) in channel_samples.iter_mut().zip(self.filters.iter_mut()) {
                     *sample = filters[filter_idx].process(*sample);
                 }
             }

@@ -125,8 +125,9 @@ impl<'outer, 'inner> Iterator for Channels<'outer, 'inner> {
 impl<'outer, 'inner> ExactSizeIterator for Channels<'outer, 'inner> {}
 
 impl<'outer, 'inner> Channels<'outer, 'inner> {
-    /// A resetting iterator. This lets you iterate over the same channels multiple times.
-    pub fn reset_iter(&mut self) -> &mut Self {
+    /// A resetting iterator. This lets you iterate over the same channels multiple times. Otherwise
+    /// you don't need to use this function as [Channels] already implements [Iterator].
+    pub fn iter_mut(&mut self) -> &mut Self {
         self.current_channel = 0;
         self
     }
