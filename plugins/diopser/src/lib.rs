@@ -104,8 +104,8 @@ impl DiopserParams {
             )
             .with_callback(trigger_filter_update),
 
-            // Smoothed parameters don't need the callback as we can loop at whether the smoother is
-            // still smoothing
+            // Smoothed parameters don't need the callback as we can just look at whether the
+            // smoother is still smoothing
             filter_frequency: FloatParam::new(
                 "Filter Frequency",
                 200.0,
