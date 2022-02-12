@@ -128,20 +128,26 @@ impl<'outer, 'inner> Channels<'outer, 'inner> {
     /// Access a sample by index. Useful when you would otehrwise iterate over this 'Channels'
     /// iterator multiple times.
     #[inline]
-    pub fn get_mut(&mut self, index: usize) -> Option<&mut f32> {
+    pub fn get_mut(&mut self, channel_index: usize) -> Option<&mut f32> {
         // SAFETY: The channel bound has already been checked
         unsafe {
-            self.buffers
-                .get_unchecked_mut(self.current_channel)
-                .get_mut(index)
+            Some(
+                self.buffers
+                    .get_mut(channel_index)?
+                    .get_unchecked_mut(self.current_sample),
+            )
         }
     }
 
     /// The same as [Self::get_mut], but without any bounds checking.
+    ///
+    /// # Safety
+    ///
+    /// `channel_index` must be in the range `0..Self::len()`.
     #[inline]
-    pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut f32 {
+    pub unsafe fn get_unchecked_mut(&mut self, channel_index: usize) -> &mut f32 {
         self.buffers
-            .get_unchecked_mut(self.current_channel)
-            .get_unchecked_mut(index)
+            .get_unchecked_mut(channel_index)
+            .get_unchecked_mut(self.current_sample)
     }
 }
