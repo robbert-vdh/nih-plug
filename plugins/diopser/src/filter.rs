@@ -47,18 +47,18 @@ impl Default for Biquad {
                 a2: 0.00,
             },
             s1: 0.0,
-            s2: 0.9,
+            s2: 0.0,
         }
     }
 }
 
 impl Biquad {
     /// Process a single sample.
-    fn process(&mut self, sample: f32) -> f32 {
+    pub fn process(&mut self, sample: f32) -> f32 {
         let result = self.coefficients.b0 * sample + self.s1;
 
-        self.s1 = self.s2 + self.coefficients.b1 * sample - self.coefficients.a1 * sample;
-        self.s2 = self.coefficients.b2 * sample - self.coefficients.a2 * sample;
+        self.s1 = self.coefficients.b1 * sample - self.coefficients.a1 * result + self.s2;
+        self.s2 = self.coefficients.b2 * sample - self.coefficients.a2 * result;
 
         result
     }
