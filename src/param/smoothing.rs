@@ -107,7 +107,7 @@ impl Smoother<f32> {
     // Yes, Clippy, like I said, this was intentional
     #[allow(clippy::should_implement_trait)]
     pub fn next(&self) -> f32 {
-        if self.steps_left.load(Ordering::Relaxed) > 1 {
+        if self.steps_left.load(Ordering::Relaxed) > 0 {
             let current = self.current.load(Ordering::Relaxed);
 
             // The number of steps usually won't fit exactly, so make sure we don't do weird things
@@ -163,7 +163,7 @@ impl Smoother<i32> {
 
     #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> i32 {
-        if self.steps_left.load(Ordering::Relaxed) > 1 {
+        if self.steps_left.load(Ordering::Relaxed) > 0 {
             let current = self.current.load(Ordering::Relaxed);
 
             // The number of steps usually won't fit exactly, so make sure we don't do weird things
