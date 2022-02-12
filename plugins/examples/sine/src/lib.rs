@@ -66,7 +66,7 @@ impl Default for SineParams {
                     max: 0.0,
                 },
             )
-            .with_smoother(Smoother::new(SmoothingStyle::Linear(3.0)))
+            .with_smoother(SmoothingStyle::Linear(3.0))
             .with_unit(" dB")
             .with_value_to_string(formatters::f32_rounded(2)),
             frequency: FloatParam::new(
@@ -78,7 +78,7 @@ impl Default for SineParams {
                     factor: Range::skew_factor(-2.0),
                 },
             )
-            .with_smoother(Smoother::new(SmoothingStyle::Linear(10.0)))
+            .with_smoother(SmoothingStyle::Linear(10.0))
             .with_unit(" Hz")
             .with_value_to_string(formatters::f32_rounded(0)),
             use_midi: BoolParam::new("Use MIDI", false),

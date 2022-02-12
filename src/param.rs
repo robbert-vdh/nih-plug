@@ -6,7 +6,7 @@ use std::fmt::Display;
 use std::sync::Arc;
 
 use self::range::{NormalizebleRange, Range};
-use self::smoothing::Smoother;
+use self::smoothing::{Smoother, SmoothingStyle};
 
 pub mod internals;
 pub mod range;
@@ -377,8 +377,8 @@ where
     /// is the parameter's new value. This should not do anything expensive as it may be called
     /// multiple times in rapid succession, and it can be run from both the GUI and the audio
     /// thread.
-    pub fn with_smoother(mut self, smoother: Smoother<T>) -> Self {
-        self.smoothed = smoother;
+    pub fn with_smoother(mut self, style: SmoothingStyle) -> Self {
+        self.smoothed = Smoother::new(style);
         self
     }
 
