@@ -1,4 +1,6 @@
-//! TODO: Document how to use the [Param] trait. For the moment, just look at the gain example.
+//! TODO: Document how to use the [Param] trait. Also mention both interfaces: direct initialization
+//!       + `..Default::default()`, and the builder interface. For the moment, just look at the gain
+//!       example.
 
 use std::fmt::Display;
 use std::sync::Arc;
@@ -12,10 +14,6 @@ pub mod smoothing;
 
 pub type FloatParam = PlainParam<f32>;
 pub type IntParam = PlainParam<i32>;
-
-// TODO: Instead of having just structs with public fields and a Default instance, consider also
-//       adding `new` functions that take just the essentials (name, default value, range) and then
-//       have builders for the other fields. That might make the params object a bit less verbose.
 
 /// Describes a single parameter of any type.
 pub trait Param: Display {
@@ -75,6 +73,9 @@ pub trait Param: Display {
 
 /// A numerical parameter that's stored unnormalized. The range is used for the normalization
 /// process.
+///
+/// You can either initialize the struct directly, using `..Default::default()` to fill in the
+/// unused fields, or you can use the builder interface with [Self::new()].
 //
 // XXX: To keep the API simple and to allow the optimizer to do its thing, the values are stored as
 //      plain primitive values that are modified through the `*mut` pointers from the plugin's
@@ -90,6 +91,8 @@ pub struct PlainParam<T> {
     /// Storing parameter values like this instead of in a single contiguous array is bad for cache
     /// locality, but it does allow for a much nicer declarative API.
     pub value: T,
+    /// An optional smoother that will automatically interpolate between the new automation values
+    /// set by the host.
     pub smoothed: Smoother<T>,
     /// Optional callback for listening to value changes. The argument passed to this function is
     /// the parameter's new **plain** value. This should not do anything expensive as it may be
@@ -97,13 +100,16 @@ pub struct PlainParam<T> {
     ///
     /// To use this, you'll probably want to store an `Arc<Atomic*>` alongside the parmater in the
     /// parmaeters struct, move a clone of that `Arc` into this closure, and then modify that.
+    ///
+    /// TODO: We probably also want to pass the old value to this function.
     pub value_changed: Option<Arc<dyn Fn(T) + Send + Sync>>,
 
     /// The distribution of the parameter's values.
     pub range: Range<T>,
     /// The parameter's human readable display name.
     pub name: &'static str,
-    /// The parameter value's unit, added after `value_to_string` if that is set.
+    /// The parameter value's unit, added after `value_to_string` if that is set. NIH-plug will not
+    /// automatically add a space before the unit.
     pub unit: &'static str,
     /// Optional custom conversion function from a plain **unnormalized** value to a string.
     pub value_to_string: Option<Arc<dyn Fn(T) -> String + Send + Sync>>,
@@ -121,7 +127,8 @@ pub struct BoolParam {
 
     /// Optional callback for listening to value changes. The argument passed to this function is
     /// the parameter's new value. This should not do anything expensive as it may be called
-    /// multiple times in rapid succession.
+    /// multiple times in rapid succession, and it can be run from both the GUI and the audio
+    /// thread.
     pub value_changed: Option<Arc<dyn Fn(bool) + Send + Sync>>,
 
     /// The parameter's human readable display name.
@@ -348,5 +355,109 @@ impl Display for BoolParam {
             (true, None) => write!(f, "On"),
             (false, None) => write!(f, "Off"),
         }
+    }
+}
+
+impl<T: Default> PlainParam<T>
+where
+    Range<T>: Default,
+{
+    /// Build a new [Self]. Use the other associated functions to modify the behavior of the
+    /// parameter.
+    pub fn new(name: &'static str, default: T, range: Range<T>) -> Self {
+        Self {
+            value: default,
+            range,
+            name,
+            ..Default::default()
+        }
+    }
+
+    /// Run a callback whenever this parameter's value changes. The argument passed to this function
+    /// is the parameter's new value. This should not do anything expensive as it may be called
+    /// multiple times in rapid succession, and it can be run from both the GUI and the audio
+    /// thread.
+    pub fn with_smoother(mut self, smoother: Smoother<T>) -> Self {
+        self.smoothed = smoother;
+        self
+    }
+
+    /// Run a callback whenever this parameter's value changes. The argument passed to this function
+    /// is the parameter's new value. This should not do anything expensive as it may be called
+    /// multiple times in rapid succession, and it can be run from both the GUI and the audio
+    /// thread.
+    pub fn with_callback(mut self, callback: Arc<dyn Fn(T) + Send + Sync>) -> Self {
+        self.value_changed = Some(callback);
+        self
+    }
+
+    /// Display a unit when rendering this parameter to a string. Appended after the
+    /// [Self::value_to_string] function if that is also set. NIH-plug will not
+    /// automatically add a space before the unit.
+    pub fn with_unit(mut self, unit: &'static str) -> Self {
+        self.unit = unit;
+        self
+    }
+
+    /// Use a custom conversion function to convert the plain, unnormalized value to a
+    /// string.
+    pub fn with_value_to_string(
+        mut self,
+        callback: Arc<dyn Fn(T) -> String + Send + Sync>,
+    ) -> Self {
+        self.value_to_string = Some(callback);
+        self
+    }
+
+    /// Use a custom conversion function to convert from a string to a plain, unnormalized
+    /// value. If the string cannot be parsed, then this should return a `None`. If this
+    /// happens while the parameter is being updated then the update will be canceled.
+    pub fn with_string_to_value<F>(
+        mut self,
+        callback: Arc<dyn Fn(&str) -> Option<T> + Send + Sync>,
+    ) -> Self {
+        self.string_to_value = Some(callback);
+        self
+    }
+}
+
+impl BoolParam {
+    /// Build a new [Self]. Use the other associated functions to modify the behavior of the
+    /// parameter.
+    pub fn new(name: &'static str, default: bool) -> Self {
+        Self {
+            value: default,
+            name,
+            ..Default::default()
+        }
+    }
+
+    /// Run a callback whenever this parameter's value changes. The argument passed to this function
+    /// is the parameter's new value. This should not do anything expensive as it may be called
+    /// multiple times in rapid succession, and it can be run from both the GUI and the audio
+    /// thread.
+    pub fn with_callback(mut self, callback: Arc<dyn Fn(bool) + Send + Sync>) -> Self {
+        self.value_changed = Some(callback);
+        self
+    }
+
+    /// Use a custom conversion function to convert the boolean value to a string.
+    pub fn with_value_to_string(
+        mut self,
+        callback: Arc<dyn Fn(bool) -> String + Send + Sync>,
+    ) -> Self {
+        self.value_to_string = Some(callback);
+        self
+    }
+
+    /// Use a custom conversion function to convert from a string to a boolean value. If the string
+    /// cannot be parsed, then this should return a `None`. If this happens while the parameter is
+    /// being updated then the update will be canceled.
+    pub fn with_string_to_value(
+        mut self,
+        callback: Arc<dyn Fn(&str) -> Option<bool> + Send + Sync>,
+    ) -> Self {
+        self.string_to_value = Some(callback);
+        self
     }
 }
