@@ -18,6 +18,8 @@ members = [
   "plugins/examples/gain",
   "plugins/examples/gain-gui",
   "plugins/examples/sine",
+
+  "plugins/diopser",
 ]
 
 [dependencies]
