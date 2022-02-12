@@ -51,30 +51,26 @@ impl Default for Gain {
 impl Default for GainParams {
     fn default() -> Self {
         Self {
-            gain: FloatParam {
-                value: 0.0,
-                smoothed: Smoother::new(SmoothingStyle::Linear(50.0)),
-                value_changed: None,
-                range: Range::Linear {
+            gain: FloatParam::new(
+                "Gain",
+                0.0,
+                Range::Linear {
                     min: -30.0,
                     max: 30.0,
                 },
-                name: "Gain",
-                unit: " dB",
-                value_to_string: formatters::f32_rounded(2),
-                string_to_value: None,
-            },
-            some_int: IntParam {
-                value: 3,
-                smoothed: Smoother::none(),
-                name: "Something",
-                range: Range::Skewed {
+            )
+            .with_smoother(Smoother::new(SmoothingStyle::Linear(50.0)))
+            .with_unit(" dB")
+            .with_value_to_string(formatters::f32_rounded(2)),
+            some_int: IntParam::new(
+                "Something",
+                3,
+                Range::Skewed {
                     min: 0,
                     max: 3,
                     factor: Range::skew_factor(1.0),
                 },
-                ..Default::default()
-            },
+            ),
         }
     }
 }

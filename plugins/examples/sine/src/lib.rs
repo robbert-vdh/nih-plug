@@ -58,36 +58,30 @@ impl Default for Sine {
 impl Default for SineParams {
     fn default() -> Self {
         Self {
-            gain: FloatParam {
-                value: -10.0,
-                smoothed: Smoother::new(SmoothingStyle::Linear(3.0)),
-                range: Range::Linear {
+            gain: FloatParam::new(
+                "Gain",
+                -10.0,
+                Range::Linear {
                     min: -30.0,
                     max: 0.0,
                 },
-                name: "Gain",
-                unit: " dB",
-                value_to_string: formatters::f32_rounded(2),
-                ..Default::default()
-            },
-            frequency: FloatParam {
-                value: 420.0,
-                smoothed: Smoother::new(SmoothingStyle::Linear(10.0)),
-                range: Range::Skewed {
+            )
+            .with_smoother(Smoother::new(SmoothingStyle::Linear(3.0)))
+            .with_unit(" dB")
+            .with_value_to_string(formatters::f32_rounded(2)),
+            frequency: FloatParam::new(
+                "Frequency",
+                420.0,
+                Range::Skewed {
                     min: 1.0,
                     max: 20_000.0,
                     factor: Range::skew_factor(-2.0),
                 },
-                name: "Frequency",
-                unit: " Hz",
-                value_to_string: formatters::f32_rounded(0),
-                ..Default::default()
-            },
-            use_midi: BoolParam {
-                value: false,
-                name: "Use MIDI",
-                ..Default::default()
-            },
+            )
+            .with_smoother(Smoother::new(SmoothingStyle::Linear(10.0)))
+            .with_unit(" Hz")
+            .with_value_to_string(formatters::f32_rounded(0)),
+            use_midi: BoolParam::new("Use MIDI", false),
         }
     }
 }

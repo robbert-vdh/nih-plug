@@ -8,6 +8,7 @@ use nih_plug::{
 use nih_plug::{BoolParam, FloatParam, Param, Params, Range, Smoother, SmoothingStyle};
 use parking_lot::RwLock;
 use std::pin::Pin;
+use std::sync::Arc;
 
 struct Gain {
     params: Pin<Box<GainParams>>,
@@ -39,31 +40,35 @@ impl Default for Gain {
 impl Default for GainParams {
     fn default() -> Self {
         Self {
+            // There are three ways to specify parameters:
+            //
+            // ...either manually specify all fields:
             gain: FloatParam {
                 value: 0.0,
                 smoothed: Smoother::new(SmoothingStyle::Linear(50.0)),
                 value_changed: None,
-                // If, for instance, updating this parameter would require other parts of the
-                // plugin's internal state to be updated other values to also be updated, then you
-                // can use a callback like this, where `requires_updates` is an `Arc<AtomicBool>`
-                // that's also stored on the parameters struct:
-                // value_changed: Some(Arc::new(move |_new| { requires_update.store(true, Ordering::Release); })),
                 range: Range::Linear {
                     min: -30.0,
                     max: 30.0,
                 },
                 name: "Gain",
                 unit: " dB",
-                value_to_string: formatters::f32_rounded(2),
+                value_to_string: Some(formatters::f32_rounded(2)),
                 string_to_value: None,
+                // ...or specify the fields you want to initialize directly and leave the other
+                // fields at their defaults:
+                // // ..Default::default(),
             },
-            // For brevity's sake you can also use the default values. Don't forget to set the field
-            // name, default value, and range though.
-            the_field_name_can_change: BoolParam {
-                value: false,
-                name: "Important Value",
-                ..Default::default()
-            },
+            // ...or use the builder interface:
+            the_field_name_can_change: BoolParam::new("Important value", false).with_callback(
+                Arc::new(|_new_value: bool| {
+                    // If, for instance, updating this parameter would require other parts of the
+                    // plugin's internal state to be updated other values to also be updated, then
+                    // you can use this callback to for instance modify an atomic in the plugin.
+                }),
+            ),
+            // Persisted fields can be intialized like any other fields, and they'll keep their when
+            // restoring the plugin's state.
             random_data: RwLock::new(Vec::new()),
         }
     }
