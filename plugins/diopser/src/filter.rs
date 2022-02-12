@@ -19,6 +19,7 @@ use std::f32::consts;
 /// A simple biquad filter with functions for generating coefficients for an all-pass filter.
 ///
 /// Based on <https://en.wikipedia.org/wiki/Digital_biquad_filter#Transposed_direct_forms>.
+#[derive(Clone, Copy, Debug)]
 pub struct Biquad {
     pub coefficients: BiquadCoefficients,
     s1: f32,
@@ -27,6 +28,7 @@ pub struct Biquad {
 
 /// The coefficients `[b0, b1, b2, a1, a2]` for [Biquad]. These coefficients are all prenormalized,
 /// i.e. they have been divided by `a0`.
+#[derive(Clone, Copy, Debug)]
 pub struct BiquadCoefficients {
     b0: f32,
     b1: f32,
@@ -85,6 +87,7 @@ impl BiquadCoefficients {
         let b2 = (1.0 + alpha) / a0;
         let a1 = (-2.0 * cos_omega0) / a0;
         let a2 = (1.0 - alpha) / a0;
+
         Self { b0, b1, b2, a1, a2 }
     }
 }
