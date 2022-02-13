@@ -31,10 +31,10 @@ mod filter;
 /// how many filters are actually active.
 const MAX_NUM_FILTERS: usize = 512;
 /// The minimum step size for smoothing the filter parmaeters.
-const MIN_AUTOMATION_STEP_SIZE: usize = 1;
+const MIN_AUTOMATION_STEP_SIZE: u32 = 1;
 /// The maximum step size for smoothing the filter parameters. Updating these parameters can be
 /// expensive, so updating them in larger steps can be useful.
-const MAX_AUTOMATION_STEP_SIZE: usize = 512;
+const MAX_AUTOMATION_STEP_SIZE: u32 = 512;
 
 // An incomplete list of unported features includes:
 // - Actually add the parameters
@@ -54,6 +54,12 @@ struct Diopser {
     /// updated. For the regular filter parameters we can look at the smoothers, but this is needed
     /// when changing the number of active filters.
     should_update_filters: Arc<AtomicBool>,
+    /// If this is 1 and any of the filter parameters are still smoothing, thenn the filter
+    /// coefficients should be recalculated on the next sample. After that, this gets reset to
+    /// `unnormalize_automation_precision(self.params.automation_precision.value)`. This is to
+    /// reduce the DSP load of automation parameters. It can also cause some fun sounding glitchy
+    /// effects when the precision is low.
+    next_filter_smoothing_in: i32,
 }
 
 // TODO: Some combinations of parameters can cause really loud resonance. We should limit the
@@ -94,6 +100,7 @@ impl Default for Diopser {
 
             filters: Vec::new(),
             should_update_filters,
+            next_filter_smoothing_in: 1,
         }
     }
 }
@@ -199,18 +206,14 @@ impl Plugin for Diopser {
         buffer: &mut Buffer,
         _context: &mut impl ProcessContext,
     ) -> ProcessStatus {
+        // Since this is an expensive operation, only update the filters when it's actually
+        // necessary, and allow smoothing only every n samples using the automation precision
+        // parameter
+        let smoothing_interval =
+            unnormalize_automation_precision(self.params.automation_precision.value);
+
         for mut channel_samples in buffer.iter_mut() {
-            // Since this is an expensive operation, only update the filters when it's actually
-            // necessary
-            let should_update_filters = self
-                .should_update_filters
-                .compare_exchange(true, false, Ordering::Acquire, Ordering::Relaxed)
-                .is_ok()
-                || self.params.filter_frequency.smoothed.is_smoothing()
-                || self.params.filter_resonance.smoothed.is_smoothing();
-            if should_update_filters {
-                self.update_filters();
-            }
+            self.maybe_update_filters(smoothing_interval);
 
             // We get better cache locality by iterating over the filters and then over the channels
             for filter_idx in 0..self.params.filter_stages.value as usize {
@@ -227,11 +230,37 @@ impl Plugin for Diopser {
 }
 
 impl Diopser {
-    fn update_filters(&mut self) {
+    /// Check if the filters need to be updated beased on [Self::should_update_filters] and the
+    /// smoothing interval, and update them as needed.
+    fn maybe_update_filters(&mut self, smoothing_interval: u32) {
+        let should_update_filters = self
+            .should_update_filters
+            .compare_exchange(true, false, Ordering::Acquire, Ordering::Relaxed)
+            .is_ok()
+            || ((self.params.filter_frequency.smoothed.is_smoothing()
+                || self.params.filter_resonance.smoothed.is_smoothing())
+                && self.next_filter_smoothing_in <= 1);
+        if should_update_filters {
+            self.update_filters(smoothing_interval);
+            self.next_filter_smoothing_in = smoothing_interval as i32;
+        } else {
+            self.next_filter_smoothing_in -= 1;
+        }
+    }
+
+    /// Recompute the filter coefficients based on the smoothed paraetersm. We can skip forwardq in
+    /// larger steps to reduce the DSP load.
+    fn update_filters(&mut self, smoothing_interval: u32) {
         let coefficients = filter::BiquadCoefficients::allpass(
             self.sample_rate,
-            self.params.filter_frequency.smoothed.next(),
-            self.params.filter_resonance.smoothed.next(),
+            self.params
+                .filter_frequency
+                .smoothed
+                .next_step(smoothing_interval),
+            self.params
+                .filter_resonance
+                .smoothed
+                .next_step(smoothing_interval),
         );
         for channel in self.filters.iter_mut() {
             for filter in channel
@@ -244,15 +273,14 @@ impl Diopser {
     }
 }
 
-fn normalize_automation_precision(step_size: usize) -> f32 {
+fn normalize_automation_precision(step_size: u32) -> f32 {
     (MAX_AUTOMATION_STEP_SIZE - step_size) as f32
         / (MAX_AUTOMATION_STEP_SIZE - MIN_AUTOMATION_STEP_SIZE) as f32
 }
 
-fn unnormalize_automation_precision(normalized: f32) -> usize {
+fn unnormalize_automation_precision(normalized: f32) -> u32 {
     MAX_AUTOMATION_STEP_SIZE
-        - (normalized * (MAX_AUTOMATION_STEP_SIZE - MIN_AUTOMATION_STEP_SIZE) as f32).round()
-            as usize
+        - (normalized * (MAX_AUTOMATION_STEP_SIZE - MIN_AUTOMATION_STEP_SIZE) as f32).round() as u32
 }
 
 impl Vst3Plugin for Diopser {
