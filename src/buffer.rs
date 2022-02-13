@@ -59,7 +59,7 @@ impl<'a> Iterator for Samples<'a> {
     type Item = Channels<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.current_sample < self.len() {
+        if self.current_sample < unsafe { (*self.buffers)[0].len() } {
             let channels = Channels {
                 buffers: self.buffers,
                 current_sample: self.current_sample,
@@ -114,7 +114,7 @@ impl<'a> Iterator for ChannelsIter<'a> {
     type Item = &'a mut f32;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.current_channel < self.len() {
+        if self.current_channel < unsafe { (*self.buffers).len() } {
             // SAFETY: These bounds have already been checked
             let sample = unsafe {
                 (*self.buffers)
