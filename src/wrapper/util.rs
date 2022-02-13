@@ -142,6 +142,7 @@ impl Drop for ScopedFtz {
     }
 }
 
+#[cfg(test)]
 mod miri {
     use std::ffi::CStr;
     use widestring::U16CStr;
