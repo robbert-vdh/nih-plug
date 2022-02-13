@@ -200,7 +200,7 @@ macro_rules! impl_plainparam {
 
                 match value {
                     Some(plain) => {
-                        self.value = plain;
+                        self.set_plain_value(plain);
                         true
                     }
                     None => false,
@@ -219,7 +219,7 @@ macro_rules! impl_plainparam {
             }
 
             fn normalized_value(&self) -> f32 {
-                self.range.normalize(self.value)
+                self.preview_normalized(self.value)
             }
 
             fn set_normalized_value(&mut self, normalized: f32) {
@@ -227,7 +227,7 @@ macro_rules! impl_plainparam {
             }
 
             fn normalized_value_to_string(&self, normalized: f32, include_unit: bool) -> String {
-                let value = self.range.unnormalize(normalized);
+                let value = self.preview_plain(normalized);
                 match (&self.value_to_string, include_unit) {
                     (Some(f), true) => format!("{}{}", f(value), self.unit),
                     (Some(f), false) => format!("{}", f(value)),
@@ -243,7 +243,7 @@ macro_rules! impl_plainparam {
                     None => string.parse().ok(),
                 }?;
 
-                Some(self.range.normalize(value))
+                Some(self.preview_normalized(value))
             }
 
             fn preview_normalized(&self, plain: Self::Plain) -> f32 {
@@ -279,7 +279,7 @@ impl Param for BoolParam {
 
         match value {
             Some(plain) => {
-                self.value = plain;
+                self.set_plain_value(plain);
                 true
             }
             None => false,
@@ -298,19 +298,15 @@ impl Param for BoolParam {
     }
 
     fn normalized_value(&self) -> f32 {
-        if self.value {
-            1.0
-        } else {
-            0.0
-        }
+        self.preview_normalized(self.value)
     }
 
     fn set_normalized_value(&mut self, normalized: f32) {
-        self.set_plain_value(normalized > 0.5);
+        self.set_plain_value(self.preview_plain(normalized));
     }
 
     fn normalized_value_to_string(&self, normalized: f32, _include_unit: bool) -> String {
-        let value = normalized > 0.5;
+        let value = self.preview_plain(normalized);
         match (value, &self.value_to_string) {
             (v, Some(f)) => f(v),
             (true, None) => String::from("On"),
@@ -324,7 +320,7 @@ impl Param for BoolParam {
             None => Some(string.eq_ignore_ascii_case("true") || string.eq_ignore_ascii_case("on")),
         }?;
 
-        Some(if value { 1.0 } else { 0.0 })
+        Some(self.preview_normalized(value))
     }
 
     fn preview_normalized(&self, plain: Self::Plain) -> f32 {
