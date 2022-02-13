@@ -252,7 +252,8 @@ mod tests {
     fn step_size() {
         // These are weird step sizes, but if it works here then it will work for anything
         let range = make_linear_float_range();
-        assert_eq!(range.snap_to_step(13.0, 4.73), 14.49);
+        // XXX: We round to decimal places when outputting, but not when snapping to steps
+        assert_eq!(range.snap_to_step(13.0, 4.73), 14.190001);
     }
 
     #[test]
