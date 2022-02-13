@@ -141,7 +141,7 @@ impl<'a> Iterator for ChannelsIter<'a> {
 
 impl<'a> ExactSizeIterator for ChannelsIter<'a> {}
 
-impl Channels<'_> {
+impl<'a: 'b, 'b> Channels<'a> {
     /// Get the number of channels.
     pub fn len(&self) -> usize {
         unsafe { (*self.buffers).len() }
@@ -149,9 +149,10 @@ impl Channels<'_> {
 
     /// A resetting iterator. This lets you iterate over the same channels multiple times. Otherwise
     /// you don't need to use this function as [Channels] already implements [Iterator].
-    pub fn iter_mut<'a: 'b, 'b>(&'a mut self) -> ChannelsIter<'b> {
+    pub fn iter_mut(&'b mut self) -> ChannelsIter<'b> {
         // SAFETY: No two [ChannelIters] can exist at a time
         let buffers: *mut [&'b mut [f32]] = unsafe { std::mem::transmute(self.buffers) };
+
         ChannelsIter {
             buffers,
             current_sample: self.current_sample,
