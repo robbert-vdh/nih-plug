@@ -34,18 +34,17 @@ pub trait Param: Display {
     /// Get the unnormalized value for this parameter.
     fn plain_value(&self) -> Self::Plain;
 
-    /// Set this parameter based on a plain, unnormalized value.
+    /// Set this parameter based on a plain, unnormalized value. This does **not** snap to step
+    /// sizes for continuous parameters (i.e. [FloatParam]).
     ///
     /// This does **not** update the smoother.
-    ///
-    /// TDOO: Decide on whether this should update the smoother or not. That wouldn't be compatible
-    /// with sample accurate automation when we add that.
     fn set_plain_value(&mut self, plain: Self::Plain);
 
     /// Get the normalized `[0, 1]` value for this parameter.
     fn normalized_value(&self) -> f32;
 
-    /// Set this parameter based on a normalized value.
+    /// Set this parameter based on a normalized value. This **does** snap to step sizes for
+    /// continuous parameters (i.e. [FloatParam]).
     ///
     /// This does **not** update the smoother.
     fn set_normalized_value(&mut self, normalized: f32);
@@ -63,7 +62,7 @@ pub trait Param: Display {
     fn preview_normalized(&self, plain: Self::Plain) -> f32;
 
     /// Get the plain, unnormalized value for a normalized value, as a float. Used as part of the
-    /// wrappers.
+    /// wrappers. This **does** snap to step sizes for continuous parameters (i.e. [FloatParam]).
     fn preview_plain(&self, normalized: f32) -> Self::Plain;
 
     /// Internal implementation detail for implementing [internals::Params]. This should not be used
@@ -251,7 +250,13 @@ macro_rules! impl_plainparam {
             }
 
             fn preview_plain(&self, normalized: f32) -> Self::Plain {
-                self.range.unnormalize(normalized)
+                let value = self.range.unnormalize(normalized);
+                match &self.step_size {
+                    // Step size snapping is not defined for [IntParam], so this cast is here just
+                    // so we can keep everything in this macro
+                    Some(step_size) => self.range.snap_to_step(value, *step_size as Self::Plain),
+                    None => value,
+                }
             }
 
             fn as_ptr(&self) -> internals::ParamPtr {

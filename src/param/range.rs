@@ -31,6 +31,9 @@ impl Range<()> {
 
 /// A normalizable range for type `T`, where `self` is expected to be a type `R<T>`. Higher kinded
 /// types would have made this trait definition a lot clearer.
+///
+/// Floating point rounding to a step size is always done in the conversion from normalized to
+/// plain, inside [super::PlainParam::preview_plain].
 pub(crate) trait NormalizebleRange<T> {
     /// Normalize a plain, unnormalized value. Will be clamped to the bounds of the range if the
     /// normalized value exceeds `[0, 1]`.
@@ -39,6 +42,9 @@ pub(crate) trait NormalizebleRange<T> {
     /// Unnormalize a normalized value. Will be clamped to `[0, 1]` if the plain, unnormalized value
     /// would exceed that range.
     fn unnormalize(&self, normalized: f32) -> T;
+
+    /// Snap a vlue to a step size, clamping to the minimum and maximum value of the range.
+    fn snap_to_step(&self, value: T, step_size: T) -> T;
 }
 
 impl Default for Range<f32> {
@@ -116,6 +122,16 @@ impl NormalizebleRange<f32> for Range<f32> {
             }
         }
     }
+
+    fn snap_to_step(&self, value: f32, step_size: f32) -> f32 {
+        let (min, max) = match &self {
+            Range::Linear { min, max } => (min, max),
+            Range::Skewed { min, max, .. } => (min, max),
+            Range::SymmetricalSkewed { min, max, .. } => (min, max),
+        };
+
+        ((value / step_size).round() * step_size).clamp(*min, *max)
+    }
 }
 
 impl NormalizebleRange<i32> for Range<i32> {
@@ -175,6 +191,12 @@ impl NormalizebleRange<i32> for Range<i32> {
             }
         }
     }
+
+    fn snap_to_step(&self, value: i32, _step_size: i32) -> i32 {
+        // Integers are already discrete, and we don't allow setting step sizes on them through the
+        // builder interface
+        value
+    }
 }
 
 #[cfg(test)]
@@ -224,6 +246,20 @@ mod tests {
             factor,
             center: -3,
         }
+    }
+
+    #[test]
+    fn step_size() {
+        // These are weird step sizes, but if it works here then it will work for anything
+        let range = make_linear_float_range();
+        assert_eq!(range.snap_to_step(13.0, 4.73), 14.49);
+    }
+
+    #[test]
+    fn step_size_clamping() {
+        let range = make_linear_float_range();
+        assert_eq!(range.snap_to_step(10.0, 4.73), 10.0);
+        assert_eq!(range.snap_to_step(20.0, 6.73), 20.0);
     }
 
     mod linear {
