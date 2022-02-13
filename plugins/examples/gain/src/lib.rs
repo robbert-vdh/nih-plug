@@ -51,6 +51,7 @@ impl Default for GainParams {
                     min: -30.0,
                     max: 30.0,
                 },
+                step_size: None,
                 name: "Gain",
                 unit: " dB",
                 value_to_string: Some(formatters::f32_rounded(2)),

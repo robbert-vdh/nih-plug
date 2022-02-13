@@ -106,6 +106,10 @@ pub struct PlainParam<T> {
 
     /// The distribution of the parameter's values.
     pub range: Range<T>,
+    /// The distance between steps of a [FloatParam]. Ignored for [IntParam]. Mostly useful for
+    /// quantizing GUI input. If this is set and if [Self::value_to_string] is not set, then this is
+    /// also used when formatting the parameter. This must be a positive, nonzero number.
+    pub step_size: Option<f32>,
     /// The parameter's human readable display name.
     pub name: &'static str,
     /// The parameter value's unit, added after `value_to_string` if that is set. NIH-plug will not
@@ -152,6 +156,7 @@ where
             smoothed: Smoother::none(),
             value_changed: None,
             range: Range::default(),
+            step_size: None,
             name: "",
             unit: "",
             value_to_string: None,
@@ -341,9 +346,26 @@ impl Param for BoolParam {
 
 impl<T: Display + Copy> Display for PlainParam<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.value_to_string {
-            Some(func) => write!(f, "{}{}", func(self.value), self.unit),
-            None => write!(f, "{}{}", self.value, self.unit),
+        match (&self.value_to_string, &self.step_size) {
+            (Some(func), _) => write!(f, "{}{}", func(self.value), self.unit),
+            (None, Some(step_size)) => {
+                // Determine the number of digits based on the step size. We'll perform some
+                // rounding to ignore spurious extra precision caused by the floating point
+                // quantization.
+                const SCALE: f32 = 1_000_000.0; // 10.0f32.powi(f32::DIGITS as i32)
+                let step_size = (step_size * SCALE).round() / SCALE;
+
+                let mut num_digits = 0usize;
+                for decimals in 0..f32::DIGITS as usize {
+                    if step_size * decimals as f32 >= 1.0 {
+                        num_digits = decimals;
+                        break;
+                    }
+                }
+
+                write!(f, "{:.num_digits$}{}", self.value, self.unit)
+            }
+            _ => write!(f, "{}{}", self.value, self.unit),
         }
     }
 }
@@ -409,6 +431,8 @@ where
         self
     }
 
+    // `with_step_size` is only implemented for the f32 version
+
     /// Use a custom conversion function to convert from a string to a plain, unnormalized
     /// value. If the string cannot be parsed, then this should return a `None`. If this
     /// happens while the parameter is being updated then the update will be canceled.
@@ -417,6 +441,16 @@ where
         callback: Arc<dyn Fn(&str) -> Option<T> + Send + Sync>,
     ) -> Self {
         self.string_to_value = Some(callback);
+        self
+    }
+}
+
+impl PlainParam<f32> {
+    /// Set the distance between steps of a [FloatParam]. Mostly useful for quantizing GUI input. If
+    /// this is set and if [Self::value_to_string] is not set, then this is also used when
+    /// formatting the parameter. This must be a positive, nonzero number.
+    pub fn with_step_size(mut self, step_size: f32) -> Self {
+        self.step_size = Some(step_size);
         self
     }
 }
