@@ -227,11 +227,19 @@ macro_rules! impl_plainparam {
 
             fn normalized_value_to_string(&self, normalized: f32, include_unit: bool) -> String {
                 let value = self.preview_plain(normalized);
-                match (&self.value_to_string, include_unit) {
-                    (Some(f), true) => format!("{}{}", f(value), self.unit),
-                    (Some(f), false) => format!("{}", f(value)),
-                    (None, true) => format!("{}{}", value, self.unit),
-                    (None, false) => format!("{}", value),
+                match (&self.value_to_string, &self.step_size, include_unit) {
+                    (Some(f), _, true) => format!("{}{}", f(value), self.unit),
+                    (Some(f), _, false) => format!("{}", f(value)),
+                    (None, Some(step_size), true) => {
+                        let num_digits = decimals_from_step_size(*step_size);
+                        format!("{:.num_digits$}{}", value, self.unit)
+                    }
+                    (None, Some(step_size), false) => {
+                        let num_digits = decimals_from_step_size(*step_size);
+                        format!("{:.num_digits$}", value)
+                    }
+                    (None, None, true) => format!("{}{}", value, self.unit),
+                    (None, None, false) => format!("{}", value),
                 }
             }
 
@@ -350,20 +358,7 @@ impl<T: Display + Copy> Display for PlainParam<T> {
         match (&self.value_to_string, &self.step_size) {
             (Some(func), _) => write!(f, "{}{}", func(self.value), self.unit),
             (None, Some(step_size)) => {
-                // Determine the number of digits based on the step size. We'll perform some
-                // rounding to ignore spurious extra precision caused by the floating point
-                // quantization.
-                const SCALE: f32 = 1_000_000.0; // 10.0f32.powi(f32::DIGITS as i32)
-                let step_size = (step_size * SCALE).round() / SCALE;
-
-                let mut num_digits = 0usize;
-                for decimals in 0..f32::DIGITS as usize {
-                    if step_size * decimals as f32 >= 1.0 {
-                        num_digits = decimals;
-                        break;
-                    }
-                }
-
+                let num_digits = decimals_from_step_size(*step_size);
                 write!(f, "{:.num_digits$}{}", self.value, self.unit)
             }
             _ => write!(f, "{}{}", self.value, self.unit),
@@ -495,4 +490,22 @@ impl BoolParam {
         self.string_to_value = Some(callback);
         self
     }
+}
+
+/// Caldculate how many decimals to round to when displaying a floating point value with a specific
+/// step size. We'll perform some rounding to ignore spurious extra precision caused by the floating
+/// point quantization.
+fn decimals_from_step_size(step_size: f32) -> usize {
+    const SCALE: f32 = 1_000_000.0; // 10.0f32.powi(f32::DIGITS as i32)
+    let step_size = (step_size * SCALE).round() / SCALE;
+
+    let mut num_digits = 0;
+    for decimals in 0..f32::DIGITS as i32 {
+        if step_size * 10.0f32.powi(decimals) as f32 >= 1.0 {
+            num_digits = decimals;
+            break;
+        }
+    }
+
+    num_digits as usize
 }
