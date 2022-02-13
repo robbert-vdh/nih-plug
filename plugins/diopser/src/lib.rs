@@ -37,10 +37,11 @@ const MIN_AUTOMATION_STEP_SIZE: u32 = 1;
 const MAX_AUTOMATION_STEP_SIZE: u32 = 512;
 
 // An incomplete list of unported features includes:
-// - Actually add the parameters
 // - Filter spread
 //
-// And after that I'll need to add a GUI
+// After that the features I want to implement are:
+// - Briefly muting the output when changing the number of filters to get rid of the clicks
+// - A GUI
 struct Diopser {
     params: Pin<Box<DiopserParams>>,
 
