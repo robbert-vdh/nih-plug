@@ -59,13 +59,14 @@ cargo xtask bundle gain --release --bundle-vst3
 The best way to get an idea for what the API looks like is to look at the
 examples.
 
-- **gain** is a simple smoothed gain plugin that shows off a couple other parts
-  of the API, like support for storing arbitrary serializable state.
-- **gain-gui** is the same plugin as gain, but with a GUI to control the
-  parameter and a digital peak meter.
-- **sine** is a simple test tone generator plugin with frequency smoothing that
-  can also make use of MIDI input instead of generating a static signal based on
-  the plugin's parameters.
+- [**gain**](plugins/examples/gain) is a simple smoothed gain plugin that shows
+  off a couple other parts of the API, like support for storing arbitrary
+  serializable state.
+- [**gain-gui**](plugins/examples/gain-gui) is the same plugin as gain, but with
+  a GUI to control the parameter and a digital peak meter.
+- [**sine**](plugins/examples/sine) is a simple test tone generator plugin with
+  frequency smoothing that can also make use of MIDI input instead of generating
+  a static signal based on the plugin's parameters.
 
 ## Licensing
 
