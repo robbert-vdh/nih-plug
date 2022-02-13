@@ -99,7 +99,7 @@ struct ScopedFtz {
     /// We can't directly implement !Send and !Sync, but this will do the same thing. This object
     /// affects the current thread's floating point registers, so it may only be dropped on the
     /// current thread.
-    send_sync_marker: PhantomData<*const ()>,
+    _send_sync_marker: PhantomData<*const ()>,
 }
 
 impl ScopedFtz {
@@ -112,12 +112,12 @@ impl ScopedFtz {
 
                     Self {
                         should_disable_again: true,
-                        send_sync_marker: PhantomData,
+                        _send_sync_marker: PhantomData,
                     }
                 } else {
                     Self {
                         should_disable_again: false,
-                        send_sync_marker: PhantomData,
+                        _send_sync_marker: PhantomData,
                     }
                 }
             } else {
