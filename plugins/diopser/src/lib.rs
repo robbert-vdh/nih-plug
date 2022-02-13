@@ -30,11 +30,15 @@ mod filter;
 /// How many all-pass filters we can have in series at most. The filter stages parameter determines
 /// how many filters are actually active.
 const MAX_NUM_FILTERS: usize = 512;
+/// The minimum step size for smoothing the filter parmaeters.
+const MIN_AUTOMATION_STEP_SIZE: usize = 1;
+/// The maximum step size for smoothing the filter parameters. Updating these parameters can be
+/// expensive, so updating them in larger steps can be useful.
+const MAX_AUTOMATION_STEP_SIZE: usize = 512;
 
 // An incomplete list of unported features includes:
 // - Actually add the parameters
 // - Filter spread
-// - Lower resolution smoothing for more efficient automation
 //
 // And after that I'll need to add a GUI
 struct Diopser {
@@ -67,6 +71,12 @@ struct DiopserParams {
     /// The Q parameter for the filters.
     #[id = "res"]
     filter_resonance: FloatParam,
+
+    /// The precision of the automation, determines the step size. This is presented to the userq as
+    /// a percentage, and it's stored here as `[0, 1]` float because smaller step sizes are more
+    /// precise so having this be an integer would result in odd situations.
+    #[id = "autopr"]
+    automation_precision: FloatParam,
 
     /// Very important.
     #[id = "ignore"]
@@ -132,6 +142,14 @@ impl DiopserParams {
             )
             .with_smoother(SmoothingStyle::Logarithmic(100.0))
             .with_value_to_string(formatters::f32_rounded(2)),
+
+            automation_precision: FloatParam::new(
+                "Automation precision",
+                normalize_automation_precision(128),
+                Range::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_unit("%")
+            .with_value_to_string(Arc::new(|value| format!("{:.0}", value * 100.0))),
 
             very_important: BoolParam::new("Don't touch this", true).with_value_to_string(
                 Arc::new(|value| String::from(if value { "please don't" } else { "stop it" })),
@@ -224,6 +242,17 @@ impl Diopser {
             }
         }
     }
+}
+
+fn normalize_automation_precision(step_size: usize) -> f32 {
+    (MAX_AUTOMATION_STEP_SIZE - step_size) as f32
+        / (MAX_AUTOMATION_STEP_SIZE - MIN_AUTOMATION_STEP_SIZE) as f32
+}
+
+fn unnormalize_automation_precision(normalized: f32) -> usize {
+    MAX_AUTOMATION_STEP_SIZE
+        - (normalized * (MAX_AUTOMATION_STEP_SIZE - MIN_AUTOMATION_STEP_SIZE) as f32).round()
+            as usize
 }
 
 impl Vst3Plugin for Diopser {
