@@ -13,10 +13,11 @@ functionality.
 
 ### Table of contents
 
-- [Current status](#current-status)
-- [Building](#building)
-- [Example plugins](#example-plugins)
-- [Example plugins](#example-plugins)
+- [Plugins](#plugins)
+- [Framework](#framework)
+  - [Current status](#current-status)
+  - [Building](#building)
+  - [Example plugins](#example-plugins)
 - [Licensing](#licensing)
 
 ## Plugins
