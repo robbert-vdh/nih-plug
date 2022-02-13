@@ -1,5 +1,5 @@
 use atomic_float::AtomicF32;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicI32, Ordering};
 
 /// Controls if and how parameters gets smoothed.
 pub enum SmoothingStyle {
@@ -25,7 +25,10 @@ pub struct Smoother<T> {
     /// The kind of snoothing that needs to be applied, if any.
     style: SmoothingStyle,
     /// The number of steps of smoothing left to take.
-    steps_left: AtomicU32,
+    ///
+    // This is a signed integer because we can skip multiple steps, which would otherwise make it
+    // possible to get an underflow here.
+    steps_left: AtomicI32,
     /// The amount we should adjust the current value each sample to be able to reach the target in
     /// the specified tiem frame. This is also a floating point number to keep the smoothing
     /// uniform.
@@ -40,7 +43,7 @@ impl<T: Default> Default for Smoother<T> {
     fn default() -> Self {
         Self {
             style: SmoothingStyle::None,
-            steps_left: AtomicU32::new(0),
+            steps_left: AtomicI32::new(0),
             step_size: Default::default(),
             current: AtomicF32::new(0.0),
             target: Default::default(),
@@ -86,7 +89,7 @@ impl Smoother<f32> {
         let steps_left = match self.style {
             SmoothingStyle::None => 1,
             SmoothingStyle::Linear(time) | SmoothingStyle::Logarithmic(time) => {
-                (sample_rate * time / 1000.0).round() as u32
+                (sample_rate * time / 1000.0).round() as i32
             }
         };
         self.steps_left.store(steps_left, Ordering::Relaxed);
@@ -104,22 +107,36 @@ impl Smoother<f32> {
         };
     }
 
+    /// Get the next value from this smoother. The value will be equal to the previous value once
+    // the smoothing period is over. This should be called exactly once per sample.
     // Yes, Clippy, like I said, this was intentional
     #[allow(clippy::should_implement_trait)]
     pub fn next(&self) -> f32 {
+        self.next_step(1)
+    }
+
+    /// [Self::next()], but with the ability to skip forward in the smoother. [Self::next()] is
+    /// equivalent to calling this function with a `steps` value of 1. Calling this function with a
+    /// `steps` value of `n` means will cause you to skip the next `n - 1` values and return the
+    /// `n`th value.
+    pub fn next_step(&self, steps: u32) -> f32 {
+        nih_debug_assert_ne!(steps, 0);
+
         if self.steps_left.load(Ordering::Relaxed) > 0 {
             let current = self.current.load(Ordering::Relaxed);
 
-            // The number of steps usually won't fit exactly, so make sure we don't do weird things
-            // with overshoots or undershoots
-            let old_steps_left = self.steps_left.fetch_sub(1, Ordering::Relaxed);
-            let new = if old_steps_left == 1 {
+            // The number of steps usually won't fit exactly, so make sure we don't end up with
+            // quantization errors on overshoots or undershoots. We also need to account for the
+            // possibility that we only have `n < steps` steps left.
+            let old_steps_left = self.steps_left.fetch_sub(steps as i32, Ordering::Relaxed);
+            let new = if old_steps_left <= steps as i32 {
+                self.steps_left.store(0, Ordering::Relaxed);
                 self.target
             } else {
                 match &self.style {
                     SmoothingStyle::None => self.target,
-                    SmoothingStyle::Linear(_) => current + self.step_size,
-                    SmoothingStyle::Logarithmic(_) => current * self.step_size,
+                    SmoothingStyle::Linear(_) => current + (self.step_size * steps as f32),
+                    SmoothingStyle::Logarithmic(_) => current * (self.step_size.powi(steps as i32)),
                 }
             };
             self.current.store(new, Ordering::Relaxed);
@@ -145,7 +162,7 @@ impl Smoother<i32> {
         let steps_left = match self.style {
             SmoothingStyle::None => 1,
             SmoothingStyle::Linear(time) | SmoothingStyle::Logarithmic(time) => {
-                (sample_rate * time / 1000.0).round() as u32
+                (sample_rate * time / 1000.0).round() as i32
             }
         };
         self.steps_left.store(steps_left, Ordering::Relaxed);
@@ -161,21 +178,36 @@ impl Smoother<i32> {
         };
     }
 
+    /// Get the next value from this smoother. The value will be equal to the previous value once
+    // the smoothing period is over. This should be called exactly once per sample.
+    // Yes, Clippy, like I said, this was intentional
     #[allow(clippy::should_implement_trait)]
-    pub fn next(&mut self) -> i32 {
+    pub fn next(&self) -> i32 {
+        self.next_step(1)
+    }
+
+    /// [Self::next()], but with the ability to skip forward in the smoother. [Self::next()] is
+    /// equivalent to calling this function with a `steps` value of 1. Calling this function with a
+    /// `steps` value of `n` means will cause you to skip the next `n - 1` values and return the
+    /// `n`th value.
+    pub fn next_step(&self, steps: u32) -> i32 {
+        nih_debug_assert_ne!(steps, 0);
+
         if self.steps_left.load(Ordering::Relaxed) > 0 {
             let current = self.current.load(Ordering::Relaxed);
 
-            // The number of steps usually won't fit exactly, so make sure we don't do weird things
-            // with overshoots or undershoots
-            let old_steps_left = self.steps_left.fetch_sub(1, Ordering::Relaxed);
-            let new = if old_steps_left == 1 {
+            // The number of steps usually won't fit exactly, so make sure we don't end up with
+            // quantization errors on overshoots or undershoots. We also need to account for the
+            // possibility that we only have `n < steps` steps left.
+            let old_steps_left = self.steps_left.fetch_sub(steps as i32, Ordering::Relaxed);
+            let new = if old_steps_left <= steps as i32 {
+                self.steps_left.store(0, Ordering::Relaxed);
                 self.target as f32
             } else {
                 match &self.style {
                     SmoothingStyle::None => self.target as f32,
-                    SmoothingStyle::Linear(_) => current + self.step_size,
-                    SmoothingStyle::Logarithmic(_) => current * self.step_size,
+                    SmoothingStyle::Linear(_) => current + (self.step_size * steps as f32),
+                    SmoothingStyle::Logarithmic(_) => current * self.step_size.powi(steps as i32),
                 }
             };
             self.current.store(new, Ordering::Relaxed);
@@ -249,6 +281,58 @@ mod tests {
         for _ in 0..(10 - 2) {
             smoother.next();
         }
+        assert_ne!(smoother.next(), 20);
+        assert_eq!(smoother.next(), 20);
+    }
+
+    /// Same as [linear_f32_smoothing], but skipping steps instead.
+    #[test]
+    fn skipping_linear_f32_smoothing() {
+        let mut smoother: Smoother<f32> = Smoother::new(SmoothingStyle::Linear(100.0));
+        smoother.reset(10.0);
+        assert_eq!(smoother.next(), 10.0);
+
+        smoother.set_target(100.0, 20.0);
+        smoother.next_step(8);
+        assert_ne!(smoother.next(), 20.0);
+        assert_eq!(smoother.next(), 20.0);
+    }
+
+    /// Same as [linear_i32_smoothing], but skipping steps instead.
+    #[test]
+    fn skipping_linear_i32_smoothing() {
+        let mut smoother: Smoother<i32> = Smoother::new(SmoothingStyle::Linear(100.0));
+        smoother.reset(10);
+        assert_eq!(smoother.next(), 10);
+
+        smoother.set_target(100.0, 20);
+        smoother.next_step(8);
+        assert_ne!(smoother.next(), 20);
+        assert_eq!(smoother.next(), 20);
+    }
+
+    /// Same as [logarithmic_f32_smoothing], but skipping steps instead.
+    #[test]
+    fn skipping_logarithmic_f32_smoothing() {
+        let mut smoother: Smoother<f32> = Smoother::new(SmoothingStyle::Logarithmic(100.0));
+        smoother.reset(10.0);
+        assert_eq!(smoother.next(), 10.0);
+
+        smoother.set_target(100.0, 20.0);
+        smoother.next_step(8);
+        assert_ne!(smoother.next(), 20.0);
+        assert_eq!(smoother.next(), 20.0);
+    }
+
+    /// Same as [logarithmic_i32_smoothing], but skipping steps instead.
+    #[test]
+    fn skipping_logarithmic_i32_smoothing() {
+        let mut smoother: Smoother<i32> = Smoother::new(SmoothingStyle::Logarithmic(100.0));
+        smoother.reset(10);
+        assert_eq!(smoother.next(), 10);
+
+        smoother.set_target(100.0, 20);
+        smoother.next_step(8);
         assert_ne!(smoother.next(), 20);
         assert_eq!(smoother.next(), 20);
     }
