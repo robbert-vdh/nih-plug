@@ -69,13 +69,13 @@ examples.
 
 ## Licensing
 
-The framework and its libraries are licensed under the [ISC
-license](https://www.isc.org/licenses/). However, the [VST3
-bindings](https://github.com/RustAudio/vst3-sys) used by `nih_export_vst3!()`
-are licensed under the GPLv3. This means that unless you replace these bindings
-with your own bindings that you made from scratch, any VST3 plugins built with
-NIH-plug also need to be able to comply with the terms of the GPLv3 license.
+The framework, its libraries, and the example plugins in `plugins/examples/` are
+all licensed under the [ISC license](https://www.isc.org/licenses/). However,
+the [VST3 bindings](https://github.com/RustAudio/vst3-sys) used by
+`nih_export_vst3!()` are licensed under the GPLv3 license. This means that
+unless you replace these bindings with your own bindings made from scratch, any
+VST3 plugins built with NIH-plug need to be able to comply with the terms of the
+GPLv3 license.
 
-The example plugins in `plugins/examples/` are also ISC-licensed, but the other
-plugins in the `plugins/` directory may be licensed under the GPLv3 license.
-Check the plugin's `Cargo.toml` file for more information.
+The other plugins in the `plugins/` directory may be licensed under the GPLv3
+license. Check the plugin's `Cargo.toml` file for more information.
