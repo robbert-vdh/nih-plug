@@ -52,15 +52,15 @@ impl<'a> Buffer<'a> {
 
 /// An iterator over all samples in the buffer, yielding iterators over each channel for every
 /// sample. This iteration order offers good cache locality for per-sample access.
-pub struct Samples<'outer: 'inner, 'inner> {
+pub struct Samples<'buffer: 'sample, 'sample> {
     /// The raw output buffers.
-    pub(self) buffers: *mut [&'inner mut [f32]],
+    pub(self) buffers: *mut [&'sample mut [f32]],
     pub(self) current_sample: usize,
-    pub(self) _marker: PhantomData<&'outer mut [&'inner mut [f32]]>,
+    pub(self) _marker: PhantomData<&'buffer mut [&'sample mut [f32]]>,
 }
 
-impl<'outer, 'inner> Iterator for Samples<'outer, 'inner> {
-    type Item = Channels<'outer, 'inner>;
+impl<'buffer, 'sample> Iterator for Samples<'buffer, 'sample> {
+    type Item = Channels<'buffer, 'sample>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.current_sample < unsafe { (*self.buffers)[0].len() } {
@@ -88,25 +88,25 @@ impl ExactSizeIterator for Samples<'_, '_> {}
 
 /// Can construct iterators over actual iterator over the channel data for a sample, yielded by
 /// [Samples].
-pub struct Channels<'outer: 'inner, 'inner> {
+pub struct Channels<'buffer: 'sample, 'sample> {
     /// The raw output buffers.
-    pub(self) buffers: *mut [&'inner mut [f32]],
+    pub(self) buffers: *mut [&'sample mut [f32]],
     pub(self) current_sample: usize,
-    pub(self) _marker: PhantomData<&'outer mut [&'inner mut [f32]]>,
+    pub(self) _marker: PhantomData<&'buffer mut [&'sample mut [f32]]>,
 }
 
 /// The actual iterator over the channel data for a sample, yielded by [Channels].
-pub struct ChannelsIter<'outer: 'inner, 'inner> {
+pub struct ChannelsIter<'buffer: 'sample, 'sample> {
     /// The raw output buffers.
-    pub(self) buffers: *mut [&'inner mut [f32]],
+    pub(self) buffers: *mut [&'sample mut [f32]],
     pub(self) current_sample: usize,
     pub(self) current_channel: usize,
-    pub(self) _marker: PhantomData<&'outer mut [&'inner mut [f32]]>,
+    pub(self) _marker: PhantomData<&'buffer mut [&'sample mut [f32]]>,
 }
 
-impl<'outer, 'inner> IntoIterator for Channels<'outer, 'inner> {
-    type Item = &'inner mut f32;
-    type IntoIter = ChannelsIter<'outer, 'inner>;
+impl<'buffer, 'sample> IntoIterator for Channels<'buffer, 'sample> {
+    type Item = &'sample mut f32;
+    type IntoIter = ChannelsIter<'buffer, 'sample>;
 
     fn into_iter(self) -> Self::IntoIter {
         ChannelsIter {
@@ -118,8 +118,8 @@ impl<'outer, 'inner> IntoIterator for Channels<'outer, 'inner> {
     }
 }
 
-impl<'outer, 'inner> Iterator for ChannelsIter<'outer, 'inner> {
-    type Item = &'inner mut f32;
+impl<'buffer, 'sample> Iterator for ChannelsIter<'buffer, 'sample> {
+    type Item = &'sample mut f32;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.current_channel < unsafe { (*self.buffers).len() } {
@@ -131,7 +131,7 @@ impl<'outer, 'inner> Iterator for ChannelsIter<'outer, 'inner> {
             };
             // SAFETY: It is not possible to have multiple mutable references to the same sample at
             // the same time
-            let sample: &'inner mut f32 = unsafe { &mut *(sample as *mut f32) };
+            let sample: &'sample mut f32 = unsafe { &mut *(sample as *mut f32) };
 
             self.current_channel += 1;
 
@@ -149,7 +149,7 @@ impl<'outer, 'inner> Iterator for ChannelsIter<'outer, 'inner> {
 
 impl ExactSizeIterator for ChannelsIter<'_, '_> {}
 
-impl<'outer, 'inner> Channels<'outer, 'inner> {
+impl<'buffer, 'sample> Channels<'buffer, 'sample> {
     /// Get the number of channels.
     pub fn len(&self) -> usize {
         unsafe { (*self.buffers).len() }
@@ -157,9 +157,9 @@ impl<'outer, 'inner> Channels<'outer, 'inner> {
 
     /// A resetting iterator. This lets you iterate over the same channels multiple times. Otherwise
     /// you don't need to use this function as [Channels] already implements [Iterator].
-    pub fn iter_mut(&mut self) -> ChannelsIter<'outer, 'inner> {
+    pub fn iter_mut(&mut self) -> ChannelsIter<'buffer, 'sample> {
         // SAFETY: No two [ChannelIters] can exist at a time
-        let buffers: *mut [&'inner mut [f32]] = unsafe { std::mem::transmute(self.buffers) };
+        let buffers: *mut [&'sample mut [f32]] = unsafe { std::mem::transmute(self.buffers) };
 
         ChannelsIter {
             buffers,
