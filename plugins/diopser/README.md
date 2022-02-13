@@ -1,6 +1,6 @@
 # Diopser
 
-**Right now it is not in a usable state yet.**
+**This port is still lacking features compared to the original.**
 
 You were expecting Disperser[¹](#disperser), but it was me, Diopser!
 

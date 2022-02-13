@@ -30,8 +30,7 @@ yourself.
 - [**Diopser**](plugins/diopser) is a totally original phase rotation plugin.
   Useful for oomphing up kickdrums and basses, transforming synths into their
   evil phase-y cousin, and making everything sound like a cheap Sci-Fi laser
-  beam. **This is an unfinished port of an existing plugin, right now it is not
-  in a usable state yet.**
+  beam. **This is an unfinished port of an existing plugin.**
 
 ## Framework
 
