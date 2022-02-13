@@ -191,3 +191,35 @@ impl<'slice, 'sample> Channels<'slice, 'sample> {
             .get_unchecked_mut(self.current_sample)
     }
 }
+
+#[cfg(miri)]
+mod miri {
+    use super::*;
+
+    #[test]
+    fn repeated_access() {
+        let mut real_buffers = vec![vec![0.0; 512]; 2];
+        let mut buffer = Buffer::default();
+        {
+            let slices = unsafe { buffer.as_raw_vec() };
+            let (first_channel, other_channels) = real_buffers.split_at_mut(1);
+            *slices = vec![&mut first_channel[0], &mut other_channels[0]];
+        }
+
+        for samples in buffer.iter_mut() {
+            for sample in samples {
+                *sample += 0.001;
+            }
+        }
+
+        for mut samples in buffer.iter_mut() {
+            for _ in 0..10 {
+                for sample in samples.iter_mut() {
+                    *sample += 0.001;
+                }
+            }
+        }
+
+        assert_eq!(real_buffers[0][0], 0.011000001);
+    }
+}
