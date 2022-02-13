@@ -94,8 +94,8 @@ pub fn process_wrapper<T, F: FnOnce() -> T>(f: F) -> T {
 /// Enable the CPU's Flush To Zero flag while this object is in scope. If the flag was not already
 /// set, it will be restored to its old value when this gets dropped.
 struct ScopedFtz {
-    /// The old FTZ mode to restore to, if FTZ was not already set.
-    old_ftz_mode: Option<u32>,
+    /// Whether FTZ should be disabled again, i.e. if FTZ was not enabled before.
+    should_disable_again: bool,
     /// We can't directly implement !Send and !Sync, but this will do the same thing. This object
     /// affects the current thread's floating point registers, so it may only be dropped on the
     /// current thread.
@@ -111,12 +111,12 @@ impl ScopedFtz {
                     unsafe { std::arch::x86_64::_MM_SET_FLUSH_ZERO_MODE(std::arch::x86_64::_MM_FLUSH_ZERO_ON) };
 
                     Self {
-                        old_ftz_mode: Some(mode),
+                        should_disable_again: true,
                         send_sync_marker: PhantomData,
                     }
                 } else {
                     Self {
-                        old_ftz_mode: None,
+                        should_disable_again: false,
                         send_sync_marker: PhantomData,
                     }
                 }
@@ -132,10 +132,10 @@ impl ScopedFtz {
 
 impl Drop for ScopedFtz {
     fn drop(&mut self) {
-        if let Some(mode) = self.old_ftz_mode {
+        if self.should_disable_again {
             cfg_if::cfg_if! {
                 if #[cfg(target_feature = "sse")] {
-                    unsafe { std::arch::x86_64::_MM_SET_FLUSH_ZERO_MODE(mode) };
+                    unsafe { std::arch::x86_64::_MM_SET_FLUSH_ZERO_MODE(std::arch::x86_64::_MM_FLUSH_ZERO_OFF) };
                 }
             };
         }
