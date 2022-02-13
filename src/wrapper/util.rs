@@ -141,3 +141,58 @@ impl Drop for ScopedFtz {
         }
     }
 }
+
+mod miri {
+    use std::ffi::CStr;
+    use widestring::U16CStr;
+
+    use super::*;
+
+    #[test]
+    fn strlcpy_normal() {
+        let mut dest = [0; 256];
+        strlcpy(&mut dest, "Hello, world!");
+
+        assert_eq!(
+            unsafe { CStr::from_ptr(dest.as_ptr()) }.to_str(),
+            Ok("Hello, world!")
+        );
+    }
+
+    #[test]
+    fn strlcpy_overflow() {
+        let mut dest = [0; 6];
+        strlcpy(&mut dest, "Hello, world!");
+
+        assert_eq!(
+            unsafe { CStr::from_ptr(dest.as_ptr()) }.to_str(),
+            Ok("Hello")
+        );
+    }
+
+    #[test]
+    fn u16strlcpy_normal() {
+        let mut dest = [0; 256];
+        u16strlcpy(&mut dest, "Hello, world!");
+
+        assert_eq!(
+            unsafe { U16CStr::from_ptr_str(dest.as_ptr() as *const u16) }
+                .to_string()
+                .unwrap(),
+            "Hello, world!"
+        );
+    }
+
+    #[test]
+    fn u16strlcpy_overflow() {
+        let mut dest = [0; 6];
+        u16strlcpy(&mut dest, "Hello, world!");
+
+        assert_eq!(
+            unsafe { U16CStr::from_ptr_str(dest.as_ptr() as *const u16) }
+                .to_string()
+                .unwrap(),
+            "Hello"
+        );
+    }
+}
