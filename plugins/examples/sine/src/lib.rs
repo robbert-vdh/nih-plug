@@ -67,8 +67,8 @@ impl Default for SineParams {
                 },
             )
             .with_smoother(SmoothingStyle::Linear(3.0))
-            .with_unit(" dB")
-            .with_value_to_string(formatters::f32_rounded(2)),
+            .with_step_size(0.01)
+            .with_unit(" dB"),
             frequency: FloatParam::new(
                 "Frequency",
                 420.0,
@@ -80,6 +80,8 @@ impl Default for SineParams {
             )
             .with_smoother(SmoothingStyle::Linear(10.0))
             .with_unit(" Hz")
+            // We purposely don't specify a step size here, but the parameter should still be
+            // displaeyd as rounded
             .with_value_to_string(formatters::f32_rounded(0)),
             use_midi: BoolParam::new("Use MIDI", false),
         }

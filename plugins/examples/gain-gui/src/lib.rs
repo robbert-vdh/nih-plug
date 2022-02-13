@@ -60,8 +60,8 @@ impl Default for GainParams {
                 },
             )
             .with_smoother(SmoothingStyle::Linear(50.0))
-            .with_unit(" dB")
-            .with_value_to_string(formatters::f32_rounded(2)),
+            .with_step_size(0.01)
+            .with_unit(" dB"),
             some_int: IntParam::new(
                 "Something",
                 3,

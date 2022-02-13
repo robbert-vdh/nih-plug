@@ -51,9 +51,11 @@ impl Default for GainParams {
                     min: -30.0,
                     max: 30.0,
                 },
-                step_size: None,
+                step_size: Some(0.01),
                 name: "Gain",
                 unit: " dB",
+                // This is actually redundant, because a step size of two decimal places already
+                // causes the parameter to shown rounded
                 value_to_string: Some(formatters::f32_rounded(2)),
                 string_to_value: None,
                 // ...or specify the fields you want to initialize directly and leave the other
