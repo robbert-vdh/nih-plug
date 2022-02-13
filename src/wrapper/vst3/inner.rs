@@ -95,8 +95,6 @@ pub enum Task {
 }
 
 impl<P: Plugin> WrapperInner<P> {
-    // XXX: The unsafe blocks in this function are unnecessary. but rust-analyzer gets a bit
-    //      confused by all of these vtables
     #[allow(unused_unsafe)]
     pub fn new() -> Arc<Self> {
         let plugin = RwLock::new(P::default());
@@ -136,10 +134,8 @@ impl<P: Plugin> WrapperInner<P> {
         // This is a mapping from the parameter IDs specified by the plugin to pointers to thsoe
         // parameters. Since the object returned by `params()` is pinned, these pointers are safe to
         // dereference as long as `wrapper.plugin` is alive
-        // XXX: This unsafe block is unnecessary. rust-analyzer gets a bit confused and this this
-        //      `read()` function is from `IBStream` which it definitely is not.
-        let param_map = unsafe { wrapper.plugin.read() }.params().param_map();
-        let param_ids = unsafe { wrapper.plugin.read() }.params().param_ids();
+        let param_map = wrapper.plugin.read().params().param_map();
+        let param_ids = wrapper.plugin.read().params().param_ids();
         nih_debug_assert!(
             !param_map.contains_key(BYPASS_PARAM_ID),
             "The wrapper alread yadds its own bypass parameter"
@@ -178,9 +174,7 @@ impl<P: Plugin> WrapperInner<P> {
         //        serving multiple plugin instances, Arc can't be used because its reference count
         //        is separate from the internal COM-style reference count.
         let wrapper: Arc<WrapperInner<P>> = wrapper.into();
-        // XXX: This unsafe block is unnecessary. rust-analyzer gets a bit confused and this this
-        //      `write()` function is from `IBStream` which it definitely is not.
-        *unsafe { wrapper.event_loop.write() } =
+        *wrapper.event_loop.write() =
             MaybeUninit::new(OsEventLoop::new_and_spawn(Arc::downgrade(&wrapper)));
 
         wrapper
