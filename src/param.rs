@@ -223,7 +223,7 @@ macro_rules! impl_plainparam {
             }
 
             fn set_normalized_value(&mut self, normalized: f32) {
-                self.set_plain_value(self.range.unnormalize(normalized));
+                self.set_plain_value(self.preview_plain(normalized));
             }
 
             fn normalized_value_to_string(&self, normalized: f32, include_unit: bool) -> String {
