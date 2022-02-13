@@ -213,13 +213,13 @@ mod miri {
         }
 
         for mut samples in buffer.iter_mut() {
-            for _ in 0..10 {
+            for _ in 0..2 {
                 for sample in samples.iter_mut() {
                     *sample += 0.001;
                 }
             }
         }
 
-        assert_eq!(real_buffers[0][0], 0.011000001);
+        assert_eq!(real_buffers[0][0], 0.003);
     }
 }
