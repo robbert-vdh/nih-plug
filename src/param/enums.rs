@@ -8,7 +8,8 @@ use super::internals::ParamPtr;
 use super::range::Range;
 use super::{IntParam, Param};
 
-// TODO: Crate and re-export the derive macro
+// Re-export the derive macro
+pub use nih_plug_derive::Enum;
 
 /// An enum usable with `EnumParam`. This trait can be derived. Variants are identified by their
 /// **declaration order**. You can freely rename the variant names, but reordering them will break
