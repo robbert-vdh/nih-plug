@@ -17,10 +17,11 @@
 #[macro_use]
 extern crate nih_plug;
 
-use nih_plug::{formatters, BoolParam, FloatParam, IntParam, Params, Range, SmoothingStyle};
 use nih_plug::{
-    Buffer, BufferConfig, BusConfig, Plugin, ProcessContext, ProcessStatus, Vst3Plugin,
+    formatters, Buffer, BufferConfig, BusConfig, Plugin, ProcessContext, ProcessStatus, Vst3Plugin,
 };
+use nih_plug::{BoolParam, FloatParam, IntParam, Params, Range, SmoothingStyle};
+use nih_plug::{Enum, EnumParam};
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -36,10 +37,8 @@ const MIN_AUTOMATION_STEP_SIZE: u32 = 1;
 /// expensive, so updating them in larger steps can be useful.
 const MAX_AUTOMATION_STEP_SIZE: u32 = 512;
 
-// An incomplete list of unported features includes:
-// - Filter spread
-//
-// After that the features I want to implement are:
+// All features from the original Diopser have been implemented (and the spread control has been
+// improved). Other features I want to implement are:
 // - Briefly muting the output when changing the number of filters to get rid of the clicks
 // - A GUI
 struct Diopser {
@@ -71,13 +70,24 @@ struct DiopserParams {
     #[id = "stages"]
     filter_stages: IntParam,
 
-    /// The filter's cutoff frequqency. When this is applied, the filters are spread around this
+    /// The filter's center frequqency. When this is applied, the filters are spread around this
     /// frequency.
     #[id = "cutoff"]
     filter_frequency: FloatParam,
     /// The Q parameter for the filters.
     #[id = "res"]
     filter_resonance: FloatParam,
+    /// Controls a frequency spread between the filter stages in octaves. When this value is 0, the
+    /// same coefficients are used for every filter. Otherwise, the earliest stage's frequency will
+    /// be offset by `-filter_spread_octave_amount`, while the latest stage will be offset by
+    /// `filter_spread_octave_amount`. If the filter spread style is set to linear then the negative
+    /// range will cover the same frequency range as the positive range.
+    #[id = "spread"]
+    filter_spread_octaves: FloatParam,
+    /// How the spread range should be distributed. The octaves mode will sound more musical while
+    /// the linear mode can be useful for sound design purposes.
+    #[id = "spstyl"]
+    filter_spread_style: EnumParam<SpreadStyle>,
 
     /// The precision of the automation, determines the step size. This is presented to the userq as
     /// a percentage, and it's stored here as `[0, 1]` float because smaller step sizes are more
@@ -108,9 +118,6 @@ impl Default for Diopser {
 
 impl DiopserParams {
     pub fn new(should_update_filters: Arc<AtomicBool>) -> Self {
-        let trigger_filter_update =
-            Arc::new(move |_| should_update_filters.store(true, Ordering::Release));
-
         Self {
             filter_stages: IntParam::new(
                 "Filter Stages",
@@ -120,7 +127,10 @@ impl DiopserParams {
                     max: MAX_NUM_FILTERS as i32,
                 },
             )
-            .with_callback(trigger_filter_update),
+            .with_callback({
+                let should_update_filters = should_update_filters.clone();
+                Arc::new(move |_| should_update_filters.store(true, Ordering::Release))
+            }),
 
             // Smoothed parameters don't need the callback as we can just look at whether the
             // smoother is still smoothing
@@ -150,6 +160,26 @@ impl DiopserParams {
             )
             .with_smoother(SmoothingStyle::Logarithmic(100.0))
             .with_value_to_string(formatters::f32_rounded(2)),
+            filter_spread_octaves: FloatParam::new(
+                "Filter Spread Octaves",
+                0.0,
+                Range::SymmetricalSkewed {
+                    min: -5.0,
+                    max: 5.0,
+                    factor: Range::skew_factor(-1.0),
+                    center: 0.0,
+                },
+            )
+            .with_step_size(0.01)
+            .with_smoother(SmoothingStyle::Linear(100.0)),
+            filter_spread_style: EnumParam::new("Filter Spread Style", SpreadStyle::Octaves)
+                .with_callback(Arc::new(move |_| {
+                    should_update_filters.store(true, Ordering::Release)
+                })),
+
+            very_important: BoolParam::new("Don't touch this", true).with_value_to_string(
+                Arc::new(|value| String::from(if value { "please don't" } else { "stop it" })),
+            ),
 
             automation_precision: FloatParam::new(
                 "Automation precision",
@@ -158,12 +188,14 @@ impl DiopserParams {
             )
             .with_unit("%")
             .with_value_to_string(Arc::new(|value| format!("{:.0}", value * 100.0))),
-
-            very_important: BoolParam::new("Don't touch this", true).with_value_to_string(
-                Arc::new(|value| String::from(if value { "please don't" } else { "stop it" })),
-            ),
         }
     }
+}
+
+#[derive(Enum, Debug)]
+enum SpreadStyle {
+    Octaves,
+    Linear,
 }
 
 impl Plugin for Diopser {
@@ -239,7 +271,8 @@ impl Diopser {
             .compare_exchange(true, false, Ordering::Acquire, Ordering::Relaxed)
             .is_ok()
             || ((self.params.filter_frequency.smoothed.is_smoothing()
-                || self.params.filter_resonance.smoothed.is_smoothing())
+                || self.params.filter_resonance.smoothed.is_smoothing()
+                || self.params.filter_spread_octaves.smoothed.is_smoothing())
                 && self.next_filter_smoothing_in <= 1);
         if should_update_filters {
             self.update_filters(smoothing_interval);
@@ -252,23 +285,46 @@ impl Diopser {
     /// Recompute the filter coefficients based on the smoothed paraetersm. We can skip forwardq in
     /// larger steps to reduce the DSP load.
     fn update_filters(&mut self, smoothing_interval: u32) {
-        let coefficients = filter::BiquadCoefficients::allpass(
-            self.sample_rate,
-            self.params
-                .filter_frequency
-                .smoothed
-                .next_step(smoothing_interval),
-            self.params
-                .filter_resonance
-                .smoothed
-                .next_step(smoothing_interval),
-        );
-        for channel in self.filters.iter_mut() {
-            for filter in channel
-                .iter_mut()
-                .take(self.params.filter_stages.value as usize)
-            {
-                filter.coefficients = coefficients;
+        if self.filters.is_empty() {
+            return;
+        }
+
+        let frequency = self
+            .params
+            .filter_frequency
+            .smoothed
+            .next_step(smoothing_interval);
+        let resonance = self
+            .params
+            .filter_resonance
+            .smoothed
+            .next_step(smoothing_interval);
+        let spread_octaves = self
+            .params
+            .filter_spread_octaves
+            .smoothed
+            .next_step(smoothing_interval);
+        let spread_style = self.params.filter_spread_style.value();
+
+        const MIN_FREQUENCY: f32 = 5.0;
+        let max_frequency = self.sample_rate / 2.05;
+        for filter_idx in 0..self.params.filter_stages.value as usize {
+            // The index of the filter normalized to range [-1, 1]
+            let filter_proportion =
+                (filter_idx as f32 / self.params.filter_stages.value as f32) * 2.0 - 1.0;
+
+            // The spread parameter adds an offset to the frequency depending on the number of the
+            // filter
+            let filter_frequency = match spread_style {
+                SpreadStyle::Octaves => frequency * 2.0f32.powf(spread_octaves * filter_proportion),
+                SpreadStyle::Linear => frequency * 2.0f32.powf(spread_octaves) * filter_proportion,
+            }
+            .clamp(MIN_FREQUENCY, max_frequency);
+
+            let coefficients =
+                filter::BiquadCoefficients::allpass(self.sample_rate, filter_frequency, resonance);
+            for channel in self.filters.iter_mut() {
+                channel[filter_idx].coefficients = coefficients;
             }
         }
     }
