@@ -252,7 +252,8 @@ impl Plugin for Diopser {
             for filter_idx in 0..self.params.filter_stages.value as usize {
                 // Because of this filter_idx outer loop we can't directly iterate over
                 // `channel_samples` as the iterator would be empty after the first loop
-                for (sample, filters) in channel_samples.iter_mut().zip(self.filters.iter_mut()) {
+                for (channel_idx, filters) in self.filters.iter_mut().enumerate() {
+                    let sample = unsafe { channel_samples.get_unchecked_mut(channel_idx) };
                     *sample = filters[filter_idx].process(*sample);
                 }
             }
