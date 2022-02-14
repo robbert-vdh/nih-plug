@@ -1,7 +1,5 @@
 # Diopser
 
-**This port is still lacking features compared to the original.**
-
 You were expecting Disperser[¹](#disperser), but it was me, Diopser!
 
 Diopser lets you rotate the phase of a signal around a specific frequency

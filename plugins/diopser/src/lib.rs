@@ -199,7 +199,7 @@ enum SpreadStyle {
 }
 
 impl Plugin for Diopser {
-    const NAME: &'static str = "Diopser (WIP port)";
+    const NAME: &'static str = "Diopser";
     const VENDOR: &'static str = "Robbert van der Helm";
     const URL: &'static str = "https://github.com/robbert-vdh/nih-plug";
     const EMAIL: &'static str = "mail@robbertvanderhelm.nl";
