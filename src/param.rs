@@ -436,7 +436,10 @@ impl<T: EnumIter + Eq + Copy + Display> Param for EnumParam<T> {
     }
 
     fn string_to_normalized_value(&self, string: &str) -> Option<f32> {
-        self.inner.string_to_normalized_value(string)
+        self.variants
+            .iter()
+            .find(|(_, repr)| repr == string)
+            .map(|(variant, _)| self.preview_normalized(*variant))
     }
 
     fn preview_normalized(&self, plain: Self::Plain) -> f32 {
