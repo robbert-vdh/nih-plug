@@ -342,6 +342,9 @@ impl<P: Plugin> IComponent for Wrapper<P> {
                 ParamPtr::EnumParam(p) => (
                     param_id_str.to_string(),
                     // XXX: This works, but it's a bit of a roundabout conversion
+                    // TODO: Consider serializing as index or as variant field name instead of the
+                    //       display value (i.e. message). Right now it's impossible to rename
+                    //       variants while preserving the valu assignment.
                     ParamValue::EnumVariant(
                         (*p).normalized_value_to_string((*p).normalized_value(), false),
                     ),
