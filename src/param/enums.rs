@@ -17,7 +17,7 @@ pub use nih_plug_derive::Enum;
 /// If you want to override this, for instance, because it needs to contain spaces, then yo ucan use
 /// the `$[name = "..."]` attribute:
 ///
-/// ```
+/// ```ignore
 /// #[derive(Enum)]
 /// enum Foo {
 ///     Bar,
