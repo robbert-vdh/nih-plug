@@ -54,8 +54,8 @@ pub trait Plugin: Default + Send + Sync + 'static {
     /// The plugin's editor, if it has one. The actual editor instance is created in
     /// [Editor::spawn]. A plugin editor likely wants to interact with the plugin's parameters and
     /// other shared data, so you'll need to move [Arc] pointing to any data you want to access into
-    /// the editor. You can later modify the parameters through the [GuiContext] and [ParamSetter]
-    /// after the editor GUI has been created.
+    /// the editor. You can later modify the parameters through the [crate::GuiContext] and
+    /// [crate::ParamSetter] after the editor GUI has been created.
     fn editor(&self) -> Option<Box<dyn Editor>> {
         None
     }
@@ -144,10 +144,10 @@ const fn swap_vst3_uid_byte_order(mut uid: [u8; 16]) -> [u8; 16] {
 /// An editor for a [Plugin].
 pub trait Editor: Send + Sync {
     /// Create an instance of the plugin's editor and embed it in the parent window. As explained in
-    /// [Plugin::editor], you can then read the parameter values directly from your [Params] object,
-    /// and modifying the values can be done using the functions on the [ParamSetter]. When you
-    /// change a parameter value that way it will be broadcasted to the host and also updated in
-    /// your [Params] struct.
+    /// [Plugin::editor], you can then read the parameter values directly from your [crate::Params]
+    /// object, and modifying the values can be done using the functions on the
+    /// [crate::ParamSetter]. When you change a parameter value that way it will be broadcasted to
+    /// the host and also updated in your [Params] struct.
     ///
     /// This function should return a handle to the editor, which will be dropped when the editor
     /// gets closed. Implement the [Drop] trait on the returned handle if you need to explicitly

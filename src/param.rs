@@ -106,8 +106,8 @@ pub struct EnumParam<T: EnumIter + EnumMessage + Eq + Copy + Display> {
     /// The integer parameter backing this enum parameter.
     pub inner: IntParam,
     /// An associative list of the variants converted to an i32 and their names. We need this
-    /// because we're doing some nasty type erasure things with [internals::ParamPtr::Enum], so we
-    /// can't directly query the associated functions on `T` after the parameter when handling
+    /// because we're doing some nasty type erasure things with [internals::ParamPtr::EnumParam], so
+    /// we can't directly query the associated functions on `T` after the parameter when handling
     /// function calls from the wrapper.
     variants: Vec<(T, String)>,
 }

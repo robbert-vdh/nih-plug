@@ -48,8 +48,8 @@ pub trait ProcessContext {
 }
 
 /// Callbacks the plugin can make when the user interacts with its GUI such as updating parameter
-/// values. This is passed to the plugin during [crate::plugin::Plugin::create_editor()]. All of
-/// these functions assume they're being called from the main GUI thread.
+/// values. This is passed to the plugin during [crate::Editor::spawn()]. All of these functions
+/// assume they're being called from the main GUI thread.
 //
 // # Safety
 //
