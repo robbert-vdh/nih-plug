@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 // Re-export for the [EnumParam]
 // TODO: Consider re-exporting this from a non-root module to make it a bit less spammy:w
-pub use strum::{Display, EnumIter, IntoEnumIterator as EnumIter};
+pub use strum::{Display, EnumIter, EnumMessage, IntoEnumIterator as EnumIter};
 
 pub mod internals;
 pub mod range;
@@ -149,11 +149,11 @@ pub struct BoolParam {
 }
 
 /// An [IntParam]-backed categorical parameter that allows convenient conversion to and from a
-/// simple enum. This enum must derive the re-exported [EnumIter], [EnumString] and [Display]
-/// traits.
+/// simple enum. This enum must derive the re-exported [EnumIter] and [EnumMessage] and [Display]
+/// traits. You can use the `#[strum(message = "Foo Bar")]` to override the name of the variant.
 //
 // TODO: Figure out a more sound way to get the same interface
-pub struct EnumParam<T: EnumIter + Eq + Copy + Display> {
+pub struct EnumParam<T: EnumIter + EnumMessage + Eq + Copy + Display> {
     /// The integer parameter backing this enum parameter.
     pub inner: IntParam,
     /// An associative list of the variants converted to an i32 and their names. We need this
@@ -196,15 +196,16 @@ impl Default for BoolParam {
     }
 }
 
-impl<T: EnumIter + Eq + Copy + Display + Default> Default for EnumParam<T> {
+impl<T: EnumIter + EnumMessage + Eq + Copy + Display + Default> Default for EnumParam<T> {
     fn default() -> Self {
-        let variants: Vec<_> = T::iter().map(|v| (v, v.to_string())).collect();
+        let variants: Vec<_> = Self::build_variants();
         let default = T::default();
 
         Self {
             inner: IntParam {
-                value: T::iter()
-                    .position(|v| v == default)
+                value: variants
+                    .iter()
+                    .position(|(v, _)| v == &default)
                     .expect("Invalid variant in init") as i32,
                 range: Range::Linear {
                     min: 0,
@@ -393,7 +394,7 @@ impl Param for BoolParam {
     }
 }
 
-impl<T: EnumIter + Eq + Copy + Display> Param for EnumParam<T> {
+impl<T: EnumIter + EnumMessage + Eq + Copy + Display> Param for EnumParam<T> {
     type Plain = T;
 
     fn update_smoother(&mut self, sample_rate: f32, reset: bool) {
@@ -480,7 +481,7 @@ impl Display for BoolParam {
     }
 }
 
-impl<T: EnumIter + Eq + Copy + Display> Display for EnumParam<T> {
+impl<T: EnumIter + EnumMessage + Eq + Copy + Display> Display for EnumParam<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.variants[self.inner.plain_value() as usize].1)
     }
@@ -602,11 +603,11 @@ impl BoolParam {
     }
 }
 
-impl<T: EnumIter + Eq + Copy + Display> EnumParam<T> {
+impl<T: EnumIter + EnumMessage + Eq + Copy + Display> EnumParam<T> {
     /// Build a new [Self]. Use the other associated functions to modify the behavior of the
     /// parameter.
     pub fn new(name: &'static str, default: T) -> Self {
-        let variants: Vec<_> = T::iter().map(|v| (v, v.to_string())).collect();
+        let variants: Vec<_> = Self::build_variants();
 
         Self {
             inner: IntParam {
@@ -630,7 +631,7 @@ impl<T: EnumIter + Eq + Copy + Display> EnumParam<T> {
     // TODO: Do exactly that
 }
 
-impl<T: EnumIter + Eq + Copy + Display> EnumParam<T> {
+impl<T: EnumIter + EnumMessage + Eq + Copy + Display> EnumParam<T> {
     // TODO: There doesn't seem to be a single enum crate that gives you a dense [0, n_variatns)
     //       mapping between integers and enum variants. So far linear search over this variants has
     //       been the best approach. We should probably replace this with our own macro at some
@@ -645,13 +646,11 @@ impl<T: EnumIter + Eq + Copy + Display> EnumParam<T> {
     //
     // TODO: Come up with a sounder way to do this.
     #[allow(clippy::len_without_is_empty)]
-    #[inline(never)]
     pub fn len(&self) -> usize {
         self.variants.len()
     }
 
     /// Get the index associated to an enum variant.
-    #[inline(never)]
     fn to_index(&self, variant: T) -> i32 {
         self.variants
             .iter()
@@ -667,9 +666,21 @@ impl<T: EnumIter + Eq + Copy + Display> EnumParam<T> {
     ///
     /// indices `>= Self::len()` will trigger a panic.
     #[allow(clippy::wrong_self_convention)]
-    #[inline(never)]
     fn from_index(&self, index: i32) -> T {
         self.variants[index as usize].0
+    }
+
+    fn build_variants() -> Vec<(T, String)> {
+        T::iter()
+            .map(|v| {
+                (
+                    v,
+                    v.get_message()
+                        .map(|custom_name| custom_name.to_string())
+                        .unwrap_or_else(|| v.to_string()),
+                )
+            })
+            .collect()
     }
 }
 

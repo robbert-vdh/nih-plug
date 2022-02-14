@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::pin::Pin;
 
-use super::{Display, EnumIter, Param};
+use super::{Display, EnumIter, EnumMessage, Param};
 
 /// Re-export for use in the [Params] proc-macro.
 pub use serde_json::from_str as deserialize_field;
@@ -50,7 +50,7 @@ pub trait Params {
 
 /// Dummy enum for in [ParamPtr]. This type needs an explicit representation size so we can compare
 /// the discriminants.
-#[derive(Display, Clone, Copy, PartialEq, Eq, EnumIter)]
+#[derive(Display, Clone, Copy, PartialEq, Eq, EnumIter, EnumMessage)]
 #[repr(i32)]
 pub enum AnyEnum {
     Foo,

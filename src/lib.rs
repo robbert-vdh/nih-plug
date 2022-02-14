@@ -18,7 +18,7 @@ pub use param::range::Range;
 pub use param::smoothing::{Smoother, SmoothingStyle};
 pub use param::{BoolParam, FloatParam, IntParam, Param};
 // TODO: Consider re-exporting these from another module so you can import them all at once
-pub use param::{Display, EnumIter, EnumParam};
+pub use param::{Display, EnumIter, EnumMessage, EnumParam};
 pub use plugin::{
     BufferConfig, BusConfig, Editor, NoteEvent, ParentWindowHandle, Plugin, ProcessStatus,
     Vst3Plugin,
