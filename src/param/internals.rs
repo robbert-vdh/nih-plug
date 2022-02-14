@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::pin::Pin;
 
-use super::Param;
+use super::{Display, EnumIter, Param};
 
 /// Re-export for use in the [Params] proc-macro.
 pub use serde_json::from_str as deserialize_field;
@@ -48,12 +48,24 @@ pub trait Params {
     fn deserialize_fields(&self, serialized: &HashMap<String, String>);
 }
 
+/// Dummy enum for in [ParamPtr]. This type needs an explicit representation size so we can compare
+/// the discriminants.
+#[derive(Display, Clone, Copy, PartialEq, Eq, EnumIter)]
+#[repr(i32)]
+pub enum AnyEnum {
+    Foo,
+    Bar,
+}
+
 /// Internal pointers to parameters. This is an implementation detail used by the wrappers.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub enum ParamPtr {
     FloatParam(*mut super::FloatParam),
     IntParam(*mut super::IntParam),
     BoolParam(*mut super::BoolParam),
+    /// The enum type parameter is used only as a phantom type, so we can safely cast between these
+    /// pointers.
+    EnumParam(*mut super::EnumParam<AnyEnum>),
 }
 
 // These pointers only point to fields on pinned structs, and the caller always needs to make sure
@@ -88,6 +100,7 @@ impl ParamPtr {
             ParamPtr::FloatParam(p) => (**p).name,
             ParamPtr::IntParam(p) => (**p).name,
             ParamPtr::BoolParam(p) => (**p).name,
+            ParamPtr::EnumParam(p) => (**p).inner.name,
         }
     }
 
@@ -102,6 +115,7 @@ impl ParamPtr {
             ParamPtr::FloatParam(p) => (**p).unit,
             ParamPtr::IntParam(p) => (**p).unit,
             ParamPtr::BoolParam(_) => "",
+            ParamPtr::EnumParam(_) => "",
         }
     }
 
@@ -118,6 +132,7 @@ impl ParamPtr {
             ParamPtr::FloatParam(p) => (**p).update_smoother(sample_rate, reset),
             ParamPtr::IntParam(p) => (**p).update_smoother(sample_rate, reset),
             ParamPtr::BoolParam(p) => (**p).update_smoother(sample_rate, reset),
+            ParamPtr::EnumParam(p) => (**p).update_smoother(sample_rate, reset),
         }
     }
 
@@ -133,6 +148,7 @@ impl ParamPtr {
             ParamPtr::FloatParam(p) => (**p).set_from_string(string),
             ParamPtr::IntParam(p) => (**p).set_from_string(string),
             ParamPtr::BoolParam(p) => (**p).set_from_string(string),
+            ParamPtr::EnumParam(p) => (**p).set_from_string(string),
         }
     }
 
@@ -147,6 +163,7 @@ impl ParamPtr {
             ParamPtr::FloatParam(p) => (**p).normalized_value(),
             ParamPtr::IntParam(p) => (**p).normalized_value(),
             ParamPtr::BoolParam(p) => (**p).normalized_value(),
+            ParamPtr::EnumParam(p) => (**p).normalized_value(),
         }
     }
 
@@ -163,6 +180,7 @@ impl ParamPtr {
             ParamPtr::FloatParam(p) => (**p).set_normalized_value(normalized),
             ParamPtr::IntParam(p) => (**p).set_normalized_value(normalized),
             ParamPtr::BoolParam(p) => (**p).set_normalized_value(normalized),
+            ParamPtr::EnumParam(p) => (**p).set_normalized_value(normalized),
         }
     }
 
@@ -178,6 +196,7 @@ impl ParamPtr {
             ParamPtr::FloatParam(p) => (**p).preview_normalized(plain),
             ParamPtr::IntParam(p) => (**p).preview_normalized(plain as i32),
             ParamPtr::BoolParam(_) => plain,
+            ParamPtr::EnumParam(p) => (**p).inner.preview_normalized(plain as i32),
         }
     }
 
@@ -193,6 +212,7 @@ impl ParamPtr {
             ParamPtr::FloatParam(p) => (**p).preview_plain(normalized),
             ParamPtr::IntParam(p) => (**p).preview_plain(normalized) as f32,
             ParamPtr::BoolParam(_) => normalized,
+            ParamPtr::EnumParam(p) => (**p).inner.preview_plain(normalized) as f32,
         }
     }
 
@@ -209,6 +229,7 @@ impl ParamPtr {
             ParamPtr::FloatParam(p) => (**p).normalized_value_to_string(normalized, include_unit),
             ParamPtr::IntParam(p) => (**p).normalized_value_to_string(normalized, include_unit),
             ParamPtr::BoolParam(p) => (**p).normalized_value_to_string(normalized, include_unit),
+            ParamPtr::EnumParam(p) => (**p).normalized_value_to_string(normalized, include_unit),
         }
     }
 
@@ -223,6 +244,7 @@ impl ParamPtr {
             ParamPtr::FloatParam(p) => (**p).string_to_normalized_value(string),
             ParamPtr::IntParam(p) => (**p).string_to_normalized_value(string),
             ParamPtr::BoolParam(p) => (**p).string_to_normalized_value(string),
+            ParamPtr::EnumParam(p) => (**p).string_to_normalized_value(string),
         }
     }
 }

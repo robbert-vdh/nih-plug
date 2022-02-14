@@ -265,6 +265,16 @@ impl<P: Plugin> IComponent for Wrapper<P> {
                 (ParamPtr::FloatParam(p), ParamValue::F32(v)) => (**p).set_plain_value(v),
                 (ParamPtr::IntParam(p), ParamValue::I32(v)) => (**p).set_plain_value(v),
                 (ParamPtr::BoolParam(p), ParamValue::Bool(v)) => (**p).set_plain_value(v),
+                (ParamPtr::EnumParam(p), ParamValue::EnumVariant(s)) => {
+                    if !(**p).set_from_string(&s) {
+                        nih_debug_assert_failure!(
+                            "Invalid stored value '{}' for parameter \"{}\" ({:?})",
+                            s,
+                            param_id_str,
+                            param_ptr,
+                        );
+                    }
+                }
                 (param_ptr, param_value) => {
                     nih_debug_assert_failure!(
                         "Invalid serialized value {:?} for parameter \"{}\" ({:?})",
@@ -328,6 +338,13 @@ impl<P: Plugin> IComponent for Wrapper<P> {
                 ParamPtr::BoolParam(p) => (
                     param_id_str.to_string(),
                     ParamValue::Bool((*p).plain_value()),
+                ),
+                ParamPtr::EnumParam(p) => (
+                    param_id_str.to_string(),
+                    // XXX: This works, but it's a bit of a roundabout conversion
+                    ParamValue::EnumVariant(
+                        (*p).normalized_value_to_string((*p).normalized_value(), false),
+                    ),
                 ),
             })
             .collect();
@@ -430,6 +447,7 @@ impl<P: Plugin> IEditController for Wrapper<P> {
                     Range::SymmetricalSkewed { min, max, .. } => max - min,
                 },
                 ParamPtr::BoolParam(_) => 1,
+                ParamPtr::EnumParam(p) => (**p).len() as i32 - 1,
             };
             info.default_normalized_value = *default_value as f64;
             info.unit_id = vst3_sys::vst::kRootUnitId;
