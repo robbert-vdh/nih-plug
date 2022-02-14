@@ -3,7 +3,8 @@
 use std::collections::HashMap;
 use std::pin::Pin;
 
-use super::{Display, EnumIter, EnumMessage, Param};
+use super::enums::{Display, EnumIter, EnumMessage};
+use super::Param;
 
 /// Re-export for use in the [Params] proc-macro.
 pub use serde_json::from_str as deserialize_field;

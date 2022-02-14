@@ -17,8 +17,8 @@ pub use param::internals::Params;
 pub use param::range::Range;
 pub use param::smoothing::{Smoother, SmoothingStyle};
 pub use param::{BoolParam, FloatParam, IntParam, Param};
-// TODO: Consider re-exporting these from another module so you can import them all at once
-pub use param::{Display, EnumIter, EnumMessage, EnumParam};
+// Importing all of the things exported from this module can be useful when using enum parmaeters
+pub use param::enums::{self, EnumParam};
 pub use plugin::{
     BufferConfig, BusConfig, Editor, NoteEvent, ParentWindowHandle, Plugin, ProcessStatus,
     Vst3Plugin,
