@@ -3,7 +3,6 @@
 use std::collections::HashMap;
 use std::pin::Pin;
 
-use super::enums::{Display, EnumIter, EnumMessage};
 use super::Param;
 
 /// Re-export for use in the [Params] proc-macro.
@@ -49,24 +48,15 @@ pub trait Params {
     fn deserialize_fields(&self, serialized: &HashMap<String, String>);
 }
 
-/// Dummy enum for in [ParamPtr]. This type needs an explicit representation size so we can compare
-/// the discriminants.
-#[derive(Display, Clone, Copy, PartialEq, Eq, EnumIter, EnumMessage)]
-#[repr(i32)]
-pub enum AnyEnum {
-    Foo,
-    Bar,
-}
-
 /// Internal pointers to parameters. This is an implementation detail used by the wrappers.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub enum ParamPtr {
     FloatParam(*mut super::FloatParam),
     IntParam(*mut super::IntParam),
     BoolParam(*mut super::BoolParam),
-    /// The enum type parameter is used only as a phantom type, so we can safely cast between these
-    /// pointers.
-    EnumParam(*mut super::EnumParam<AnyEnum>),
+    /// Since we can't encode the actual enum here, this inner parameter struct contains all of the
+    /// relevant information from the enum so it can be type erased.
+    EnumParam(*mut super::enums::EnumParamInner),
 }
 
 // These pointers only point to fields on pinned structs, and the caller always needs to make sure
@@ -197,7 +187,7 @@ impl ParamPtr {
             ParamPtr::FloatParam(p) => (**p).preview_normalized(plain),
             ParamPtr::IntParam(p) => (**p).preview_normalized(plain as i32),
             ParamPtr::BoolParam(_) => plain,
-            ParamPtr::EnumParam(p) => (**p).inner.preview_normalized(plain as i32),
+            ParamPtr::EnumParam(p) => (**p).preview_normalized(plain as i32),
         }
     }
 
@@ -213,7 +203,7 @@ impl ParamPtr {
             ParamPtr::FloatParam(p) => (**p).preview_plain(normalized),
             ParamPtr::IntParam(p) => (**p).preview_plain(normalized) as f32,
             ParamPtr::BoolParam(_) => normalized,
-            ParamPtr::EnumParam(p) => (**p).inner.preview_plain(normalized) as f32,
+            ParamPtr::EnumParam(p) => (**p).preview_plain(normalized) as f32,
         }
     }
 

@@ -265,15 +265,10 @@ impl<P: Plugin> IComponent for Wrapper<P> {
                 (ParamPtr::FloatParam(p), ParamValue::F32(v)) => (**p).set_plain_value(v),
                 (ParamPtr::IntParam(p), ParamValue::I32(v)) => (**p).set_plain_value(v),
                 (ParamPtr::BoolParam(p), ParamValue::Bool(v)) => (**p).set_plain_value(v),
-                (ParamPtr::EnumParam(p), ParamValue::EnumVariant(s)) => {
-                    if !(**p).set_from_string(&s) {
-                        nih_debug_assert_failure!(
-                            "Invalid stored value '{}' for parameter \"{}\" ({:?})",
-                            s,
-                            param_id_str,
-                            param_ptr,
-                        );
-                    }
+                // Enums are serialized based on the active variant's index (which may not be the
+                // same as the discriminator)
+                (ParamPtr::EnumParam(p), ParamValue::I32(variant_idx)) => {
+                    (**p).set_plain_value(variant_idx)
                 }
                 (param_ptr, param_value) => {
                     nih_debug_assert_failure!(
@@ -340,14 +335,10 @@ impl<P: Plugin> IComponent for Wrapper<P> {
                     ParamValue::Bool((*p).plain_value()),
                 ),
                 ParamPtr::EnumParam(p) => (
+                    // Enums are serialized based on the active variant's index (which may not be
+                    // the same as the discriminator)
                     param_id_str.to_string(),
-                    // XXX: This works, but it's a bit of a roundabout conversion
-                    // TODO: Consider serializing as index or as variant field name instead of the
-                    //       display value (i.e. message). Right now it's impossible to rename
-                    //       variants while preserving the valu assignment.
-                    ParamValue::EnumVariant(
-                        (*p).normalized_value_to_string((*p).normalized_value(), false),
-                    ),
+                    ParamValue::I32((*p).plain_value()),
                 ),
             })
             .collect();

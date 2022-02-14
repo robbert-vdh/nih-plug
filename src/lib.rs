@@ -13,12 +13,11 @@ pub use nih_plug_derive::Params;
 // And also re-export anything you'd need to build a plugin
 pub use buffer::Buffer;
 pub use context::{GuiContext, ParamSetter, ProcessContext};
+pub use param::enums::{Enum, EnumParam};
 pub use param::internals::Params;
 pub use param::range::Range;
 pub use param::smoothing::{Smoother, SmoothingStyle};
 pub use param::{BoolParam, FloatParam, IntParam, Param};
-// Importing all of the things exported from this module can be useful when using enum parmaeters
-pub use param::enums::{self, EnumParam};
 pub use plugin::{
     BufferConfig, BusConfig, Editor, NoteEvent, ParentWindowHandle, Plugin, ProcessStatus,
     Vst3Plugin,

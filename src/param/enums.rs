@@ -1,59 +1,101 @@
 //! Enum parameters. `enum` is a keyword, so `enums` it is.
 
 use std::fmt::Display;
+use std::marker::PhantomData;
+use std::sync::Arc;
 
 use super::internals::ParamPtr;
 use super::range::Range;
 use super::{IntParam, Param};
 
-// Re-export for the [EnumParam]
-// TODO: Consider re-exporting this from a non-root module to make it a bit less spammy:w
-pub use strum::{Display, EnumIter, EnumMessage, IntoEnumIterator as EnumIter};
+// TODO: Crate and re-export the derive macro
 
-/// An [IntParam]-backed categorical parameter that allows convenient conversion to and from a
-/// simple enum. This enum must derive the re-exported [EnumIter] and [EnumMessage] and [Display]
-/// traits. You can use the `#[strum(message = "Foo Bar")]` to override the name of the variant.
-//
-// TODO: Figure out a more sound way to get the same interface
-pub struct EnumParam<T: EnumIter + EnumMessage + Eq + Copy + Display> {
-    /// The integer parameter backing this enum parameter.
-    pub inner: IntParam,
-    /// An associative list of the variants converted to an i32 and their names. We need this
-    /// because we're doing some nasty type erasure things with [ParamPtr::EnumParam], so we can't
-    /// directly query the associated functions on `T` after the parameter when handling function
-    /// calls from the wrapper.
-    variants: Vec<(T, String)>,
+/// An enum usable with `EnumParam`. This trait can be derived. Variants are identified by their
+/// **declaration order**. You can freely rename the variant names, but reordering them will break
+/// compatibility with existing presets. The variatn's name is used as the display name by default.
+/// If you want to override this, for instance, because it needs to contain spaces, then yo ucan use
+/// the `$[name = "..."]` attribute:
+///
+/// ```
+/// #[derive(Enum)]
+/// enum Foo {
+///     Bar,
+///     Baz,
+///     #[name = "Contains Spaces"]
+///     ContainsSpaces,
+/// }
+/// ```
+pub trait Enum {
+    /// The human readable names for the variants. These are displayed in the GUI or parameter list,
+    /// and also used for parsing text back to a parameter value. The length of this slice
+    /// determines how many variants there are.
+    fn variants() -> &'static [&'static str];
+
+    /// Get the variant index (which may not be the same as the discriminator) corresponding to the
+    /// active variant. The index needs to correspond to the name in [Self::variants()].
+    fn to_index(self) -> usize;
+
+    /// Get the variant corresponding to the variant with the same index in [Self::variants()]. This
+    /// must always return a value. If the index is out of range, return the first variatn.
+    fn from_index(index: usize) -> Self;
 }
 
-impl<T: EnumIter + EnumMessage + Eq + Copy + Display + Default> Default for EnumParam<T> {
+/// An [IntParam]-backed categorical parameter that allows convenient conversion to and from a
+/// simple enum. This enum must derive the re-exported [Enum] trait. Check the trait's documentation
+/// for more information on how this works.
+pub struct EnumParam<T: Enum> {
+    /// A type-erased version of this parameter so the wrapper can do its thing without needing to
+    /// know about `T`.
+    inner: EnumParamInner,
+
+    /// `T` is only used on the plugin side to convert back to an enum variant. Internally
+    /// everything works through the variants field on [EnumParamInner].
+    _marker: PhantomData<T>,
+}
+
+/// The type-erased internals for [EnumParam] so that the wrapper can interact with it. Acts like an
+/// [IntParam] but with different conversions from strings to values.
+pub struct EnumParamInner {
+    /// The integer parameter backing this enum parameter.
+    pub(crate) inner: IntParam,
+    /// The human readable variant names, obtained from [Enum::variants()].
+    variants: &'static [&'static str],
+}
+
+impl<T: Enum + Default> Default for EnumParam<T> {
     fn default() -> Self {
-        let variants: Vec<_> = Self::build_variants();
-        let default = T::default();
+        let variants = T::variants();
 
         Self {
-            inner: IntParam {
-                value: variants
-                    .iter()
-                    .position(|(v, _)| v == &default)
-                    .expect("Invalid variant in init") as i32,
-                range: Range::Linear {
-                    min: 0,
-                    max: variants.len() as i32 - 1,
+            inner: EnumParamInner {
+                inner: IntParam {
+                    value: T::default().to_index() as i32,
+                    range: Range::Linear {
+                        min: 0,
+                        max: variants.len() as i32 - 1,
+                    },
+                    ..Default::default()
                 },
-                ..Default::default()
+                variants,
             },
-            variants,
+            _marker: PhantomData,
         }
     }
 }
 
-impl<T: EnumIter + EnumMessage + Eq + Copy + Display> Display for EnumParam<T> {
+impl<T: Enum> Display for EnumParam<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.variants[self.inner.plain_value() as usize].1)
+        self.inner.fmt(f)
     }
 }
 
-impl<T: EnumIter + EnumMessage + Eq + Copy + Display> Param for EnumParam<T> {
+impl Display for EnumParamInner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.variants[self.inner.plain_value() as usize])
+    }
+}
+
+impl<T: Enum> Param for EnumParam<T> {
     type Plain = T;
 
     fn update_smoother(&mut self, sample_rate: f32, reset: bool) {
@@ -61,9 +103,58 @@ impl<T: EnumIter + EnumMessage + Eq + Copy + Display> Param for EnumParam<T> {
     }
 
     fn set_from_string(&mut self, string: &str) -> bool {
-        match self.variants.iter().find(|(_, repr)| repr == string) {
-            Some((variant, _)) => {
-                self.inner.set_plain_value(self.to_index(*variant));
+        self.inner.set_from_string(string)
+    }
+
+    fn plain_value(&self) -> Self::Plain {
+        T::from_index(self.inner.plain_value() as usize)
+    }
+
+    fn set_plain_value(&mut self, plain: Self::Plain) {
+        self.inner.set_plain_value(T::to_index(plain) as i32)
+    }
+
+    fn normalized_value(&self) -> f32 {
+        self.inner.normalized_value()
+    }
+
+    fn set_normalized_value(&mut self, normalized: f32) {
+        self.inner.set_normalized_value(normalized)
+    }
+
+    fn normalized_value_to_string(&self, normalized: f32, include_unit: bool) -> String {
+        self.inner
+            .normalized_value_to_string(normalized, include_unit)
+    }
+
+    fn string_to_normalized_value(&self, string: &str) -> Option<f32> {
+        self.inner.string_to_normalized_value(string)
+    }
+
+    fn preview_normalized(&self, plain: Self::Plain) -> f32 {
+        self.inner.preview_normalized(T::to_index(plain) as i32)
+    }
+
+    fn preview_plain(&self, normalized: f32) -> Self::Plain {
+        T::from_index(self.inner.preview_plain(normalized) as usize)
+    }
+
+    fn as_ptr(&self) -> ParamPtr {
+        self.inner.as_ptr()
+    }
+}
+
+impl Param for EnumParamInner {
+    type Plain = i32;
+
+    fn update_smoother(&mut self, sample_rate: f32, reset: bool) {
+        self.inner.update_smoother(sample_rate, reset)
+    }
+
+    fn set_from_string(&mut self, string: &str) -> bool {
+        match self.variants.iter().position(|n| n == &string) {
+            Some(idx) => {
+                self.inner.set_plain_value(idx as i32);
                 true
             }
             None => false,
@@ -71,11 +162,11 @@ impl<T: EnumIter + EnumMessage + Eq + Copy + Display> Param for EnumParam<T> {
     }
 
     fn plain_value(&self) -> Self::Plain {
-        self.from_index(self.inner.plain_value())
+        self.inner.plain_value()
     }
 
     fn set_plain_value(&mut self, plain: Self::Plain) {
-        self.inner.set_plain_value(self.to_index(plain))
+        self.inner.set_plain_value(plain)
     }
 
     fn normalized_value(&self) -> f32 {
@@ -87,114 +178,74 @@ impl<T: EnumIter + EnumMessage + Eq + Copy + Display> Param for EnumParam<T> {
     }
 
     fn normalized_value_to_string(&self, normalized: f32, _include_unit: bool) -> String {
-        // XXX: As mentioned below, our type punning would cause `.to_string()` to print the
-        //      incorect value. Because of that, we already stored the string representations for
-        //      variants values in this struct.
-        let plain = self.preview_plain(normalized);
-        let index = self.to_index(plain);
-        self.variants[index as usize].1.clone()
+        let index = self.preview_plain(normalized);
+        self.variants[index as usize].to_string()
     }
 
     fn string_to_normalized_value(&self, string: &str) -> Option<f32> {
         self.variants
             .iter()
-            .find(|(_, repr)| repr == string)
-            .map(|(variant, _)| self.preview_normalized(*variant))
+            .position(|n| n == &string)
+            .map(|idx| self.preview_normalized(idx as i32))
     }
 
     fn preview_normalized(&self, plain: Self::Plain) -> f32 {
-        self.inner.preview_normalized(self.to_index(plain))
+        self.inner.preview_normalized(plain)
     }
 
     fn preview_plain(&self, normalized: f32) -> Self::Plain {
-        self.from_index(self.inner.preview_plain(normalized))
+        self.inner.preview_plain(normalized)
     }
 
     fn as_ptr(&self) -> ParamPtr {
-        ParamPtr::EnumParam(
-            self as *const EnumParam<T> as *mut EnumParam<T>
-                as *mut EnumParam<super::internals::AnyEnum>,
-        )
+        ParamPtr::EnumParam(self as *const EnumParamInner as *mut EnumParamInner)
     }
 }
 
-impl<T: EnumIter + EnumMessage + Eq + Copy + Display> EnumParam<T> {
+impl<T: Enum + 'static> EnumParam<T> {
     /// Build a new [Self]. Use the other associated functions to modify the behavior of the
     /// parameter.
     pub fn new(name: &'static str, default: T) -> Self {
-        let variants: Vec<_> = Self::build_variants();
+        let variants = T::variants();
 
         Self {
-            inner: IntParam {
-                value: variants
-                    .iter()
-                    .position(|(v, _)| v == &default)
-                    .expect("Invalid variant in init") as i32,
-                range: Range::Linear {
-                    min: 0,
-                    max: variants.len() as i32 - 1,
+            inner: EnumParamInner {
+                inner: IntParam {
+                    value: T::to_index(default) as i32,
+                    range: Range::Linear {
+                        min: 0,
+                        max: variants.len() as i32 - 1,
+                    },
+                    name,
+                    ..Default::default()
                 },
-                name,
-                ..Default::default()
+                variants,
             },
-            variants,
+            _marker: PhantomData,
         }
     }
 
-    // We currently don't implement callbacks here. If we want to do that, then we'll need to add
-    // the IntParam fields to the parameter itself.
-    // TODO: Do exactly that
+    /// Run a callback whenever this parameter's value changes. The argument passed to this function
+    /// is the parameter's new value. This should not do anything expensive as it may be called
+    /// multiple times in rapid succession, and it can be run from both the GUI and the audio
+    /// thread.
+    pub fn with_callback(mut self, callback: Arc<dyn Fn(T) + Send + Sync>) -> Self {
+        self.inner.inner.value_changed = Some(Arc::new(move |value| {
+            callback(T::from_index(value as usize))
+        }));
+        self
+    }
+
+    /// Get the active enum variant.
+    pub fn value(&self) -> T {
+        self.plain_value()
+    }
 }
 
-impl<T: EnumIter + EnumMessage + Eq + Copy + Display> EnumParam<T> {
-    // TODO: There doesn't seem to be a single enum crate that gives you a dense [0, n_variatns)
-    //       mapping between integers and enum variants. So far linear search over this variants has
-    //       been the best approach. We should probably replace this with our own macro at some
-    //       point.
-
-    /// The number of variants for this parameter
-    //
-    // This is part of the magic sauce that lets [ParamPtr::Enum] work. The type parmaeter there is
-    // a dummy type, acting as a somewhat unsound way to do type erasure. Because all data is stored
-    // in the struct after initialization (i.e. we no longer rely on T's specifics) and AnyParam is
-    // represented by an i32 this EnumParam behaves correctly even when casted between Ts.
-    //
-    // TODO: Come up with a sounder way to do this.
+impl EnumParamInner {
+    /// Get the number of variants for this enum.
     #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         self.variants.len()
-    }
-
-    /// Get the index associated to an enum variant.
-    fn to_index(&self, variant: T) -> i32 {
-        self.variants
-            .iter()
-            // This is somewhat shady, as `T` is going to be `AnyEnum` when this is indirectly
-            // called from the wrapper.
-            .position(|(v, _)| v == &variant)
-            .expect("Invalid enum variant") as i32
-    }
-
-    /// Get a variant from a index.
-    ///
-    /// # Panics
-    ///
-    /// indices `>= Self::len()` will trigger a panic.
-    #[allow(clippy::wrong_self_convention)]
-    fn from_index(&self, index: i32) -> T {
-        self.variants[index as usize].0
-    }
-
-    fn build_variants() -> Vec<(T, String)> {
-        T::iter()
-            .map(|v| {
-                (
-                    v,
-                    v.get_message()
-                        .map(|custom_name| custom_name.to_string())
-                        .unwrap_or_else(|| v.to_string()),
-                )
-            })
-            .collect()
     }
 }
