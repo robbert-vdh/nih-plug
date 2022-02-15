@@ -1,0 +1,8 @@
+# This provides metadata for `cargo xtask bundle <foo>`. The syntax is as
+# follows:
+#
+# [package_name]
+# name = "Human Readable Plugin Name"  # defaults to <package_name>
+
+[diopser]
+name = "Diopser"
