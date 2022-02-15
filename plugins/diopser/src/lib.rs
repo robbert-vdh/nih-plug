@@ -41,6 +41,8 @@ const MAX_AUTOMATION_STEP_SIZE: u32 = 512;
 // improved). Other features I want to implement are:
 // - Briefly muting the output when changing the number of filters to get rid of the clicks
 // - A GUI
+// - A panic switch (maybe also as a trigger-like parameter) to reset all filter states may also be
+//   useful
 struct Diopser {
     params: Pin<Box<DiopserParams>>,
 
