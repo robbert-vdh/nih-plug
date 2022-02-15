@@ -779,7 +779,7 @@ impl<P: Plugin> IAudioProcessor for Wrapper<P> {
                     input_events.clear();
                     let mut event: MaybeUninit<_> = MaybeUninit::uninit();
                     for i in 0..num_events {
-                        nih_debug_assert_eq!(events.get_event(i, event.as_mut_ptr()), kResultOk);
+                        assert_eq!(events.get_event(i, event.as_mut_ptr()), kResultOk);
                         let event = event.assume_init();
                         let timing = event.sample_offset as u32;
                         if event.type_ == vst3_sys::vst::EventTypes::kNoteOnEvent as u16 {
