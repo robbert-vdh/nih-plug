@@ -4,6 +4,9 @@ use std::sync::Weak;
 
 #[cfg(all(target_family = "unix", not(target_os = "macos")))]
 mod linux;
+// For now, also use the Linux event loop on macOS so it at least compiles
+#[cfg(target_os = "macos")]
+mod linux;
 #[cfg(target_os = "windows")]
 mod windows;
 
