@@ -14,9 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use packed_simd::f32x2;
 use std::f32::consts;
 use std::ops::{Add, Mul, Sub};
+
+#[cfg(feature = "simd")]
+use packed_simd::f32x2;
 
 /// A simple biquad filter with functions for generating coefficients for an all-pass filter.
 ///
@@ -127,6 +129,7 @@ impl SimdType for f32 {
     }
 }
 
+#[cfg(feature = "simd")]
 impl SimdType for f32x2 {
     fn from_f32(value: f32) -> Self {
         f32x2::splat(value)

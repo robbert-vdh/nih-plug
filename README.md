@@ -46,7 +46,7 @@ great but it has only been tested under Wine with
 
 NIH-plug works with the latest stable Rust compiler.
 
-After installing [Rust](https://rustup.rs/) you can compile any of the plugins
+After installing [Rust](https://rustup.rs/), you can compile any of the plugins
 in the `plugins` directory in the following way, replacing `gain` with the name
 of the plugin:
 

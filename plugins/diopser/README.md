@@ -19,6 +19,22 @@ and much better performance.
   Disperser or Kilohearts AB.
 </sup>
 
+### Building
+
+After installing [Rust](https://rustup.rs/) you can compile Diopser as follows
+
+```shell
+cargo xtask bundle gain --release --bundle-vst3
+```
+
+If you don't have access to a nightly compiler (`rustup default nightly && rustup update`),
+then you can compile a version without SIMD at a 2x penalty by disabling the
+SIMD feature:
+
+```shell
+cargo xtask bundle gain --release --bundle-vst3 --no-default-features
+```
+
 ## Download
 
 There are currently no prebuilt downloads available. Check this repository's

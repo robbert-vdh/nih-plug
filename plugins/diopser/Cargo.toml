@@ -8,7 +8,12 @@ license = "GPL-3.0-or-later"
 [lib]
 crate-type = ["cdylib"]
 
+[features]
+default = ["simd"]
+# Make it go fast, vroom
+simd = ["packed_simd"]
+
 [dependencies]
 nih_plug = { path = "../../", features = ["assert_process_allocs"] }
 
-packed_simd = { version = "0.3.6", package = "packed_simd_2" }
+packed_simd = { version = "0.3.6", package = "packed_simd_2", optional = true }
