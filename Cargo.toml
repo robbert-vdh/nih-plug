@@ -22,6 +22,12 @@ members = [
   "plugins/diopser",
 ]
 
+[features]
+default = []
+# Enabling this feature will cause the plugin to terminate when allocations
+# occur in the processing function while compiling in debug mode.
+assert_process_allocs = ["assert_no_alloc"]
+
 [dependencies]
 nih_plug_derive = { path = "nih_plug_derive" }
 
@@ -49,9 +55,3 @@ features = [
   "Win32_System_LibraryLoader",
   "Win32_System_Performance",
 ]
-
-[features]
-default = []
-# Enabling this feature will cause the plugin to terminate when allocations
-# occur in the processing function while compiling in debug mode.
-assert_process_allocs = ["assert_no_alloc"]
