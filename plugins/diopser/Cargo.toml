@@ -10,3 +10,5 @@ crate-type = ["cdylib"]
 
 [dependencies]
 nih_plug = { path = "../../", features = ["assert_process_allocs"] }
+
+packed_simd = { version = "0.3.6", package = "packed_simd_2" }
