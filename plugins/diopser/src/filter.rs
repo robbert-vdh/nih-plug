@@ -41,13 +41,7 @@ impl Default for Biquad {
     /// Before setting constants the filter should just act as an identity function.
     fn default() -> Self {
         Self {
-            coefficients: BiquadCoefficients {
-                b0: 1.0,
-                b1: 0.0,
-                b2: 0.0,
-                a1: 0.0,
-                a2: 0.00,
-            },
+            coefficients: BiquadCoefficients::identity(),
             s1: 0.0,
             s2: 0.0,
         }
@@ -67,6 +61,17 @@ impl Biquad {
 }
 
 impl BiquadCoefficients {
+    /// Filter coefficients that would cause the sound to be passed through as is.
+    pub fn identity() -> Self {
+        Self {
+            b0: 1.0,
+            b1: 0.0,
+            b2: 0.0,
+            a1: 0.0,
+            a2: 0.0,
+        }
+    }
+
     /// Compute the coefficients for an all-pass filter.
     ///
     /// Based on <http://shepazu.github.io/Audio-EQ-Cookbook/audio-eq-cookbook.html>.
