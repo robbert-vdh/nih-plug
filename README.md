@@ -37,10 +37,10 @@ yourself.
 ### Current status
 
 It actually works! There's still lots of small things to implement, but the core
-functionality and including basic GUI support are there. Currently the event
-loop has not yet been implemented for macOS, and the Windows version should work
-great but it has only been tested under Wine with
-[yabridge](https://github.com/robbert-vdh/yabridge).
+functionality and including basic GUI support are there. Currently the Windows
+version has only been tested under Wine with
+[yabridge](https://github.com/robbert-vdh/yabridge), and the macOS version
+hasn't been tested at all. Feel free to be the first one!
 
 ### Building
 

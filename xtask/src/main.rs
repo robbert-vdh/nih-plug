@@ -41,7 +41,7 @@ fn main() -> Result<()> {
     }
 }
 
-// TODO: This probably needs more work for macOS. I don't know, I don't have a Mac.
+// TODO: The macOS version has not been tested
 fn bundle(package: &str, mut args: Vec<String>) -> Result<()> {
     let bundle_name = match load_bundler_config()?.and_then(|c| c.get(package).cloned()) {
         Some(PackageConfig { name: Some(name) }) => name,
@@ -113,6 +113,8 @@ fn bundle(package: &str, mut args: Vec<String>) -> Result<()> {
         fs::create_dir_all(vst3_lib_path.parent().unwrap())
             .context("Could not create bundle directory")?;
         fs::copy(&lib_path, &vst3_lib_path).context("Could not copy library to bundle")?;
+
+        maybe_create_macos_vst3_bundle(package, cross_compile_target.as_deref())?;
 
         eprintln!("Created a VST3 bundle at '{}'", vst3_bundle_home.display());
     } else {
@@ -217,4 +219,60 @@ fn vst3_bundle_library_name(package: &str, cross_compile_target: Option<&str>) -
             return Ok(vst3_bundle_library_name_windows_x86(package));
         }
     }
+}
+
+/// If compiling for macOS, create all of the bundl-y stuff Steinberg and Apple require you to have.
+fn maybe_create_macos_vst3_bundle(package: &str, cross_compile_target: Option<&str>) -> Result<()> {
+    match cross_compile_target {
+        Some("x86_64-apple-darwin") => (),
+        Some(_) => return Ok(()),
+        #[cfg(target_os = "macos")]
+        _ => (),
+        #[cfg(not(target_os = "macos"))]
+        _ => return Ok(()),
+    }
+
+    // TODO: May want to add bundler.toml fields for the identifier, version and signature at some
+    // point.
+    fs::write(
+        format!("target/{}.vst3/Contents/PkgInfo", package),
+        "BNDL????",
+    )
+    .context("Could not create PkgInfo file")?;
+    fs::write(
+        format!("target/{}.vst3/Contents/Info.plist", package),
+        format!(r#"<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist>
+  <dict>
+    <key>CFBundleExecutable</key>
+    <string>{package}</string>
+    <key>CFBundleIconFile</key>
+    <string></string>
+    <key>CFBundleIdentifier</key>
+    <string>com.nih-plug.{package}</string>
+    <key>CFBundleName</key>
+    <string>{package}</string>
+    <key>CFBundleDisplayName</key>
+    <string>{package}</string>
+    <key>CFBundlePackageType</key>
+    <string>BNDL</string>
+    <key>CFBundleSignature</key>
+    <string>????</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+    <key>CFBundleVersion</key>
+    <string>1.0.0</string>
+    <key>NSHumanReadableCopyright</key>
+    <string></string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+  </dict>
+</plist>
+"#),
+    )
+    .context("Could not create Info.plist file")?;
+
+    Ok(())
 }
