@@ -21,10 +21,11 @@ and much better performance.
 
 ### Building
 
-After installing [Rust](https://rustup.rs/) you can compile Diopser as follows
+After installing [Rust](https://rustup.rs/) with the nightly toolchain you can
+compile Diopser as follows
 
 ```shell
-cargo xtask bundle gain --release --bundle-vst3
+cargo +nightly xtask bundle gain --release --bundle-vst3
 ```
 
 If you don't have access to a nightly compiler (`rustup default nightly && rustup update`),
