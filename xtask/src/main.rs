@@ -1,10 +1,21 @@
 use anyhow::{bail, Context, Result};
+use serde::Deserialize;
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
 
 const USAGE_STRING: &str =
     "Usage: cargo xtask bundle <package> [--release] [--target <triple>] [--bundle-vst3]";
+
+/// Any additional configuration that might be useful for creating plugin bundles, stored as
+/// `bundler.toml` alongside the workspace's main `Cargo.toml` file.
+type BundlerConfig = HashMap<String, PackageConfig>;
+
+#[derive(Debug, Clone, Deserialize)]
+struct PackageConfig {
+    name: Option<String>,
+}
 
 fn main() -> Result<()> {
     let project_root = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -32,6 +43,11 @@ fn main() -> Result<()> {
 
 // TODO: This probably needs more work for macOS. I don't know, I don't have a Mac.
 fn bundle(package: &str, mut args: Vec<String>) -> Result<()> {
+    let bundle_name = match load_bundler_config()?.and_then(|c| c.get(package).cloned()) {
+        Some(PackageConfig { name: Some(name) }) => name,
+        _ => package.to_string(),
+    };
+
     let mut is_release_build = false;
     let mut bundle_vst3 = false;
     let mut cross_compile_target: Option<String> = None;
@@ -83,7 +99,7 @@ fn bundle(package: &str, mut args: Vec<String>) -> Result<()> {
     eprintln!();
     if bundle_vst3 {
         let vst3_lib_path = Path::new("target").join(vst3_bundle_library_name(
-            package,
+            &bundle_name,
             cross_compile_target.as_deref(),
         )?);
         let vst3_bundle_home = vst3_lib_path
@@ -104,6 +120,24 @@ fn bundle(package: &str, mut args: Vec<String>) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Load the `bundler.toml` file, if it exists. If it does exist but it cannot be parsed, then this
+/// will return an error.
+fn load_bundler_config() -> Result<Option<BundlerConfig>> {
+    // We're already in the project root
+    let bundler_config_path = Path::new("bundler.toml");
+    if !bundler_config_path.exists() {
+        return Ok(None);
+    }
+
+    let result = toml::from_str(
+        &fs::read_to_string(&bundler_config_path)
+            .with_context(|| format!("Could not read '{}'", bundler_config_path.display()))?,
+    )
+    .with_context(|| format!("Could not parse '{}'", bundler_config_path.display()))?;
+
+    Ok(Some(result))
 }
 
 fn target_base(cross_compile_target: Option<&str>) -> Result<&'static str> {
