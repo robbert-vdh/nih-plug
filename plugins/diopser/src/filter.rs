@@ -73,6 +73,13 @@ impl<T: SimdType> Biquad<T> {
 
         result
     }
+
+    /// Reset the state to zero, useful after making making large, non-interpolatable changes to the
+    /// filter coefficients.
+    pub fn reset(&mut self) {
+        self.s1 = T::from_f32(0.0);
+        self.s2 = T::from_f32(0.0);
+    }
 }
 
 impl<T: SimdType> BiquadCoefficients<T> {

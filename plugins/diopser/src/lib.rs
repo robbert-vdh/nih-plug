@@ -44,8 +44,6 @@ const MAX_AUTOMATION_STEP_SIZE: u32 = 512;
 // improved). Other features I want to implement are:
 // - Briefly muting the output when changing the number of filters to get rid of the clicks
 // - A GUI
-// - A panic switch (maybe also as a trigger-like parameter) to reset all filter states may also be
-//   useful
 //
 // TODO: Decide on whether to keep the scalar version or to just only support SIMD. Issue is that
 //       packed_simd requires a nightly compiler.
@@ -321,16 +319,19 @@ impl Diopser {
     /// Check if the filters need to be updated beased on [Self::should_update_filters] and the
     /// smoothing interval, and update them as needed.
     fn maybe_update_filters(&mut self, smoothing_interval: u32) {
-        let should_update_filters = self
+        // In addition to updating the filters, we should also clear the filter's state when
+        // changing a setting we can't neatly interpolate between.
+        let reset_filters = self
             .should_update_filters
             .compare_exchange(true, false, Ordering::Acquire, Ordering::Relaxed)
-            .is_ok()
+            .is_ok();
+        let should_update_filters = reset_filters
             || ((self.params.filter_frequency.smoothed.is_smoothing()
                 || self.params.filter_resonance.smoothed.is_smoothing()
                 || self.params.filter_spread_octaves.smoothed.is_smoothing())
                 && self.next_filter_smoothing_in <= 1);
         if should_update_filters {
-            self.update_filters(smoothing_interval);
+            self.update_filters(smoothing_interval, reset_filters);
             self.next_filter_smoothing_in = smoothing_interval as i32;
         } else {
             self.next_filter_smoothing_in -= 1;
@@ -339,7 +340,7 @@ impl Diopser {
 
     /// Recompute the filter coefficients based on the smoothed paraetersm. We can skip forwardq in
     /// larger steps to reduce the DSP load.
-    fn update_filters(&mut self, smoothing_interval: u32) {
+    fn update_filters(&mut self, smoothing_interval: u32, reset_filters: bool) {
         if self.filters.is_empty() {
             return;
         }
@@ -382,11 +383,17 @@ impl Diopser {
             #[cfg(feature = "simd")]
             {
                 self.filters[filter_idx].coefficients = coefficients;
+                if reset_filters {
+                    self.filters[filter_idx].reset();
+                }
             }
 
             #[cfg(not(feature = "simd"))]
             for channel in self.filters.iter_mut() {
                 channel[filter_idx].coefficients = coefficients;
+                if reset_filters {
+                    channel[filter_idx].reset();
+                }
             }
         }
     }
