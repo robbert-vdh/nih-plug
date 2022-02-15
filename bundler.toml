@@ -1,5 +1,5 @@
-# This provides metadata for `cargo xtask bundle <foo>`. The syntax is as
-# follows:
+# This provides metadata for NIH-plug's `cargo xtask bundle <foo>` plugin
+# bundler. This file's syntax is as follows:
 #
 # [package_name]
 # name = "Human Readable Plugin Name"  # defaults to <package_name>
