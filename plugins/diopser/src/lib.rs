@@ -22,6 +22,7 @@ use nih_plug::{
 };
 use nih_plug::{BoolParam, FloatParam, IntParam, Params, Range, SmoothingStyle};
 use nih_plug::{Enum, EnumParam};
+use packed_simd::f32x2;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -49,9 +50,12 @@ struct Diopser {
     /// Needed for computing the filter coefficients.
     sample_rate: f32,
 
-    /// All of the all-pass filters, with one array of serial filters per channelq.
-    /// [DiopserParams::num_stages] controls how many filters are actually active.
-    filters: Vec<[filter::Biquad; MAX_NUM_FILTERS]>,
+    /// All of the all-pass filters, with vectorized coefficients so they can be calculated for
+    /// multiple channels at once.  [DiopserParams::num_stages] controls how many filters are
+    /// actually active.
+    // FIXME: This was the scalar version, maybe add this back at some point.
+    // filters: Vec<[filter::Biquad<f32>; MAX_NUM_FILTERS]>,
+    filters: [filter::Biquad<f32x2>; MAX_NUM_FILTERS],
     /// If this is set at the start of the processing cycle, then the filter coefficients should be
     /// updated. For the regular filter parameters we can look at the smoothers, but this is needed
     /// when changing the number of active filters.
@@ -111,7 +115,7 @@ impl Default for Diopser {
 
             sample_rate: 1.0,
 
-            filters: Vec::new(),
+            filters: [filter::Biquad::default(); MAX_NUM_FILTERS],
             should_update_filters,
             next_filter_smoothing_in: 1,
         }
@@ -216,19 +220,17 @@ impl Plugin for Diopser {
     }
 
     fn accepts_bus_config(&self, config: &BusConfig) -> bool {
-        // This works with any symmetrical IO layout
-        config.num_input_channels == config.num_output_channels && config.num_input_channels > 0
+        // FIXME: The scalar version would work for any IO layout, but this SIMD version can only do
+        //        stereo
+        config.num_input_channels == config.num_output_channels && config.num_input_channels == 2
     }
 
     fn initialize(
         &mut self,
-        bus_config: &BusConfig,
+        _bus_config: &BusConfig,
         buffer_config: &BufferConfig,
         _context: &mut impl ProcessContext,
     ) -> bool {
-        self.filters =
-            vec![[Default::default(); MAX_NUM_FILTERS]; bus_config.num_input_channels as usize];
-
         // Initialize the filters on the first process call
         self.sample_rate = buffer_config.sample_rate;
         self.should_update_filters.store(true, Ordering::Release);
@@ -250,16 +252,25 @@ impl Plugin for Diopser {
         for mut channel_samples in buffer.iter_mut() {
             self.maybe_update_filters(smoothing_interval);
 
-            // We get better cache locality by iterating over the filters and then over the channels
-            for filter_idx in 0..self.params.filter_stages.value as usize {
-                for (channel_idx, filters) in self.filters.iter_mut().enumerate() {
-                    // We can also use `channel_samples.iter_mut()`, but the compiler isn't able to
-                    // optmize that iterator away and it would add a ton of overhead over indexing
-                    // the buffer directly
-                    let sample = unsafe { channel_samples.get_unchecked_mut(channel_idx) };
-                    *sample = filters[filter_idx].process(*sample);
-                }
+            // We can compute the filters for both channels at once. This version thus now only
+            // supports stero audio.
+            let mut samples =
+                f32x2::new(*unsafe { channel_samples.get_unchecked_mut(0) }, *unsafe {
+                    channel_samples.get_unchecked_mut(1)
+                });
+
+            // Iterating over the filters and then over the channels would get us better cache
+            // locality even in the scalar version
+            for filter in self
+                .filters
+                .iter_mut()
+                .take(self.params.filter_stages.value as usize)
+            {
+                samples = filter.process(samples);
             }
+
+            *unsafe { channel_samples.get_unchecked_mut(0) } = samples.extract(0);
+            *unsafe { channel_samples.get_unchecked_mut(1) } = samples.extract(1);
         }
 
         ProcessStatus::Normal
@@ -325,11 +336,10 @@ impl Diopser {
             }
             .clamp(MIN_FREQUENCY, max_frequency);
 
+            // In the scalar version we'd update every channel's filter's coefficients gere
             let coefficients =
                 filter::BiquadCoefficients::allpass(self.sample_rate, filter_frequency, resonance);
-            for channel in self.filters.iter_mut() {
-                channel[filter_idx].coefficients = coefficients;
-            }
+            self.filters[filter_idx].coefficients = coefficients;
         }
     }
 }

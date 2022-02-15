@@ -11,7 +11,8 @@ like a cartoon laser beam, or a psytrance kickdrum. If you are experimenting
 with those kinds of settings, then you may want to consider temporarily placing
 a peak limiter after the plugin in case loud resonances start building up.
 
-This is a port from https://github.com/robbert-vdh/diopser.
+This is a port from https://github.com/robbert-vdh/diopser with more features
+and much better performance.
 
 <sup id="disperser">
   *Disperser is a trademark of Kilohearts AB. Diopser is in no way related to
