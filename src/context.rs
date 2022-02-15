@@ -9,10 +9,11 @@ mod windows;
 
 #[cfg(all(target_family = "unix", not(target_os = "macos")))]
 pub(crate) use self::linux::LinuxEventLoop as OsEventLoop;
+// For now, also use the Linux event loop on macOS so it at least compiles
+#[cfg(target_os = "macos")]
+pub(crate) use self::linux::LinuxEventLoop as OsEventLoop;
 #[cfg(target_os = "windows")]
 pub(crate) use self::windows::WindowsEventLoop as OsEventLoop;
-#[cfg(target_os = "macos")]
-compile_error!("The macOS event loop has not yet been implemented");
 
 use crate::param::internals::ParamPtr;
 use crate::param::Param;

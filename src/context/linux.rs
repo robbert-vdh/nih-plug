@@ -10,6 +10,10 @@ use super::{EventLoop, MainThreadExecutor};
 use crate::nih_log;
 
 /// See [super::EventLoop].
+#[cfg_attr(
+    target_os = "macos",
+    deprecated = "macOS needs to have its own event loop implementation, this implementation may not work correctly"
+)]
 pub(crate) struct LinuxEventLoop<T, E> {
     /// The thing that ends up executing these tasks. The tasks are usually executed from the worker
     /// thread, but if the current thread is the main thread then the task cna also be executed
