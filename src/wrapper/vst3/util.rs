@@ -1,4 +1,6 @@
 use lazy_static::lazy_static;
+use std::ops::Deref;
+use vst3_sys::{interfaces::IUnknown, ComInterface};
 
 use crate::wrapper::util::hash_param_id;
 
@@ -33,11 +35,26 @@ pub struct VstPtr<T: vst3_sys::ComInterface + ?Sized> {
     ptr: vst3_sys::VstPtr<T>,
 }
 
-impl<T: vst3_sys::ComInterface + ?Sized> std::ops::Deref for VstPtr<T> {
+/// The same as [VstPtr] with shared semnatics, but for objects we defined ourself since VstPtr only
+/// works for interfaces.
+#[repr(transparent)]
+pub struct ObjectPtr<T: IUnknown> {
+    ptr: *const T,
+}
+
+impl<T: ComInterface + ?Sized> Deref for VstPtr<T> {
     type Target = vst3_sys::VstPtr<T>;
 
     fn deref(&self) -> &Self::Target {
         &self.ptr
+    }
+}
+
+impl<T: IUnknown> Deref for ObjectPtr<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.ptr }
     }
 }
 
@@ -47,7 +64,24 @@ impl<T: vst3_sys::ComInterface + ?Sized> From<vst3_sys::VstPtr<T>> for VstPtr<T>
     }
 }
 
+impl<T: IUnknown> Drop for ObjectPtr<T> {
+    fn drop(&mut self) {
+        unsafe { (*self).release() };
+    }
+}
+
 /// SAFETY: Sharing these pointers across thread is s safe as they have internal atomic reference
 /// counting, so as long as a `VstPtr<T>` handle exists the object will stay alive.
-unsafe impl<T: vst3_sys::ComInterface + ?Sized> Send for VstPtr<T> {}
-unsafe impl<T: vst3_sys::ComInterface + ?Sized> Sync for VstPtr<T> {}
+unsafe impl<T: ComInterface + ?Sized> Send for VstPtr<T> {}
+unsafe impl<T: ComInterface + ?Sized> Sync for VstPtr<T> {}
+
+unsafe impl<T: IUnknown> Send for ObjectPtr<T> {}
+unsafe impl<T: IUnknown> Sync for ObjectPtr<T> {}
+
+impl<T: IUnknown> ObjectPtr<T> {
+    /// Create a smart pointer for an existing reference counted object.
+    pub fn new(obj: &T) -> Self {
+        unsafe { obj.add_ref() };
+        Self { ptr: obj }
+    }
+}
