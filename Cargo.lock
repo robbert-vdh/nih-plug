@@ -91,9 +91,9 @@ checksum = "0d8c1fef690941d3e7788d328517591fecc684c084084702d6ff1641e993699a"
 
 [[package]]
 name = "cc"
-version = "1.0.72"
+version = "1.0.73"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22a9137b95ea06864e018375b72adfb7db6e6f68cfc8df5a04d00288050485ee"
+checksum = "2fff2a6927b3bb87f9595d67196a70493f627687a71d87a0d692242c33f58c11"
 
 [[package]]
 name = "cfg-if"
@@ -435,9 +435,9 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "libc"
-version = "0.2.117"
+version = "0.2.118"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e74d72e0f9b65b5b4ca49a346af3976df0f9c61d550727f349ecd559f251a26c"
+checksum = "06e509672465a0504304aa87f9f176f2b2b716ed8fb105ebe5c02dc6dce96a94"
 
 [[package]]
 name = "libloading"
@@ -750,9 +750,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.78"
+version = "1.0.79"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d23c1ba4cf0efd44be32017709280b32d1cea5c3f1275c3b6d9e8bc54f758085"
+checksum = "8e8d9fa5c3b304765ce1fd9c4c8a3de2c8db365a5b91be52f186efc675681d95"
 dependencies = [
  "itoa",
  "ryu",
@@ -850,7 +850,7 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 [[package]]
 name = "vst3-com"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vst3-sys.git?branch=fix/atomic-reference-count#8e651b4151ff902adf969ae0837e84ab7a8282d0"
+source = "git+https://github.com/robbert-vdh/vst3-sys.git?branch=fix/atomic-reference-count#1f634714bb1190297ef5eecb4c393fd1a0fa566d"
 dependencies = [
  "vst3-com-macros",
 ]
@@ -858,7 +858,7 @@ dependencies = [
 [[package]]
 name = "vst3-com-macros"
 version = "0.2.0"
-source = "git+https://github.com/robbert-vdh/vst3-sys.git?branch=fix/atomic-reference-count#8e651b4151ff902adf969ae0837e84ab7a8282d0"
+source = "git+https://github.com/robbert-vdh/vst3-sys.git?branch=fix/atomic-reference-count#1f634714bb1190297ef5eecb4c393fd1a0fa566d"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -869,7 +869,7 @@ dependencies = [
 [[package]]
 name = "vst3-com-macros-support"
 version = "0.2.0"
-source = "git+https://github.com/robbert-vdh/vst3-sys.git?branch=fix/atomic-reference-count#8e651b4151ff902adf969ae0837e84ab7a8282d0"
+source = "git+https://github.com/robbert-vdh/vst3-sys.git?branch=fix/atomic-reference-count#1f634714bb1190297ef5eecb4c393fd1a0fa566d"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -879,7 +879,7 @@ dependencies = [
 [[package]]
 name = "vst3-sys"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vst3-sys.git?branch=fix/atomic-reference-count#8e651b4151ff902adf969ae0837e84ab7a8282d0"
+source = "git+https://github.com/robbert-vdh/vst3-sys.git?branch=fix/atomic-reference-count#1f634714bb1190297ef5eecb4c393fd1a0fa566d"
 dependencies = [
  "vst3-com",
 ]
