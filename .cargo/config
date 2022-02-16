@@ -1,2 +1,8 @@
 [alias]
-xtask = "run --package xtask --"
+# Building the xtask package in release mode is normally not necessary, but if
+# you're going to compile other plugins in release mode then you'd need to
+# recompile serde(-derive) because the xtask packages needs serde to parse the
+# `bundler.toml` config file. To avoid needing to compile these expensive crates
+# twice, we'll default to also running the xtask target in release mode.
+xtask = "run --package xtask --release --"
+xtask-debug = "run --package xtask --"
