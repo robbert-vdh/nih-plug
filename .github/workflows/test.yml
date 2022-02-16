@@ -114,7 +114,7 @@ jobs:
 
       - name: Determine build archive name
         run: |
-          echo "ARCHIVE_NAME=nih-plug-$(git describe --always)-${{ runner.os }}" >> "$GITHUB_ENV"
+          echo "ARCHIVE_NAME=nih-plugs-$(git describe --always)-${{ matrix.os }}" >> "$GITHUB_ENV"
       - name: Move all packaged plugin into a directory
         run: |
           mkdir "$ARCHIVE_NAME"
