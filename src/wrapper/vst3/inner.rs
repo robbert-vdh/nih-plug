@@ -8,7 +8,8 @@ use vst3_sys::base::{kInvalidArgument, kResultOk, tresult};
 use vst3_sys::vst::IComponentHandler;
 
 use super::context::WrapperProcessContext;
-use super::util::{VstPtr, BYPASS_PARAM_HASH, BYPASS_PARAM_ID};
+use super::util::{ObjectPtr, VstPtr, BYPASS_PARAM_HASH, BYPASS_PARAM_ID};
+use super::view::WrapperView;
 use crate::buffer::Buffer;
 use crate::context::{EventLoop, GuiContext, MainThreadExecutor, OsEventLoop};
 use crate::param::internals::ParamPtr;
@@ -29,6 +30,10 @@ pub(crate) struct WrapperInner<P: Plugin> {
     /// The host's `IComponentHandler` instance, if passed through
     /// `IEditController::set_component_handler`.
     pub component_handler: RwLock<Option<VstPtr<dyn IComponentHandler>>>,
+
+    /// Our own [IPlugView] instance. This is set while the editor is actually visible (which is
+    /// different form the lifetimei of [super::WrapperView] itself).
+    pub plug_view: RwLock<Option<ObjectPtr<WrapperView<P>>>>,
 
     /// A realtime-safe task queue so the plugin can schedule tasks that need to be run later on the
     /// GUI thread.
@@ -105,6 +110,8 @@ impl<P: Plugin> WrapperInner<P> {
             editor,
 
             component_handler: RwLock::new(None),
+
+            plug_view: RwLock::new(None),
 
             event_loop: RwLock::new(MaybeUninit::uninit()),
 

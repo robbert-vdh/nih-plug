@@ -10,7 +10,7 @@ use vst3_sys::gui::{IPlugFrame, IPlugView};
 use vst3_sys::VST3;
 
 use super::inner::WrapperInner;
-use super::util::VstPtr;
+use super::util::{ObjectPtr, VstPtr};
 use crate::plugin::{Editor, Plugin};
 use crate::ParentWindowHandle;
 
@@ -117,6 +117,8 @@ impl<P: Plugin> IPlugView for WrapperView<P> {
                 self.editor
                     .spawn(ParentWindowHandle { handle }, self.inner.clone()),
             );
+            *self.inner.plug_view.write() = Some(ObjectPtr::from(self));
+
             kResultOk
         } else {
             kResultFalse
@@ -126,7 +128,9 @@ impl<P: Plugin> IPlugView for WrapperView<P> {
     unsafe fn removed(&self) -> tresult {
         let mut editor_handle = self.editor_handle.write();
         if editor_handle.is_some() {
+            *self.inner.plug_view.write() = None;
             *editor_handle = None;
+
             kResultOk
         } else {
             kResultFalse

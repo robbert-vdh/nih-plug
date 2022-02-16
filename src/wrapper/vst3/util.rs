@@ -64,6 +64,14 @@ impl<T: vst3_sys::ComInterface + ?Sized> From<vst3_sys::VstPtr<T>> for VstPtr<T>
     }
 }
 
+impl<T: IUnknown> From<&T> for ObjectPtr<T> {
+    /// Create a smart pointer for an existing reference counted object.
+    fn from(obj: &T) -> Self {
+        unsafe { obj.add_ref() };
+        Self { ptr: obj }
+    }
+}
+
 impl<T: IUnknown> Drop for ObjectPtr<T> {
     fn drop(&mut self) {
         unsafe { (*self).release() };
@@ -77,11 +85,3 @@ unsafe impl<T: ComInterface + ?Sized> Sync for VstPtr<T> {}
 
 unsafe impl<T: IUnknown> Send for ObjectPtr<T> {}
 unsafe impl<T: IUnknown> Sync for ObjectPtr<T> {}
-
-impl<T: IUnknown> ObjectPtr<T> {
-    /// Create a smart pointer for an existing reference counted object.
-    pub fn new(obj: &T) -> Self {
-        unsafe { obj.add_ref() };
-        Self { ptr: obj }
-    }
-}
