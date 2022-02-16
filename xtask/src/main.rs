@@ -37,6 +37,9 @@ fn main() -> Result<()> {
 
             bundle(&package, other_args)
         }
+        // This is only meant to be used by the CI, since using awk for this can be a bit spotty on
+        // macOS
+        "known-packages" => list_known_packages(),
         _ => bail!("Unknown command '{command}'\n\n{USAGE_STRING}"),
     }
 }
@@ -119,6 +122,18 @@ fn bundle(package: &str, mut args: Vec<String>) -> Result<()> {
         eprintln!("Created a VST3 bundle at '{}'", vst3_bundle_home.display());
     } else {
         eprintln!("Not creating any plugin bundles")
+    }
+
+    Ok(())
+}
+
+/// This lists the packages configured in `bundler.toml`. This is only used as part of the CI when
+/// bundling plugins.
+fn list_known_packages() -> Result<()> {
+    if let Some(config) = load_bundler_config()? {
+        for package in config.keys() {
+            println!("{package}");
+        }
     }
 
     Ok(())

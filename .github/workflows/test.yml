@@ -107,7 +107,7 @@ jobs:
         # Instead of hardcoding which targets to build and package, we'll
         # package everything that's got en entry in the `bundler.toml` file
         run: |
-          packages=$(awk 'match($0, /^\s*\["?([^"]+)"?]/, matches) { print matches[1] }' bundler.toml)
+          packages=$(cargo xtask known-packages)
           for package in $packages; do
             cargo xtask bundle "$package" --bundle-vst3 --release
           done
