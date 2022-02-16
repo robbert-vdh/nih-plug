@@ -4,11 +4,13 @@ use std::any::Any;
 use std::ffi::{c_void, CStr};
 use std::mem;
 use std::sync::Arc;
+use vst3_com::utils::SharedVstPtr;
 use vst3_sys::base::{kInvalidArgument, kResultFalse, kResultOk, tresult, TBool};
-use vst3_sys::gui::IPlugView;
+use vst3_sys::gui::{IPlugFrame, IPlugView};
 use vst3_sys::VST3;
 
 use super::inner::WrapperInner;
+use super::util::VstPtr;
 use crate::plugin::{Editor, Plugin};
 use crate::ParentWindowHandle;
 
@@ -34,11 +36,14 @@ pub(crate) struct WrapperView<P: Plugin> {
     inner: Arc<WrapperInner<P>>,
     editor: Arc<dyn Editor>,
     editor_handle: RwLock<Option<Box<dyn Any>>>,
+
+    /// The `IPlugFrame` instance passed by the host during `IPlugView::set_frame`.
+    pub plug_frame: RwLock<Option<VstPtr<dyn IPlugFrame>>>,
 }
 
 impl<P: Plugin> WrapperView<P> {
     pub fn new(inner: Arc<WrapperInner<P>>, editor: Arc<dyn Editor>) -> Box<Self> {
-        Self::allocate(inner, editor, RwLock::new(None))
+        Self::allocate(inner, editor, RwLock::new(None), RwLock::new(None))
     }
 }
 
@@ -176,9 +181,14 @@ impl<P: Plugin> IPlugView for WrapperView<P> {
         kResultOk
     }
 
-    unsafe fn set_frame(&self, _frame: *mut c_void) -> tresult {
-        // TODO: Implement resizing. We don't implement that right now, so we also don't need the
-        //       plug frame.
+    unsafe fn set_frame(&self, frame: *mut c_void) -> tresult {
+        // The correct argument type is missing from the bindings
+        let frame: SharedVstPtr<dyn IPlugFrame> = mem::transmute(frame);
+        match frame.upgrade() {
+            Some(frame) => *self.plug_frame.write() = Some(frame.into()),
+            None => *self.plug_frame.write() = None,
+        }
+
         kResultOk
     }
 
