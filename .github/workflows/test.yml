@@ -18,13 +18,12 @@ defaults:
     shell: bash
 
 jobs:
-  build-all:
+  test:
     strategy:
       matrix:
         os: [ubuntu-18.04, macos-10.15, windows-latest]
-    name: Build all components
+    name: Build and test all components
     runs-on: ${{ matrix.os }}
-    # TODO: At some point, add artifacts
     steps:
       - uses: actions/checkout@v2
       # Needed for git-describe to do anything useful
@@ -66,3 +65,61 @@ jobs:
         with:
           command: test
           args: --workspace
+
+  # We won't package the example plugins
+  package:
+    strategy:
+      matrix:
+        os: [ubuntu-18.04, macos-10.15, windows-latest]
+    name: Package plugin binaries
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: Fetch all git history
+        run: git fetch --force --prune --tags --unshallow
+
+      - name: Install dependencies
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl-dev libxcb1-dev libxcb-icccm4-dev libxcursor-dev libxkbcommon-dev libxcb-shape0-dev libxcb-xfixes0-dev
+
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Set up Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          # FIXME: Needed for SIMD. Diopser can be compiled without SIMD support
+          #        though, we'd actually need to test whether both versions
+          #        compile
+          toolchain: nightly
+          profile: minimal
+          default: true
+      - name: Package all targets from bundler.toml
+        # Instead of hardcoding which targets to build and package, we'll
+        # package everything that's got en entry in the `bundler.toml` file
+        run: |
+          packages=$(awk 'match($0, /^\s*\["?([^"]+)"?]/, matches) { print matches[1] }' bundler.toml)
+          for package in $packages; do
+            cargo xtask bundle "$package" --bundle-vst3 --release
+          done
+
+      - name: Determine build archive name
+        run: |
+          echo "ARCHIVE_NAME=nih-plug-$(git describe --always)-${{ runner.os }}" >> "$GITHUB_ENV"
+      - name: Move all packaged plugin into a directory
+        run: |
+          mkdir "$ARCHIVE_NAME"
+          mv target/*.vst3 "$ARCHIVE_NAME"
+      - uses: actions/upload-artifact@v2
+        with:
+          name: ${{ env.ARCHIVE_NAME }}
+          path: ${{ env.ARCHIVE_NAME }}
