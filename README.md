@@ -22,10 +22,8 @@ functionality.
 
 ## Plugins
 
-Check each plugin's readme for more details on what the plugin actually does.
-There are currently no automated builds available, so check the
-[building](#building) section for instructions on how to compile these plugins
-yourself.
+Check each plugin's readme for more details on what the plugin actually does and
+for download links.
 
 - [**Diopser**](plugins/diopser) is a totally original phase rotation plugin.
   Useful for oomphing up kickdrums and basses, transforming synths into their
