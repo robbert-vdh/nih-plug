@@ -49,7 +49,7 @@ in the `plugins` directory in the following way, replacing `gain` with the name
 of the plugin:
 
 ```shell
-cargo xtask bundle gain --release --bundle-vst3
+cargo xtask bundle gain --release
 ```
 
 ### Example plugins

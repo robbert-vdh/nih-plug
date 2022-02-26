@@ -109,7 +109,7 @@ jobs:
         run: |
           packages=$(cargo xtask known-packages)
           for package in $packages; do
-            cargo xtask bundle "$package" --bundle-vst3 --release
+            cargo xtask bundle "$package" --release
           done
 
       - name: Determine build archive name

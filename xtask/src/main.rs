@@ -7,8 +7,7 @@ use std::process::Command;
 
 mod symbols;
 
-const USAGE_STRING: &str =
-    "Usage: cargo xtask bundle <package> [--release] [--target <triple>] [--bundle-vst3]";
+const USAGE_STRING: &str = "Usage: cargo xtask bundle <package> [--release] [--target <triple>]";
 
 /// The base birectory for the bundler's output.
 const BUNDLE_HOME: &str = "target/bundled";
@@ -40,7 +39,7 @@ fn main() -> Result<()> {
                 .context(format!("Missing package name\n\n{USAGE_STRING}"))?;
             let other_args: Vec<_> = args.collect();
 
-            bundle(&package, other_args)
+            bundle(&package, &other_args)
         }
         // This is only meant to be used by the CI, since using awk for this can be a bit spotty on
         // macOS
@@ -50,22 +49,17 @@ fn main() -> Result<()> {
 }
 
 // TODO: The macOS version has not been tested
-fn bundle(package: &str, mut args: Vec<String>) -> Result<()> {
+fn bundle(package: &str, args: &[String]) -> Result<()> {
     let bundle_name = match load_bundler_config()?.and_then(|c| c.get(package).cloned()) {
         Some(PackageConfig { name: Some(name) }) => name,
         _ => package.to_string(),
     };
 
     let mut is_release_build = false;
-    let mut bundle_vst3 = false;
     let mut cross_compile_target: Option<String> = None;
     for arg_idx in (0..args.len()).rev() {
         let arg = &args[arg_idx];
         match arg.as_str() {
-            "--bundle-vst3" => {
-                bundle_vst3 = true;
-                args.remove(arg_idx);
-            }
             "--release" => is_release_build = true,
             "--target" => {
                 // When cross compiling we should generate the correct bundle type
@@ -104,6 +98,11 @@ fn bundle(package: &str, mut args: Vec<String>) -> Result<()> {
         bail!("Could not find built library at '{}'", lib_path.display());
     }
 
+    // We'll detect the pugin formats supported by the plugin binary and create bundled accordingly
+    // TODO: Support VST2 and CLAP here
+    let bundle_vst3 = symbols::exported(&lib_path, "GetPluginFactory")
+        .with_context(|| format!("Could not parse '{}'", lib_path.display()))?;
+
     eprintln!();
     if bundle_vst3 {
         let vst3_lib_path = Path::new(BUNDLE_HOME).join(vst3_bundle_library_name(
@@ -126,7 +125,7 @@ fn bundle(package: &str, mut args: Vec<String>) -> Result<()> {
 
         eprintln!("Created a VST3 bundle at '{}'", vst3_bundle_home.display());
     } else {
-        eprintln!("Not creating any plugin bundles")
+        eprintln!("Not creating any plugin bundles because the package does not export any plugins")
     }
 
     Ok(())
