@@ -118,7 +118,7 @@ jobs:
       - name: Move all packaged plugin into a directory
         run: |
           mkdir "$ARCHIVE_NAME"
-          mv target/*.vst3 "$ARCHIVE_NAME"
+          mv target/bundled/* "$ARCHIVE_NAME"
       - uses: actions/upload-artifact@v2
         with:
           name: ${{ env.ARCHIVE_NAME }}

@@ -10,6 +10,9 @@ mod symbols;
 const USAGE_STRING: &str =
     "Usage: cargo xtask bundle <package> [--release] [--target <triple>] [--bundle-vst3]";
 
+/// The base birectory for the bundler's output.
+const BUNDLE_HOME: &str = "target/bundled";
+
 /// Any additional configuration that might be useful for creating plugin bundles, stored as
 /// `bundler.toml` alongside the workspace's main `Cargo.toml` file.
 type BundlerConfig = HashMap<String, PackageConfig>;
@@ -103,7 +106,7 @@ fn bundle(package: &str, mut args: Vec<String>) -> Result<()> {
 
     eprintln!();
     if bundle_vst3 {
-        let vst3_lib_path = Path::new("target").join(vst3_bundle_library_name(
+        let vst3_lib_path = Path::new(BUNDLE_HOME).join(vst3_bundle_library_name(
             &bundle_name,
             cross_compile_target.as_deref(),
         )?);
@@ -250,9 +253,9 @@ fn maybe_create_macos_vst3_bundle(package: &str, cross_compile_target: Option<&s
     }
 
     // TODO: May want to add bundler.toml fields for the identifier, version and signature at some
-    // point.
+    //       point.
     fs::write(
-        format!("target/{}.vst3/Contents/PkgInfo", package),
+        format!("{}/{}.vst3/Contents/PkgInfo", BUNDLE_HOME, package),
         "BNDL????",
     )
     .context("Could not create PkgInfo file")?;
