@@ -5,6 +5,8 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
+mod symbols;
+
 const USAGE_STRING: &str =
     "Usage: cargo xtask bundle <package> [--release] [--target <triple>] [--bundle-vst3]";
 
