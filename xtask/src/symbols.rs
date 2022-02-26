@@ -23,6 +23,9 @@ pub fn exported<P: AsRef<Path>>(binary: P, symbol: &str) -> Result<bool> {
                 goblin::mach::Mach::Binary(obj) => obj,
             };
 
+            // XXX: Why are all exported symbols on macOS prefixed with an underscore?
+            let symbol = format!("_{}", symbol);
+
             Ok(obj.exports()?.into_iter().any(|sym| sym.name == symbol))
         }
         goblin::Object::PE(obj) => Ok(obj.exports.iter().any(|sym| sym.name == Some(symbol))),
