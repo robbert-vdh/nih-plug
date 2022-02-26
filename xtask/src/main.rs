@@ -281,7 +281,7 @@ fn maybe_create_macos_vst3_bundle(package: &str, cross_compile_target: Option<&s
     )
     .context("Could not create PkgInfo file")?;
     fs::write(
-        format!("target/{}.vst3/Contents/Info.plist", package),
+        format!("{}/{}.vst3/Contents/Info.plist", BUNDLE_HOME, package),
         format!(r#"<?xml version="1.0" encoding="UTF-8"?>
 
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
