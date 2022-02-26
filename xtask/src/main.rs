@@ -7,7 +7,9 @@ use std::process::Command;
 
 mod symbols;
 
-const USAGE_STRING: &str = "Usage: cargo xtask bundle <package> [--release] [--target <triple>]";
+const USAGE_STRING: &str = "Usage:
+  cargo xtask bundle <package> [--release] [--target <triple>]
+  cargo xtask bundle -p <package1> -p <package2> ... [--release] [--target <triple>]";
 
 /// The base birectory for the bundler's output.
 const BUNDLE_HOME: &str = "target/bundled";
@@ -34,12 +36,32 @@ fn main() -> Result<()> {
         .context(format!("Missing command name\n\n{USAGE_STRING}"))?;
     match command.as_str() {
         "bundle" => {
-            let package = args
-                .next()
-                .context(format!("Missing package name\n\n{USAGE_STRING}"))?;
+            // For convenience's sake we'll allow building multiple packages with -p just like carg
+            // obuild, but you can also build a single package without specifying -p
+            let mut args = args.peekable();
+            let mut packages = Vec::new();
+            if args.peek().map(|s| s.as_str()) == Some("-p") {
+                while args.peek().map(|s| s.as_str()) == Some("-p") {
+                    packages.push(
+                        args.nth(1)
+                            .context(format!("Missing package name after -p\n\n{USAGE_STRING}"))?,
+                    );
+                }
+            } else {
+                packages.push(
+                    args.next()
+                        .context(format!("Missing package name\n\n{USAGE_STRING}"))?,
+                );
+            };
             let other_args: Vec<_> = args.collect();
 
-            bundle(&package, &other_args)
+            bundle(&packages[0], &other_args)?;
+            for package in packages.into_iter().skip(1) {
+                eprintln!();
+                bundle(&package, &other_args)?;
+            }
+
+            Ok(())
         }
         // This is only meant to be used by the CI, since using awk for this can be a bit spotty on
         // macOS
