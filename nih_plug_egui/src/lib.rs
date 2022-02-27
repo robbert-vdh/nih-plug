@@ -98,9 +98,10 @@ where
             WindowOpenOptions {
                 title: String::from("egui window"),
                 size: Size::new(width as f64, height as f64),
-                // TODO: What happens when we use the system scale factor here? I'd assume this
-                //       would work everywhere, even if the window may be tiny in some cases.
-                scale: WindowScalePolicy::ScaleFactor(1.0),
+                // TODO: Implement the plugin-specific DPI scaling APIs with a method on the
+                //       `GuiContext` when baseview gets window resizing. For some reason passing
+                //       1.0 here causes the UI to be scaled on macOS but not the mouse events.
+                scale: WindowScalePolicy::SystemScaleFactor,
                 gl_config: Some(GlConfig {
                     version: (3, 2),
                     red_bits: 8,
