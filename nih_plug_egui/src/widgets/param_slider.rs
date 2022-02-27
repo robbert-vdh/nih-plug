@@ -1,4 +1,4 @@
-use egui::{vec2, Response, Sense, Stroke, TextStyle, Ui, Vec2, Widget};
+use egui::{vec2, Response, Sense, Stroke, TextStyle, Ui, Vec2, Widget, WidgetText};
 use lazy_static::lazy_static;
 
 use super::util;
@@ -181,11 +181,11 @@ impl<'a, P: Param> ParamSlider<'a, P> {
         let should_draw_frame = ui.visuals().button_frame;
         let padding = ui.spacing().button_padding;
 
-        let text = ui.painter().layout(
-            format!("{}", self.param),
-            TextStyle::Button,
-            visuals.text_color(),
+        let text = WidgetText::from(format!("{}", self.param)).into_galley(
+            ui,
+            None,
             ui.available_width() - (padding.x * 2.0),
+            TextStyle::Button,
         );
 
         let (_, rect) = ui.allocate_space(text.size() + (padding * 2.0));
@@ -195,7 +195,7 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                 let stroke = visuals.bg_stroke;
                 ui.painter().rect(
                     rect.expand(visuals.expansion),
-                    visuals.corner_radius,
+                    visuals.rounding,
                     fill,
                     stroke,
                 );
@@ -205,7 +205,7 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                 .layout()
                 .align_size_within_rect(text.size(), rect.shrink2(padding))
                 .min;
-            ui.painter().galley(text_pos, text);
+            text.paint_with_visuals(ui.painter(), text_pos, &visuals);
         }
     }
 }
@@ -215,8 +215,7 @@ impl<P: Param> Widget for ParamSlider<'_, P> {
         ui.horizontal(|ui| {
             // Allocate space, but add some padding on the top and bottom to make it look a bit slimmer.
             let height = ui
-                .fonts()
-                .row_height(TextStyle::Body)
+                .text_style_height(&TextStyle::Body)
                 .max(ui.spacing().interact_size.y);
             let slider_height = ui.painter().round_to_pixel(height * 0.65);
             let response = ui

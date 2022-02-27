@@ -5,7 +5,7 @@
 use baseview::gl::GlConfig;
 use baseview::{Size, WindowHandle, WindowOpenOptions, WindowScalePolicy};
 use crossbeam::atomic::AtomicCell;
-use egui::CtxRef;
+use egui::Context;
 use egui_baseview::EguiWindow;
 use nih_plug::{Editor, ParamSetter, ParentWindowHandle};
 use parking_lot::RwLock;
@@ -35,7 +35,7 @@ pub fn create_egui_editor<T, U>(
 ) -> Option<Box<dyn Editor>>
 where
     T: 'static + Send + Sync,
-    U: Fn(&CtxRef, &ParamSetter, &mut T) + 'static + Send + Sync,
+    U: Fn(&Context, &ParamSetter, &mut T) + 'static + Send + Sync,
 {
     Some(Box::new(EguiEditor {
         egui_state,
@@ -77,7 +77,7 @@ struct EguiEditor<T> {
     egui_state: Arc<EguiState>,
     /// The plugin's state. This is kept in between editor openenings.
     user_state: Arc<RwLock<T>>,
-    update: Arc<dyn Fn(&CtxRef, &ParamSetter, &mut T) + 'static + Send + Sync>,
+    update: Arc<dyn Fn(&Context, &ParamSetter, &mut T) + 'static + Send + Sync>,
 }
 
 impl<T> Editor for EguiEditor<T>
