@@ -26,7 +26,11 @@ pub fn exported<P: AsRef<Path>>(binary: P, symbol: &str) -> Result<bool> {
             // XXX: Why are all exported symbols on macOS prefixed with an underscore?
             let symbol = format!("_{}", symbol);
 
-            Ok(obj.exports()?.into_iter().any(|sym| sym.name == symbol))
+            Ok(obj.symbols().any(|r| {
+                r.map_or(false, |x| {
+                    x.1.is_global() && !x.1.is_undefined() && x.0 == symbol
+                })
+            }))
         }
         goblin::Object::PE(obj) => Ok(obj.exports.iter().any(|sym| sym.name == Some(symbol))),
         obj => bail!("Unsupported object type: {:?}", obj),
