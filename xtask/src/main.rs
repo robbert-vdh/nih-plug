@@ -141,7 +141,8 @@ fn bundle(package: &str, args: &[String]) -> Result<()> {
 
         fs::create_dir_all(vst3_lib_path.parent().unwrap())
             .context("Could not create bundle directory")?;
-        fs::copy(&lib_path, &vst3_lib_path).context("Could not copy library to bundle")?;
+        reflink::reflink_or_copy(&lib_path, &vst3_lib_path)
+            .context("Could not copy library to bundle")?;
 
         maybe_create_macos_vst3_bundle(package, cross_compile_target.as_deref())?;
 
