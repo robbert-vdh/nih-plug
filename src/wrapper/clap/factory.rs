@@ -2,12 +2,13 @@ use clap_sys::host::clap_host;
 use clap_sys::plugin::{clap_plugin, clap_plugin_descriptor};
 use clap_sys::plugin_factory::clap_plugin_factory;
 use clap_sys::version::CLAP_VERSION;
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 use std::os::raw::c_char;
 use std::ptr;
 
+use super::plugin::Plugin;
 use crate::ClapPlugin;
 
 /// The plugin's factory. Initialized using a lazy_static from the entry poiunt's `get_factory()`
@@ -127,6 +128,12 @@ impl<P: ClapPlugin> Factory<P> {
         host: *const clap_host,
         plugin_id: *const c_char,
     ) -> *const clap_plugin {
-        todo!()
+        let factory = &*(factory as *const Self);
+
+        if !plugin_id.is_null() && CStr::from_ptr(plugin_id) == factory.clap_id.as_c_str() {
+            &Box::leak(Box::new(Plugin::<P>::new(host))).clap_plugin
+        } else {
+            ptr::null()
+        }
     }
 }

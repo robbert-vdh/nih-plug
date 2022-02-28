@@ -1,4 +1,5 @@
 mod factory;
+mod plugin;
 
 /// Re-export for the wrapper.
 pub use self::factory::Factory;
