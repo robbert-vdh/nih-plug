@@ -1,6 +1,6 @@
 use clap_sys::host::clap_host;
 use clap_sys::plugin::clap_plugin;
-use clap_sys::process::{clap_process, clap_process_status};
+use clap_sys::process::{clap_process, clap_process_status, CLAP_PROCESS_CONTINUE};
 use crossbeam::atomic::AtomicCell;
 use crossbeam::queue::ArrayQueue;
 use parking_lot::RwLock;
@@ -18,7 +18,7 @@ use crate::plugin::{BufferConfig, BusConfig, ClapPlugin};
 use crate::NoteEvent;
 
 #[repr(C)]
-pub struct Plugin<P: ClapPlugin> {
+pub struct Wrapper<P: ClapPlugin> {
     // Keep the vtable as the first field so we can do a simple pointer cast
     pub clap_plugin: clap_plugin,
 
@@ -75,7 +75,7 @@ pub enum Task {
 
 /// Because CLAP has this [clap_host::request_host_callback()] function, we don't need to use
 /// `OsEventLoop` and can instead just request a main thread callback directly.
-impl<P: ClapPlugin> EventLoop<Task, Plugin<P>> for Plugin<P> {
+impl<P: ClapPlugin> EventLoop<Task, Wrapper<P>> for Wrapper<P> {
     fn new_and_spawn(_executor: std::sync::Weak<Self>) -> Self {
         panic!("What are you doing");
     }
@@ -102,7 +102,7 @@ impl<P: ClapPlugin> EventLoop<Task, Plugin<P>> for Plugin<P> {
     }
 }
 
-impl<P: ClapPlugin> MainThreadExecutor<Task> for Plugin<P> {
+impl<P: ClapPlugin> MainThreadExecutor<Task> for Wrapper<P> {
     unsafe fn execute(&self, task: Task) {
         todo!("Implement latency changes for CLAP")
     }
@@ -111,7 +111,7 @@ impl<P: ClapPlugin> MainThreadExecutor<Task> for Plugin<P> {
 unsafe impl Send for HostCallback {}
 unsafe impl Sync for HostCallback {}
 
-impl<P: ClapPlugin> Plugin<P> {
+impl<P: ClapPlugin> Wrapper<P> {
     pub fn new(host_callback: *const clap_host) -> Self {
         let plugin_descriptor = Box::new(PluginDescriptor::default());
 

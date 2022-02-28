@@ -6,7 +6,7 @@ use std::os::raw::c_char;
 use std::ptr;
 
 use super::descriptor::PluginDescriptor;
-use super::plugin::Plugin;
+use super::plugin::Wrapper;
 use crate::ClapPlugin;
 
 /// The plugin's factory. Initialized using a lazy_static from the entry poiunt's `get_factory()`
@@ -60,7 +60,7 @@ impl<P: ClapPlugin> Factory<P> {
 
         if !plugin_id.is_null() && CStr::from_ptr(plugin_id) == factory.plugin_descriptor.clap_id()
         {
-            &Box::leak(Box::new(Plugin::<P>::new(host))).clap_plugin
+            &Box::leak(Box::new(Wrapper::<P>::new(host))).clap_plugin
         } else {
             ptr::null()
         }

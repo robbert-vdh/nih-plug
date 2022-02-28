@@ -2,7 +2,7 @@ use parking_lot::RwLockWriteGuard;
 use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 
-use super::plugin::{Plugin, Task};
+use super::plugin::{Task, Wrapper};
 use crate::context::ProcessContext;
 use crate::event_loop::EventLoop;
 use crate::plugin::{ClapPlugin, NoteEvent};
@@ -11,7 +11,7 @@ use crate::plugin::{ClapPlugin, NoteEvent};
 /// to lock guards for event queues. Otherwise reading these events would require constant
 /// unnecessary atomic operations to lock the uncontested RwLocks.
 pub(crate) struct WrapperProcessContext<'a, P: ClapPlugin> {
-    pub(super) plugin: &'a Plugin<P>,
+    pub(super) plugin: &'a Wrapper<P>,
     pub(super) input_events_guard: RwLockWriteGuard<'a, VecDeque<NoteEvent>>,
 }
 
