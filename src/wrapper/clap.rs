@@ -11,8 +11,7 @@ pub use lazy_static::lazy_static;
 #[macro_export]
 macro_rules! nih_export_clap {
     ($plugin_ty:ty) => {
-        // We need a function pointer to a [wrapper::get_factory()] that creates a factory for
-        // `$plugin_ty`, so we need to generate the function inside of this macro
+        // We need a function pointer to a [wrapper::get_factory()] that creates a factory for `$plugin_ty`, so we need to generate the function inside of this macro
         #[doc(hidden)]
         mod clap {
             // Because `$plugin_ty` is likely defined in the enclosing scope
@@ -26,23 +25,21 @@ macro_rules! nih_export_clap {
 
             // We don't need any special initialization or deinitialization handling
             pub extern "C" fn init(_plugin_path: *const ::std::os::raw::c_char) -> bool {
-                nih_log!("clap::init()");
-
                 true
             }
 
-            pub extern "C" fn deinit() {
-                nih_log!("clap::deinit()");
-            }
+            pub extern "C" fn deinit() {}
 
             pub extern "C" fn get_factory(
                 factory_id: *const ::std::os::raw::c_char,
             ) -> *const ::std::ffi::c_void {
                 if !factory_id.is_null()
                     && unsafe { ::std::ffi::CStr::from_ptr(factory_id) }
-                        == unsafe { ::std::ffi::CStr::from_ptr(
-                            ::nih_plug::wrapper::clap::CLAP_PLUGIN_FACTORY_ID,
-                        ) }
+                        == unsafe {
+                            ::std::ffi::CStr::from_ptr(
+                                ::nih_plug::wrapper::clap::CLAP_PLUGIN_FACTORY_ID,
+                            )
+                        }
                 {
                     &(*FACTORY).clap_plugin_factory as *const _ as *const ::std::ffi::c_void
                 } else {
