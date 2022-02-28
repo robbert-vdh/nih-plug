@@ -21,7 +21,7 @@ use super::view::WrapperView;
 use crate::param::internals::ParamPtr;
 use crate::param::range::Range;
 use crate::param::Param;
-use crate::plugin::{BufferConfig, BusConfig, NoteEvent, Plugin, ProcessStatus};
+use crate::plugin::{BufferConfig, BusConfig, NoteEvent, ProcessStatus, Vst3Plugin};
 use crate::wrapper::state::{ParamValue, State};
 use crate::wrapper::util::{process_wrapper, u16strlcpy};
 
@@ -29,17 +29,17 @@ use crate::wrapper::util::{process_wrapper, u16strlcpy};
 use vst3_sys as vst3_com;
 
 #[VST3(implements(IComponent, IEditController, IAudioProcessor))]
-pub(crate) struct Wrapper<P: Plugin> {
+pub(crate) struct Wrapper<P: Vst3Plugin> {
     inner: Arc<WrapperInner<P>>,
 }
 
-impl<P: Plugin> Wrapper<P> {
+impl<P: Vst3Plugin> Wrapper<P> {
     pub fn new() -> Box<Self> {
         Self::allocate(WrapperInner::new())
     }
 }
 
-impl<P: Plugin> IPluginBase for Wrapper<P> {
+impl<P: Vst3Plugin> IPluginBase for Wrapper<P> {
     unsafe fn initialize(&self, _context: *mut c_void) -> tresult {
         // We currently don't need or allow any initialization logic
         kResultOk
@@ -50,7 +50,7 @@ impl<P: Plugin> IPluginBase for Wrapper<P> {
     }
 }
 
-impl<P: Plugin> IComponent for Wrapper<P> {
+impl<P: Vst3Plugin> IComponent for Wrapper<P> {
     unsafe fn get_controller_class_id(&self, _tuid: *mut vst3_sys::IID) -> tresult {
         // We won't separate the edit controller to keep the implemetnation a bit smaller
         kNoInterface
@@ -375,7 +375,7 @@ impl<P: Plugin> IComponent for Wrapper<P> {
     }
 }
 
-impl<P: Plugin> IEditController for Wrapper<P> {
+impl<P: Vst3Plugin> IEditController for Wrapper<P> {
     unsafe fn set_component_state(&self, _state: SharedVstPtr<dyn IBStream>) -> tresult {
         // We have a single file component, so we don't need to do anything here
         kResultOk
@@ -587,7 +587,7 @@ impl<P: Plugin> IEditController for Wrapper<P> {
     }
 }
 
-impl<P: Plugin> IAudioProcessor for Wrapper<P> {
+impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
     unsafe fn set_bus_arrangements(
         &self,
         inputs: *mut vst3_sys::vst::SpeakerArrangement,

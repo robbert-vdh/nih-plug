@@ -14,13 +14,13 @@ use crate::buffer::Buffer;
 use crate::context::GuiContext;
 use crate::event_loop::{EventLoop, MainThreadExecutor, OsEventLoop};
 use crate::param::internals::ParamPtr;
-use crate::plugin::{BufferConfig, BusConfig, Editor, NoteEvent, Plugin, ProcessStatus};
+use crate::plugin::{BufferConfig, BusConfig, Editor, NoteEvent, ProcessStatus, Vst3Plugin};
 use crate::wrapper::util::hash_param_id;
 
 /// The actual wrapper bits. We need this as an `Arc<T>` so we can safely use our event loop API.
 /// Since we can't combine that with VST3's interior reference counting this just has to be moved to
 /// its own struct.
-pub(crate) struct WrapperInner<P: Plugin> {
+pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// The wrapped plugin instance.
     pub plugin: RwLock<P>,
     /// The plugin's editor, if it has one. This object does not do anything on its own, but we need
@@ -100,7 +100,7 @@ pub enum Task {
     TriggerRestart(i32),
 }
 
-impl<P: Plugin> WrapperInner<P> {
+impl<P: Vst3Plugin> WrapperInner<P> {
     #[allow(unused_unsafe)]
     pub fn new() -> Arc<Self> {
         let plugin = RwLock::new(P::default());
@@ -229,7 +229,7 @@ impl<P: Plugin> WrapperInner<P> {
 // lifetime since we currently try to stay GUI framework agnostic. Because of that, the only
 // alternative is to pass an `Arc<Self as GuiContext>` to the plugin and hope it doesn't do anything
 // weird with it.
-impl<P: Plugin> GuiContext for WrapperInner<P> {
+impl<P: Vst3Plugin> GuiContext for WrapperInner<P> {
     // All of these functions are supposed to be called from the main thread, so we'll put some
     // trust in the caller and assume that this is indeed the case
     unsafe fn raw_begin_set_parameter(&self, param: ParamPtr) {
@@ -291,7 +291,7 @@ impl<P: Plugin> GuiContext for WrapperInner<P> {
     }
 }
 
-impl<P: Plugin> MainThreadExecutor<Task> for WrapperInner<P> {
+impl<P: Vst3Plugin> MainThreadExecutor<Task> for WrapperInner<P> {
     unsafe fn execute(&self, task: Task) {
         // This function is always called from the main thread
         // TODO: When we add GUI resizing and context menus, this should propagate those events to

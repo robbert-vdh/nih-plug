@@ -11,7 +11,7 @@ use vst3_sys::VST3;
 
 use super::inner::WrapperInner;
 use super::util::{ObjectPtr, VstPtr};
-use crate::plugin::{Editor, Plugin};
+use crate::plugin::{Editor, Vst3Plugin};
 use crate::ParentWindowHandle;
 
 // Alias needed for the VST3 attribute macro
@@ -32,7 +32,7 @@ const VST3_PLATFORM_X11_WINDOW: &str = "X11EmbedWindowID";
 /// The plugin's [IPlugView] instance created in [IEditController::create_view] if `P` has an
 /// editor. This is managed separately so the lifetime bounds match up.
 #[VST3(implements(IPlugView))]
-pub(crate) struct WrapperView<P: Plugin> {
+pub(crate) struct WrapperView<P: Vst3Plugin> {
     inner: Arc<WrapperInner<P>>,
     editor: Arc<dyn Editor>,
     editor_handle: RwLock<Option<Box<dyn Any>>>,
@@ -41,13 +41,13 @@ pub(crate) struct WrapperView<P: Plugin> {
     pub plug_frame: RwLock<Option<VstPtr<dyn IPlugFrame>>>,
 }
 
-impl<P: Plugin> WrapperView<P> {
+impl<P: Vst3Plugin> WrapperView<P> {
     pub fn new(inner: Arc<WrapperInner<P>>, editor: Arc<dyn Editor>) -> Box<Self> {
         Self::allocate(inner, editor, RwLock::new(None), RwLock::new(None))
     }
 }
 
-impl<P: Plugin> IPlugView for WrapperView<P> {
+impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
     #[cfg(all(target_family = "unix", not(target_os = "macos")))]
     unsafe fn is_platform_type_supported(&self, type_: vst3_sys::base::FIDString) -> tresult {
         let type_ = CStr::from_ptr(type_);

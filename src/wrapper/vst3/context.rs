@@ -5,17 +5,17 @@ use std::sync::atomic::Ordering;
 use super::inner::{Task, WrapperInner};
 use crate::context::ProcessContext;
 use crate::event_loop::EventLoop;
-use crate::plugin::{NoteEvent, Plugin};
+use crate::plugin::{NoteEvent, Vst3Plugin};
 
 /// A [ProcessContext] implementation for the wrapper. This is a separate object so it can hold on
 /// to lock guards for event queues. Otherwise reading these events would require constant
 /// unnecessary atomic operations to lock the uncontested RwLocks.
-pub(crate) struct WrapperProcessContext<'a, P: Plugin> {
+pub(crate) struct WrapperProcessContext<'a, P: Vst3Plugin> {
     pub inner: &'a WrapperInner<P>,
     pub input_events_guard: RwLockWriteGuard<'a, VecDeque<NoteEvent>>,
 }
 
-impl<P: Plugin> ProcessContext for WrapperProcessContext<'_, P> {
+impl<P: Vst3Plugin> ProcessContext for WrapperProcessContext<'_, P> {
     fn set_latency_samples(&self, samples: u32) {
         // Only trigger a restart if it's actually needed
         let old_latency = self.inner.current_latency.swap(samples, Ordering::SeqCst);
