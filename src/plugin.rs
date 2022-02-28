@@ -113,7 +113,7 @@ pub trait ClapPlugin: Plugin {
     //
     // TODO: CLAP mentions that `win32-dpi-aware` is a special keyword that informs the host that
     //       the plugin is DPI aware, can and should we have special handling for this?
-    const CLAP_KEYWORDS: &'static [&'static str];
+    const CLAP_FEATURES: &'static [&'static str];
     /// A URL to the plugin's manual, CLAP does not specify what to do when there is none.
     //
     // TODO: CLAP does not specify this, can these manual fields be null pointers?
