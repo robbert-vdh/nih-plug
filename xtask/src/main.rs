@@ -137,14 +137,44 @@ fn bundle(package: &str, args: &[String]) -> Result<()> {
     }
 
     // We'll detect the pugin formats supported by the plugin binary and create bundled accordingly
-    // TODO: Support VST2 and CLAP here
+    // TODO: Support VST2 at some point
+    let bundle_clap = symbols::exported(&lib_path, "clap_entry")
+        .with_context(|| format!("Could not parse '{}'", lib_path.display()))?;
     let bundle_vst3 = symbols::exported(&lib_path, "GetPluginFactory")
         .with_context(|| format!("Could not parse '{}'", lib_path.display()))?;
+    let bundled_plugin = bundle_clap || bundle_vst3;
 
     eprintln!();
+    if bundle_clap {
+        let clap_bundle_library_name = clap_bundle_library_name(&bundle_name, compilation_target);
+        let clap_lib_path = Path::new(BUNDLE_HOME).join(&clap_bundle_library_name);
+
+        fs::create_dir_all(clap_lib_path.parent().unwrap())
+            .context("Could not create CLAP bundle directory")?;
+        reflink::reflink_or_copy(&lib_path, &clap_lib_path)
+            .context("Could not copy library to CLAP bundle")?;
+
+        // In contrast to VST3, CLAP only uses bundles on macOS, so we'll just take the first
+        // component of the library name instead
+        let clap_bundle_home = Path::new(BUNDLE_HOME).join(
+            Path::new(&clap_bundle_library_name)
+                .components()
+                .next()
+                .expect("Malformed CLAP library path"),
+        );
+        maybe_create_macos_bundle(package, &clap_bundle_home, compilation_target)?;
+
+        eprintln!("Created a CLAP bundle at '{}'", clap_bundle_home.display());
+    }
     if bundle_vst3 {
         let vst3_lib_path =
             Path::new(BUNDLE_HOME).join(vst3_bundle_library_name(&bundle_name, compilation_target));
+
+        fs::create_dir_all(vst3_lib_path.parent().unwrap())
+            .context("Could not create VST3 bundle directory")?;
+        reflink::reflink_or_copy(&lib_path, &vst3_lib_path)
+            .context("Could not copy library to VST3 bundle")?;
+
         let vst3_bundle_home = vst3_lib_path
             .parent()
             .unwrap()
@@ -152,16 +182,11 @@ fn bundle(package: &str, args: &[String]) -> Result<()> {
             .unwrap()
             .parent()
             .unwrap();
-
-        fs::create_dir_all(vst3_lib_path.parent().unwrap())
-            .context("Could not create bundle directory")?;
-        reflink::reflink_or_copy(&lib_path, &vst3_lib_path)
-            .context("Could not copy library to bundle")?;
-
-        maybe_create_macos_vst3_bundle(package, compilation_target)?;
+        maybe_create_macos_bundle(package, vst3_bundle_home, compilation_target)?;
 
         eprintln!("Created a VST3 bundle at '{}'", vst3_bundle_home.display());
-    } else {
+    }
+    if !bundled_plugin {
         eprintln!("Not creating any plugin bundles because the package does not export any plugins")
     }
 
@@ -242,10 +267,22 @@ fn library_basename(package: &str, target: CompilationTarget) -> String {
     }
 }
 
-// See https://developer.steinberg.help/display/VST/Plug-in+Format+Structure
+/// The filename of the CLAP plugin for Linux and Windows, or the full path to the library file
+/// inside of a CLAP bundle on macOS
+fn clap_bundle_library_name(package: &str, target: CompilationTarget) -> String {
+    match target {
+        CompilationTarget::Linux64
+        | CompilationTarget::Linux32
+        | CompilationTarget::Windows64
+        | CompilationTarget::Windows32 => format!("{package}.clap"),
+        CompilationTarget::Mac64 => format!("{package}.vst3/Contents/MacOS/{package}"),
+    }
+}
 
 /// The full path to the library file inside of a VST3 bundle, including the leading `.vst3`
 /// directory.
+///
+/// See <https://developer.steinberg.help/display/VST/Plug-in+Format+Structure>.
 fn vst3_bundle_library_name(package: &str, target: CompilationTarget) -> String {
     match target {
         CompilationTarget::Linux64 => format!("{package}.vst3/Contents/x86_64-linux/{package}.so"),
@@ -259,20 +296,21 @@ fn vst3_bundle_library_name(package: &str, target: CompilationTarget) -> String 
 }
 
 /// If compiling for macOS, create all of the bundl-y stuff Steinberg and Apple require you to have.
-fn maybe_create_macos_vst3_bundle(package: &str, target: CompilationTarget) -> Result<()> {
+fn maybe_create_macos_bundle(
+    package: &str,
+    bundle_home: &Path,
+    target: CompilationTarget,
+) -> Result<()> {
     if target != CompilationTarget::Mac64 {
         return Ok(());
     }
 
     // TODO: May want to add bundler.toml fields for the identifier, version and signature at some
     //       point.
+    fs::write(bundle_home.join("Contents").join("PkgInfo"), "BNDL????")
+        .context("Could not create PkgInfo file")?;
     fs::write(
-        format!("{}/{}.vst3/Contents/PkgInfo", BUNDLE_HOME, package),
-        "BNDL????",
-    )
-    .context("Could not create PkgInfo file")?;
-    fs::write(
-        format!("{}/{}.vst3/Contents/Info.plist", BUNDLE_HOME, package),
+        bundle_home.join("Contents").join("Info.plist"),
         format!(r#"<?xml version="1.0" encoding="UTF-8"?>
 
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
