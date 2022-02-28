@@ -1,3 +1,4 @@
+mod descriptor;
 mod factory;
 mod plugin;
 
