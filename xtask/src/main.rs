@@ -23,6 +23,21 @@ struct PackageConfig {
     name: Option<String>,
 }
 
+/// The target we're generating a plugin for. This can be either the native target or a cross
+/// compilation target, so to reduce redundancy when determining the correct bundle paths we'll use
+/// an enum for this.
+///
+/// TODO: Right now we don't consider ARM targets at all
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CompilationTarget {
+    Linux64,
+    Linux32,
+    Mac64,
+    Windows64,
+    Windows32,
+}
+
 fn main() -> Result<()> {
     let project_root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -113,9 +128,10 @@ fn bundle(package: &str, args: &[String]) -> Result<()> {
         bail!("Could not build {}", package);
     }
 
+    let compilation_target = compilation_target(cross_compile_target.as_deref())?;
     let lib_path = Path::new(target_base(cross_compile_target.as_deref())?)
         .join(if is_release_build { "release" } else { "debug" })
-        .join(library_basename(package, cross_compile_target.as_deref())?);
+        .join(library_basename(package, compilation_target));
     if !lib_path.exists() {
         bail!("Could not find built library at '{}'", lib_path.display());
     }
@@ -127,10 +143,8 @@ fn bundle(package: &str, args: &[String]) -> Result<()> {
 
     eprintln!();
     if bundle_vst3 {
-        let vst3_lib_path = Path::new(BUNDLE_HOME).join(vst3_bundle_library_name(
-            &bundle_name,
-            cross_compile_target.as_deref(),
-        )?);
+        let vst3_lib_path =
+            Path::new(BUNDLE_HOME).join(vst3_bundle_library_name(&bundle_name, compilation_target));
         let vst3_bundle_home = vst3_lib_path
             .parent()
             .unwrap()
@@ -144,7 +158,7 @@ fn bundle(package: &str, args: &[String]) -> Result<()> {
         reflink::reflink_or_copy(&lib_path, &vst3_lib_path)
             .context("Could not copy library to bundle")?;
 
-        maybe_create_macos_vst3_bundle(package, cross_compile_target.as_deref())?;
+        maybe_create_macos_vst3_bundle(package, compilation_target)?;
 
         eprintln!("Created a VST3 bundle at '{}'", vst3_bundle_home.display());
     } else {
@@ -184,6 +198,31 @@ fn load_bundler_config() -> Result<Option<BundlerConfig>> {
     Ok(Some(result))
 }
 
+/// The target we're compiling for. This is used to determine the paths and options for creating
+/// plugin bundles.
+fn compilation_target(cross_compile_target: Option<&str>) -> Result<CompilationTarget> {
+    match cross_compile_target {
+        Some("x86_64-unknown-linux-gnu") => Ok(CompilationTarget::Linux64),
+        Some("x86_64-apple-darwin") => Ok(CompilationTarget::Mac64),
+        Some("x86_64-pc-windows-gnu") => Ok(CompilationTarget::Windows64),
+        Some(target) => bail!("Unhandled cross-compilation target: {}", target),
+        None => {
+            #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+            return Ok(CompilationTarget::Linux64);
+            #[cfg(all(target_os = "linux", target_arch = "x86"))]
+            return Ok(CompilationTarget::Linux32);
+            #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+            return Ok(CompilationTarget::Mac64);
+            #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
+            return Ok(CompilationTarget::Windows64);
+            #[cfg(all(target_os = "windows", target_arch = "x86"))]
+            return Ok(CompilationTarget::Windows32);
+        }
+    }
+}
+
+/// The base directory for the compiled binaries. This does not use [CompilationTarget] as we need
+/// to be able to differentiate between native and cross-compilation.
 fn target_base(cross_compile_target: Option<&str>) -> Result<&'static str> {
     match cross_compile_target {
         Some("x86_64-unknown-linux-gnu") => Ok("target/x86_64-unknown-linux-gnu"),
@@ -194,84 +233,35 @@ fn target_base(cross_compile_target: Option<&str>) -> Result<&'static str> {
     }
 }
 
-fn library_basename(package: &str, cross_compile_target: Option<&str>) -> Result<String> {
-    fn library_basename_linux(package: &str) -> String {
-        format!("lib{package}.so")
-    }
-    fn library_basename_macos(package: &str) -> String {
-        format!("lib{package}.dylib")
-    }
-    fn library_basename_windows(package: &str) -> String {
-        format!("{package}.dll")
-    }
-
-    match cross_compile_target {
-        Some("x86_64-unknown-linux-gnu") => Ok(library_basename_linux(package)),
-        Some("x86_64-apple-darwin") => Ok(library_basename_macos(package)),
-        Some("x86_64-pc-windows-gnu") => Ok(library_basename_windows(package)),
-        Some(target) => bail!("Unhandled cross-compilation target: {}", target),
-        None => {
-            #[cfg(target_os = "linux")]
-            return Ok(library_basename_linux(package));
-            #[cfg(target_os = "macos")]
-            return Ok(library_basename_macos(package));
-            #[cfg(target_os = "windows")]
-            return Ok(library_basename_windows(package));
-        }
+/// The file name of the compiled library for a `cdylib` crate.
+fn library_basename(package: &str, target: CompilationTarget) -> String {
+    match target {
+        CompilationTarget::Linux64 | CompilationTarget::Linux32 => format!("lib{package}.so"),
+        CompilationTarget::Mac64 => format!("lib{package}.dylib"),
+        CompilationTarget::Windows64 | CompilationTarget::Windows32 => format!("{package}.dll"),
     }
 }
 
 // See https://developer.steinberg.help/display/VST/Plug-in+Format+Structure
 
-fn vst3_bundle_library_name(package: &str, cross_compile_target: Option<&str>) -> Result<String> {
-    fn vst3_bundle_library_name_linux_x86_64(package: &str) -> String {
-        format!("{package}.vst3/Contents/x86_64-linux/{package}.so")
-    }
-    #[allow(dead_code)]
-    fn vst3_bundle_library_name_linux_x86(package: &str) -> String {
-        format!("{package}.vst3/Contents/i386-linux/{package}.so")
-    }
-    // TODO: This should be a Mach-O bundle, not sure how that works
-    fn vst3_bundle_library_name_macos(package: &str) -> String {
-        format!("{package}.vst3/Contents/MacOS/{package}")
-    }
-    fn vst3_bundle_library_name_windows_x86_64(package: &str) -> String {
-        format!("{package}.vst3/Contents/x86_64-win/{package}.vst3")
-    }
-    #[allow(dead_code)]
-    fn vst3_bundle_library_name_windows_x86(package: &str) -> String {
-        format!("{package}.vst3/Contents/x86-win/{package}.vst3")
-    }
-
-    match cross_compile_target {
-        Some("x86_64-unknown-linux-gnu") => Ok(vst3_bundle_library_name_linux_x86_64(package)),
-        Some("x86_64-apple-darwin") => Ok(vst3_bundle_library_name_macos(package)),
-        Some("x86_64-pc-windows-gnu") => Ok(vst3_bundle_library_name_windows_x86_64(package)),
-        Some(target) => bail!("Unhandled cross-compilation target: {}", target),
-        None => {
-            #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-            return Ok(vst3_bundle_library_name_linux_x86_64(package));
-            #[cfg(all(target_os = "linux", target_arch = "x86"))]
-            return Ok(vst3_bundle_library_name_linux_x86(package));
-            #[cfg(target_os = "macos")]
-            return Ok(vst3_bundle_library_name_macos(package));
-            #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
-            return Ok(vst3_bundle_library_name_windows_x86_64(package));
-            #[cfg(all(target_os = "windows", target_arch = "x86"))]
-            return Ok(vst3_bundle_library_name_windows_x86(package));
+/// The full path to the library file inside of a VST3 bundle, including the leading `.vst3`
+/// directory.
+fn vst3_bundle_library_name(package: &str, target: CompilationTarget) -> String {
+    match target {
+        CompilationTarget::Linux64 => format!("{package}.vst3/Contents/x86_64-linux/{package}.so"),
+        CompilationTarget::Linux32 => format!("{package}.vst3/Contents/i386-linux/{package}.so"),
+        CompilationTarget::Mac64 => format!("{package}.vst3/Contents/MacOS/{package}"),
+        CompilationTarget::Windows64 => {
+            format!("{package}.vst3/Contents/x86_64-win/{package}.vst3")
         }
+        CompilationTarget::Windows32 => format!("{package}.vst3/Contents/x86-win/{package}.vst3"),
     }
 }
 
 /// If compiling for macOS, create all of the bundl-y stuff Steinberg and Apple require you to have.
-fn maybe_create_macos_vst3_bundle(package: &str, cross_compile_target: Option<&str>) -> Result<()> {
-    match cross_compile_target {
-        Some("x86_64-apple-darwin") => (),
-        Some(_) => return Ok(()),
-        #[cfg(target_os = "macos")]
-        _ => (),
-        #[cfg(not(target_os = "macos"))]
-        _ => return Ok(()),
+fn maybe_create_macos_vst3_bundle(package: &str, target: CompilationTarget) -> Result<()> {
+    if target != CompilationTarget::Mac64 {
+        return Ok(());
     }
 
     // TODO: May want to add bundler.toml fields for the identifier, version and signature at some
