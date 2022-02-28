@@ -14,19 +14,21 @@ macro_rules! nih_export_clap {
         mod clap {
             // We don't need any special initialization or deinitialization handling
             pub fn init(_plugin_path: *const ::std::os::raw::c_char) -> bool {
-                eprintln!("Init!");
+                nih_log!("clap::init()");
 
                 true
             }
 
             pub fn deinit() {
-                eprintln!("Deinit!");
+                nih_log!("clap::deinit()");
             }
 
             pub fn get_factory(
                 factory_id: *const ::std::os::raw::c_char,
             ) -> *const ::std::ffi::c_void {
-                eprintln!("get factory!! {factory_id:#?}");
+                nih_log!("clap::get_factory({:?})", unsafe {
+                    ::std::ffi::CStr::from_ptr(factory_id)
+                });
 
                 std::ptr::null()
             }
@@ -40,12 +42,14 @@ macro_rules! nih_export_clap {
                 // These function pointers are marked as `extern "C"`but there's no reason why the symbols
                 // would need to be exported, so we need these transmutes
                 init: unsafe {
-                    ::std::mem::transmute(clap::init as fn(*const ::std::os::raw::c_char) -> bool)
+                    ::std::mem::transmute(
+                        self::clap::init as fn(*const ::std::os::raw::c_char) -> bool,
+                    )
                 },
-                deinit: unsafe { ::std::mem::transmute(clap::deinit as fn()) },
+                deinit: unsafe { ::std::mem::transmute(self::clap::deinit as fn()) },
                 get_factory: unsafe {
                     ::std::mem::transmute(
-                        clap::get_factory
+                        self::clap::get_factory
                             as fn(*const ::std::os::raw::c_char) -> *const ::std::ffi::c_void,
                     )
                 },
