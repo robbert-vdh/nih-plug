@@ -103,7 +103,9 @@ pub trait Plugin: Default + Send + Sync + 'static {
 
 /// Provides auxiliary metadata needed for a CLAP plugin.
 pub trait ClapPlugin: Plugin {
-    // TODO: Add the required fields, just like the [Vst3Plugin] trait
+    /// A unique ID that identifies this particular plugin. This is usually in reverse domain name
+    /// notation, e.g. `com.manufacturer.plugin-name`.
+    const CLAP_ID: &'static str;
 }
 
 /// Provides auxiliary metadata needed for a VST3 plugin.

@@ -176,7 +176,9 @@ impl Plugin for Sine {
     }
 }
 
-impl ClapPlugin for Sine {}
+impl ClapPlugin for Sine {
+    const CLAP_ID: &'static str = "com.moist-plugins-gmbh.sine";
+}
 
 impl Vst3Plugin for Sine {
     const VST3_CLASS_ID: [u8; 16] = *b"SineMoistestPlug";

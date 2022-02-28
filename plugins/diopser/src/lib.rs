@@ -410,7 +410,9 @@ fn unnormalize_automation_precision(normalized: f32) -> u32 {
         - (normalized * (MAX_AUTOMATION_STEP_SIZE - MIN_AUTOMATION_STEP_SIZE) as f32).round() as u32
 }
 
-impl ClapPlugin for Diopser {}
+impl ClapPlugin for Diopser {
+    const CLAP_ID: &'static str = "nl.robbertvanderhelm.diopser";
+}
 
 impl Vst3Plugin for Diopser {
     const VST3_CLASS_ID: [u8; 16] = *b"DiopserPlugRvdH.";

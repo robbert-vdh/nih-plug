@@ -202,7 +202,9 @@ impl Plugin for Gain {
     }
 }
 
-impl ClapPlugin for Gain {}
+impl ClapPlugin for Gain {
+    const CLAP_ID: &'static str = "com.moist-plugins-gmbh.gain";
+}
 
 impl Vst3Plugin for Gain {
     const VST3_CLASS_ID: [u8; 16] = *b"GainGuiYeahBoyyy";
