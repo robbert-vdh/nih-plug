@@ -10,11 +10,11 @@ pub fn exported<P: AsRef<Path>>(binary: P, symbol: &str) -> Result<bool> {
     let bytes = fs::read(&binary)
         .with_context(|| format!("Could not read '{}'", binary.as_ref().display()))?;
     match goblin::Object::parse(&bytes)? {
-        goblin::Object::Elf(obj) => Ok(obj.dynsyms.iter().any(|sym| {
-            !sym.is_import()
-                && sym.is_function()
-                && obj.dynstrtab.get_at(sym.st_name) == Some(symbol)
-        })),
+        goblin::Object::Elf(obj) => Ok(obj
+            .dynsyms
+            .iter()
+            // We don't filter by functions here since we need to export a constant for CLAP
+            .any(|sym| !sym.is_import() && obj.dynstrtab.get_at(sym.st_name) == Some(symbol))),
         goblin::Object::Mach(obj) => {
             let obj = match obj {
                 goblin::mach::Mach::Fat(arches) => arches
