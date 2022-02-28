@@ -18,7 +18,8 @@
 extern crate nih_plug;
 
 use nih_plug::{
-    formatters, Buffer, BufferConfig, BusConfig, Plugin, ProcessContext, ProcessStatus, Vst3Plugin,
+    formatters, Buffer, BufferConfig, BusConfig, ClapPlugin, Plugin, ProcessContext, ProcessStatus,
+    Vst3Plugin,
 };
 use nih_plug::{BoolParam, FloatParam, IntParam, Params, Range, SmoothingStyle};
 use nih_plug::{Enum, EnumParam};
@@ -408,6 +409,8 @@ fn unnormalize_automation_precision(normalized: f32) -> u32 {
     MAX_AUTOMATION_STEP_SIZE
         - (normalized * (MAX_AUTOMATION_STEP_SIZE - MIN_AUTOMATION_STEP_SIZE) as f32).round() as u32
 }
+
+impl ClapPlugin for Diopser {}
 
 impl Vst3Plugin for Diopser {
     const VST3_CLASS_ID: [u8; 16] = *b"DiopserPlugRvdH.";

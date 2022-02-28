@@ -101,6 +101,11 @@ pub trait Plugin: Default + Send + Sync + 'static {
     fn process(&mut self, buffer: &mut Buffer, context: &mut impl ProcessContext) -> ProcessStatus;
 }
 
+/// Provides auxiliary metadata needed for a CLAP plugin.
+pub trait ClapPlugin: Plugin {
+    // TODO: Add the required fields, just like the [Vst3Plugin] trait
+}
+
 /// Provides auxiliary metadata needed for a VST3 plugin.
 pub trait Vst3Plugin: Plugin {
     /// The unique class ID that identifies this particular plugin. You can use the

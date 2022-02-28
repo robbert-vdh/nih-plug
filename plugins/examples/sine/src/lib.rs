@@ -2,8 +2,8 @@
 extern crate nih_plug;
 
 use nih_plug::{
-    formatters, util, Buffer, BufferConfig, BusConfig, Plugin, ProcessContext, ProcessStatus,
-    Vst3Plugin,
+    formatters, util, Buffer, BufferConfig, BusConfig, ClapPlugin, Plugin, ProcessContext,
+    ProcessStatus, Vst3Plugin,
 };
 use nih_plug::{BoolParam, FloatParam, Params, Range, Smoother, SmoothingStyle};
 use std::f32::consts;
@@ -175,6 +175,8 @@ impl Plugin for Sine {
         ProcessStatus::Normal
     }
 }
+
+impl ClapPlugin for Sine {}
 
 impl Vst3Plugin for Sine {
     const VST3_CLASS_ID: [u8; 16] = *b"SineMoistestPlug";

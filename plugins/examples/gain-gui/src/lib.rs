@@ -3,8 +3,8 @@ extern crate nih_plug;
 
 use atomic_float::AtomicF32;
 use nih_plug::{
-    util, Buffer, BufferConfig, BusConfig, Editor, IntParam, Plugin, ProcessContext, ProcessStatus,
-    Vst3Plugin,
+    util, Buffer, BufferConfig, BusConfig, ClapPlugin, Editor, IntParam, Plugin, ProcessContext,
+    ProcessStatus, Vst3Plugin,
 };
 use nih_plug::{FloatParam, Params, Range, SmoothingStyle};
 use nih_plug_egui::{create_egui_editor, egui, widgets, EguiState};
@@ -201,6 +201,8 @@ impl Plugin for Gain {
         ProcessStatus::Normal
     }
 }
+
+impl ClapPlugin for Gain {}
 
 impl Vst3Plugin for Gain {
     const VST3_CLASS_ID: [u8; 16] = *b"GainGuiYeahBoyyy";

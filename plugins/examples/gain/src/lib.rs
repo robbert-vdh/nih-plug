@@ -2,8 +2,8 @@
 extern crate nih_plug;
 
 use nih_plug::{
-    formatters, util, Buffer, BufferConfig, BusConfig, Plugin, ProcessContext, ProcessStatus,
-    Vst3Plugin,
+    formatters, util, Buffer, BufferConfig, BusConfig, ClapPlugin, Plugin, ProcessContext,
+    ProcessStatus, Vst3Plugin,
 };
 use nih_plug::{BoolParam, FloatParam, Params, Range, Smoother, SmoothingStyle};
 use parking_lot::RwLock;
@@ -128,6 +128,8 @@ impl Plugin for Gain {
         ProcessStatus::Normal
     }
 }
+
+impl ClapPlugin for Gain {}
 
 impl Vst3Plugin for Gain {
     const VST3_CLASS_ID: [u8; 16] = *b"GainMoistestPlug";
