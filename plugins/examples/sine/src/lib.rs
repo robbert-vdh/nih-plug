@@ -178,6 +178,10 @@ impl Plugin for Sine {
 
 impl ClapPlugin for Sine {
     const CLAP_ID: &'static str = "com.moist-plugins-gmbh.sine";
+    const CLAP_DESCRIPTION: &'static str = "An optionally MIDI controlled sine test tone";
+    const CLAP_KEYWORDS: &'static [&'static str] = &["instrument", "mono", "stereo", "utility"];
+    const CLAP_MANUAL_URL: &'static str = Self::URL;
+    const CLAP_SUPPORT_URL: &'static str = Self::URL;
 }
 
 impl Vst3Plugin for Sine {

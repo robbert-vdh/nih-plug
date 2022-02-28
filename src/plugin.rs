@@ -106,6 +106,20 @@ pub trait ClapPlugin: Plugin {
     /// A unique ID that identifies this particular plugin. This is usually in reverse domain name
     /// notation, e.g. `com.manufacturer.plugin-name`.
     const CLAP_ID: &'static str;
+    /// A short description for the plugin.
+    const CLAP_DESCRIPTION: &'static str;
+    /// Arbitrary keywords describing the plugin. See the CLAP specification for examples:
+    /// <https://github.com/free-audio/clap/blob/main/include/clap/plugin.h>.
+    //
+    // TODO: CLAP mentions that `win32-dpi-aware` is a special keyword that informs the host that
+    //       the plugin is DPI aware, can and should we have special handling for this?
+    const CLAP_KEYWORDS: &'static [&'static str];
+    /// A URL to the plugin's manual, CLAP does not specify what to do when there is none.
+    //
+    // TODO: CLAP does not specify this, can these manual fields be null pointers?
+    const CLAP_MANUAL_URL: &'static str;
+    /// A URL to the plugin's support page, CLAP does not specify what to do when there is none.
+    const CLAP_SUPPORT_URL: &'static str;
 }
 
 /// Provides auxiliary metadata needed for a VST3 plugin.

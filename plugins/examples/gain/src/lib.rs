@@ -131,6 +131,10 @@ impl Plugin for Gain {
 
 impl ClapPlugin for Gain {
     const CLAP_ID: &'static str = "com.moist-plugins-gmbh.gain";
+    const CLAP_DESCRIPTION: &'static str = "A smoothed gain parameter example plugin";
+    const CLAP_KEYWORDS: &'static [&'static str] = &["audio_effect", "mono", "stereo", "tool"];
+    const CLAP_MANUAL_URL: &'static str = Self::URL;
+    const CLAP_SUPPORT_URL: &'static str = Self::URL;
 }
 
 impl Vst3Plugin for Gain {
