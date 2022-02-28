@@ -112,7 +112,7 @@ impl<'a> ParamSetter<'a> {
 
     /// Set a parameter to an already normalized value. Works exactly the same as
     /// [Self::set_parameter] and needs to follow the same rules, but this may be useful when
-    /// implementigna a GUI.
+    /// implementing a GUI.
     pub fn set_parameter_normalized<P: Param>(&self, param: &P, normalized: f32) {
         let ptr = param.as_ptr();
         unsafe { self.context.raw_set_parameter_normalized(ptr, normalized) };
