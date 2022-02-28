@@ -13,6 +13,7 @@ use std::thread::{self, ThreadId};
 
 use super::context::WrapperProcessContext;
 use super::descriptor::PluginDescriptor;
+use super::util::ClapPtr;
 use crate::event_loop::{EventLoop, MainThreadExecutor, TASK_QUEUE_CAPACITY};
 use crate::plugin::{BufferConfig, BusConfig, ClapPlugin};
 use crate::NoteEvent;
@@ -43,7 +44,7 @@ pub struct Wrapper<P: ClapPlugin> {
     /// TODO: Implement the latency extension.
     pub current_latency: AtomicU32,
 
-    host_callback: HostCallback,
+    host_callback: ClapPtr<clap_host>,
     /// Needs to be boxed because the plugin object is supposed to contain a static reference to
     /// this.
     plugin_descriptor: Box<PluginDescriptor<P>>,
@@ -88,8 +89,8 @@ impl<P: ClapPlugin> EventLoop<Task, Wrapper<P>> for Wrapper<P> {
             let success = self.tasks.push(task).is_ok();
             if success {
                 // CLAP lets us use the host's event loop instead of having to implement our own
-                let host = self.host_callback.0;
-                unsafe { ((*host).request_callback)(host) };
+                let host = &self.host_callback;
+                unsafe { (host.request_callback)(&**host) };
             }
 
             success
@@ -108,13 +109,11 @@ impl<P: ClapPlugin> MainThreadExecutor<Task> for Wrapper<P> {
     }
 }
 
-unsafe impl Send for HostCallback {}
-unsafe impl Sync for HostCallback {}
-
 impl<P: ClapPlugin> Wrapper<P> {
     pub fn new(host_callback: *const clap_host) -> Self {
         let plugin_descriptor = Box::new(PluginDescriptor::default());
 
+        assert!(!host_callback.is_null());
         Self {
             clap_plugin: clap_plugin {
                 // This needs to live on the heap because the plugin object contains a direct
@@ -145,7 +144,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             input_events: RwLock::new(VecDeque::with_capacity(512)),
             current_latency: AtomicU32::new(0),
 
-            host_callback: HostCallback(host_callback),
+            host_callback: unsafe { ClapPtr::new(host_callback) },
             plugin_descriptor,
 
             tasks: ArrayQueue::new(TASK_QUEUE_CAPACITY),
