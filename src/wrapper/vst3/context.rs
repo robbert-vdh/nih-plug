@@ -3,7 +3,8 @@ use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 
 use super::inner::{Task, WrapperInner};
-use crate::context::{EventLoop, ProcessContext};
+use crate::context::ProcessContext;
+use crate::event_loop::EventLoop;
 use crate::plugin::{NoteEvent, Plugin};
 
 /// A [ProcessContext] implementation for the wrapper. This is a separate object so it can hold on

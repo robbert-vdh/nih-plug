@@ -26,6 +26,7 @@ pub use plugin::{
 // The rest is either internal or already re-exported
 mod buffer;
 mod context;
+mod event_loop;
 pub mod param;
 pub mod plugin;
 pub mod wrapper;
