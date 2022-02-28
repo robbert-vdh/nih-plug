@@ -3,12 +3,17 @@ use clap_sys::plugin::clap_plugin;
 use clap_sys::process::{clap_process, clap_process_status};
 use crossbeam::atomic::AtomicCell;
 use parking_lot::RwLock;
+use std::collections::VecDeque;
 use std::ffi::c_void;
 use std::os::raw::c_char;
 use std::ptr;
+use std::sync::atomic::AtomicU32;
 
+use super::context::WrapperProcessContext;
 use super::descriptor::PluginDescriptor;
+use crate::event_loop::{EventLoop, MainThreadExecutor};
 use crate::plugin::{BufferConfig, BusConfig, ClapPlugin};
+use crate::NoteEvent;
 
 #[repr(C)]
 pub struct Plugin<P: ClapPlugin> {
@@ -23,13 +28,61 @@ pub struct Plugin<P: ClapPlugin> {
     current_bus_config: AtomicCell<BusConfig>,
     /// The current buffer configuration, containing the sample rate and the maximum block size.
     /// Will be set in `clap_plugin::activate()`.
-    pub current_buffer_config: AtomicCell<Option<BufferConfig>>,
+    current_buffer_config: AtomicCell<Option<BufferConfig>>,
+    /// The incoming events for the plugin, if `P::ACCEPTS_MIDI` is set.
+    ///
+    /// TODO: Maybe load these lazily at some point instead of needing to spool them all to this
+    ///       queue first
+    /// TODO: Read these in the process call.
+    input_events: RwLock<VecDeque<NoteEvent>>,
+    /// The current latency in samples, as set by the plugin through the [ProcessContext]. uses the
+    /// latency extnesion
+    ///
+    /// TODO: Implement the latency extension.
+    pub current_latency: AtomicU32,
 
-    host_callback: *const clap_host,
+    host_callback: HostCallback,
     /// Needs to be boxed because the plugin object is supposed to contain a static reference to
     /// this.
     plugin_descriptor: Box<PluginDescriptor<P>>,
 }
+
+/// Send+Sync wrapper around clap_host.
+struct HostCallback(*const clap_host);
+
+/// Tasks that can be sent from the plugin to be executed on the main thread in a non-blocking
+/// realtime safe way. Instead of using a random thread or the OS' event loop like in the Linux
+/// implementation, this uses [clap_host::request_callback()] instead.
+#[derive(Debug, Clone)]
+pub enum Task {
+    /// Inform the host that the latency has changed.
+    LatencyChanged,
+}
+
+/// Because CLAP has this [clap_host::request_host_callback()] function, we don't need to use
+/// `OsEventLoop` and can instead just request a main thread callback directly.
+impl<P: ClapPlugin> EventLoop<Task, Plugin<P>> for Plugin<P> {
+    fn new_and_spawn(executor: std::sync::Weak<Self>) -> Self {
+        panic!("What are you doing");
+    }
+
+    fn do_maybe_async(&self, task: Task) -> bool {
+        todo!()
+    }
+
+    fn is_main_thread(&self) -> bool {
+        todo!()
+    }
+}
+
+impl<P: ClapPlugin> MainThreadExecutor<Task> for Plugin<P> {
+    unsafe fn execute(&self, task: Task) {
+        todo!()
+    }
+}
+
+unsafe impl Send for HostCallback {}
+unsafe impl Sync for HostCallback {}
 
 impl<P: ClapPlugin> Plugin<P> {
     pub fn new(host_callback: *const clap_host) -> Self {
@@ -62,20 +115,20 @@ impl<P: ClapPlugin> Plugin<P> {
                 num_output_channels: P::DEFAULT_NUM_OUTPUTS,
             }),
             current_buffer_config: AtomicCell::new(None),
+            input_events: RwLock::new(VecDeque::with_capacity(512)),
+            current_latency: AtomicU32::new(0),
 
-            host_callback,
+            host_callback: HostCallback(host_callback),
             plugin_descriptor,
         }
     }
-}
 
-impl<P: ClapPlugin> Plugin<P> {
-    // pub fn make_process_context(&self) -> WrapperProcessContext<'_, P> {
-    //     WrapperProcessContext {
-    //         plugin: self,
-    //         input_events_guard: self.input_events.write(),
-    //     }
-    // }
+    fn make_process_context(&self) -> WrapperProcessContext<'_, P> {
+        WrapperProcessContext {
+            plugin: self,
+            input_events_guard: self.input_events.write(),
+        }
+    }
 
     unsafe extern "C" fn init(_plugin: *const clap_plugin) -> bool {
         // We don't need any special initialization
@@ -102,21 +155,20 @@ impl<P: ClapPlugin> Plugin<P> {
 
         // TODO: Reset smoothers
 
-        todo!();
-        // if plugin.plugin.write().initialize(
-        //     &bus_config,
-        //     &buffer_config,
-        //     plugin.make_process_context(),
-        // ) {
-        //     // TODO: Allocate buffer slices
+        if plugin.plugin.write().initialize(
+            &bus_config,
+            &buffer_config,
+            &mut plugin.make_process_context(),
+        ) {
+            // TODO: Allocate buffer slices
 
-        //     // Also store this for later, so we can reinitialize the plugin after restoring state
-        //     plugin.current_buffer_config.store(Some(buffer_config));
+            // Also store this for later, so we can reinitialize the plugin after restoring state
+            plugin.current_buffer_config.store(Some(buffer_config));
 
-        //     true
-        // } else {
-        //     false
-        // }
+            true
+        } else {
+            false
+        }
     }
 
     unsafe extern "C" fn deactivate(_plugin: *const clap_plugin) {
