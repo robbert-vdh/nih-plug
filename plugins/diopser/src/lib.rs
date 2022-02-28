@@ -417,4 +417,5 @@ impl Vst3Plugin for Diopser {
     const VST3_CATEGORIES: &'static str = "Fx|Filter";
 }
 
+nih_export_clap!(Diopser);
 nih_export_vst3!(Diopser);

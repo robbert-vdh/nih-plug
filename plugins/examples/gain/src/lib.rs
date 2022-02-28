@@ -136,4 +136,5 @@ impl Vst3Plugin for Gain {
     const VST3_CATEGORIES: &'static str = "Fx|Dynamics";
 }
 
+nih_export_clap!(Gain);
 nih_export_vst3!(Gain);

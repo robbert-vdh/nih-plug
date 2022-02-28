@@ -183,4 +183,5 @@ impl Vst3Plugin for Sine {
     const VST3_CATEGORIES: &'static str = "Instrument|Synth|Tools";
 }
 
+nih_export_clap!(Sine);
 nih_export_vst3!(Sine);
