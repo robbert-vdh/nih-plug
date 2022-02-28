@@ -44,7 +44,7 @@ macro_rules! nih_export_clap {
                             ::nih_plug::wrapper::clap::CLAP_PLUGIN_FACTORY_ID,
                         ) }
                 {
-                    &(*factory).clap_plugin_factory() as *const _ as *const ::std::ffi::c_void
+                    &(*factory).clap_plugin_factory as *const _ as *const ::std::ffi::c_void
                 } else {
                     std::ptr::null()
                 }
