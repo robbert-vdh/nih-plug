@@ -275,7 +275,7 @@ fn clap_bundle_library_name(package: &str, target: CompilationTarget) -> String 
         | CompilationTarget::Linux32
         | CompilationTarget::Windows64
         | CompilationTarget::Windows32 => format!("{package}.clap"),
-        CompilationTarget::Mac64 => format!("{package}.vst3/Contents/MacOS/{package}"),
+        CompilationTarget::Mac64 => format!("{package}.clap/Contents/MacOS/{package}"),
     }
 }
 
