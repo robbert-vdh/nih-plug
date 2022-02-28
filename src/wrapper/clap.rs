@@ -25,17 +25,17 @@ macro_rules! nih_export_clap {
             }
 
             // We don't need any special initialization or deinitialization handling
-            pub fn init(_plugin_path: *const ::std::os::raw::c_char) -> bool {
+            pub extern "C" fn init(_plugin_path: *const ::std::os::raw::c_char) -> bool {
                 nih_log!("clap::init()");
 
                 true
             }
 
-            pub fn deinit() {
+            pub extern "C" fn deinit() {
                 nih_log!("clap::deinit()");
             }
 
-            pub fn get_factory(
+            pub extern "C" fn get_factory(
                 factory_id: *const ::std::os::raw::c_char,
             ) -> *const ::std::ffi::c_void {
                 if !factory_id.is_null()
@@ -56,20 +56,9 @@ macro_rules! nih_export_clap {
         pub static clap_entry: ::nih_plug::wrapper::clap::clap_plugin_entry =
             ::nih_plug::wrapper::clap::clap_plugin_entry {
                 clap_version: ::nih_plug::wrapper::clap::CLAP_VERSION,
-                // These function pointers are marked as `extern "C"`but there's no reason why the symbols
-                // would need to be exported, so we need these transmutes
-                init: unsafe {
-                    ::std::mem::transmute(
-                        self::clap::init as fn(*const ::std::os::raw::c_char) -> bool,
-                    )
-                },
-                deinit: unsafe { ::std::mem::transmute(self::clap::deinit as fn()) },
-                get_factory: unsafe {
-                    ::std::mem::transmute(
-                        self::clap::get_factory
-                            as fn(*const ::std::os::raw::c_char) -> *const ::std::ffi::c_void,
-                    )
-                },
+                init: self::clap::init,
+                deinit: self::clap::deinit,
+                get_factory: self::clap::get_factory,
             };
     };
 }
