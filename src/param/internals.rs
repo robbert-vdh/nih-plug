@@ -26,6 +26,8 @@ pub use serde_json::to_string as serialize_field;
 ///
 /// This implementation is safe when using from the wrapper because the plugin object needs to be
 /// pinned, and it can never outlive the wrapper.
+//
+// TODO: Add a `#[nested]` attribute for nested params objects
 pub trait Params {
     /// Create a mapping from unique parameter IDs to parameters. This is done for every parameter
     /// field marked with `#[id = "stable_name"]`. Dereferencing the pointers stored in the values
