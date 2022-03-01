@@ -1,6 +1,6 @@
 use clap_sys::events::{
     clap_event_header, clap_event_param_mod, clap_event_param_value, clap_input_events,
-    clap_output_events, CLAP_EVENT_PARAM_MOD, CLAP_EVENT_PARAM_VALUE,
+    clap_output_events, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_MOD, CLAP_EVENT_PARAM_VALUE,
 };
 use clap_sys::ext::params::{
     clap_param_info, clap_plugin_params, CLAP_EXT_PARAMS, CLAP_PARAM_IS_BYPASS,
@@ -10,11 +10,15 @@ use clap_sys::ext::thread_check::{clap_host_thread_check, CLAP_EXT_THREAD_CHECK}
 use clap_sys::host::clap_host;
 use clap_sys::id::clap_id;
 use clap_sys::plugin::clap_plugin;
-use clap_sys::process::{clap_process, clap_process_status};
+use clap_sys::process::{
+    clap_process, clap_process_status, CLAP_PROCESS_CONTINUE, CLAP_PROCESS_CONTINUE_IF_NOT_QUIET,
+    CLAP_PROCESS_ERROR,
+};
 use crossbeam::atomic::AtomicCell;
 use crossbeam::queue::ArrayQueue;
 use lazy_static::lazy_static;
 use parking_lot::RwLock;
+use std::cmp;
 use std::collections::{HashMap, VecDeque};
 use std::ffi::{c_void, CStr};
 use std::os::raw::c_char;
@@ -25,11 +29,11 @@ use std::thread::{self, ThreadId};
 use super::context::WrapperProcessContext;
 use super::descriptor::PluginDescriptor;
 use super::util::ClapPtr;
+use crate::buffer::Buffer;
 use crate::event_loop::{EventLoop, MainThreadExecutor, TASK_QUEUE_CAPACITY};
 use crate::param::internals::ParamPtr;
-use crate::plugin::{BufferConfig, BusConfig, ClapPlugin};
-use crate::wrapper::util::{hash_param_id, strlcpy};
-use crate::NoteEvent;
+use crate::plugin::{BufferConfig, BusConfig, ClapPlugin, NoteEvent, ProcessStatus};
+use crate::wrapper::util::{hash_param_id, process_wrapper, strlcpy};
 
 /// Right now the wrapper adds its own bypass parameter.
 ///
@@ -67,6 +71,11 @@ pub struct Wrapper<P: ClapPlugin> {
     ///
     /// TODO: Implement the latency extension.
     pub current_latency: AtomicU32,
+    /// Contains slices for the plugin's outputs. You can't directly create a nested slice form
+    /// apointer to pointers, so this needs to be preallocated in the setup call and kept around
+    /// between process calls. This buffer owns the vector, because otherwise it would need to store
+    /// a mutable reference to the data contained in this mutex.
+    pub output_buffer: RwLock<Buffer<'static>>,
 
     // We'll query all of the host's extensions upfront
     host_callback: ClapPtr<clap_host>,
@@ -206,6 +215,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             bypass_state: AtomicBool::new(false),
             input_events: RwLock::new(VecDeque::with_capacity(512)),
             current_latency: AtomicU32::new(0),
+            output_buffer: RwLock::new(Buffer::default()),
 
             host_callback,
             thread_check,
@@ -339,8 +349,11 @@ impl<P: ClapPlugin> Wrapper<P> {
     /// from the process function.
     pub unsafe fn handle_event(&self, event: *const clap_event_header) {
         let raw_event = &*event;
-        match raw_event.type_ {
-            CLAP_EVENT_PARAM_VALUE => {
+        match (raw_event.space_id, raw_event.type_) {
+            // TODO: Implement the event filter
+            // TODO: Handle sample accurate parameter changes, possibly in a similar way to the
+            //       smoothing
+            (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_VALUE) => {
                 let event = &*(event as *const clap_event_param_value);
                 self.update_plain_value_by_hash(
                     event.param_id,
@@ -348,7 +361,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                     self.current_buffer_config.load().map(|c| c.sample_rate),
                 );
             }
-            CLAP_EVENT_PARAM_MOD => {
+            (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_MOD) => {
                 let event = &*(event as *const clap_event_param_mod);
                 self.update_plain_value_by_hash(
                     event.param_id,
@@ -356,7 +369,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                     self.current_buffer_config.load().map(|c| c.sample_rate),
                 );
             }
-            // TODO: Handle MIDI
+            // TODO: Handle MIDI if `P::ACCEPTS_MIDI` is true
             // TODO: Make sure this only gets logged in debug mode
             _ => nih_log!(
                 "Unhandled CLAP event type {} for namespace {}",
@@ -389,14 +402,21 @@ impl<P: ClapPlugin> Wrapper<P> {
             max_buffer_size: max_frames_count,
         };
 
-        // TODO: Reset smoothers
+        // Befure initializing the plugin, make sure all smoothers are set the the default values
+        for param in wrapper.param_by_hash.values() {
+            param.update_smoother(buffer_config.sample_rate, true);
+        }
 
         if wrapper.plugin.write().initialize(
             &bus_config,
             &buffer_config,
             &mut wrapper.make_process_context(),
         ) {
-            // TODO: Allocate buffer slices
+            // Preallocate enough room in the output slices vector so we can convert a `*mut *mut
+            // f32` to a `&mut [&mut f32]` in the process call
+            wrapper.output_buffer.write().with_raw_vec(|output_slices| {
+                output_slices.resize_with(bus_config.num_output_channels as usize, || &mut [])
+            });
 
             // Also store this for later, so we can reinitialize the plugin after restoring state
             wrapper.current_buffer_config.store(Some(buffer_config));
@@ -424,7 +444,111 @@ impl<P: ClapPlugin> Wrapper<P> {
         plugin: *const clap_plugin,
         process: *const clap_process,
     ) -> clap_process_status {
-        todo!();
+        let wrapper = &*(plugin as *const Self);
+
+        if process.is_null() {
+            return CLAP_PROCESS_ERROR;
+        }
+
+        // Panic on allocations if the `assert_process_allocs` feature has been enabled, and make
+        // sure that FTZ is set up correctly
+        process_wrapper(|| {
+            // We need to handle incoming automation and MIDI events. Since we don't support sample
+            // accuration automation yet and there's no way to get the last event for a parameter,
+            // we'll process every incomingevent.
+            let process = &*process;
+            if !process.in_events.is_null() {
+                let num_events = ((*process.in_events).size)(&*process.in_events);
+                for event_idx in 0..num_events {
+                    let event = ((*process.in_events).get)(&*process.in_events, event_idx);
+                    wrapper.handle_event(event);
+                }
+            }
+
+            // I don't think this is a thing for CLAP since there's a dedicated flush function, but
+            // might as well protect against this
+            // TOOD: Send the output events when doing a flush
+            if process.audio_outputs_count == 0 || process.frames_count == 0 {
+                nih_log!("CLAP process call event flush");
+                return CLAP_PROCESS_CONTINUE;
+            }
+
+            // The setups we suppport are:
+            // - 1 input bus
+            // - 1 output bus
+            // - 1 input bus and 1 output bus
+            nih_debug_assert!(
+                process.audio_inputs_count <= 1 && process.audio_outputs_count <= 1,
+                "The host provides more than one input or output bus"
+            );
+
+            // Right now we don't handle any auxiliary outputs
+            nih_debug_assert!(!process.audio_outputs.is_null());
+            let audio_outputs = &*process.audio_outputs;
+            let num_output_channels = audio_outputs.channel_count as usize;
+
+            // This vector has been preallocated to contain enough slices as there are output
+            // channels
+            // TODO: The audio buffers have a latency field, should we use those?
+            // TODO: Like with VST3, should we expose some way to access or set the silence/constant
+            //       flags?
+            let mut output_buffer = wrapper.output_buffer.write();
+            output_buffer.with_raw_vec(|output_slices| {
+                nih_debug_assert!(!audio_outputs.data32.is_null());
+                nih_debug_assert_eq!(num_output_channels, output_slices.len());
+                for (output_channel_idx, output_channel_slice) in
+                    output_slices.iter_mut().enumerate()
+                {
+                    // SAFETY: These pointers may not be valid outside of this function even though
+                    // their lifetime is equal to this structs. This is still safe because they are
+                    // only dereferenced here later as part of this process function.
+                    *output_channel_slice = std::slice::from_raw_parts_mut(
+                        *(audio_outputs.data32 as *mut *mut f32).add(output_channel_idx),
+                        process.frames_count as usize,
+                    );
+                }
+            });
+
+            // Most hosts process data in place, in which case we don't need to do any copying
+            // ourselves. If the pointers do not alias, then we'll do the copy here and then the
+            // plugin can just do normal in place processing.
+            if !process.audio_inputs.is_null() {
+                // We currently don't support sidechain inputs
+                let audio_inputs = &*process.audio_inputs;
+                let num_input_channels = audio_inputs.channel_count as usize;
+                nih_debug_assert!(
+                    num_input_channels <= num_output_channels,
+                    "Stereo to mono and similar configurations are not supported"
+                );
+                for input_channel_idx in 0..cmp::min(num_input_channels, num_output_channels) {
+                    let output_channel_ptr =
+                        *(audio_outputs.data32 as *mut *mut f32).add(input_channel_idx);
+                    let input_channel_ptr = *(audio_inputs.data32).add(input_channel_idx);
+                    if input_channel_ptr != output_channel_ptr {
+                        ptr::copy_nonoverlapping(
+                            input_channel_ptr,
+                            output_channel_ptr,
+                            process.frames_count as usize,
+                        );
+                    }
+                }
+            }
+
+            let mut plugin = wrapper.plugin.write();
+            let mut context = wrapper.make_process_context();
+            match plugin.process(&mut output_buffer, &mut context) {
+                ProcessStatus::Error(err) => {
+                    nih_debug_assert_failure!("Process error: {}", err);
+
+                    CLAP_PROCESS_ERROR
+                }
+                ProcessStatus::Normal => CLAP_PROCESS_CONTINUE_IF_NOT_QUIET,
+                ProcessStatus::Tail(_) => CLAP_PROCESS_CONTINUE,
+                ProcessStatus::KeepAlive => CLAP_PROCESS_CONTINUE,
+            }
+
+            // TODO: Handle parameter outputs/automation
+        })
     }
 
     unsafe extern "C" fn get_extension(

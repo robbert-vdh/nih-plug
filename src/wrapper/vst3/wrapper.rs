@@ -797,6 +797,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
             }
 
             // It's possible the host only wanted to send new parameter values
+            // TOOD: Send the output events when doing a flush
             if data.num_outputs == 0 {
                 nih_log!("VST3 parameter flush");
                 return kResultOk;
@@ -826,7 +827,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                 (*data.outputs).buffers,
             );
 
-            // This vector has been reallocated to contain enough slices as there are output
+            // This vector has been preallocated to contain enough slices as there are output
             // channels
             let mut output_buffer = self.inner.output_buffer.write();
             output_buffer.with_raw_vec(|output_slices| {
@@ -868,7 +869,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                 }
             }
 
-            let plugin = &mut *self.inner.plugin.data_ptr();
+            let mut plugin = self.inner.plugin.write();
             let mut context = self.inner.make_process_context();
             match plugin.process(&mut output_buffer, &mut context) {
                 ProcessStatus::Error(err) => {
