@@ -475,6 +475,116 @@ impl<'slice, 'sample> Block<'slice, 'sample> {
             .get_unchecked_mut(channel_index)
             .get_unchecked_mut(self.current_block_start..self.current_block_end)
     }
+
+    /// Get a SIMD vector containing the channel data for a specific sample in this block. If `LANES
+    /// > channels.len()` then this will be padded with zeroes. If `LANES < channels.len()` then
+    /// this won't contain all values.
+    ///
+    /// Returns a `None` value if `sample_index` is out of bounds.
+    #[cfg(feature = "simd")]
+    #[inline]
+    pub fn to_simd<const LANES: usize>(&self, sample_index: usize) -> Option<Simd<f32, LANES>>
+    where
+        LaneCount<LANES>: SupportedLaneCount,
+    {
+        if sample_index > self.len() {
+            return None;
+        }
+
+        let used_lanes = self.len().max(LANES);
+        let mut values = [0.0; LANES];
+        for (channel_idx, value) in values.iter_mut().enumerate().take(used_lanes) {
+            *value = unsafe {
+                *(*self.buffers)
+                    .get_unchecked(channel_idx)
+                    .get_unchecked(self.current_block_start + sample_index)
+            };
+        }
+
+        Some(Simd::from_array(values))
+    }
+
+    /// Get a SIMD vector containing the channel data for a specific sample in this block. Will
+    /// always read exactly `LANES` channels, and does not perform bounds checks on `sample_index`.
+    ///
+    /// # Safety
+    ///
+    /// Undefined behavior if `LANES > block.len()` or if `sample_index > block.len()`.
+    #[cfg(feature = "simd")]
+    #[inline]
+    pub unsafe fn to_simd_unchecked<const LANES: usize>(
+        &self,
+        sample_index: usize,
+    ) -> Simd<f32, LANES>
+    where
+        LaneCount<LANES>: SupportedLaneCount,
+    {
+        let mut values = [0.0; LANES];
+        for (channel_idx, value) in values.iter_mut().enumerate() {
+            *value = *(*self.buffers)
+                .get_unchecked(channel_idx)
+                .get_unchecked(self.current_block_start + sample_index);
+        }
+
+        Simd::from_array(values)
+    }
+
+    /// Write data from a SIMD vector to this sample's channel data for a specific sample in this
+    /// block. This takes the padding added by [Self::to_simd()] into account.
+    ///
+    /// Returns `false` if `sample_index` is out of bounds.
+    #[cfg(feature = "simd")]
+    #[allow(clippy::wrong_self_convention)]
+    #[inline]
+    pub fn from_simd<const LANES: usize>(
+        &mut self,
+        sample_index: usize,
+        vector: Simd<f32, LANES>,
+    ) -> bool
+    where
+        LaneCount<LANES>: SupportedLaneCount,
+    {
+        if sample_index > self.len() {
+            return false;
+        }
+
+        let used_lanes = self.len().max(LANES);
+        let values = vector.to_array();
+        for (channel_idx, value) in values.into_iter().enumerate().take(used_lanes) {
+            *unsafe {
+                (*self.buffers)
+                    .get_unchecked_mut(channel_idx)
+                    .get_unchecked_mut(self.current_block_start + sample_index)
+            } = value;
+        }
+
+        true
+    }
+
+    /// Write data from a SIMD vector to this sample's channel data for a specific sample in this
+    /// block.. This assumes `LANES` matches exactly with the number of channels in the buffer, and
+    /// does not perform bounds checks on `sample_index`.
+    ///
+    /// # Safety
+    ///
+    /// Undefined behavior if `LANES > block.len()` or if `sample_index > block.len()`.
+    #[cfg(feature = "simd")]
+    #[allow(clippy::wrong_self_convention)]
+    #[inline]
+    pub unsafe fn from_simd_unchecked<const LANES: usize>(
+        &mut self,
+        sample_index: usize,
+        vector: Simd<f32, LANES>,
+    ) where
+        LaneCount<LANES>: SupportedLaneCount,
+    {
+        let values = vector.to_array();
+        for (channel_idx, value) in values.into_iter().enumerate() {
+            *(*self.buffers)
+                .get_unchecked_mut(channel_idx)
+                .get_unchecked_mut(self.current_block_start + sample_index) = value;
+        }
+    }
 }
 
 #[cfg(any(miri, test))]
