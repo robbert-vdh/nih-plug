@@ -146,7 +146,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         let param_ids = wrapper.plugin.read().params().param_ids();
         nih_debug_assert!(
             !param_map.contains_key(BYPASS_PARAM_ID),
-            "The wrapper alread yadds its own bypass parameter"
+            "The wrapper already adds its own bypass parameter"
         );
 
         // Only calculate these hashes once, and in the stable order defined by the plugin

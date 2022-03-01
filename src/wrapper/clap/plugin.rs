@@ -1,11 +1,15 @@
+use clap_sys::events::{clap_input_events, clap_output_events};
+use clap_sys::ext::params::{clap_param_info, clap_plugin_params, CLAP_EXT_PARAMS};
 use clap_sys::host::clap_host;
+use clap_sys::id::clap_id;
 use clap_sys::plugin::clap_plugin;
-use clap_sys::process::{clap_process, clap_process_status, CLAP_PROCESS_CONTINUE};
+use clap_sys::process::{clap_process, clap_process_status};
 use crossbeam::atomic::AtomicCell;
 use crossbeam::queue::ArrayQueue;
+use lazy_static::lazy_static;
 use parking_lot::RwLock;
-use std::collections::VecDeque;
-use std::ffi::c_void;
+use std::collections::{HashMap, VecDeque};
+use std::ffi::{c_void, CStr};
 use std::os::raw::c_char;
 use std::ptr;
 use std::sync::atomic::AtomicU32;
@@ -15,8 +19,18 @@ use super::context::WrapperProcessContext;
 use super::descriptor::PluginDescriptor;
 use super::util::ClapPtr;
 use crate::event_loop::{EventLoop, MainThreadExecutor, TASK_QUEUE_CAPACITY};
+use crate::param::internals::ParamPtr;
 use crate::plugin::{BufferConfig, BusConfig, ClapPlugin};
+use crate::wrapper::util::hash_param_id;
 use crate::NoteEvent;
+
+/// Right now the wrapper adds its own bypass parameter.
+///
+/// TODO: Actually use this parameter.
+pub const BYPASS_PARAM_ID: &str = "bypass";
+lazy_static! {
+    pub static ref BYPASS_PARAM_HASH: u32 = hash_param_id(BYPASS_PARAM_ID);
+}
 
 #[repr(C)]
 pub struct Wrapper<P: ClapPlugin> {
@@ -49,6 +63,27 @@ pub struct Wrapper<P: ClapPlugin> {
     /// this.
     plugin_descriptor: Box<PluginDescriptor<P>>,
 
+    clap_plugin_params: clap_plugin_params,
+    // These fiels are exactly the same as their VST3 wrapper counterparts.
+    //
+    /// The keys from `param_map` in a stable order.
+    param_hashes: Vec<u32>,
+    /// A mapping from parameter ID hashes (obtained from the string parameter IDs) to pointers to
+    /// parameters belonging to the plugin. As long as `plugin` does not get recreated, these
+    /// addresses will remain stable, as they are obtained from a pinned object.
+    param_by_hash: HashMap<u32, ParamPtr>,
+    /// The default normalized parameter value for every parameter in `param_ids`. We need to store
+    /// this in case the host requeries the parmaeter later. This is also indexed by the hash so we
+    /// can retrieve them later for the UI if needed.
+    param_defaults_normalized: HashMap<u32, f32>,
+    /// Mappings from string parameter indentifiers to parameter hashes. Useful for debug logging
+    /// and when storing and restorign plugin state.
+    param_id_to_hash: HashMap<&'static str, u32>,
+    /// The inverse mapping from [Self::param_by_hash]. This is needed to be able to have an
+    /// ergonomic parameter setting API that uses references to the parameters instead of having to
+    /// add a setter function to the parameter (or even worse, have it be completely untyped).
+    param_ptr_to_hash: HashMap<ParamPtr, u32>,
+
     /// A queue of tasks that still need to be performed. Because CLAP lets the plugin request a
     /// host callback directly, we don't need to use the OsEventLoop we use in our other plugin
     /// implementations. Instead, we'll post tasks to this queue, ask the host to call
@@ -61,9 +96,6 @@ pub struct Wrapper<P: ClapPlugin> {
     /// TODO: If the host supports the ThreadCheck extension, we should use that instead.
     main_thread_id: ThreadId,
 }
-
-/// Send+Sync wrapper around clap_host.
-struct HostCallback(*const clap_host);
 
 /// Tasks that can be sent from the plugin to be executed on the main thread in a non-blocking
 /// realtime safe way. Instead of using a random thread or the OS' event loop like in the Linux
@@ -114,7 +146,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         let plugin_descriptor = Box::new(PluginDescriptor::default());
 
         assert!(!host_callback.is_null());
-        Self {
+        let mut wrapper = Self {
             clap_plugin: clap_plugin {
                 // This needs to live on the heap because the plugin object contains a direct
                 // reference to the manifest as a value. We could share this between instances of
@@ -147,9 +179,64 @@ impl<P: ClapPlugin> Wrapper<P> {
             host_callback: unsafe { ClapPtr::new(host_callback) },
             plugin_descriptor,
 
+            clap_plugin_params: clap_plugin_params {
+                count: Self::ext_params_count,
+                get_info: Self::ext_params_get_info,
+                get_value: Self::ext_params_get_value,
+                value_to_text: Self::ext_params_value_to_text,
+                text_to_value: Self::ext_params_text_to_value,
+                flush: Self::ext_params_flush,
+            },
+            param_hashes: Vec::new(),
+            param_by_hash: HashMap::new(),
+            param_defaults_normalized: HashMap::new(),
+            param_id_to_hash: HashMap::new(),
+            param_ptr_to_hash: HashMap::new(),
+
             tasks: ArrayQueue::new(TASK_QUEUE_CAPACITY),
             main_thread_id: thread::current().id(),
-        }
+        };
+
+        // This is a mapping from the parameter IDs specified by the plugin to pointers to thsoe
+        // parameters. Since the object returned by `params()` is pinned, these pointers are safe to
+        // dereference as long as `wrapper.plugin` is alive
+        let param_map = wrapper.plugin.read().params().param_map();
+        let param_ids = wrapper.plugin.read().params().param_ids();
+        nih_debug_assert!(
+            !param_map.contains_key(BYPASS_PARAM_ID),
+            "The wrapper already adds its own bypass parameter"
+        );
+
+        // Only calculate these hashes once, and in the stable order defined by the plugin
+        let param_id_hashes_ptrs: Vec<_> = param_ids
+            .iter()
+            .filter_map(|id| {
+                let param_ptr = param_map.get(id)?;
+                Some((id, hash_param_id(id), param_ptr))
+            })
+            .collect();
+        wrapper.param_hashes = param_id_hashes_ptrs
+            .iter()
+            .map(|&(_, hash, _)| hash)
+            .collect();
+        wrapper.param_by_hash = param_id_hashes_ptrs
+            .iter()
+            .map(|&(_, hash, ptr)| (hash, *ptr))
+            .collect();
+        wrapper.param_defaults_normalized = param_id_hashes_ptrs
+            .iter()
+            .map(|&(_, hash, ptr)| (hash, unsafe { ptr.normalized_value() }))
+            .collect();
+        wrapper.param_id_to_hash = param_id_hashes_ptrs
+            .iter()
+            .map(|&(id, hash, _)| (*id, hash))
+            .collect();
+        wrapper.param_ptr_to_hash = param_id_hashes_ptrs
+            .into_iter()
+            .map(|(_, hash, ptr)| (*ptr, hash))
+            .collect();
+
+        wrapper
     }
 
     fn make_process_context(&self) -> WrapperProcessContext<'_, P> {
@@ -224,7 +311,19 @@ impl<P: ClapPlugin> Wrapper<P> {
         plugin: *const clap_plugin,
         id: *const c_char,
     ) -> *const c_void {
-        todo!();
+        let plugin = &*(plugin as *const Self);
+
+        if id.is_null() {
+            return ptr::null();
+        }
+
+        // TODO: Implement the other useful extensions. Like uh audio inputs.
+        let id = CStr::from_ptr(id);
+        if id == CStr::from_ptr(CLAP_EXT_PARAMS) {
+            &plugin.clap_plugin_params as *const _ as *const c_void
+        } else {
+            ptr::null()
+        }
     }
 
     unsafe extern "C" fn on_main_thread(plugin: *const clap_plugin) {
@@ -235,5 +334,52 @@ impl<P: ClapPlugin> Wrapper<P> {
         while let Some(task) = plugin.tasks.pop() {
             plugin.execute(task);
         }
+    }
+
+    unsafe extern "C" fn ext_params_count(plugin: *const clap_plugin) -> u32 {
+        todo!();
+    }
+
+    unsafe extern "C" fn ext_params_get_info(
+        plugin: *const clap_plugin,
+        param_index: i32,
+        param_info: *mut clap_param_info,
+    ) -> bool {
+        todo!();
+    }
+
+    unsafe extern "C" fn ext_params_get_value(
+        plugin: *const clap_plugin,
+        param_id: clap_id,
+        value: *mut f64,
+    ) -> bool {
+        todo!();
+    }
+
+    unsafe extern "C" fn ext_params_value_to_text(
+        plugin: *const clap_plugin,
+        param_id: clap_id,
+        value: f64,
+        display: *mut c_char,
+        size: u32,
+    ) -> bool {
+        todo!();
+    }
+
+    unsafe extern "C" fn ext_params_text_to_value(
+        plugin: *const clap_plugin,
+        param_id: clap_id,
+        display: *const c_char,
+        value: *mut f64,
+    ) -> bool {
+        todo!();
+    }
+
+    unsafe extern "C" fn ext_params_flush(
+        plugin: *const clap_plugin,
+        in_: *const clap_input_events,
+        out: *const clap_output_events,
+    ) {
+        todo!();
     }
 }
