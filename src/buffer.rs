@@ -385,7 +385,7 @@ impl<'slice, 'sample> Block<'slice, 'sample> {
     }
 }
 
-#[cfg(miri)]
+#[cfg(any(miri, test))]
 mod miri {
     use super::*;
 
