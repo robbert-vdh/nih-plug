@@ -11,6 +11,8 @@ functionality I needed and I'll expose more functionality as I need it. See the
 documentation comment in the `Plugin` trait for an incomplete list of missing
 functionality.
 
+Come join us on the [Rust Audio Discord](https://discord.gg/ykxU3rt4Cb).
+
 ### Table of contents
 
 - [Plugins](#plugins)
