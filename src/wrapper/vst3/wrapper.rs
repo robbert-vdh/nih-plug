@@ -19,7 +19,6 @@ use super::inner::WrapperInner;
 use super::util::{VstPtr, BYPASS_PARAM_HASH, BYPASS_PARAM_ID};
 use super::view::WrapperView;
 use crate::param::internals::ParamPtr;
-use crate::param::range::Range;
 use crate::param::Param;
 use crate::plugin::{BufferConfig, BusConfig, NoteEvent, ProcessStatus, Vst3Plugin};
 use crate::wrapper::state::{ParamValue, State};
@@ -699,8 +698,9 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
             self.inner
                 .output_buffer
                 .write()
-                .as_raw_vec()
-                .resize_with(bus_config.num_output_channels as usize, || &mut []);
+                .with_raw_vec(|output_slices| {
+                    output_slices.resize_with(bus_config.num_output_channels as usize, || &mut [])
+                });
 
             // Also store this for later, so we can reinitialize the plugin after restoring state
             self.inner.current_buffer_config.store(Some(buffer_config));
@@ -829,8 +829,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
             // This vector has been reallocated to contain enough slices as there are output
             // channels
             let mut output_buffer = self.inner.output_buffer.write();
-            {
-                let output_slices = output_buffer.as_raw_vec();
+            output_buffer.with_raw_vec(|output_slices| {
                 nih_debug_assert_eq!(num_output_channels, output_slices.len());
                 for (output_channel_idx, output_channel_slice) in
                     output_slices.iter_mut().enumerate()
@@ -843,7 +842,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                         data.num_samples as usize,
                     );
                 }
-            }
+            });
 
             // Most hosts process data in place, in which case we don't need to do any copying
             // ourselves. If the pointers do not alias, then we'll do the copy here and then the
