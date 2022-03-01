@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::pin::Pin;
 
+use super::range::Range;
 use super::Param;
 
 /// Re-export for use in the [Params] proc-macro.
@@ -82,6 +83,25 @@ where
 }
 
 impl ParamPtr {
+    /// Get the number of steps for this paramter, if it is stepped.
+    ///
+    /// # Safety
+    ///
+    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
+    /// still alive.
+    pub unsafe fn step_count(&self) -> Option<i32> {
+        match self {
+            ParamPtr::FloatParam(_) => None,
+            ParamPtr::IntParam(p) => match (**p).range {
+                Range::Linear { min, max } => Some(max - min),
+                Range::Skewed { min, max, .. } => Some(max - min),
+                Range::SymmetricalSkewed { min, max, .. } => Some(max - min),
+            },
+            ParamPtr::BoolParam(_) => Some(1),
+            ParamPtr::EnumParam(p) => Some((**p).len() as i32 - 1),
+        }
+    }
+
     /// Get the human readable name for this parameter.
     ///
     /// # Safety

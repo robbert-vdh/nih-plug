@@ -433,16 +433,7 @@ impl<P: Vst3Plugin> IEditController for Wrapper<P> {
             u16strlcpy(&mut info.title, param_ptr.name());
             u16strlcpy(&mut info.short_title, param_ptr.name());
             u16strlcpy(&mut info.units, param_ptr.unit());
-            info.step_count = match param_ptr {
-                ParamPtr::FloatParam(_) => 0,
-                ParamPtr::IntParam(p) => match (**p).range {
-                    Range::Linear { min, max } => max - min,
-                    Range::Skewed { min, max, .. } => max - min,
-                    Range::SymmetricalSkewed { min, max, .. } => max - min,
-                },
-                ParamPtr::BoolParam(_) => 1,
-                ParamPtr::EnumParam(p) => (**p).len() as i32 - 1,
-            };
+            info.step_count = param_ptr.step_count().unwrap_or(0);
             info.default_normalized_value = *default_value as f64;
             info.unit_id = vst3_sys::vst::kRootUnitId;
             info.flags = vst3_sys::vst::ParameterFlags::kCanAutomate as i32;
