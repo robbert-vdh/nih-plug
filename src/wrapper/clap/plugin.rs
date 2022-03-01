@@ -3,6 +3,7 @@ use clap_sys::ext::params::{
     clap_param_info, clap_plugin_params, CLAP_EXT_PARAMS, CLAP_PARAM_IS_BYPASS,
     CLAP_PARAM_IS_STEPPED,
 };
+use clap_sys::ext::thread_check::{clap_host_thread_check, CLAP_EXT_THREAD_CHECK};
 use clap_sys::host::clap_host;
 use clap_sys::id::clap_id;
 use clap_sys::plugin::clap_plugin;
@@ -64,7 +65,10 @@ pub struct Wrapper<P: ClapPlugin> {
     /// TODO: Implement the latency extension.
     pub current_latency: AtomicU32,
 
+    // We'll query all of the host's extensions upfront
     host_callback: ClapPtr<clap_host>,
+    thread_check: Option<ClapPtr<clap_host_thread_check>>,
+
     /// Needs to be boxed because the plugin object is supposed to contain a static reference to
     /// this.
     plugin_descriptor: Box<PluginDescriptor<P>>,
@@ -97,9 +101,8 @@ pub struct Wrapper<P: ClapPlugin> {
     /// there until it is empty.
     tasks: ArrayQueue<Task>,
     /// The ID of the main thread. In practice this is the ID of the thread that created this
-    /// object.
-    ///
-    /// TODO: If the host supports the ThreadCheck extension, we should use that instead.
+    /// object. If the host supports the thread check extension (and [Self::thread_check] thus
+    /// contains a value), then that extension is used instead.
     main_thread_id: ThreadId,
 }
 
@@ -136,8 +139,12 @@ impl<P: ClapPlugin> EventLoop<Task, Wrapper<P>> for Wrapper<P> {
     }
 
     fn is_main_thread(&self) -> bool {
-        // TODO: Use the `thread_check::is_main_thread` extension method if that's available
-        thread::current().id() == self.main_thread_id
+        // If the host supports the thread check interface then we'll use that, otherwise we'll
+        // check if this is the same thread as the one that created the plugin instance.
+        match &self.thread_check {
+            Some(thread_check) => unsafe { (thread_check.is_main_thread)(&*self.host_callback) },
+            None => thread::current().id() == self.main_thread_id,
+        }
     }
 }
 
@@ -152,6 +159,11 @@ impl<P: ClapPlugin> Wrapper<P> {
         let plugin_descriptor = Box::new(PluginDescriptor::default());
 
         assert!(!host_callback.is_null());
+        let host_callback = unsafe { ClapPtr::new(host_callback) };
+        let thread_check = unsafe {
+            query_host_extension::<clap_host_thread_check>(&host_callback, CLAP_EXT_THREAD_CHECK)
+        };
+
         let mut wrapper = Self {
             clap_plugin: clap_plugin {
                 // This needs to live on the heap because the plugin object contains a direct
@@ -183,7 +195,9 @@ impl<P: ClapPlugin> Wrapper<P> {
             input_events: RwLock::new(VecDeque::with_capacity(512)),
             current_latency: AtomicU32::new(0),
 
-            host_callback: unsafe { ClapPtr::new(host_callback) },
+            host_callback,
+            thread_check,
+
             plugin_descriptor,
 
             clap_plugin_params: clap_plugin_params {
@@ -464,5 +478,22 @@ impl<P: ClapPlugin> Wrapper<P> {
         out: *const clap_output_events,
     ) {
         todo!();
+    }
+}
+
+/// Convenience function to query an extennsion from the host.
+///
+/// # Safety
+///
+/// The extension type `T` must match the extension's name `name`.
+unsafe fn query_host_extension<T>(
+    host_callback: &ClapPtr<clap_host>,
+    name: *const c_char,
+) -> Option<ClapPtr<T>> {
+    let extension_ptr = (host_callback.get_extension)(&**host_callback, name);
+    if !extension_ptr.is_null() {
+        Some(ClapPtr::new(extension_ptr as *const T))
+    } else {
+        None
     }
 }
