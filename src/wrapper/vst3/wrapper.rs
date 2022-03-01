@@ -394,8 +394,8 @@ impl<P: Vst3Plugin> IEditController for Wrapper<P> {
     }
 
     unsafe fn get_parameter_count(&self) -> i32 {
-        // NOTE: We add a bypass parameter ourselves on index `self.param_ids.len()`, so these
-        //       indices are all off by one
+        // NOTE: We add a bypass parameter ourselves on index `self.inner.param_hashes.len()`, so
+        //       these indices are all off by one
         self.inner.param_hashes.len() as i32 + 1
     }
 

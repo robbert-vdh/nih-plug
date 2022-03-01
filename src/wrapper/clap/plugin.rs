@@ -1,5 +1,8 @@
 use clap_sys::events::{clap_input_events, clap_output_events};
-use clap_sys::ext::params::{clap_param_info, clap_plugin_params, CLAP_EXT_PARAMS};
+use clap_sys::ext::params::{
+    clap_param_info, clap_plugin_params, CLAP_EXT_PARAMS, CLAP_PARAM_IS_BYPASS,
+    CLAP_PARAM_IS_STEPPED,
+};
 use clap_sys::host::clap_host;
 use clap_sys::id::clap_id;
 use clap_sys::plugin::clap_plugin;
@@ -21,7 +24,7 @@ use super::util::ClapPtr;
 use crate::event_loop::{EventLoop, MainThreadExecutor, TASK_QUEUE_CAPACITY};
 use crate::param::internals::ParamPtr;
 use crate::plugin::{BufferConfig, BusConfig, ClapPlugin};
-use crate::wrapper::util::hash_param_id;
+use crate::wrapper::util::{hash_param_id, strlcpy};
 use crate::NoteEvent;
 
 /// Right now the wrapper adds its own bypass parameter.
@@ -261,9 +264,9 @@ impl<P: ClapPlugin> Wrapper<P> {
         _min_frames_count: u32,
         max_frames_count: u32,
     ) -> bool {
-        let plugin = &*(plugin as *const Self);
+        let wrapper = &*(plugin as *const Self);
 
-        let bus_config = plugin.current_bus_config.load();
+        let bus_config = wrapper.current_bus_config.load();
         let buffer_config = BufferConfig {
             sample_rate: sample_rate as f32,
             max_buffer_size: max_frames_count,
@@ -271,15 +274,15 @@ impl<P: ClapPlugin> Wrapper<P> {
 
         // TODO: Reset smoothers
 
-        if plugin.plugin.write().initialize(
+        if wrapper.plugin.write().initialize(
             &bus_config,
             &buffer_config,
-            &mut plugin.make_process_context(),
+            &mut wrapper.make_process_context(),
         ) {
             // TODO: Allocate buffer slices
 
             // Also store this for later, so we can reinitialize the plugin after restoring state
-            plugin.current_buffer_config.store(Some(buffer_config));
+            wrapper.current_buffer_config.store(Some(buffer_config));
 
             true
         } else {
@@ -311,7 +314,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         plugin: *const clap_plugin,
         id: *const c_char,
     ) -> *const c_void {
-        let plugin = &*(plugin as *const Self);
+        let wrapper = &*(plugin as *const Self);
 
         if id.is_null() {
             return ptr::null();
@@ -320,24 +323,28 @@ impl<P: ClapPlugin> Wrapper<P> {
         // TODO: Implement the other useful extensions. Like uh audio inputs.
         let id = CStr::from_ptr(id);
         if id == CStr::from_ptr(CLAP_EXT_PARAMS) {
-            &plugin.clap_plugin_params as *const _ as *const c_void
+            &wrapper.clap_plugin_params as *const _ as *const c_void
         } else {
             ptr::null()
         }
     }
 
     unsafe extern "C" fn on_main_thread(plugin: *const clap_plugin) {
-        let plugin = &*(plugin as *const Self);
+        let wrapper = &*(plugin as *const Self);
 
         // [Self::do_maybe_async] posts a task to the queue and asks the host to call this function
         // on the main thread, so once that's done we can just handle all requests here
-        while let Some(task) = plugin.tasks.pop() {
-            plugin.execute(task);
+        while let Some(task) = wrapper.tasks.pop() {
+            wrapper.execute(task);
         }
     }
 
     unsafe extern "C" fn ext_params_count(plugin: *const clap_plugin) -> u32 {
-        todo!();
+        let wrapper = &*(plugin as *const Self);
+
+        // NOTE: We add a bypass parameter ourselves on index `plugin.param_hashes.len()`, so
+        //       these indices are all off by one
+        wrapper.param_hashes.len() as u32 + 1
     }
 
     unsafe extern "C" fn ext_params_get_info(
@@ -345,7 +352,54 @@ impl<P: ClapPlugin> Wrapper<P> {
         param_index: i32,
         param_info: *mut clap_param_info,
     ) -> bool {
-        todo!();
+        let wrapper = &*(plugin as *const Self);
+
+        // Parameter index `self.param_ids.len()` is our own bypass parameter
+        if param_info.is_null()
+            || param_index < 0
+            || param_index > wrapper.param_hashes.len() as i32
+        {
+            return false;
+        }
+
+        *param_info = std::mem::zeroed();
+
+        // TODO: We don't use the cookies at this point. In theory this would be faster than the ID
+        //       hashmap lookup, but for now we'll stay consistent with the VST3 implementation.
+        let param_info = &mut *param_info;
+        if param_index == wrapper.param_hashes.len() as i32 {
+            param_info.id = *BYPASS_PARAM_HASH;
+            param_info.flags = CLAP_PARAM_IS_STEPPED | CLAP_PARAM_IS_BYPASS;
+            param_info.cookie = ptr::null_mut();
+            strlcpy(&mut param_info.name, "Bypass");
+            strlcpy(&mut param_info.module, "");
+            param_info.min_value = 0.0;
+            param_info.max_value = 1.0;
+            param_info.default_value = 0.0;
+        } else {
+            let param_hash = &wrapper.param_hashes[param_index as usize];
+            let default_value = &wrapper.param_defaults_normalized[param_hash];
+            let param_ptr = &wrapper.param_by_hash[param_hash];
+            let step_count = param_ptr.step_count();
+
+            param_info.id = *param_hash;
+            param_info.flags = if step_count.is_some() {
+                CLAP_PARAM_IS_STEPPED
+            } else {
+                0
+            };
+            param_info.cookie = ptr::null_mut();
+            strlcpy(&mut param_info.name, param_ptr.name());
+            strlcpy(&mut param_info.module, "");
+            param_info.min_value = 0.0;
+            // Stepped parameters are unnormalized float parameters since there's no separate step
+            // range option
+            // TODO: This should probably be encapsulated in some way so we don't forget about this in one place
+            param_info.max_value = step_count.unwrap_or(1) as f64;
+            param_info.default_value = *default_value as f64 * step_count.unwrap_or(1) as f64;
+        }
+
+        true
     }
 
     unsafe extern "C" fn ext_params_get_value(
@@ -363,6 +417,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         display: *mut c_char,
         size: u32,
     ) -> bool {
+        // TODO: Don't forget to add the unit
         todo!();
     }
 
