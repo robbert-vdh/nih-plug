@@ -395,10 +395,14 @@ impl<P: ClapPlugin> Wrapper<P> {
             param_info.cookie = ptr::null_mut();
             strlcpy(&mut param_info.name, param_ptr.name());
             strlcpy(&mut param_info.module, "");
+            // We don't use the actual minimum and maximum values here because that would not scale
+            // with skewed integer ranges. Instead, just treat all parameters as `[0, 1]` normalized
+            // paramters multiplied by the step size.
             param_info.min_value = 0.0;
             // Stepped parameters are unnormalized float parameters since there's no separate step
             // range option
             // TODO: This should probably be encapsulated in some way so we don't forget about this in one place
+            // TODO: Like with VST3, this won't actually do the correct thing with skewed stepped parameters
             param_info.max_value = step_count.unwrap_or(1) as f64;
             param_info.default_value = *default_value as f64 * step_count.unwrap_or(1) as f64;
         }
@@ -423,9 +427,9 @@ impl<P: ClapPlugin> Wrapper<P> {
             } else {
                 0.0
             };
-
             true
         } else if let Some(param_ptr) = wrapper.param_by_hash.get(&param_id) {
+            // TODO: As explained above, this may do strange things with skewed discrete parameters
             *value =
                 param_ptr.normalized_value() as f64 * param_ptr.step_count().unwrap_or(1) as f64;
             true
