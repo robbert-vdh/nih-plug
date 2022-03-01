@@ -497,12 +497,13 @@ impl<P: ClapPlugin> Wrapper<P> {
             // we'll process every incoming event.
             let process = &*process;
             if !process.in_events.is_null() {
-                let mut input_events_guard = wrapper.input_events.write();
+                let mut input_events = wrapper.input_events.write();
+                input_events.clear();
 
                 let num_events = ((*process.in_events).size)(&*process.in_events);
                 for event_idx in 0..num_events {
                     let event = ((*process.in_events).get)(&*process.in_events, event_idx);
-                    wrapper.handle_event(event, &mut input_events_guard);
+                    wrapper.handle_event(event, &mut input_events);
                 }
             }
 
@@ -802,12 +803,12 @@ impl<P: ClapPlugin> Wrapper<P> {
         let wrapper = &*(plugin as *const Self);
 
         if !in_.is_null() {
-            let mut input_events_guard = wrapper.input_events.write();
+            let mut input_events = wrapper.input_events.write();
 
             let num_events = ((*in_).size)(&*in_);
             for event_idx in 0..num_events {
                 let event = ((*in_).get)(&*in_, event_idx);
-                wrapper.handle_event(event, &mut input_events_guard);
+                wrapper.handle_event(event, &mut input_events);
             }
         }
 
