@@ -258,6 +258,20 @@ impl<'a> Buffer<'a> {
     /// [crate::Smoother::next_block()]. Before using this, you will need to call
     /// [crate::Plugin::initialize_block_smoothers()] with the same `max_block_size` in your
     /// initialization function first.
+    ///
+    /// You can use this to obtain block-slices from a buffer so you can pass them to a libraryq:
+    ///
+    /// ```ignore
+    /// for block in buffer.iter_blocks(128) {
+    ///     let mut block_channels = block.into_iter();
+    ///     let stereo_slice = &[
+    ///         block_channels.next().unwrap(),
+    ///         block_channels.next().unwrap(),
+    ///     ];
+    ///
+    ///     // Do something cool with `stereo_slice`
+    /// }
+    /// ````
     pub fn iter_blocks<'slice>(&'slice mut self, max_block_size: usize) -> BlocksIter<'slice, 'a> {
         BlocksIter {
             buffers: self.output_slices.as_mut_slice(),
