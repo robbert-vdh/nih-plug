@@ -342,9 +342,9 @@ impl<'slice, 'sample> Channels<'slice, 'sample> {
 }
 
 impl<'slice, 'sample> Block<'slice, 'sample> {
-    /// Get the number of channels in the block.
+    /// Get the number of samples (not channels) in the block.
     pub fn len(&self) -> usize {
-        unsafe { (*self.buffers).len() }
+        self.current_block_end - self.current_block_start
     }
 
     /// A resetting iterator. This lets you iterate over the same block multiple times. Otherwise
