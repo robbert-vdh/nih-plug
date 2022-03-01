@@ -284,10 +284,7 @@ impl Plugin for Diopser {
             // supports steroo audio.
             #[cfg(feature = "simd")]
             {
-                let mut samples = f32x2::from_array([
-                    *unsafe { channel_samples.get_unchecked_mut(0) },
-                    *unsafe { channel_samples.get_unchecked_mut(1) },
-                ]);
+                let mut samples = unsafe { channel_samples.to_simd_unchecked() };
 
                 for filter in self
                     .filters
@@ -297,8 +294,7 @@ impl Plugin for Diopser {
                     samples = filter.process(samples);
                 }
 
-                *unsafe { channel_samples.get_unchecked_mut(0) } = samples.as_array()[0];
-                *unsafe { channel_samples.get_unchecked_mut(1) } = samples.as_array()[1];
+                unsafe { channel_samples.from_simd_unchecked(samples) };
             }
 
             #[cfg(not(feature = "simd"))]
