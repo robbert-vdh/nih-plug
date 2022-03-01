@@ -50,7 +50,8 @@ pub struct ChannelsIter<'slice, 'sample: 'slice> {
 // Per-block per-channel per-sample iterators
 
 /// An iterator over all samples in the buffer, slicing over the sample-dimension with a maximum
-/// size of [Self::max_block_size]. See [Buffer::iter_blocks()].
+/// size of [Self::max_block_size]. See [Buffer::iter_blocks()]. Yields both the block and the
+/// offset from the start of the buffer.
 pub struct BlocksIter<'slice, 'sample: 'slice> {
     /// The raw output buffers.
     pub(self) buffers: *mut [&'sample mut [f32]],
@@ -134,23 +135,24 @@ impl<'slice, 'sample> Iterator for BlockChannelsIter<'slice, 'sample> {
 }
 
 impl<'slice, 'sample> Iterator for BlocksIter<'slice, 'sample> {
-    type Item = Block<'slice, 'sample>;
+    type Item = (usize, Block<'slice, 'sample>);
 
     fn next(&mut self) -> Option<Self::Item> {
         let buffer_len = unsafe { (*self.buffers)[0].len() };
         if self.current_block_start < buffer_len {
+            let current_block_start = self.current_block_start;
             let current_block_end =
                 (self.current_block_start + self.max_block_size).min(buffer_len);
             let block = Block {
                 buffers: self.buffers,
-                current_block_start: self.current_block_start,
+                current_block_start,
                 current_block_end,
                 _marker: self._marker,
             };
 
             self.current_block_start += self.max_block_size;
 
-            Some(block)
+            Some((current_block_start, block))
         } else {
             None
         }
@@ -430,8 +432,8 @@ mod miri {
 
         // These iterators should not alias
         let mut blocks = buffer.iter_blocks(16);
-        let block1 = blocks.next().unwrap();
-        let block2 = blocks.next().unwrap();
+        let (_block1_offset, block1) = blocks.next().unwrap();
+        let (_block2_offset, block2) = blocks.next().unwrap();
         for channel in block1 {
             for sample in channel.iter_mut() {
                 *sample += 0.001;
