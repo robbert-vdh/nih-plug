@@ -23,7 +23,7 @@ impl<'a> Buffer<'a> {
     }
 
     /// Obtain the raw audio buffers.
-    pub fn as_raw(&mut self) -> &mut [&'a mut [f32]] {
+    pub fn as_slice(&mut self) -> &mut [&'a mut [f32]] {
         &mut self.output_slices
     }
 
