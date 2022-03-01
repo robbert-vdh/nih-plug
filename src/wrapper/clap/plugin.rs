@@ -694,7 +694,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             if value > 0.5 {
                 strlcpy(dest, "Bypassed")
             } else {
-                strlcpy(dest, "Enabled")
+                strlcpy(dest, "Not Bypassed")
             }
 
             true
@@ -734,7 +734,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         if param_id == *BYPASS_PARAM_HASH {
             let normalized_valeu = match display {
                 "Bypassed" => 1.0,
-                "Enabled" => 0.0,
+                "Not Bypassed" => 0.0,
                 _ => return false,
             };
             *value = normalized_valeu;

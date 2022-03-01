@@ -458,7 +458,7 @@ impl<P: Vst3Plugin> IEditController for Wrapper<P> {
             if value_normalized > 0.5 {
                 u16strlcpy(dest, "Bypassed")
             } else {
-                u16strlcpy(dest, "Enabled")
+                u16strlcpy(dest, "Not Bypassed")
             }
 
             kResultOk
@@ -490,7 +490,7 @@ impl<P: Vst3Plugin> IEditController for Wrapper<P> {
         if id == *BYPASS_PARAM_HASH {
             let value = match string.as_str() {
                 "Bypassed" => 1.0,
-                "Enabled" => 0.0,
+                "Not Bypassed" => 0.0,
                 _ => return kResultFalse,
             };
             *value_normalized = value;
