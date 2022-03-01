@@ -534,6 +534,7 @@ version = "0.0.0"
 dependencies = [
  "assert_no_alloc",
  "atomic_float",
+ "atomic_refcell",
  "cfg-if",
  "clap-sys",
  "crossbeam",

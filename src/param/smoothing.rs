@@ -1,5 +1,5 @@
 use atomic_float::AtomicF32;
-use parking_lot::{MappedMutexGuard, Mutex, MutexGuard};
+use atomic_refcell::{AtomicRef, AtomicRefCell, AtomicRefMut};
 use std::sync::atomic::{AtomicI32, Ordering};
 
 use crate::buffer::Block;
@@ -43,7 +43,7 @@ pub struct Smoother<T> {
 
     /// A dense buffer containing smoothed values for an entire block of audio. Useful when using
     /// [crate::Buffer::iter_blocks()] to process small blocks of audio multiple times.
-    block_values: Mutex<Vec<T>>,
+    block_values: AtomicRefCell<Vec<T>>,
 }
 
 impl<T: Default> Default for Smoother<T> {
@@ -55,7 +55,7 @@ impl<T: Default> Default for Smoother<T> {
             current: AtomicF32::new(0.0),
             target: Default::default(),
 
-            block_values: Mutex::new(Vec::new()),
+            block_values: AtomicRefCell::new(Vec::new()),
         }
     }
 }
@@ -85,7 +85,7 @@ impl<T: Default> Smoother<T> {
     /// [crate::Buffer::iter_blocks()].
     pub fn initialize_block_smoother(&mut self, max_block_size: usize) {
         self.block_values
-            .lock()
+            .borrow_mut()
             .resize_with(max_block_size, || T::default());
     }
 }
@@ -142,8 +142,8 @@ impl Smoother<f32> {
     ///
     /// Returns a `None` value if the block length exceed's the allocated capacity.
     #[inline]
-    pub fn next_block(&self, block: &Block) -> Option<MappedMutexGuard<[f32]>> {
-        let mut block_values = self.block_values.lock();
+    pub fn next_block(&self, block: &Block) -> Option<AtomicRefMut<[f32]>> {
+        let mut block_values = self.block_values.borrow_mut();
         if block_values.len() < block.len() {
             return None;
         }
@@ -154,7 +154,7 @@ impl Smoother<f32> {
         //       In that case we wouldn't need to do anything ehre.
         (&mut block_values[..block.len()]).fill_with(|| self.next());
 
-        Some(MutexGuard::map(block_values, |values| {
+        Some(AtomicRefMut::map(block_values, |values| {
             &mut values[..block.len()]
         }))
     }
@@ -239,16 +239,16 @@ impl Smoother<i32> {
     ///
     /// Returns a `None` value if the block length exceed's the allocated capacity.
     #[inline]
-    pub fn next_block(&self, block_len: usize) -> Option<MappedMutexGuard<[i32]>> {
-        let mut block_values = self.block_values.lock();
-        if block_values.len() < block_len {
+    pub fn next_block(&self, block: &Block) -> Option<AtomicRefMut<[i32]>> {
+        let mut block_values = self.block_values.borrow_mut();
+        if block_values.len() < block.len() {
             return None;
         }
 
-        (&mut block_values[..block_len]).fill_with(|| self.next());
+        (&mut block_values[..block.len()]).fill_with(|| self.next());
 
-        Some(MutexGuard::map(block_values, |values| {
-            &mut values[..block_len]
+        Some(AtomicRefMut::map(block_values, |values| {
+            &mut values[..block.len()]
         }))
     }
 

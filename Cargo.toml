@@ -32,6 +32,7 @@ assert_process_allocs = ["assert_no_alloc"]
 nih_plug_derive = { path = "nih_plug_derive" }
 
 atomic_float = "0.1"
+atomic_refcell = "0.1"
 cfg-if = "1.0"
 # For CLAP 0.18
 clap-sys = { git = "https://github.com/glowcoil/clap-sys", rev = "3ef7048e1d3b426a7c6b02b5d3ae18f14874d4e5" }
