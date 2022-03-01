@@ -113,6 +113,10 @@ impl<'a> ParamSetter<'a> {
     /// Set a parameter to an already normalized value. Works exactly the same as
     /// [Self::set_parameter] and needs to follow the same rules, but this may be useful when
     /// implementing a GUI.
+    ///
+    /// This does not perform any snapping. Consider converting the normalized value to a plain
+    /// value and setting that with [Self::set_parameter()] instead so the normalized value known to
+    /// the host matches `param.normalized_value()`.
     pub fn set_parameter_normalized<P: Param>(&self, param: &P, normalized: f32) {
         let ptr = param.as_ptr();
         unsafe { self.context.raw_set_parameter_normalized(ptr, normalized) };
