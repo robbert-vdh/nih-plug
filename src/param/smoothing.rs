@@ -1,5 +1,5 @@
 use atomic_float::AtomicF32;
-use parking_lot::Mutex;
+use parking_lot::{MappedMutexGuard, Mutex, MutexGuard};
 use std::sync::atomic::{AtomicI32, Ordering};
 
 /// Controls if and how parameters gets smoothed.
@@ -124,12 +124,37 @@ impl Smoother<f32> {
     }
 
     /// Get the next value from this smoother. The value will be equal to the previous value once
-    // the smoothing period is over. This should be called exactly once per sample.
+    /// the smoothing period is over. This should be called exactly once per sample.
     // Yes, Clippy, like I said, this was intentional
     #[allow(clippy::should_implement_trait)]
     #[inline]
     pub fn next(&self) -> f32 {
         self.next_step(1)
+    }
+
+    /// Produce smoothed values for an entire block of audio. Used in conjunction with
+    /// [crate::Buffer::iter_blocks()]. Make sure to call
+    /// [crate::Plugin::initialize_block_smoothers()] with the same maximum buffer block size as the
+    /// one passed to `iter_blocks()` in your [crate::Plugin::initialize()] function first to
+    /// allocate memory for the block smoothing.
+    ///
+    /// Returns a `None` value if the block length exceed's the allocated capacity.
+    #[inline]
+    pub fn next_block(&self, block_len: usize) -> Option<MappedMutexGuard<[f32]>> {
+        let mut block_values = self.block_values.lock();
+        if block_values.len() < block_len {
+            return None;
+        }
+
+        // TODO: As a small optimization we could split this up into two loops for the smoothed and
+        //       unsmoothed parts. Another worthwhile optimization would be to remember if the
+        //       buffer is already filled with the target value and [Self::is_smoothing()] is false.
+        //       In that case we wouldn't need to do anything ehre.
+        (&mut block_values[..block_len]).fill_with(|| self.next());
+
+        Some(MutexGuard::map(block_values, |values| {
+            &mut values[..block_len]
+        }))
     }
 
     /// [Self::next()], but with the ability to skip forward in the smoother. [Self::next()] is
@@ -202,6 +227,27 @@ impl Smoother<i32> {
     #[allow(clippy::should_implement_trait)]
     pub fn next(&self) -> i32 {
         self.next_step(1)
+    }
+
+    /// Produce smoothed values for an entire block of audio. Used in conjunction with
+    /// [crate::Buffer::iter_blocks()]. Make sure to call
+    /// [crate::Plugin::initialize_block_smoothers()] with the same maximum buffer block size as the
+    /// one passed to `iter_blocks()` in your [crate::Plugin::initialize()] function first to
+    /// allocate memory for the block smoothing.
+    ///
+    /// Returns a `None` value if the block length exceed's the allocated capacity.
+    #[inline]
+    pub fn next_block(&self, block_len: usize) -> Option<MappedMutexGuard<[i32]>> {
+        let mut block_values = self.block_values.lock();
+        if block_values.len() < block_len {
+            return None;
+        }
+
+        (&mut block_values[..block_len]).fill_with(|| self.next());
+
+        Some(MutexGuard::map(block_values, |values| {
+            &mut values[..block_len]
+        }))
     }
 
     /// [Self::next()], but with the ability to skip forward in the smoother. [Self::next()] is
