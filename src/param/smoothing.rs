@@ -1,5 +1,5 @@
 use atomic_float::AtomicF32;
-use atomic_refcell::{AtomicRef, AtomicRefCell, AtomicRefMut};
+use atomic_refcell::{AtomicRefCell, AtomicRefMut};
 use std::sync::atomic::{AtomicI32, Ordering};
 
 use crate::buffer::Block;
