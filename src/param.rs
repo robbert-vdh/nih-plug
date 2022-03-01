@@ -22,17 +22,6 @@ pub trait Param: Display {
     /// The plain parameter type.
     type Plain;
 
-    /// Update the smoother state to point to the current value. Also used when initializing and
-    /// restoring a plugin so everything is in sync. In that case the smoother should completely
-    /// reset to the current value.
-    fn update_smoother(&mut self, sample_rate: f32, reset: bool);
-
-    /// Set this parameter based on a string. Returns whether the updating succeeded. That can fail
-    /// if the string cannot be parsed.
-    ///
-    /// TODO: After implementing VST3, check if we handle parsing failures correctly
-    fn set_from_string(&mut self, string: &str) -> bool;
-
     /// Get the unnormalized value for this parameter.
     fn plain_value(&self) -> Self::Plain;
 
@@ -66,6 +55,17 @@ pub trait Param: Display {
     /// Get the plain, unnormalized value for a normalized value, as a float. Used as part of the
     /// wrappers. This **does** snap to step sizes for continuous parameters (i.e. [FloatParam]).
     fn preview_plain(&self, normalized: f32) -> Self::Plain;
+
+    /// Set this parameter based on a string. Returns whether the updating succeeded. That can fail
+    /// if the string cannot be parsed.
+    ///
+    /// TODO: After implementing VST3, check if we handle parsing failures correctly
+    fn set_from_string(&mut self, string: &str) -> bool;
+
+    /// Update the smoother state to point to the current value. Also used when initializing and
+    /// restoring a plugin so everything is in sync. In that case the smoother should completely
+    /// reset to the current value.
+    fn update_smoother(&mut self, sample_rate: f32, reset: bool);
 
     /// Internal implementation detail for implementing [internals::Params]. This should not be used
     /// directly.

@@ -99,14 +99,6 @@ impl Display for EnumParamInner {
 impl<T: Enum> Param for EnumParam<T> {
     type Plain = T;
 
-    fn update_smoother(&mut self, sample_rate: f32, reset: bool) {
-        self.inner.update_smoother(sample_rate, reset)
-    }
-
-    fn set_from_string(&mut self, string: &str) -> bool {
-        self.inner.set_from_string(string)
-    }
-
     fn plain_value(&self) -> Self::Plain {
         T::from_index(self.inner.plain_value() as usize)
     }
@@ -140,6 +132,14 @@ impl<T: Enum> Param for EnumParam<T> {
         T::from_index(self.inner.preview_plain(normalized) as usize)
     }
 
+    fn set_from_string(&mut self, string: &str) -> bool {
+        self.inner.set_from_string(string)
+    }
+
+    fn update_smoother(&mut self, sample_rate: f32, reset: bool) {
+        self.inner.update_smoother(sample_rate, reset)
+    }
+
     fn as_ptr(&self) -> ParamPtr {
         self.inner.as_ptr()
     }
@@ -147,20 +147,6 @@ impl<T: Enum> Param for EnumParam<T> {
 
 impl Param for EnumParamInner {
     type Plain = i32;
-
-    fn update_smoother(&mut self, sample_rate: f32, reset: bool) {
-        self.inner.update_smoother(sample_rate, reset)
-    }
-
-    fn set_from_string(&mut self, string: &str) -> bool {
-        match self.variants.iter().position(|n| n == &string) {
-            Some(idx) => {
-                self.inner.set_plain_value(idx as i32);
-                true
-            }
-            None => false,
-        }
-    }
 
     fn plain_value(&self) -> Self::Plain {
         self.inner.plain_value()
@@ -196,6 +182,20 @@ impl Param for EnumParamInner {
 
     fn preview_plain(&self, normalized: f32) -> Self::Plain {
         self.inner.preview_plain(normalized)
+    }
+
+    fn set_from_string(&mut self, string: &str) -> bool {
+        match self.variants.iter().position(|n| n == &string) {
+            Some(idx) => {
+                self.inner.set_plain_value(idx as i32);
+                true
+            }
+            None => false,
+        }
+    }
+
+    fn update_smoother(&mut self, sample_rate: f32, reset: bool) {
+        self.inner.update_smoother(sample_rate, reset)
     }
 
     fn as_ptr(&self) -> ParamPtr {

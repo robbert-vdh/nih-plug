@@ -101,30 +101,6 @@ macro_rules! impl_plainparam {
         impl Param for $ty {
             type Plain = $plain;
 
-            fn update_smoother(&mut self, sample_rate: f32, reset: bool) {
-                if reset {
-                    self.smoothed.reset(self.value);
-                } else {
-                    self.smoothed.set_target(sample_rate, self.value);
-                }
-            }
-
-            fn set_from_string(&mut self, string: &str) -> bool {
-                let value = match &self.string_to_value {
-                    Some(f) => f(string),
-                    // TODO: Check how Rust's parse function handles trailing garbage
-                    None => string.parse().ok(),
-                };
-
-                match value {
-                    Some(plain) => {
-                        self.set_plain_value(plain);
-                        true
-                    }
-                    None => false,
-                }
-            }
-
             fn plain_value(&self) -> Self::Plain {
                 self.value
             }
@@ -183,6 +159,30 @@ macro_rules! impl_plainparam {
                     // so we can keep everything in this macro
                     Some(step_size) => self.range.snap_to_step(value, *step_size as Self::Plain),
                     None => value,
+                }
+            }
+
+            fn set_from_string(&mut self, string: &str) -> bool {
+                let value = match &self.string_to_value {
+                    Some(f) => f(string),
+                    // TODO: Check how Rust's parse function handles trailing garbage
+                    None => string.parse().ok(),
+                };
+
+                match value {
+                    Some(plain) => {
+                        self.set_plain_value(plain);
+                        true
+                    }
+                    None => false,
+                }
+            }
+
+            fn update_smoother(&mut self, sample_rate: f32, reset: bool) {
+                if reset {
+                    self.smoothed.reset(self.value);
+                } else {
+                    self.smoothed.set_target(sample_rate, self.value);
                 }
             }
 
