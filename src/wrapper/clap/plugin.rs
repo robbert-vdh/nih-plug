@@ -1,6 +1,8 @@
 use clap_sys::events::{
-    clap_event_header, clap_event_param_mod, clap_event_param_value, clap_input_events,
-    clap_output_events, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_MOD, CLAP_EVENT_PARAM_VALUE,
+    clap_event_header, clap_event_note, clap_event_param_mod, clap_event_param_value,
+    clap_input_events, clap_output_events, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_MIDI,
+    CLAP_EVENT_NOTE_EXPRESSION, CLAP_EVENT_NOTE_OFF, CLAP_EVENT_NOTE_ON, CLAP_EVENT_PARAM_MOD,
+    CLAP_EVENT_PARAM_VALUE,
 };
 use clap_sys::ext::params::{
     clap_param_info, clap_plugin_params, CLAP_EXT_PARAMS, CLAP_PARAM_IS_BYPASS,
@@ -17,7 +19,7 @@ use clap_sys::process::{
 use crossbeam::atomic::AtomicCell;
 use crossbeam::queue::ArrayQueue;
 use lazy_static::lazy_static;
-use parking_lot::RwLock;
+use parking_lot::{RwLock, RwLockWriteGuard};
 use std::cmp;
 use std::collections::{HashMap, VecDeque};
 use std::ffi::{c_void, CStr};
@@ -64,7 +66,6 @@ pub struct Wrapper<P: ClapPlugin> {
     ///
     /// TODO: Maybe load these lazily at some point instead of needing to spool them all to this
     ///       queue first
-    /// TODO: Read these in the process call.
     input_events: RwLock<VecDeque<NoteEvent>>,
     /// The current latency in samples, as set by the plugin through the [ProcessContext]. uses the
     /// latency extnesion
@@ -347,7 +348,14 @@ impl<P: ClapPlugin> Wrapper<P> {
 
     /// Handle an incoming CLAP event. You must clear [Self::input_events] first before calling this
     /// from the process function.
-    pub unsafe fn handle_event(&self, event: *const clap_event_header) {
+    ///
+    /// To save on mutex operations when handing MIDI events, the lock guard for the input events
+    /// need to be passed into this function.
+    pub unsafe fn handle_event(
+        &self,
+        event: *const clap_event_header,
+        input_events: &mut RwLockWriteGuard<VecDeque<NoteEvent>>,
+    ) {
         let raw_event = &*event;
         match (raw_event.space_id, raw_event.type_) {
             // TODO: Implement the event filter
@@ -369,7 +377,38 @@ impl<P: ClapPlugin> Wrapper<P> {
                     self.current_buffer_config.load().map(|c| c.sample_rate),
                 );
             }
-            // TODO: Handle MIDI if `P::ACCEPTS_MIDI` is true
+            (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_ON) => {
+                if P::ACCEPTS_MIDI {
+                    let event = &*(event as *const clap_event_note);
+                    input_events.push_back(NoteEvent::NoteOn {
+                        timing: raw_event.time,
+                        channel: event.channel as u8,
+                        note: event.key as u8,
+                        velocity: (event.velocity * 127.0).round() as u8,
+                    });
+                }
+            }
+            (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_OFF) => {
+                if P::ACCEPTS_MIDI {
+                    let event = &*(event as *const clap_event_note);
+                    input_events.push_back(NoteEvent::NoteOff {
+                        timing: raw_event.time,
+                        channel: event.channel as u8,
+                        note: event.key as u8,
+                        velocity: (event.velocity * 127.0).round() as u8,
+                    });
+                }
+            }
+            (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_EXPRESSION) => {
+                if P::ACCEPTS_MIDI {
+                    // TODO: Implement pressure and other expressions along with MIDI CCs
+                }
+            }
+            (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_MIDI) => {
+                if P::ACCEPTS_MIDI {
+                    // TODO: Implement raw MIDI handling once we add CCs
+                }
+            }
             // TODO: Make sure this only gets logged in debug mode
             _ => nih_log!(
                 "Unhandled CLAP event type {} for namespace {}",
@@ -455,13 +494,15 @@ impl<P: ClapPlugin> Wrapper<P> {
         process_wrapper(|| {
             // We need to handle incoming automation and MIDI events. Since we don't support sample
             // accuration automation yet and there's no way to get the last event for a parameter,
-            // we'll process every incomingevent.
+            // we'll process every incoming event.
             let process = &*process;
             if !process.in_events.is_null() {
+                let mut input_events_guard = wrapper.input_events.write();
+
                 let num_events = ((*process.in_events).size)(&*process.in_events);
                 for event_idx in 0..num_events {
                     let event = ((*process.in_events).get)(&*process.in_events, event_idx);
-                    wrapper.handle_event(event);
+                    wrapper.handle_event(event, &mut input_events_guard);
                 }
             }
 
@@ -761,10 +802,12 @@ impl<P: ClapPlugin> Wrapper<P> {
         let wrapper = &*(plugin as *const Self);
 
         if !in_.is_null() {
+            let mut input_events_guard = wrapper.input_events.write();
+
             let num_events = ((*in_).size)(&*in_);
             for event_idx in 0..num_events {
                 let event = ((*in_).get)(&*in_, event_idx);
-                wrapper.handle_event(event);
+                wrapper.handle_event(event, &mut input_events_guard);
             }
         }
 
