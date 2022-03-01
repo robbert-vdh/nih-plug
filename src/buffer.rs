@@ -16,50 +16,34 @@ pub struct Buffer<'a> {
     output_slices: Vec<&'a mut [f32]>,
 }
 
-impl<'a> Buffer<'a> {
-    /// Returns true if this buffer does not contain any samples.
-    pub fn is_empty(&self) -> bool {
-        self.output_slices.is_empty() || self.output_slices[0].is_empty()
-    }
-
-    /// Obtain the raw audio buffers.
-    pub fn as_slice(&mut self) -> &mut [&'a mut [f32]] {
-        &mut self.output_slices
-    }
-
-    /// Iterate over the samples, returning a channel iterator for each sample.
-    pub fn iter_mut<'slice>(&'slice mut self) -> Samples<'slice, 'a> {
-        Samples {
-            buffers: self.output_slices.as_mut_slice(),
-            current_sample: 0,
-            _marker: PhantomData,
-        }
-    }
-
-    /// Access the raw output slice vector. This neds to be resized to match the number of output
-    /// channels during the plugin's initialization. Then during audio processing, these slices
-    /// should be updated to point to the plugin's audio buffers.
-    ///
-    /// # Safety
-    ///
-    /// The stored slices must point to live data when this object is passed to the plugins' process
-    /// function. The rest of this object also assumes all channel lengths are equal. Panics will
-    /// likely occur if this is not the case.
-    pub unsafe fn as_raw_vec(&mut self) -> &mut Vec<&'a mut [f32]> {
-        &mut self.output_slices
-    }
-}
-
 /// An iterator over all samples in the buffer, yielding iterators over each channel for every
 /// sample. This iteration order offers good cache locality for per-sample access.
-pub struct Samples<'slice, 'sample: 'slice> {
+pub struct SamplesIter<'slice, 'sample: 'slice> {
     /// The raw output buffers.
     pub(self) buffers: *mut [&'sample mut [f32]],
     pub(self) current_sample: usize,
     pub(self) _marker: PhantomData<&'slice mut [&'sample mut [f32]]>,
 }
 
-impl<'slice, 'sample> Iterator for Samples<'slice, 'sample> {
+/// Can construct iterators over actual iterator over the channel data for a sample, yielded by
+/// [Samples].
+pub struct Channels<'slice, 'sample: 'slice> {
+    /// The raw output buffers.
+    pub(self) buffers: *mut [&'sample mut [f32]],
+    pub(self) current_sample: usize,
+    pub(self) _marker: PhantomData<&'slice mut [&'sample mut [f32]]>,
+}
+
+/// The actual iterator over the channel data for a sample, yielded by [Channels].
+pub struct ChannelsIter<'slice, 'sample: 'slice> {
+    /// The raw output buffers.
+    pub(self) buffers: *mut [&'sample mut [f32]],
+    pub(self) current_sample: usize,
+    pub(self) current_channel: usize,
+    pub(self) _marker: PhantomData<&'slice mut [&'sample mut [f32]]>,
+}
+
+impl<'slice, 'sample> Iterator for SamplesIter<'slice, 'sample> {
     type Item = Channels<'slice, 'sample>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -81,40 +65,6 @@ impl<'slice, 'sample> Iterator for Samples<'slice, 'sample> {
     fn size_hint(&self) -> (usize, Option<usize>) {
         let remaining = unsafe { (*self.buffers)[0].len() } - self.current_sample;
         (remaining, Some(remaining))
-    }
-}
-
-impl ExactSizeIterator for Samples<'_, '_> {}
-
-/// Can construct iterators over actual iterator over the channel data for a sample, yielded by
-/// [Samples].
-pub struct Channels<'slice, 'sample: 'slice> {
-    /// The raw output buffers.
-    pub(self) buffers: *mut [&'sample mut [f32]],
-    pub(self) current_sample: usize,
-    pub(self) _marker: PhantomData<&'slice mut [&'sample mut [f32]]>,
-}
-
-/// The actual iterator over the channel data for a sample, yielded by [Channels].
-pub struct ChannelsIter<'slice, 'sample: 'slice> {
-    /// The raw output buffers.
-    pub(self) buffers: *mut [&'sample mut [f32]],
-    pub(self) current_sample: usize,
-    pub(self) current_channel: usize,
-    pub(self) _marker: PhantomData<&'slice mut [&'sample mut [f32]]>,
-}
-
-impl<'slice, 'sample> IntoIterator for Channels<'slice, 'sample> {
-    type Item = &'sample mut f32;
-    type IntoIter = ChannelsIter<'slice, 'sample>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        ChannelsIter {
-            buffers: self.buffers,
-            current_sample: self.current_sample,
-            current_channel: 0,
-            _marker: self._marker,
-        }
     }
 }
 
@@ -146,7 +96,57 @@ impl<'slice, 'sample> Iterator for ChannelsIter<'slice, 'sample> {
     }
 }
 
+impl<'slice, 'sample> IntoIterator for Channels<'slice, 'sample> {
+    type Item = &'sample mut f32;
+    type IntoIter = ChannelsIter<'slice, 'sample>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        ChannelsIter {
+            buffers: self.buffers,
+            current_sample: self.current_sample,
+            current_channel: 0,
+            _marker: self._marker,
+        }
+    }
+}
+
+impl ExactSizeIterator for SamplesIter<'_, '_> {}
+
 impl ExactSizeIterator for ChannelsIter<'_, '_> {}
+
+impl<'a> Buffer<'a> {
+    /// Returns true if this buffer does not contain any samples.
+    pub fn is_empty(&self) -> bool {
+        self.output_slices.is_empty() || self.output_slices[0].is_empty()
+    }
+
+    /// Obtain the raw audio buffers.
+    pub fn as_slice(&mut self) -> &mut [&'a mut [f32]] {
+        &mut self.output_slices
+    }
+
+    /// Iterate over the samples, returning a channel iterator for each sample.
+    pub fn iter_mut<'slice>(&'slice mut self) -> SamplesIter<'slice, 'a> {
+        SamplesIter {
+            buffers: self.output_slices.as_mut_slice(),
+            current_sample: 0,
+            _marker: PhantomData,
+        }
+    }
+
+    /// Access the raw output slice vector. This neds to be resized to match the number of output
+    /// channels during the plugin's initialization. Then during audio processing, these slices
+    /// should be updated to point to the plugin's audio buffers.
+    ///
+    /// # Safety
+    ///
+    /// The stored slices must point to live data when this object is passed to the plugins' process
+    /// function. The rest of this object also assumes all channel lengths are equal. Panics will
+    /// likely occur if this is not the case.
+    pub unsafe fn as_raw_vec(&mut self) -> &mut Vec<&'a mut [f32]> {
+        &mut self.output_slices
+    }
+}
 
 impl<'slice, 'sample> Channels<'slice, 'sample> {
     /// Get the number of channels.
