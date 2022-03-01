@@ -15,7 +15,7 @@ use std::collections::{HashMap, VecDeque};
 use std::ffi::{c_void, CStr};
 use std::os::raw::c_char;
 use std::ptr;
-use std::sync::atomic::AtomicU32;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::thread::{self, ThreadId};
 
 use super::context::WrapperProcessContext;
@@ -49,6 +49,9 @@ pub struct Wrapper<P: ClapPlugin> {
     /// The current buffer configuration, containing the sample rate and the maximum block size.
     /// Will be set in `clap_plugin::activate()`.
     current_buffer_config: AtomicCell<Option<BufferConfig>>,
+    /// Whether the plugin is currently bypassed. This is not yet integrated with the `Plugin`
+    /// trait.
+    bypass_state: AtomicBool,
     /// The incoming events for the plugin, if `P::ACCEPTS_MIDI` is set.
     ///
     /// TODO: Maybe load these lazily at some point instead of needing to spool them all to this
@@ -176,6 +179,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 num_output_channels: P::DEFAULT_NUM_OUTPUTS,
             }),
             current_buffer_config: AtomicCell::new(None),
+            bypass_state: AtomicBool::new(false),
             input_events: RwLock::new(VecDeque::with_capacity(512)),
             current_latency: AtomicU32::new(0),
 
@@ -407,7 +411,27 @@ impl<P: ClapPlugin> Wrapper<P> {
         param_id: clap_id,
         value: *mut f64,
     ) -> bool {
-        todo!();
+        let wrapper = &*(plugin as *const Self);
+
+        if value.is_null() {
+            return false;
+        }
+
+        if param_id == *BYPASS_PARAM_HASH {
+            *value = if wrapper.bypass_state.load(Ordering::SeqCst) {
+                1.0
+            } else {
+                0.0
+            };
+
+            true
+        } else if let Some(param_ptr) = wrapper.param_by_hash.get(&param_id) {
+            *value =
+                param_ptr.normalized_value() as f64 * param_ptr.step_count().unwrap_or(1) as f64;
+            true
+        } else {
+            false
+        }
     }
 
     unsafe extern "C" fn ext_params_value_to_text(
