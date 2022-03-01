@@ -111,6 +111,7 @@ impl Smoother<f32> {
     // the smoothing period is over. This should be called exactly once per sample.
     // Yes, Clippy, like I said, this was intentional
     #[allow(clippy::should_implement_trait)]
+    #[inline]
     pub fn next(&self) -> f32 {
         self.next_step(1)
     }
@@ -119,6 +120,7 @@ impl Smoother<f32> {
     /// equivalent to calling this function with a `steps` value of 1. Calling this function with a
     /// `steps` value of `n` means will cause you to skip the next `n - 1` values and return the
     /// `n`th value.
+    #[inline]
     pub fn next_step(&self, steps: u32) -> f32 {
         nih_debug_assert_ne!(steps, 0);
 
