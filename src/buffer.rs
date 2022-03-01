@@ -1,5 +1,7 @@
 use std::marker::PhantomData;
 
+// TODO: Does adding `#[inline]` to the .next() functions make any difference?
+
 /// The audio buffers used during processing. This contains the output audio output buffers with the
 /// inputs already copied to the outputs. You can either use the iterator adapters to conveniently
 /// and efficiently iterate over the samples, or you can do your own thing using the raw audio
