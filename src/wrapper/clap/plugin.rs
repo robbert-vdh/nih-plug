@@ -703,7 +703,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 dest,
                 // CLAP does not have a separate unit, so we'll include the unit here
                 &param_ptr.normalized_value_to_string(
-                    value as f32 * param_ptr.step_count().unwrap_or(1) as f32,
+                    value as f32 / param_ptr.step_count().unwrap_or(1) as f32,
                     true,
                 ),
             );
@@ -745,7 +745,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 Some(v) => v as f64,
                 None => return false,
             };
-            *value = normalized_value;
+            *value = normalized_value * param_ptr.step_count().unwrap_or(1) as f64;
 
             true
         } else {
