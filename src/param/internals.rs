@@ -149,6 +149,22 @@ impl ParamPtr {
         }
     }
 
+    /// Allocate memory for block-based smoothing. The [crate::Plugin::initialize_block_smoothers()]
+    /// method will do this for every smoother.
+    ///
+    /// # Safety
+    ///
+    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
+    /// still alive.
+    pub unsafe fn initialize_block_smoother(&mut self, max_block_size: usize) {
+        match &self {
+            ParamPtr::FloatParam(p) => (**p).initialize_block_smoother(max_block_size),
+            ParamPtr::IntParam(p) => (**p).initialize_block_smoother(max_block_size),
+            ParamPtr::BoolParam(p) => (**p).initialize_block_smoother(max_block_size),
+            ParamPtr::EnumParam(p) => (**p).initialize_block_smoother(max_block_size),
+        }
+    }
+
     /// Set this parameter based on a string. Returns whether the updating succeeded. That can fail
     /// if the string cannot be parsed.
     ///

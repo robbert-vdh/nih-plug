@@ -67,6 +67,10 @@ pub trait Param: Display {
     /// reset to the current value.
     fn update_smoother(&mut self, sample_rate: f32, reset: bool);
 
+    /// Allocate memory for block-based smoothing. The [crate::Plugin::initialize_block_smoothers()]
+    /// method will do this for every smoother.
+    fn initialize_block_smoother(&mut self, max_block_size: usize);
+
     /// Internal implementation detail for implementing [internals::Params]. This should not be used
     /// directly.
     fn as_ptr(&self) -> internals::ParamPtr;

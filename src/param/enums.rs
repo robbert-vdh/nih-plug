@@ -140,6 +140,10 @@ impl<T: Enum> Param for EnumParam<T> {
         self.inner.update_smoother(sample_rate, reset)
     }
 
+    fn initialize_block_smoother(&mut self, max_block_size: usize) {
+        self.inner.initialize_block_smoother(max_block_size)
+    }
+
     fn as_ptr(&self) -> ParamPtr {
         self.inner.as_ptr()
     }
@@ -196,6 +200,10 @@ impl Param for EnumParamInner {
 
     fn update_smoother(&mut self, sample_rate: f32, reset: bool) {
         self.inner.update_smoother(sample_rate, reset)
+    }
+
+    fn initialize_block_smoother(&mut self, max_block_size: usize) {
+        self.inner.initialize_block_smoother(max_block_size)
     }
 
     fn as_ptr(&self) -> ParamPtr {

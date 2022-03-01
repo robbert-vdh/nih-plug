@@ -1,4 +1,5 @@
 use atomic_float::AtomicF32;
+use parking_lot::Mutex;
 use std::sync::atomic::{AtomicI32, Ordering};
 
 /// Controls if and how parameters gets smoothed.
@@ -37,6 +38,10 @@ pub struct Smoother<T> {
     current: AtomicF32,
     /// The value we're smoothing towards
     target: T,
+
+    /// A dense buffer containing smoothed values for an entire block of audio. Useful when using
+    /// [crate::Buffer::iter_blocks()] to process small blocks of audio multiple times.
+    block_values: Mutex<Vec<T>>,
 }
 
 impl<T: Default> Default for Smoother<T> {
@@ -47,6 +52,8 @@ impl<T: Default> Default for Smoother<T> {
             step_size: Default::default(),
             current: AtomicF32::new(0.0),
             target: Default::default(),
+
+            block_values: Mutex::new(Vec::new()),
         }
     }
 }
@@ -69,6 +76,15 @@ impl<T: Default> Smoother<T> {
     /// recompute something wheenver this parameter changes.
     pub fn is_smoothing(&self) -> bool {
         self.steps_left.load(Ordering::Relaxed) > 0
+    }
+
+    /// Allocate memory to store smoothed values for an entire block of audio. Call this in
+    /// [crate::Plugin::initialize()] with the same max block size you are going to pass to
+    /// [crate::Buffer::iter_blocks()].
+    pub fn initialize_block_smoother(&mut self, max_block_size: usize) {
+        self.block_values
+            .lock()
+            .resize_with(max_block_size, || T::default());
     }
 }
 

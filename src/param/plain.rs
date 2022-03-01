@@ -186,6 +186,10 @@ macro_rules! impl_plainparam {
                 }
             }
 
+            fn initialize_block_smoother(&mut self, max_block_size: usize) {
+                self.smoothed.initialize_block_smoother(max_block_size);
+            }
+
             fn as_ptr(&self) -> ParamPtr {
                 ParamPtr::$ty(self as *const $ty as *mut $ty)
             }

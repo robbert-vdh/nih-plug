@@ -122,6 +122,8 @@ impl Param for BoolParam {
         // Can't really smooth a binary parameter now can you
     }
 
+    fn initialize_block_smoother(&mut self, _max_block_size: usize) {}
+
     fn as_ptr(&self) -> ParamPtr {
         ParamPtr::BoolParam(self as *const BoolParam as *mut BoolParam)
     }
