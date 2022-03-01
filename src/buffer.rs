@@ -483,7 +483,10 @@ impl<'slice, 'sample> Block<'slice, 'sample> {
     /// Returns a `None` value if `sample_index` is out of bounds.
     #[cfg(feature = "simd")]
     #[inline]
-    pub fn to_simd<const LANES: usize>(&self, sample_index: usize) -> Option<Simd<f32, LANES>>
+    pub fn to_channel_simd<const LANES: usize>(
+        &self,
+        sample_index: usize,
+    ) -> Option<Simd<f32, LANES>>
     where
         LaneCount<LANES>: SupportedLaneCount,
     {
@@ -512,7 +515,7 @@ impl<'slice, 'sample> Block<'slice, 'sample> {
     /// Undefined behavior if `LANES > block.len()` or if `sample_index > block.len()`.
     #[cfg(feature = "simd")]
     #[inline]
-    pub unsafe fn to_simd_unchecked<const LANES: usize>(
+    pub unsafe fn to_channel_simd_unchecked<const LANES: usize>(
         &self,
         sample_index: usize,
     ) -> Simd<f32, LANES>
@@ -536,7 +539,7 @@ impl<'slice, 'sample> Block<'slice, 'sample> {
     #[cfg(feature = "simd")]
     #[allow(clippy::wrong_self_convention)]
     #[inline]
-    pub fn from_simd<const LANES: usize>(
+    pub fn from_channel_simd<const LANES: usize>(
         &mut self,
         sample_index: usize,
         vector: Simd<f32, LANES>,
@@ -571,7 +574,7 @@ impl<'slice, 'sample> Block<'slice, 'sample> {
     #[cfg(feature = "simd")]
     #[allow(clippy::wrong_self_convention)]
     #[inline]
-    pub unsafe fn from_simd_unchecked<const LANES: usize>(
+    pub unsafe fn from_channel_simd_unchecked<const LANES: usize>(
         &mut self,
         sample_index: usize,
         vector: Simd<f32, LANES>,
