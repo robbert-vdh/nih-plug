@@ -1,5 +1,8 @@
 use std::marker::PhantomData;
 
+#[cfg(feature = "simd")]
+use std::simd::{LaneCount, Simd, SupportedLaneCount};
+
 // TODO: Does adding `#[inline]` to the .next() functions make any difference?
 
 /// The audio buffers used during processing. This contains the output audio output buffers with the
@@ -340,6 +343,91 @@ impl<'slice, 'sample> Channels<'slice, 'sample> {
         (*self.buffers)
             .get_unchecked_mut(channel_index)
             .get_unchecked_mut(self.current_sample)
+    }
+
+    /// Get a SIMD vector containing the channel data for this buffer. If `LANES > channels.len()`
+    /// then this will be padded with zeroes. If `LANES < channels.len()` then this won't contain
+    /// all values.
+    #[cfg(feature = "simd")]
+    #[inline]
+    pub fn to_simd<const LANES: usize>(&self) -> Simd<f32, LANES>
+    where
+        LaneCount<LANES>: SupportedLaneCount,
+    {
+        let used_lanes = self.len().max(LANES);
+        let mut values = [0.0; LANES];
+        for (channel_idx, value) in values.iter_mut().enumerate().take(used_lanes) {
+            *value = unsafe {
+                *(*self.buffers)
+                    .get_unchecked(channel_idx)
+                    .get_unchecked(self.current_sample)
+            };
+        }
+
+        Simd::from_array(values)
+    }
+
+    /// Get a SIMD vector containing the channel data for this buffer. Will always read exactly
+    /// `LANES` channels.
+    ///
+    /// # Safety
+    ///
+    /// Undefined behavior if `LANES > channels.len()`.
+    #[cfg(feature = "simd")]
+    #[inline]
+    pub unsafe fn to_simd_unchecked<const LANES: usize>(&self) -> Simd<f32, LANES>
+    where
+        LaneCount<LANES>: SupportedLaneCount,
+    {
+        let mut values = [0.0; LANES];
+        for (channel_idx, value) in values.iter_mut().enumerate() {
+            *value = *(*self.buffers)
+                .get_unchecked(channel_idx)
+                .get_unchecked(self.current_sample);
+        }
+
+        Simd::from_array(values)
+    }
+
+    /// Write data from a SIMD vector to this sample's channel data. This takes the padding added by
+    /// [Self::to_simd()] into account.
+    #[cfg(feature = "simd")]
+    #[allow(clippy::wrong_self_convention)]
+    #[inline]
+    pub fn from_simd<const LANES: usize>(&mut self, vector: Simd<f32, LANES>)
+    where
+        LaneCount<LANES>: SupportedLaneCount,
+    {
+        let used_lanes = self.len().max(LANES);
+        let values = vector.to_array();
+        for (channel_idx, value) in values.into_iter().enumerate().take(used_lanes) {
+            *unsafe {
+                (*self.buffers)
+                    .get_unchecked_mut(channel_idx)
+                    .get_unchecked_mut(self.current_sample)
+            } = value;
+        }
+    }
+
+    /// Write data from a SIMD vector to this sample's channel data. This assumes `LANES` matches
+    /// exactly with the number of channels in the buffer.
+    ///
+    /// # Safety
+    ///
+    /// Undefined behavior if `LANES > channels.len()`.
+    #[cfg(feature = "simd")]
+    #[allow(clippy::wrong_self_convention)]
+    #[inline]
+    pub unsafe fn from_simd_unchecked<const LANES: usize>(&mut self, vector: Simd<f32, LANES>)
+    where
+        LaneCount<LANES>: SupportedLaneCount,
+    {
+        let values = vector.to_array();
+        for (channel_idx, value) in values.into_iter().enumerate() {
+            *(*self.buffers)
+                .get_unchecked_mut(channel_idx)
+                .get_unchecked_mut(self.current_sample) = value;
+        }
     }
 }
 

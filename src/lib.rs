@@ -1,6 +1,8 @@
 // TODO: Once everything is more fleshed out, document the basic usage of this library and
 //       restructure these re-exports into a more useful prelude
 
+#![cfg_attr(feature = "simd", feature(portable_simd))]
+
 #[macro_use]
 pub mod debug;
 

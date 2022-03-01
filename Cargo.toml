@@ -27,6 +27,9 @@ default = []
 # Enabling this feature will cause the plugin to terminate when allocations
 # occur in the processing function while compiling in debug mode.
 assert_process_allocs = ["assert_no_alloc"]
+# Add adapters to the Buffer object for reading the channel data to and from
+# `std::simd` vectors. Requires a nightly compiler.
+simd = []
 
 [dependencies]
 nih_plug_derive = { path = "nih_plug_derive" }
