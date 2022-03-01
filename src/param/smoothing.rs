@@ -2,6 +2,8 @@ use atomic_float::AtomicF32;
 use parking_lot::{MappedMutexGuard, Mutex, MutexGuard};
 use std::sync::atomic::{AtomicI32, Ordering};
 
+use crate::buffer::Block;
+
 /// Controls if and how parameters gets smoothed.
 pub enum SmoothingStyle {
     /// No smoothing is applied. The parameter's `value` field contains the latest sample value
@@ -140,9 +142,9 @@ impl Smoother<f32> {
     ///
     /// Returns a `None` value if the block length exceed's the allocated capacity.
     #[inline]
-    pub fn next_block(&self, block_len: usize) -> Option<MappedMutexGuard<[f32]>> {
+    pub fn next_block(&self, block: &Block) -> Option<MappedMutexGuard<[f32]>> {
         let mut block_values = self.block_values.lock();
-        if block_values.len() < block_len {
+        if block_values.len() < block.len() {
             return None;
         }
 
@@ -150,10 +152,10 @@ impl Smoother<f32> {
         //       unsmoothed parts. Another worthwhile optimization would be to remember if the
         //       buffer is already filled with the target value and [Self::is_smoothing()] is false.
         //       In that case we wouldn't need to do anything ehre.
-        (&mut block_values[..block_len]).fill_with(|| self.next());
+        (&mut block_values[..block.len()]).fill_with(|| self.next());
 
         Some(MutexGuard::map(block_values, |values| {
-            &mut values[..block_len]
+            &mut values[..block.len()]
         }))
     }
 
