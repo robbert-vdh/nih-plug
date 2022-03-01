@@ -141,6 +141,10 @@ impl Smoother<f32> {
     /// allocate memory for the block smoothing.
     ///
     /// Returns a `None` value if the block length exceed's the allocated capacity.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this function is called again while another block value slice is still alive.
     #[inline]
     pub fn next_block(&self, block: &Block) -> Option<AtomicRefMut<[f32]>> {
         let mut block_values = self.block_values.borrow_mut();
@@ -238,6 +242,10 @@ impl Smoother<i32> {
     /// allocate memory for the block smoothing.
     ///
     /// Returns a `None` value if the block length exceed's the allocated capacity.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this function is called again while another block value slice is still alive.
     #[inline]
     pub fn next_block(&self, block: &Block) -> Option<AtomicRefMut<[i32]>> {
         let mut block_values = self.block_values.borrow_mut();
