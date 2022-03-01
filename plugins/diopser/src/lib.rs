@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+#![cfg_attr(feature = "simd", feature(portable_simd))]
+
 #[macro_use]
 extern crate nih_plug;
 
@@ -28,7 +30,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 #[cfg(feature = "simd")]
-use packed_simd::f32x2;
+use std::simd::f32x2;
 
 mod filter;
 
@@ -282,10 +284,10 @@ impl Plugin for Diopser {
             // supports steroo audio.
             #[cfg(feature = "simd")]
             {
-                let mut samples =
-                    f32x2::new(*unsafe { channel_samples.get_unchecked_mut(0) }, *unsafe {
-                        channel_samples.get_unchecked_mut(1)
-                    });
+                let mut samples = f32x2::from_array([
+                    *unsafe { channel_samples.get_unchecked_mut(0) },
+                    *unsafe { channel_samples.get_unchecked_mut(1) },
+                ]);
 
                 for filter in self
                     .filters
@@ -295,8 +297,8 @@ impl Plugin for Diopser {
                     samples = filter.process(samples);
                 }
 
-                *unsafe { channel_samples.get_unchecked_mut(0) } = samples.extract(0);
-                *unsafe { channel_samples.get_unchecked_mut(1) } = samples.extract(1);
+                *unsafe { channel_samples.get_unchecked_mut(0) } = samples.as_array()[0];
+                *unsafe { channel_samples.get_unchecked_mut(1) } = samples.as_array()[1];
             }
 
             #[cfg(not(feature = "simd"))]

@@ -10,10 +10,8 @@ crate-type = ["cdylib"]
 
 [features]
 default = ["simd"]
-# Make it go fast, vroom
-simd = ["packed_simd"]
+# Make it go fast, vroom. Requires a nightly compiler.
+simd = []
 
 [dependencies]
 nih_plug = { path = "../../", features = ["assert_process_allocs"] }
-
-packed_simd = { version = "0.3.6", package = "packed_simd_2", optional = true }

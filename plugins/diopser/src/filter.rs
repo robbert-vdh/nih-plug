@@ -18,7 +18,7 @@ use std::f32::consts;
 use std::ops::{Add, Mul, Sub};
 
 #[cfg(feature = "simd")]
-use packed_simd::f32x2;
+use std::simd::f32x2;
 
 /// A simple biquad filter with functions for generating coefficients for an all-pass filter.
 ///
