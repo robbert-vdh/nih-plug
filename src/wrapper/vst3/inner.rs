@@ -197,7 +197,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
 
     /// Convenience function for setting a value for a parameter as triggered by a VST3 parameter
     /// update. The same rate is for updating parameter smoothing.
-    pub unsafe fn set_normalized_value_by_hash(
+    pub fn set_normalized_value_by_hash(
         &self,
         hash: u32,
         normalized_value: f32,
@@ -211,11 +211,11 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         } else if let Some(param_ptr) = self.param_by_hash.get(&hash) {
             // Also update the parameter's smoothing if applicable
             match (param_ptr, sample_rate) {
-                (_, Some(sample_rate)) => {
+                (_, Some(sample_rate)) => unsafe {
                     param_ptr.set_normalized_value(normalized_value);
                     param_ptr.update_smoother(sample_rate, false);
-                }
-                _ => param_ptr.set_normalized_value(normalized_value),
+                },
+                _ => unsafe { param_ptr.set_normalized_value(normalized_value) },
             }
 
             kResultOk

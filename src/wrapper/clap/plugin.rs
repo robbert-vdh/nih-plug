@@ -1,4 +1,7 @@
-use clap_sys::events::{clap_input_events, clap_output_events};
+use clap_sys::events::{
+    clap_event_header, clap_event_param_mod, clap_event_param_value, clap_input_events,
+    clap_output_events, CLAP_EVENT_PARAM_MOD, CLAP_EVENT_PARAM_VALUE,
+};
 use clap_sys::ext::params::{
     clap_param_info, clap_plugin_params, CLAP_EXT_PARAMS, CLAP_PARAM_IS_BYPASS,
     CLAP_PARAM_IS_STEPPED,
@@ -113,6 +116,15 @@ pub struct Wrapper<P: ClapPlugin> {
 pub enum Task {
     /// Inform the host that the latency has changed.
     LatencyChanged,
+}
+
+/// The types of CLAP parameter updates for events.
+pub enum ClapParamUpdate {
+    /// Set the parameter to this plain value. In our wrapper the plain values are the normalized
+    /// values multiplied by the step count for discrete parameters.
+    PlainValueSet(f64),
+    /// Add a delta to the parameter's current plain value (so again, multiplied by the step size).
+    PlainValueMod(f64),
 }
 
 /// Because CLAP has this [clap_host::request_host_callback()] function, we don't need to use
@@ -264,6 +276,93 @@ impl<P: ClapPlugin> Wrapper<P> {
         WrapperProcessContext {
             plugin: self,
             input_events_guard: self.input_events.write(),
+        }
+    }
+
+    /// Convenience function for setting a value for a parameter as triggered by a VST3 parameter
+    /// update. The same rate is for updating parameter smoothing.
+    ///
+    /// # Note
+    ///
+    /// These values are CLAP plain values, which include a step count multiplier for discrete
+    /// parameter values.
+    pub fn update_plain_value_by_hash(
+        &self,
+        hash: u32,
+        update: ClapParamUpdate,
+        sample_rate: Option<f32>,
+    ) -> bool {
+        if hash == *BYPASS_PARAM_HASH {
+            match update {
+                ClapParamUpdate::PlainValueSet(clap_plain_value) => self
+                    .bypass_state
+                    .store(clap_plain_value >= 0.5, Ordering::SeqCst),
+                ClapParamUpdate::PlainValueMod(clap_plain_mod) => {
+                    if clap_plain_mod > 0.0 {
+                        self.bypass_state.store(true, Ordering::SeqCst)
+                    } else if clap_plain_mod < 0.0 {
+                        self.bypass_state.store(false, Ordering::SeqCst)
+                    }
+                }
+            }
+
+            true
+        } else if let Some(param_ptr) = self.param_by_hash.get(&hash) {
+            let normalized_value = match update {
+                ClapParamUpdate::PlainValueSet(clap_plain_value) => {
+                    clap_plain_value as f32 / unsafe { param_ptr.step_count() }.unwrap_or(1) as f32
+                }
+                ClapParamUpdate::PlainValueMod(clap_plain_mod) => {
+                    let current_normalized_value = unsafe { param_ptr.normalized_value() };
+                    current_normalized_value
+                        + (clap_plain_mod as f32
+                            / unsafe { param_ptr.step_count() }.unwrap_or(1) as f32)
+                }
+            };
+
+            // Also update the parameter's smoothing if applicable
+            match (param_ptr, sample_rate) {
+                (_, Some(sample_rate)) => unsafe {
+                    param_ptr.set_normalized_value(normalized_value);
+                    param_ptr.update_smoother(sample_rate, false);
+                },
+                _ => unsafe { param_ptr.set_normalized_value(normalized_value) },
+            }
+
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Handle an incoming CLAP event. You must clear [Self::input_events] first before calling this
+    /// from the process function.
+    pub unsafe fn handle_event(&self, event: *const clap_event_header) {
+        let raw_event = &*event;
+        match raw_event.type_ {
+            CLAP_EVENT_PARAM_VALUE => {
+                let event = &*(event as *const clap_event_param_value);
+                self.update_plain_value_by_hash(
+                    event.param_id,
+                    ClapParamUpdate::PlainValueSet(event.value),
+                    self.current_buffer_config.load().map(|c| c.sample_rate),
+                );
+            }
+            CLAP_EVENT_PARAM_MOD => {
+                let event = &*(event as *const clap_event_param_mod);
+                self.update_plain_value_by_hash(
+                    event.param_id,
+                    ClapParamUpdate::PlainValueMod(event.amount),
+                    self.current_buffer_config.load().map(|c| c.sample_rate),
+                );
+            }
+            // TODO: Handle MIDI
+            // TODO: Make sure this only gets logged in debug mode
+            _ => nih_log!(
+                "Unhandled CLAP event type {} for namespace {}",
+                raw_event.type_,
+                raw_event.space_id
+            ),
         }
     }
 
@@ -459,8 +558,36 @@ impl<P: ClapPlugin> Wrapper<P> {
         display: *mut c_char,
         size: u32,
     ) -> bool {
-        // TODO: Don't forget to add the unit
-        todo!();
+        let wrapper = &*(plugin as *const Self);
+
+        if display.is_null() {
+            return false;
+        }
+
+        let dest = std::slice::from_raw_parts_mut(display, size as usize);
+
+        if param_id == *BYPASS_PARAM_HASH {
+            if value > 0.5 {
+                strlcpy(dest, "Bypassed")
+            } else {
+                strlcpy(dest, "Enabled")
+            }
+
+            true
+        } else if let Some(param_ptr) = wrapper.param_by_hash.get(&param_id) {
+            strlcpy(
+                dest,
+                // CLAP does not have a separate unit, so we'll include the unit here
+                &param_ptr.normalized_value_to_string(
+                    value as f32 * param_ptr.step_count().unwrap_or(1) as f32,
+                    true,
+                ),
+            );
+
+            true
+        } else {
+            false
+        }
     }
 
     unsafe extern "C" fn ext_params_text_to_value(
@@ -469,7 +596,37 @@ impl<P: ClapPlugin> Wrapper<P> {
         display: *const c_char,
         value: *mut f64,
     ) -> bool {
-        todo!();
+        let wrapper = &*(plugin as *const Self);
+
+        if display.is_null() || value.is_null() {
+            return false;
+        }
+
+        let display = match CStr::from_ptr(display).to_str() {
+            Ok(s) => s,
+            Err(_) => return false,
+        };
+
+        if param_id == *BYPASS_PARAM_HASH {
+            let normalized_valeu = match display {
+                "Bypassed" => 1.0,
+                "Enabled" => 0.0,
+                _ => return false,
+            };
+            *value = normalized_valeu;
+
+            true
+        } else if let Some(param_ptr) = wrapper.param_by_hash.get(&param_id) {
+            let normalized_value = match param_ptr.string_to_normalized_value(display) {
+                Some(v) => v as f64,
+                None => return false,
+            };
+            *value = normalized_value;
+
+            true
+        } else {
+            false
+        }
     }
 
     unsafe extern "C" fn ext_params_flush(
@@ -477,7 +634,17 @@ impl<P: ClapPlugin> Wrapper<P> {
         in_: *const clap_input_events,
         out: *const clap_output_events,
     ) {
-        todo!();
+        let wrapper = &*(plugin as *const Self);
+
+        if !in_.is_null() {
+            let num_events = ((*in_).size)(&*in_);
+            for event_idx in 0..num_events {
+                let event = ((*in_).get)(&*in_, event_idx);
+                wrapper.handle_event(event);
+            }
+        }
+
+        // TODO: Handle automation/outputs
     }
 }
 
