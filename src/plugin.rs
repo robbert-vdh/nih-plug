@@ -95,10 +95,31 @@ pub trait Plugin: Default + Send + Sync + 'static {
     /// abort the program when any allocation accurs in the process function while running in debug
     /// mode.
     ///
+    /// The framework provides convenient iterators on the [Buffer] object to process audio either
+    /// either per-sample per-channel, or per-block per-channel per-sample. The first approach is
+    /// preferred for plugins that don't require block-based processing because of their use of
+    /// per-sample SIMD or excessive branching. The parameter smoothers can also work in both modes:
+    /// use [crate::Smoother::next()] for per-sample processing, and [crate::Smoother::next_block()]
+    /// for block-based processing. In order to use block-based smoothing, you will need to call
+    /// [Self::initialize_block_smoothers()] in your [Self::initialize()] function first to reserve
+    /// enough capacity in the smoothers.
+    ///
     /// TODO: Provide a way to access auxiliary input channels if the IO configuration is
     ///       assymetric
     /// TODO: Pass transport and other context information to the plugin
+    /// TODO: Create an example plugin that uses block-based processing
     fn process(&mut self, buffer: &mut Buffer, context: &mut impl ProcessContext) -> ProcessStatus;
+
+    /// Convenience function to allocate memory for block-based smoothing. Since this allocates
+    /// memory, this should be called in [Self::initialize()]. If you are going to use
+    /// [Buffer::iter_blocks] and want to use parameter smoothing in those blocks, then call this
+    /// function with the same maximum block size first before calling
+    /// [crate::Smoother::next_block()].
+    fn initialize_block_smoothers(&mut self, max_block_size: usize) {
+        for param in self.params().param_map().values_mut() {
+            unsafe { param.initialize_block_smoother(max_block_size) };
+        }
+    }
 }
 
 /// Provides auxiliary metadata needed for a CLAP plugin.
