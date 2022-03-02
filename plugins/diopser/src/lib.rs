@@ -369,6 +369,7 @@ impl Diopser {
             (frequency * 2.0f32.powf(spread_octaves)) - frequency
         };
 
+        // TODO: This wrecks the DSP load at high smoothing accuracy, perhaps also use SIMD here
         const MIN_FREQUENCY: f32 = 5.0;
         let max_frequency = self.sample_rate / 2.05;
         for filter_idx in 0..self.params.filter_stages.value as usize {
