@@ -1,5 +1,23 @@
 use std::ops::Deref;
 
+/// Early exit out of a function with the specified return value when one of the passed pointers is
+/// null.
+macro_rules! check_null_ptr {
+    ($ret:expr, $ptr:expr $(, $ptrs:expr)* $(, )?) => {
+        check_null_ptr_msg!("Null pointer passed to function", $ret, $ptr $(, $ptrs)*)
+    };
+}
+
+/// The same as [check_null_ptr!], but with a custom message.
+macro_rules! check_null_ptr_msg {
+    ($msg:expr, $ret:expr, $ptr:expr $(, $ptrs:expr)* $(, )?) => {
+        if $ptr.is_null() $(|| $ptrs.is_null())* {
+            nih_debug_assert_failure!($msg);
+            return $ret;
+        }
+    };
+}
+
 /// Send+Sync wrapper around CLAP host extension pointers.
 pub struct ClapPtr<T> {
     inner: *const T,

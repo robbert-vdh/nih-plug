@@ -1,3 +1,7 @@
+// Clippy doesn't understand it when we use a unit in our `check_null_ptr!()` maccro, even if we
+// explicitly pattern match on that unit
+#![allow(clippy::unused_unit)]
+
 use clap_sys::events::{
     clap_event_header, clap_event_note, clap_event_param_mod, clap_event_param_value,
     clap_input_events, clap_output_events, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_MIDI,
@@ -483,11 +487,8 @@ impl<P: ClapPlugin> Wrapper<P> {
         plugin: *const clap_plugin,
         process: *const clap_process,
     ) -> clap_process_status {
+        check_null_ptr!(CLAP_PROCESS_ERROR, plugin, process);
         let wrapper = &*(plugin as *const Self);
-
-        if process.is_null() {
-            return CLAP_PROCESS_ERROR;
-        }
 
         // Panic on allocations if the `assert_process_allocs` feature has been enabled, and make
         // sure that FTZ is set up correctly
@@ -525,7 +526,12 @@ impl<P: ClapPlugin> Wrapper<P> {
             );
 
             // Right now we don't handle any auxiliary outputs
-            nih_debug_assert!(!process.audio_outputs.is_null());
+            check_null_ptr_msg!(
+                "Null pointers passed for audio outputs in process function",
+                CLAP_PROCESS_ERROR,
+                process.audio_outputs,
+                (*process.audio_outputs).data32
+            );
             let audio_outputs = &*process.audio_outputs;
             let num_output_channels = audio_outputs.channel_count as usize;
 
@@ -536,7 +542,6 @@ impl<P: ClapPlugin> Wrapper<P> {
             //       flags?
             let mut output_buffer = wrapper.output_buffer.write();
             output_buffer.with_raw_vec(|output_slices| {
-                nih_debug_assert!(!audio_outputs.data32.is_null());
                 nih_debug_assert_eq!(num_output_channels, output_slices.len());
                 for (output_channel_idx, output_channel_slice) in
                     output_slices.iter_mut().enumerate()
@@ -597,11 +602,8 @@ impl<P: ClapPlugin> Wrapper<P> {
         plugin: *const clap_plugin,
         id: *const c_char,
     ) -> *const c_void {
+        check_null_ptr!(ptr::null(), plugin, id);
         let wrapper = &*(plugin as *const Self);
-
-        if id.is_null() {
-            return ptr::null();
-        }
 
         // TODO: Implement the other useful extensions. Like uh audio inputs.
         let id = CStr::from_ptr(id);
@@ -623,6 +625,7 @@ impl<P: ClapPlugin> Wrapper<P> {
     }
 
     unsafe extern "C" fn ext_params_count(plugin: *const clap_plugin) -> u32 {
+        check_null_ptr!(0, plugin);
         let wrapper = &*(plugin as *const Self);
 
         // NOTE: We add a bypass parameter ourselves on index `plugin.param_hashes.len()`, so
@@ -635,13 +638,11 @@ impl<P: ClapPlugin> Wrapper<P> {
         param_index: i32,
         param_info: *mut clap_param_info,
     ) -> bool {
+        check_null_ptr!(false, plugin, param_info);
         let wrapper = &*(plugin as *const Self);
 
         // Parameter index `self.param_ids.len()` is our own bypass parameter
-        if param_info.is_null()
-            || param_index < 0
-            || param_index > wrapper.param_hashes.len() as i32
-        {
+        if param_index < 0 || param_index > wrapper.param_hashes.len() as i32 {
             return false;
         }
 
@@ -694,11 +695,8 @@ impl<P: ClapPlugin> Wrapper<P> {
         param_id: clap_id,
         value: *mut f64,
     ) -> bool {
+        check_null_ptr!(false, plugin, value);
         let wrapper = &*(plugin as *const Self);
-
-        if value.is_null() {
-            return false;
-        }
 
         if param_id == *BYPASS_PARAM_HASH {
             *value = if wrapper.bypass_state.load(Ordering::SeqCst) {
@@ -724,11 +722,8 @@ impl<P: ClapPlugin> Wrapper<P> {
         display: *mut c_char,
         size: u32,
     ) -> bool {
+        check_null_ptr!(false, plugin, display);
         let wrapper = &*(plugin as *const Self);
-
-        if display.is_null() {
-            return false;
-        }
 
         let dest = std::slice::from_raw_parts_mut(display, size as usize);
 
@@ -762,11 +757,8 @@ impl<P: ClapPlugin> Wrapper<P> {
         display: *const c_char,
         value: *mut f64,
     ) -> bool {
+        check_null_ptr!(false, plugin, display, value);
         let wrapper = &*(plugin as *const Self);
-
-        if display.is_null() || value.is_null() {
-            return false;
-        }
 
         let display = match CStr::from_ptr(display).to_str() {
             Ok(s) => s,
@@ -800,6 +792,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         in_: *const clap_input_events,
         out: *const clap_output_events,
     ) {
+        check_null_ptr!((), plugin);
         let wrapper = &*(plugin as *const Self);
 
         if !in_.is_null() {

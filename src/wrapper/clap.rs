@@ -1,8 +1,10 @@
+#[macro_use]
+mod util;
+
 mod context;
 mod descriptor;
 mod factory;
 mod plugin;
-mod util;
 
 /// Re-export for the wrapper.
 pub use self::factory::Factory;
