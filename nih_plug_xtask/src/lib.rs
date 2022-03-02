@@ -10,12 +10,16 @@ mod symbols;
 /// Re-export for the main function.
 pub use anyhow::Result;
 
-const USAGE_STRING: &str = "Usage:
-  cargo xtask bundle <package> [--release] [--target <triple>]
-  cargo xtask bundle -p <package1> -p <package2> ... [--release] [--target <triple>]";
-
 /// The base birectory for the bundler's output.
 const BUNDLE_HOME: &str = "target/bundled";
+
+fn build_usage_string(command_name: &str) -> String {
+    format!(
+        "Usage:
+  {command_name} bundle <package> [--release] [--target <triple>]
+  {command_name} bundle -p <package1> -p <package2> ... [--release] [--target <triple>]"
+    )
+}
 
 /// Any additional configuration that might be useful for creating plugin bundles, stored as
 /// `bundler.toml` alongside the workspace's main `Cargo.toml` file.
@@ -44,18 +48,19 @@ pub enum CompilationTarget {
 /// The main xtask entry point function. See the readme for instructions on how to use this.
 pub fn main() -> Result<()> {
     let args = std::env::args().skip(1);
-    main_with_args(args)
+    main_with_args("cargo xtask", args)
 }
 
 /// The main xtask entry point function, but with custom command line arguments. `args` should not
 /// contain the command name, so you should always skip at least one argument from
 /// `std::env::args()` before passing it to this function.
-pub fn main_with_args(mut args: impl Iterator<Item = String>) -> Result<()> {
+pub fn main_with_args(command_name: &str, mut args: impl Iterator<Item = String>) -> Result<()> {
     chdir_workspace_root()?;
 
+    let usage_string = build_usage_string(command_name);
     let command = args
         .next()
-        .context(format!("Missing command name\n\n{USAGE_STRING}"))?;
+        .context(format!("Missing command name\n\n{usage_string}",))?;
     match command.as_str() {
         "bundle" => {
             // For convenience's sake we'll allow building multiple packages with -p just like carg
@@ -66,13 +71,13 @@ pub fn main_with_args(mut args: impl Iterator<Item = String>) -> Result<()> {
                 while args.peek().map(|s| s.as_str()) == Some("-p") {
                     packages.push(
                         args.nth(1)
-                            .context(format!("Missing package name after -p\n\n{USAGE_STRING}"))?,
+                            .context(format!("Missing package name after -p\n\n{usage_string}"))?,
                     );
                 }
             } else {
                 packages.push(
                     args.next()
-                        .context(format!("Missing package name\n\n{USAGE_STRING}"))?,
+                        .context(format!("Missing package name\n\n{usage_string}"))?,
                 );
             };
             let other_args: Vec<_> = args.collect();
@@ -88,7 +93,7 @@ pub fn main_with_args(mut args: impl Iterator<Item = String>) -> Result<()> {
         // This is only meant to be used by the CI, since using awk for this can be a bit spotty on
         // macOS
         "known-packages" => list_known_packages(),
-        _ => bail!("Unknown command '{command}'\n\n{USAGE_STRING}"),
+        _ => bail!("Unknown command '{command}'\n\n{usage_string}"),
     }
 }
 
