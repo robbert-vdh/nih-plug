@@ -1083,12 +1083,21 @@ impl<P: ClapPlugin> Wrapper<P> {
         );
         match serialized {
             Ok(serialized) => {
+                // CLAP does not provide a way to tell how much data there is left in a stream, so
+                // we need to prepend it to our actual state data.
+                let length_bytes = (serialized.len() as u64).to_le_bytes();
+                let num_length_bytes_written = ((*stream).write)(
+                    stream,
+                    length_bytes.as_ptr() as *const c_void,
+                    length_bytes.len() as u64,
+                );
                 let num_bytes_written = ((*stream).write)(
                     stream,
                     serialized.as_ptr() as *const c_void,
                     serialized.len() as u64,
                 );
 
+                nih_debug_assert_eq!(num_length_bytes_written as usize, length_bytes.len());
                 nih_debug_assert_eq!(num_bytes_written as usize, serialized.len());
                 true
             }
@@ -1106,39 +1115,25 @@ impl<P: ClapPlugin> Wrapper<P> {
         check_null_ptr!(false, plugin, stream);
         let wrapper = &*(plugin as *const Self);
 
-        // CLAP does not have a way to tell you about the size of a stream, so the workaround would
-        // be to keep reading 1 MiB chunks until we reach the end of file, reallocating the buffer
-        // each time as we go.
-        const CHUNK_SIZE: usize = 1 << 20;
-        let mut actual_read_buffer_size = 0usize;
-        let mut read_buffer: Vec<u8> = Vec::with_capacity(CHUNK_SIZE);
-        loop {
-            let num_bytes_read = ((*stream).read)(
-                stream,
-                // Make sure to start reading from where we left off if we're going through this
-                // loop multiple times
-                read_buffer.as_mut_ptr().add(actual_read_buffer_size) as *mut c_void,
-                CHUNK_SIZE as u64,
-            );
-            if num_bytes_read < 0 {
-                nih_debug_assert_failure!("Error while reading plugin state");
-                return false;
-            }
+        // CLAP does not have a way to tell how much data there is left in a stream, so we've
+        // prepended the size in front of our JSON state
+        let mut length_bytes = [0; 8];
+        let num_length_bytes_read = ((*stream).read)(
+            stream,
+            length_bytes.as_mut_ptr() as *mut c_void,
+            length_bytes.len() as u64,
+        );
+        nih_debug_assert_eq!(num_length_bytes_read as usize, length_bytes.len());
+        let length = u64::from_le_bytes(length_bytes);
 
-            actual_read_buffer_size += num_bytes_read as usize;
-            if num_bytes_read != CHUNK_SIZE as i64 {
-                // If we read anything below `CHUNK_SIZE` bytes, then we've reached the end of file
-                // on this read
-                break;
-            }
-
-            // Otherwise, reallocate the buffer with enough room for another chunk and try again
-            nih_debug_assert_eq!(num_bytes_read, CHUNK_SIZE as i64);
-            read_buffer.reserve(CHUNK_SIZE);
-        }
-
-        // After reading, trim the additional capacity near the end of the buffer
-        read_buffer.set_len(actual_read_buffer_size as usize);
+        let mut read_buffer: Vec<u8> = Vec::with_capacity(length as usize);
+        let num_bytes_read = ((*stream).read)(
+            stream,
+            read_buffer.as_mut_ptr() as *mut c_void,
+            length as u64,
+        );
+        nih_debug_assert_eq!(num_bytes_read as u64, length);
+        read_buffer.set_len(length as usize);
 
         let success = state::deserialize(
             &read_buffer,
