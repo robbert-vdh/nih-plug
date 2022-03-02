@@ -21,7 +21,7 @@ use super::view::WrapperView;
 use crate::param::internals::ParamPtr;
 use crate::param::Param;
 use crate::plugin::{BufferConfig, BusConfig, NoteEvent, ProcessStatus, Vst3Plugin};
-use crate::wrapper::state::{ParamValue, State};
+use crate::wrapper::state::{self, ParamValue, State};
 use crate::wrapper::util::{process_wrapper, u16strlcpy};
 
 // Alias needed for the VST3 attribute macro
@@ -311,49 +311,14 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
 
         let state = state.upgrade().unwrap();
 
-        // We'll serialize parmaeter values as a simple `string_param_id: display_value` map.
-        let mut params: HashMap<_, _> = self
-            .inner
-            .param_id_to_hash
-            .iter()
-            .filter_map(|(param_id_str, hash)| {
-                let param_ptr = self.inner.param_by_hash.get(hash)?;
-                Some((param_id_str, param_ptr))
-            })
-            .map(|(&param_id_str, &param_ptr)| match param_ptr {
-                ParamPtr::FloatParam(p) => (
-                    param_id_str.to_string(),
-                    ParamValue::F32((*p).plain_value()),
-                ),
-                ParamPtr::IntParam(p) => (
-                    param_id_str.to_string(),
-                    ParamValue::I32((*p).plain_value()),
-                ),
-                ParamPtr::BoolParam(p) => (
-                    param_id_str.to_string(),
-                    ParamValue::Bool((*p).plain_value()),
-                ),
-                ParamPtr::EnumParam(p) => (
-                    // Enums are serialized based on the active variant's index (which may not be
-                    // the same as the discriminator)
-                    param_id_str.to_string(),
-                    ParamValue::I32((*p).plain_value()),
-                ),
-            })
-            .collect();
-
-        // Don't forget about the bypass parameter
-        params.insert(
-            BYPASS_PARAM_ID.to_string(),
-            ParamValue::Bool(self.inner.bypass_state.load(Ordering::SeqCst)),
+        let serialized = state::serialize(
+            self.inner.plugin.read().params(),
+            &self.inner.param_by_hash,
+            &self.inner.param_id_to_hash,
+            BYPASS_PARAM_ID,
+            &self.inner.bypass_state,
         );
-
-        // The plugin can also persist arbitrary fields alongside its parameters. This is useful for
-        // storing things like sample data.
-        let fields = self.inner.plugin.read().params().serialize_fields();
-
-        let plugin_state = State { params, fields };
-        match serde_json::to_vec(&plugin_state) {
+        match serialized {
             Ok(serialized) => {
                 let mut num_bytes_written = 0;
                 let result = state.write(

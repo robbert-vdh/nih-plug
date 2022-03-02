@@ -2,6 +2,12 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+use crate::param::internals::ParamPtr;
+use crate::param::Param;
+use crate::Params;
 
 /// A plain, unnormalized value for a parameter.
 #[derive(Debug, Serialize, Deserialize)]
@@ -26,4 +32,56 @@ pub(crate) struct State {
     /// The individual fields are also serialized as JSON so they can safely be restored
     /// independently of the other fields.
     pub fields: HashMap<String, String>,
+}
+
+/// Serialize a plugin's state to a vector containing JSON data. This can (and should) be shared
+/// across plugin formats.
+pub(crate) unsafe fn serialize(
+    plugin_params: Pin<&dyn Params>,
+    param_by_hash: &HashMap<u32, ParamPtr>,
+    param_id_to_hash: &HashMap<&'static str, u32>,
+    bypass_param_id: &str,
+    bypass_state: &AtomicBool,
+) -> serde_json::Result<Vec<u8>> {
+    // We'll serialize parmaeter values as a simple `string_param_id: display_value` map.
+    let mut params: HashMap<_, _> = param_id_to_hash
+        .iter()
+        .filter_map(|(param_id_str, hash)| {
+            let param_ptr = param_by_hash.get(hash)?;
+            Some((param_id_str, param_ptr))
+        })
+        .map(|(&param_id_str, &param_ptr)| match param_ptr {
+            ParamPtr::FloatParam(p) => (
+                param_id_str.to_string(),
+                ParamValue::F32((*p).plain_value()),
+            ),
+            ParamPtr::IntParam(p) => (
+                param_id_str.to_string(),
+                ParamValue::I32((*p).plain_value()),
+            ),
+            ParamPtr::BoolParam(p) => (
+                param_id_str.to_string(),
+                ParamValue::Bool((*p).plain_value()),
+            ),
+            ParamPtr::EnumParam(p) => (
+                // Enums are serialized based on the active variant's index (which may not be
+                // the same as the discriminator)
+                param_id_str.to_string(),
+                ParamValue::I32((*p).plain_value()),
+            ),
+        })
+        .collect();
+
+    // Don't forget about the bypass parameter
+    params.insert(
+        bypass_param_id.to_string(),
+        ParamValue::Bool(bypass_state.load(Ordering::SeqCst)),
+    );
+
+    // The plugin can also persist arbitrary fields alongside its parameters. This is useful for
+    // storing things like sample data.
+    let fields = plugin_params.serialize_fields();
+
+    let plugin_state = State { params, fields };
+    serde_json::to_vec(&plugin_state)
 }
