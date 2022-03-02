@@ -564,6 +564,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "nih_plug_xtask"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "goblin",
+ "reflink",
+ "serde",
+ "toml",
+]
+
+[[package]]
 name = "nix"
 version = "0.22.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1153,9 +1164,5 @@ checksum = "d2d7d3948613f75c98fd9328cfdcc45acc4d360655289d0a7d4ec931392200a3"
 name = "xtask"
 version = "0.1.0"
 dependencies = [
- "anyhow",
- "goblin",
- "reflink",
- "serde",
- "toml",
+ "nih_plug_xtask",
 ]
