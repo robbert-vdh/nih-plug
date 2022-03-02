@@ -8,7 +8,10 @@ use clap_sys::events::{
     CLAP_EVENT_NOTE_EXPRESSION, CLAP_EVENT_NOTE_OFF, CLAP_EVENT_NOTE_ON, CLAP_EVENT_PARAM_MOD,
     CLAP_EVENT_PARAM_VALUE,
 };
-use clap_sys::ext::audio_ports::{CLAP_PORT_MONO, CLAP_PORT_STEREO};
+use clap_sys::ext::audio_ports::{
+    clap_audio_port_info, clap_plugin_audio_ports, CLAP_AUDIO_PORT_IS_MAIN, CLAP_EXT_AUDIO_PORTS,
+    CLAP_PORT_MONO, CLAP_PORT_STEREO,
+};
 use clap_sys::ext::audio_ports_config::{
     clap_audio_ports_config, clap_plugin_audio_ports_config, CLAP_EXT_AUDIO_PORTS_CONFIG,
 };
@@ -18,7 +21,7 @@ use clap_sys::ext::params::{
 };
 use clap_sys::ext::thread_check::{clap_host_thread_check, CLAP_EXT_THREAD_CHECK};
 use clap_sys::host::clap_host;
-use clap_sys::id::clap_id;
+use clap_sys::id::{clap_id, CLAP_INVALID_ID};
 use clap_sys::plugin::clap_plugin;
 use clap_sys::process::{
     clap_process, clap_process_status, CLAP_PROCESS_CONTINUE, CLAP_PROCESS_CONTINUE_IF_NOT_QUIET,
@@ -104,6 +107,8 @@ pub struct Wrapper<P: ClapPlugin> {
     ///
     /// TODO: Support surround setups once a plugin needs taht
     supported_bus_configs: Vec<BusConfig>,
+
+    clap_plugin_audio_ports: clap_plugin_audio_ports,
 
     clap_plugin_params: clap_plugin_params,
     // These fiels are exactly the same as their VST3 wrapper counterparts.
@@ -248,6 +253,11 @@ impl<P: ClapPlugin> Wrapper<P> {
                 select: Self::ext_audio_ports_config_select,
             },
             supported_bus_configs: Vec::new(),
+
+            clap_plugin_audio_ports: clap_plugin_audio_ports {
+                count: Self::ext_audio_ports_count,
+                get: Self::ext_audio_ports_get,
+            },
 
             clap_plugin_params: clap_plugin_params {
                 count: Self::ext_params_count,
@@ -658,7 +668,6 @@ impl<P: ClapPlugin> Wrapper<P> {
         let wrapper = &*(plugin as *const Self);
 
         // TODO: Implement the following extensions:
-        //       - audio ports (for naming audio ports)
         //       - gui
         //       - the non-freestanding GUI extensions depending on the platform
         //       - latency
@@ -666,6 +675,8 @@ impl<P: ClapPlugin> Wrapper<P> {
         let id = CStr::from_ptr(id);
         if id == CStr::from_ptr(CLAP_EXT_AUDIO_PORTS_CONFIG) {
             &wrapper.clap_plugin_audio_ports_config as *const _ as *const c_void
+        } else if id == CStr::from_ptr(CLAP_EXT_AUDIO_PORTS) {
+            &wrapper.clap_plugin_audio_ports as *const _ as *const c_void
         } else if id == CStr::from_ptr(CLAP_EXT_PARAMS) {
             &wrapper.clap_plugin_params as *const _ as *const c_void
         } else {
@@ -686,7 +697,6 @@ impl<P: ClapPlugin> Wrapper<P> {
     }
 
     unsafe extern "C" fn ext_audio_ports_config_count(plugin: *const clap_plugin) -> u32 {
-        // TODO: Implement sidechain nputs and auxiliary outputs
         check_null_ptr!(0, plugin);
         let wrapper = &*(plugin as *const Self);
 
@@ -729,6 +739,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 };
 
                 *config = std::mem::zeroed();
+
                 let config = &mut *config;
                 config.id = index;
                 strlcpy(&mut config.name, &name);
@@ -768,6 +779,92 @@ impl<P: ClapPlugin> Wrapper<P> {
                 nih_debug_assert_failure!(
                     "Host tried to select out of bounds audio port config {}",
                     config_id
+                );
+
+                false
+            }
+        }
+    }
+
+    unsafe extern "C" fn ext_audio_ports_count(plugin: *const clap_plugin, is_input: bool) -> u32 {
+        // TODO: Implement sidechain nputs and auxiliary outputs
+        check_null_ptr!(0, plugin);
+        let wrapper = &*(plugin as *const Self);
+
+        let bus_config = wrapper.current_bus_config.load();
+        match (
+            is_input,
+            bus_config.num_input_channels,
+            bus_config.num_output_channels,
+        ) {
+            (true, 0, _) => 0,
+            // This should not be possible, however
+            (false, _, 0) => 0,
+            _ => 1,
+        }
+    }
+
+    unsafe extern "C" fn ext_audio_ports_get(
+        plugin: *const clap_plugin,
+        index: u32,
+        is_input: bool,
+        info: *mut clap_audio_port_info,
+    ) -> bool {
+        check_null_ptr!(false, plugin, info);
+        let wrapper = &*(plugin as *const Self);
+
+        const INPUT_ID: u32 = 0;
+        const OUTPUT_ID: u32 = 1;
+
+        // Even if we don't report having ports when the number of channels are 0, might as well
+        // handle them here anyways in case we do need to always report them in the future
+        match index {
+            0 => {
+                let current_bus_config = wrapper.current_bus_config.load();
+                let channel_count = if is_input {
+                    current_bus_config.num_input_channels
+                } else {
+                    current_bus_config.num_output_channels
+                };
+
+                // When we add sidechain inputs and auxiliary outputs this would need some changing
+                let stable_id = if is_input { INPUT_ID } else { OUTPUT_ID };
+                let pair_stable_id = if is_input && current_bus_config.num_output_channels > 0 {
+                    OUTPUT_ID
+                } else if !is_input && current_bus_config.num_input_channels > 0 {
+                    INPUT_ID
+                } else {
+                    CLAP_INVALID_ID
+                };
+                let port_type_name = if is_input { "Input" } else { "Output" };
+                let name = match channel_count {
+                    1 => format!("Mono {port_type_name}"),
+                    2 => format!("Stereo {port_type_name}"),
+                    n => format!("{channel_count} channel {port_type_name}"),
+                };
+                let port_type = match channel_count {
+                    1 => CLAP_PORT_MONO,
+                    2 => CLAP_PORT_STEREO,
+                    _ => ptr::null(),
+                };
+
+                *info = std::mem::zeroed();
+
+                let info = &mut *info;
+                info.id = stable_id;
+                strlcpy(&mut info.name, &name);
+                info.flags = CLAP_AUDIO_PORT_IS_MAIN;
+                info.channel_count = channel_count;
+                info.port_type = port_type;
+                info.in_place_pair = pair_stable_id;
+
+                true
+            }
+            _ => {
+                nih_debug_assert_failure!(
+                    "Host tried to query information for out of bounds audio port {} (input: {})",
+                    index,
+                    is_input
                 );
 
                 false
