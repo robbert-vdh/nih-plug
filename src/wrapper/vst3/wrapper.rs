@@ -1,5 +1,4 @@
 use std::cmp;
-use std::collections::HashMap;
 use std::ffi::c_void;
 use std::mem::{self, MaybeUninit};
 use std::ptr;
@@ -18,10 +17,8 @@ use widestring::U16CStr;
 use super::inner::WrapperInner;
 use super::util::{VstPtr, BYPASS_PARAM_HASH, BYPASS_PARAM_ID};
 use super::view::WrapperView;
-use crate::param::internals::ParamPtr;
-use crate::param::Param;
 use crate::plugin::{BufferConfig, BusConfig, NoteEvent, ProcessStatus, Vst3Plugin};
-use crate::wrapper::state::{self, ParamValue, State};
+use crate::wrapper::state;
 use crate::wrapper::util::{process_wrapper, u16strlcpy};
 
 // Alias needed for the VST3 attribute macro
@@ -220,80 +217,20 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
             return kResultFalse;
         }
 
-        let state: State = match serde_json::from_slice(&read_buffer) {
-            Ok(s) => s,
-            Err(err) => {
-                nih_debug_assert_failure!("Error while deserializing state: {}", err);
-                return kResultFalse;
-            }
-        };
-
-        let sample_rate = self
-            .inner
-            .current_buffer_config
-            .load()
-            .map(|c| c.sample_rate);
-        for (param_id_str, param_value) in state.params {
-            // Handle the bypass parameter separately
-            if param_id_str == BYPASS_PARAM_ID {
-                match param_value {
-                    ParamValue::Bool(b) => self.inner.bypass_state.store(b, Ordering::SeqCst),
-                    _ => nih_debug_assert_failure!(
-                        "Invalid serialized value {:?} for parameter \"{}\"",
-                        param_value,
-                        param_id_str,
-                    ),
-                };
-                continue;
-            }
-
-            let param_ptr = match self
-                .inner
-                .param_id_to_hash
-                .get(param_id_str.as_str())
-                .and_then(|hash| self.inner.param_by_hash.get(hash))
-            {
-                Some(ptr) => ptr,
-                None => {
-                    nih_debug_assert_failure!("Unknown parameter: {}", param_id_str);
-                    continue;
-                }
-            };
-
-            match (param_ptr, param_value) {
-                (ParamPtr::FloatParam(p), ParamValue::F32(v)) => (**p).set_plain_value(v),
-                (ParamPtr::IntParam(p), ParamValue::I32(v)) => (**p).set_plain_value(v),
-                (ParamPtr::BoolParam(p), ParamValue::Bool(v)) => (**p).set_plain_value(v),
-                // Enums are serialized based on the active variant's index (which may not be the
-                // same as the discriminator)
-                (ParamPtr::EnumParam(p), ParamValue::I32(variant_idx)) => {
-                    (**p).set_plain_value(variant_idx)
-                }
-                (param_ptr, param_value) => {
-                    nih_debug_assert_failure!(
-                        "Invalid serialized value {:?} for parameter \"{}\" ({:?})",
-                        param_value,
-                        param_id_str,
-                        param_ptr,
-                    );
-                }
-            }
-
-            // Make sure everything starts out in sync
-            if let Some(sample_rate) = sample_rate {
-                param_ptr.update_smoother(sample_rate, true);
-            }
+        let success = state::deserialize(
+            &read_buffer,
+            self.inner.plugin.read().params(),
+            &self.inner.param_by_hash,
+            &self.inner.param_id_to_hash,
+            self.inner.current_buffer_config.load().as_ref(),
+            BYPASS_PARAM_ID,
+            &self.inner.bypass_state,
+        );
+        if !success {
+            return kResultFalse;
         }
 
-        // The plugin can also persist arbitrary fields alongside its parameters. This is useful for
-        // storing things like sample data.
-        self.inner
-            .plugin
-            .read()
-            .params()
-            .deserialize_fields(&state.fields);
-
-        // Reinitialize the plugin after loading state so it can respond to the new parmaeters
+        // Reinitialize the plugin after loading state so it can respond to the new parameter values
         let bus_config = self.inner.current_bus_config.load();
         if let Some(buffer_config) = self.inner.current_buffer_config.load() {
             self.inner.plugin.write().initialize(

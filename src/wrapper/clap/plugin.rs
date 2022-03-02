@@ -19,6 +19,7 @@ use clap_sys::ext::params::{
     clap_param_info, clap_plugin_params, CLAP_EXT_PARAMS, CLAP_PARAM_IS_BYPASS,
     CLAP_PARAM_IS_STEPPED,
 };
+use clap_sys::ext::state::clap_plugin_state;
 use clap_sys::ext::thread_check::{clap_host_thread_check, CLAP_EXT_THREAD_CHECK};
 use clap_sys::host::clap_host;
 use clap_sys::id::{clap_id, CLAP_INVALID_ID};
@@ -27,6 +28,7 @@ use clap_sys::process::{
     clap_process, clap_process_status, CLAP_PROCESS_CONTINUE, CLAP_PROCESS_CONTINUE_IF_NOT_QUIET,
     CLAP_PROCESS_ERROR,
 };
+use clap_sys::stream::{clap_istream, clap_ostream};
 use crossbeam::atomic::AtomicCell;
 use crossbeam::queue::ArrayQueue;
 use lazy_static::lazy_static;
@@ -124,12 +126,14 @@ pub struct Wrapper<P: ClapPlugin> {
     /// can retrieve them later for the UI if needed.
     param_defaults_normalized: HashMap<u32, f32>,
     /// Mappings from string parameter indentifiers to parameter hashes. Useful for debug logging
-    /// and when storing and restorign plugin state.
+    /// and when storing and restoring plugin state.
     param_id_to_hash: HashMap<&'static str, u32>,
     /// The inverse mapping from [Self::param_by_hash]. This is needed to be able to have an
     /// ergonomic parameter setting API that uses references to the parameters instead of having to
     /// add a setter function to the parameter (or even worse, have it be completely untyped).
     param_ptr_to_hash: HashMap<ParamPtr, u32>,
+
+    clap_plugin_state: clap_plugin_state,
 
     /// A queue of tasks that still need to be performed. Because CLAP lets the plugin request a
     /// host callback directly, we don't need to use the OsEventLoop we use in our other plugin
@@ -272,6 +276,11 @@ impl<P: ClapPlugin> Wrapper<P> {
             param_defaults_normalized: HashMap::new(),
             param_id_to_hash: HashMap::new(),
             param_ptr_to_hash: HashMap::new(),
+
+            clap_plugin_state: clap_plugin_state {
+                save: Self::ext_state_save,
+                load: Self::ext_state_load,
+            },
 
             tasks: ArrayQueue::new(TASK_QUEUE_CAPACITY),
             main_thread_id: thread::current().id(),
@@ -1054,6 +1063,23 @@ impl<P: ClapPlugin> Wrapper<P> {
         }
 
         // TODO: Handle automation/outputs
+    }
+
+    unsafe extern "C" fn ext_state_save(
+        plugin: *const clap_plugin,
+        stream: *mut clap_ostream,
+    ) -> bool {
+        check_null_ptr!(false, plugin, stream);
+        let wrapper = &*(plugin as *const Self);
+
+        todo!()
+    }
+
+    unsafe extern "C" fn ext_state_load(
+        plugin: *const clap_plugin,
+        stream: *mut clap_istream,
+    ) -> bool {
+        todo!()
     }
 }
 

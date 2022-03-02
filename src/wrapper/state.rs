@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::param::internals::ParamPtr;
 use crate::param::Param;
-use crate::Params;
+use crate::{BufferConfig, Params};
 
 /// A plain, unnormalized value for a parameter.
 #[derive(Debug, Serialize, Deserialize)]
@@ -84,4 +84,84 @@ pub(crate) unsafe fn serialize(
 
     let plugin_state = State { params, fields };
     serde_json::to_vec(&plugin_state)
+}
+
+/// Serialize a plugin's state to a vector containing JSON data. This can (and should) be shared
+/// across plugin formats. Returns `false` and logs an error if the state could not be deserialized.
+///
+/// Make sure to reinitialize plugin after deserializing the state so it can react to the new
+/// parameter values. The smoothers have already been reset by this function.
+pub(crate) unsafe fn deserialize(
+    state: &[u8],
+    plugin_params: Pin<&dyn Params>,
+    param_by_hash: &HashMap<u32, ParamPtr>,
+    param_id_to_hash: &HashMap<&'static str, u32>,
+    current_buffer_config: Option<&BufferConfig>,
+    bypass_param_id: &str,
+    bypass_state: &AtomicBool,
+) -> bool {
+    let state: State = match serde_json::from_slice(state) {
+        Ok(s) => s,
+        Err(err) => {
+            nih_debug_assert_failure!("Error while deserializing state: {}", err);
+            return false;
+        }
+    };
+
+    let sample_rate = current_buffer_config.map(|c| c.sample_rate);
+    for (param_id_str, param_value) in state.params {
+        // Handle the bypass parameter separately
+        if param_id_str == bypass_param_id {
+            match param_value {
+                ParamValue::Bool(b) => bypass_state.store(b, Ordering::SeqCst),
+                _ => nih_debug_assert_failure!(
+                    "Invalid serialized value {:?} for parameter \"{}\"",
+                    param_value,
+                    param_id_str,
+                ),
+            };
+            continue;
+        }
+
+        let param_ptr = match param_id_to_hash
+            .get(param_id_str.as_str())
+            .and_then(|hash| param_by_hash.get(hash))
+        {
+            Some(ptr) => ptr,
+            None => {
+                nih_debug_assert_failure!("Unknown parameter: {}", param_id_str);
+                continue;
+            }
+        };
+
+        match (param_ptr, param_value) {
+            (ParamPtr::FloatParam(p), ParamValue::F32(v)) => (**p).set_plain_value(v),
+            (ParamPtr::IntParam(p), ParamValue::I32(v)) => (**p).set_plain_value(v),
+            (ParamPtr::BoolParam(p), ParamValue::Bool(v)) => (**p).set_plain_value(v),
+            // Enums are serialized based on the active variant's index (which may not be the
+            // same as the discriminator)
+            (ParamPtr::EnumParam(p), ParamValue::I32(variant_idx)) => {
+                (**p).set_plain_value(variant_idx)
+            }
+            (param_ptr, param_value) => {
+                nih_debug_assert_failure!(
+                    "Invalid serialized value {:?} for parameter \"{}\" ({:?})",
+                    param_value,
+                    param_id_str,
+                    param_ptr,
+                );
+            }
+        }
+
+        // Make sure everything starts out in sync
+        if let Some(sample_rate) = sample_rate {
+            param_ptr.update_smoother(sample_rate, true);
+        }
+    }
+
+    // The plugin can also persist arbitrary fields alongside its parameters. This is useful for
+    // storing things like sample data.
+    plugin_params.deserialize_fields(&state.fields);
+
+    true
 }
