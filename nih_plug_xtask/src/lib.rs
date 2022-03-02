@@ -148,12 +148,17 @@ pub fn bundle(package: &str, args: &[String]) -> Result<()> {
     }
 
     // We'll detect the pugin formats supported by the plugin binary and create bundled accordingly
-    // TODO: Support VST2 at some point
+    // NOTE: NIH-plug does not support VST2, but we'll support bundling VST2 plugins anyways because
+    //       this bundler can also be used standalone.
     let bundle_clap = symbols::exported(&lib_path, "clap_entry")
+        .with_context(|| format!("Could not parse '{}'", lib_path.display()))?;
+    // We'll ignore the platofrm-specific entry points for VST2 plugins since there's no reason to
+    // create a new Rust VST2 plugin that doesn't work in modern DAWs
+    let bundle_vst2 = symbols::exported(&lib_path, "VSTPluginMain")
         .with_context(|| format!("Could not parse '{}'", lib_path.display()))?;
     let bundle_vst3 = symbols::exported(&lib_path, "GetPluginFactory")
         .with_context(|| format!("Could not parse '{}'", lib_path.display()))?;
-    let bundled_plugin = bundle_clap || bundle_vst3;
+    let bundled_plugin = bundle_clap || bundle_vst2 || bundle_vst3;
 
     eprintln!();
     if bundle_clap {
@@ -176,6 +181,27 @@ pub fn bundle(package: &str, args: &[String]) -> Result<()> {
         maybe_create_macos_bundle_metadata(package, &clap_bundle_home, compilation_target)?;
 
         eprintln!("Created a CLAP bundle at '{}'", clap_bundle_home.display());
+    }
+    if bundle_vst2 {
+        let vst2_bundle_library_name = vst2_bundle_library_name(&bundle_name, compilation_target);
+        let vst2_lib_path = Path::new(BUNDLE_HOME).join(&vst2_bundle_library_name);
+
+        fs::create_dir_all(vst2_lib_path.parent().unwrap())
+            .context("Could not create VST2 bundle directory")?;
+        reflink::reflink_or_copy(&lib_path, &vst2_lib_path)
+            .context("Could not copy library to VST2 bundle")?;
+
+        // VST2 only uses bundles on macOS, so we'll just take the first component of the library
+        // name instead
+        let vst2_bundle_home = Path::new(BUNDLE_HOME).join(
+            Path::new(&vst2_bundle_library_name)
+                .components()
+                .next()
+                .expect("Malformed VST2 library path"),
+        );
+        maybe_create_macos_bundle_metadata(package, &vst2_bundle_home, compilation_target)?;
+
+        eprintln!("Created a VST2 bundle at '{}'", vst2_bundle_home.display());
     }
     if bundle_vst3 {
         let vst3_lib_path =
@@ -287,6 +313,16 @@ fn clap_bundle_library_name(package: &str, target: CompilationTarget) -> String 
         | CompilationTarget::Windows64
         | CompilationTarget::Windows32 => format!("{package}.clap"),
         CompilationTarget::Mac64 => format!("{package}.clap/Contents/MacOS/{package}"),
+    }
+}
+
+/// On Linux and Windows VST2 plugins are regular library files, and on macOS they are put in a
+/// bundle.
+fn vst2_bundle_library_name(package: &str, target: CompilationTarget) -> String {
+    match target {
+        CompilationTarget::Linux64 | CompilationTarget::Linux32 => format!("{package}.so"),
+        CompilationTarget::Windows64 | CompilationTarget::Windows32 => format!("{package}.dll"),
+        CompilationTarget::Mac64 => format!("{package}.vst/Contents/MacOS/{package}"),
     }
 }
 
