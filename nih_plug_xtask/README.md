@@ -1,9 +1,10 @@
 # NIH-plug: bundler and other utilities
 
 This is NIH-plug's `cargo xtask` command, but as a library. This way you can use
-it in your own projects without forking this repo or copying the binary into
-your own repo. This is necessary until Cargo supports [running binaries from
-dependencies directly](https://github.com/rust-lang/rfcs/pull/3168).
+it in your own projects without having to either fork this repo or vendor the
+binary into your own repo. This is necessary until Cargo supports [running
+binaries from dependencies
+directly](https://github.com/rust-lang/rfcs/pull/3168).
 
 To use this, add an `xtask` binary to your project using `cargo new --bin xtask`
 and add it to the Cargo workspace in your repository's main `Cargo.toml` file:
