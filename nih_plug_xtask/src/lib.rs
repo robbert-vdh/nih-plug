@@ -43,9 +43,16 @@ pub enum CompilationTarget {
 
 /// The main xtask entry point function. See the readme for instructions on how to use this.
 pub fn main() -> Result<()> {
+    let args = std::env::args().skip(1);
+    main_with_args(args)
+}
+
+/// The main xtask entry point function, but with custom command line arguments. `args` should not
+/// contain the command name, so you should always skip at least one argument from
+/// `std::env::args()` before passing it to this function.
+pub fn main_with_args(mut args: impl Iterator<Item = String>) -> Result<()> {
     chdir_workspace_root()?;
 
-    let mut args = std::env::args().skip(1);
     let command = args
         .next()
         .context(format!("Missing command name\n\n{USAGE_STRING}"))?;
