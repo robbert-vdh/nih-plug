@@ -728,9 +728,9 @@ dependencies = [
 
 [[package]]
 name = "redox_syscall"
-version = "0.2.10"
+version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8383f39639269cde97d255a32bdb68c047337295414940c68bdd30c2e13203ff"
+checksum = "8380fe0152551244f0747b1bf41737e0f8a74f97a14ccefd1148187271634f3c"
 dependencies = [
  "bitflags",
 ]
@@ -904,7 +904,7 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 [[package]]
 name = "vst3-com"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vst3-sys.git?branch=fix/atomic-reference-count#1f634714bb1190297ef5eecb4c393fd1a0fa566d"
+source = "git+https://github.com/RustAudio/vst3-sys.git#81ee70462870a0f4d9e3f9a0e09c8c4539a2e0fe"
 dependencies = [
  "vst3-com-macros",
 ]
@@ -912,7 +912,7 @@ dependencies = [
 [[package]]
 name = "vst3-com-macros"
 version = "0.2.0"
-source = "git+https://github.com/robbert-vdh/vst3-sys.git?branch=fix/atomic-reference-count#1f634714bb1190297ef5eecb4c393fd1a0fa566d"
+source = "git+https://github.com/RustAudio/vst3-sys.git#81ee70462870a0f4d9e3f9a0e09c8c4539a2e0fe"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -923,7 +923,7 @@ dependencies = [
 [[package]]
 name = "vst3-com-macros-support"
 version = "0.2.0"
-source = "git+https://github.com/robbert-vdh/vst3-sys.git?branch=fix/atomic-reference-count#1f634714bb1190297ef5eecb4c393fd1a0fa566d"
+source = "git+https://github.com/RustAudio/vst3-sys.git#81ee70462870a0f4d9e3f9a0e09c8c4539a2e0fe"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -933,7 +933,7 @@ dependencies = [
 [[package]]
 name = "vst3-sys"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vst3-sys.git?branch=fix/atomic-reference-count#1f634714bb1190297ef5eecb4c393fd1a0fa566d"
+source = "git+https://github.com/RustAudio/vst3-sys.git#81ee70462870a0f4d9e3f9a0e09c8c4539a2e0fe"
 dependencies = [
  "vst3-com",
 ]
