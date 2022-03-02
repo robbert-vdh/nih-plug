@@ -209,7 +209,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
         );
         read_buffer.set_len(num_bytes_read as usize);
 
-        // If the size is zero, some hsots will always return `kResultFalse` even if the read was
+        // If the size is zero, some hosts will always return `kResultFalse` even if the read was
         // 'successful', so we can't check the return value but we can check the number of bytes
         // read.
         if read_buffer.len() != stream_byte_size as usize {
