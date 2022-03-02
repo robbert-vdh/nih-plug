@@ -11,3 +11,9 @@ this using:
 ```shell
 cargo install --git https://github.com/robbert-vdh/nih-plug.git cargo-nih-plug
 ```
+
+Once that's installed, you can bundle plugins using:
+
+```shell
+cargo nih-plug bundle <package_name> --release
+```
