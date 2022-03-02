@@ -15,6 +15,7 @@ use clap_sys::ext::audio_ports::{
 use clap_sys::ext::audio_ports_config::{
     clap_audio_ports_config, clap_plugin_audio_ports_config, CLAP_EXT_AUDIO_PORTS_CONFIG,
 };
+use clap_sys::ext::latency::{clap_host_latency, clap_plugin_latency, CLAP_EXT_LATENCY};
 use clap_sys::ext::params::{
     clap_param_info, clap_plugin_params, CLAP_EXT_PARAMS, CLAP_PARAM_IS_BYPASS,
     CLAP_PARAM_IS_STEPPED,
@@ -92,13 +93,12 @@ pub struct Wrapper<P: ClapPlugin> {
     /// a mutable reference to the data contained in this mutex.
     pub output_buffer: RwLock<Buffer<'static>>,
 
-    // We'll query all of the host's extensions upfront
-    host_callback: ClapPtr<clap_host>,
-    thread_check: Option<ClapPtr<clap_host_thread_check>>,
-
     /// Needs to be boxed because the plugin object is supposed to contain a static reference to
     /// this.
     plugin_descriptor: Box<PluginDescriptor<P>>,
+
+    // We'll query all of the host's extensions upfront
+    host_callback: ClapPtr<clap_host>,
 
     clap_plugin_audio_ports_config: clap_plugin_audio_ports_config,
     /// During initialization we'll ask `P` which bus configurations it supports. The host can then
@@ -111,6 +111,9 @@ pub struct Wrapper<P: ClapPlugin> {
     supported_bus_configs: Vec<BusConfig>,
 
     clap_plugin_audio_ports: clap_plugin_audio_ports,
+
+    clap_plugin_latency: clap_plugin_latency,
+    host_latency: Option<ClapPtr<clap_host_latency>>,
 
     clap_plugin_params: clap_plugin_params,
     // These fiels are exactly the same as their VST3 wrapper counterparts.
@@ -132,6 +135,8 @@ pub struct Wrapper<P: ClapPlugin> {
     /// ergonomic parameter setting API that uses references to the parameters instead of having to
     /// add a setter function to the parameter (or even worse, have it be completely untyped).
     param_ptr_to_hash: HashMap<ParamPtr, u32>,
+
+    host_thread_check: Option<ClapPtr<clap_host_thread_check>>,
 
     clap_plugin_state: clap_plugin_state,
 
@@ -191,7 +196,7 @@ impl<P: ClapPlugin> EventLoop<Task, Wrapper<P>> for Wrapper<P> {
     fn is_main_thread(&self) -> bool {
         // If the host supports the thread check interface then we'll use that, otherwise we'll
         // check if this is the same thread as the one that created the plugin instance.
-        match &self.thread_check {
+        match &self.host_thread_check {
             Some(thread_check) => unsafe { (thread_check.is_main_thread)(&*self.host_callback) },
             None => thread::current().id() == self.main_thread_id,
         }
@@ -200,7 +205,13 @@ impl<P: ClapPlugin> EventLoop<Task, Wrapper<P>> for Wrapper<P> {
 
 impl<P: ClapPlugin> MainThreadExecutor<Task> for Wrapper<P> {
     unsafe fn execute(&self, task: Task) {
-        todo!("Implement latency changes for CLAP")
+        // This function is always called from the main thread, from [Self::on_main_thread].
+        match task {
+            Task::LatencyChanged => match &self.host_latency {
+                Some(host_latency) => (host_latency.changed)(&*self.host_callback),
+                None => nih_debug_assert_failure!("Host does not support the latency extension"),
+            },
+        };
     }
 }
 
@@ -210,7 +221,9 @@ impl<P: ClapPlugin> Wrapper<P> {
 
         assert!(!host_callback.is_null());
         let host_callback = unsafe { ClapPtr::new(host_callback) };
-        let thread_check = unsafe {
+        let host_latency =
+            unsafe { query_host_extension::<clap_host_latency>(&host_callback, CLAP_EXT_LATENCY) };
+        let host_thread_check = unsafe {
             query_host_extension::<clap_host_thread_check>(&host_callback, CLAP_EXT_THREAD_CHECK)
         };
 
@@ -246,10 +259,9 @@ impl<P: ClapPlugin> Wrapper<P> {
             current_latency: AtomicU32::new(0),
             output_buffer: RwLock::new(Buffer::default()),
 
-            host_callback,
-            thread_check,
-
             plugin_descriptor,
+
+            host_callback,
 
             clap_plugin_audio_ports_config: clap_plugin_audio_ports_config {
                 count: Self::ext_audio_ports_config_count,
@@ -262,6 +274,11 @@ impl<P: ClapPlugin> Wrapper<P> {
                 count: Self::ext_audio_ports_count,
                 get: Self::ext_audio_ports_get,
             },
+
+            clap_plugin_latency: clap_plugin_latency {
+                get: Self::ext_latency_get,
+            },
+            host_latency,
 
             clap_plugin_params: clap_plugin_params {
                 count: Self::ext_params_count,
@@ -276,6 +293,8 @@ impl<P: ClapPlugin> Wrapper<P> {
             param_defaults_normalized: HashMap::new(),
             param_id_to_hash: HashMap::new(),
             param_ptr_to_hash: HashMap::new(),
+
+            host_thread_check,
 
             clap_plugin_state: clap_plugin_state {
                 save: Self::ext_state_save,
@@ -679,12 +698,13 @@ impl<P: ClapPlugin> Wrapper<P> {
         // TODO: Implement the following extensions:
         //       - gui
         //       - the non-freestanding GUI extensions depending on the platform
-        //       - latency
         let id = CStr::from_ptr(id);
         if id == CStr::from_ptr(CLAP_EXT_AUDIO_PORTS_CONFIG) {
             &wrapper.clap_plugin_audio_ports_config as *const _ as *const c_void
         } else if id == CStr::from_ptr(CLAP_EXT_AUDIO_PORTS) {
             &wrapper.clap_plugin_audio_ports as *const _ as *const c_void
+        } else if id == CStr::from_ptr(CLAP_EXT_LATENCY) {
+            &wrapper.clap_plugin_latency as *const _ as *const c_void
         } else if id == CStr::from_ptr(CLAP_EXT_PARAMS) {
             &wrapper.clap_plugin_params as *const _ as *const c_void
         } else if id == CStr::from_ptr(CLAP_EXT_STATE) {
@@ -880,6 +900,13 @@ impl<P: ClapPlugin> Wrapper<P> {
                 false
             }
         }
+    }
+
+    unsafe extern "C" fn ext_latency_get(plugin: *const clap_plugin) -> u32 {
+        check_null_ptr!(0, plugin);
+        let wrapper = &*(plugin as *const Self);
+
+        wrapper.current_latency.load(Ordering::SeqCst)
     }
 
     unsafe extern "C" fn ext_params_count(plugin: *const clap_plugin) -> u32 {
