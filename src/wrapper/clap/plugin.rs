@@ -680,7 +680,6 @@ impl<P: ClapPlugin> Wrapper<P> {
         //       - gui
         //       - the non-freestanding GUI extensions depending on the platform
         //       - latency
-        //       - state
         let id = CStr::from_ptr(id);
         if id == CStr::from_ptr(CLAP_EXT_AUDIO_PORTS_CONFIG) {
             &wrapper.clap_plugin_audio_ports_config as *const _ as *const c_void
