@@ -19,7 +19,7 @@ use clap_sys::ext::params::{
     clap_param_info, clap_plugin_params, CLAP_EXT_PARAMS, CLAP_PARAM_IS_BYPASS,
     CLAP_PARAM_IS_STEPPED,
 };
-use clap_sys::ext::state::clap_plugin_state;
+use clap_sys::ext::state::{clap_plugin_state, CLAP_EXT_STATE};
 use clap_sys::ext::thread_check::{clap_host_thread_check, CLAP_EXT_THREAD_CHECK};
 use clap_sys::host::clap_host;
 use clap_sys::id::{clap_id, CLAP_INVALID_ID};
@@ -688,8 +688,10 @@ impl<P: ClapPlugin> Wrapper<P> {
             &wrapper.clap_plugin_audio_ports as *const _ as *const c_void
         } else if id == CStr::from_ptr(CLAP_EXT_PARAMS) {
             &wrapper.clap_plugin_params as *const _ as *const c_void
+        } else if id == CStr::from_ptr(CLAP_EXT_STATE) {
+            &wrapper.clap_plugin_state as *const _ as *const c_void
         } else {
-            nih_log!("Host tried to query unknown extension '{:?}'", id);
+            nih_log!("Host tried to query unknown extension {:?}", id);
             ptr::null()
         }
     }
