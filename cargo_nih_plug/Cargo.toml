@@ -1,9 +1,9 @@
 [package]
-name = "xtask"
+name = "cargo-nih-plug"
 version = "0.1.0"
 edition = "2021"
 authors = ["Robbert van der Helm <mail@robbertvanderhelm.nl>"]
-description = "A helper for compiling and bundling plugins, can be invoked in this repo using `cargo xtask`"
+description = "A cargo subcommand for compiling and bundling plugins, analogous to NIH-plug's `cargo xtask`"
 license = "ISC"
 
 [dependencies]
