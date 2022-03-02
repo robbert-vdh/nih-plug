@@ -8,6 +8,10 @@ use clap_sys::events::{
     CLAP_EVENT_NOTE_EXPRESSION, CLAP_EVENT_NOTE_OFF, CLAP_EVENT_NOTE_ON, CLAP_EVENT_PARAM_MOD,
     CLAP_EVENT_PARAM_VALUE,
 };
+use clap_sys::ext::audio_ports::{CLAP_PORT_MONO, CLAP_PORT_STEREO};
+use clap_sys::ext::audio_ports_config::{
+    clap_audio_ports_config, clap_plugin_audio_ports_config, CLAP_EXT_AUDIO_PORTS_CONFIG,
+};
 use clap_sys::ext::params::{
     clap_param_info, clap_plugin_params, CLAP_EXT_PARAMS, CLAP_PARAM_IS_BYPASS,
     CLAP_PARAM_IS_STEPPED,
@@ -40,6 +44,7 @@ use crate::event_loop::{EventLoop, MainThreadExecutor, TASK_QUEUE_CAPACITY};
 use crate::param::internals::ParamPtr;
 use crate::plugin::{BufferConfig, BusConfig, ClapPlugin, NoteEvent, ProcessStatus};
 use crate::wrapper::util::{hash_param_id, process_wrapper, strlcpy};
+use crate::Plugin;
 
 /// Right now the wrapper adds its own bypass parameter.
 ///
@@ -89,6 +94,16 @@ pub struct Wrapper<P: ClapPlugin> {
     /// Needs to be boxed because the plugin object is supposed to contain a static reference to
     /// this.
     plugin_descriptor: Box<PluginDescriptor<P>>,
+
+    clap_plugin_audio_ports_config: clap_plugin_audio_ports_config,
+    /// During initialization we'll ask `P` which bus configurations it supports. The host can then
+    /// use the audio ports config extension to choose a configuration. Right now we only query mono
+    /// and stereo configurations, with and without inputs, as well as the plugin's default input
+    /// and output channel counts if that does not match one of those configurations (to do the
+    /// least surprising thing).
+    ///
+    /// TODO: Support surround setups once a plugin needs taht
+    supported_bus_configs: Vec<BusConfig>,
 
     clap_plugin_params: clap_plugin_params,
     // These fiels are exactly the same as their VST3 wrapper counterparts.
@@ -227,6 +242,13 @@ impl<P: ClapPlugin> Wrapper<P> {
 
             plugin_descriptor,
 
+            clap_plugin_audio_ports_config: clap_plugin_audio_ports_config {
+                count: Self::ext_audio_ports_config_count,
+                get: Self::ext_audio_ports_config_get,
+                select: Self::ext_audio_ports_config_select,
+            },
+            supported_bus_configs: Vec::new(),
+
             clap_plugin_params: clap_plugin_params {
                 count: Self::ext_params_count,
                 get_info: Self::ext_params_get_info,
@@ -244,6 +266,35 @@ impl<P: ClapPlugin> Wrapper<P> {
             tasks: ArrayQueue::new(TASK_QUEUE_CAPACITY),
             main_thread_id: thread::current().id(),
         };
+
+        // Query all sensible bus configurations supported by the plugin. We don't do surround or
+        // anything beyond stereo right now.
+        for num_output_channels in [1, 2] {
+            for num_input_channels in [0, num_output_channels] {
+                let bus_config = BusConfig {
+                    num_input_channels,
+                    num_output_channels,
+                };
+                if wrapper.plugin.read().accepts_bus_config(&bus_config) {
+                    wrapper.supported_bus_configs.push(bus_config);
+                }
+            }
+        }
+
+        // In the off chance that the default config specified by the plugin is not in the above
+        // list, we'll try that as well.
+        let default_bus_config = BusConfig {
+            num_input_channels: P::DEFAULT_NUM_INPUTS,
+            num_output_channels: P::DEFAULT_NUM_OUTPUTS,
+        };
+        if !wrapper.supported_bus_configs.contains(&default_bus_config)
+            && wrapper
+                .plugin
+                .read()
+                .accepts_bus_config(&default_bus_config)
+        {
+            wrapper.supported_bus_configs.push(default_bus_config);
+        }
 
         // This is a mapping from the parameter IDs specified by the plugin to pointers to thsoe
         // parameters. Since the object returned by `params()` is pinned, these pointers are safe to
@@ -437,6 +488,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         _min_frames_count: u32,
         max_frames_count: u32,
     ) -> bool {
+        check_null_ptr!(false, plugin);
         let wrapper = &*(plugin as *const Self);
 
         let bus_config = wrapper.current_bus_config.load();
@@ -605,22 +657,121 @@ impl<P: ClapPlugin> Wrapper<P> {
         check_null_ptr!(ptr::null(), plugin, id);
         let wrapper = &*(plugin as *const Self);
 
-        // TODO: Implement the other useful extensions. Like uh audio inputs.
+        // TODO: Implement the following extensions:
+        //       - audio ports (for naming audio ports)
+        //       - gui
+        //       - the non-freestanding GUI extensions depending on the platform
+        //       - latency
+        //       - state
         let id = CStr::from_ptr(id);
-        if id == CStr::from_ptr(CLAP_EXT_PARAMS) {
+        if id == CStr::from_ptr(CLAP_EXT_AUDIO_PORTS_CONFIG) {
+            &wrapper.clap_plugin_audio_ports_config as *const _ as *const c_void
+        } else if id == CStr::from_ptr(CLAP_EXT_PARAMS) {
             &wrapper.clap_plugin_params as *const _ as *const c_void
         } else {
+            nih_log!("Host tried to query unknown extension '{:?}'", id);
             ptr::null()
         }
     }
 
     unsafe extern "C" fn on_main_thread(plugin: *const clap_plugin) {
+        check_null_ptr!((), plugin);
         let wrapper = &*(plugin as *const Self);
 
         // [Self::do_maybe_async] posts a task to the queue and asks the host to call this function
         // on the main thread, so once that's done we can just handle all requests here
         while let Some(task) = wrapper.tasks.pop() {
             wrapper.execute(task);
+        }
+    }
+
+    unsafe extern "C" fn ext_audio_ports_config_count(plugin: *const clap_plugin) -> u32 {
+        // TODO: Implement sidechain nputs and auxiliary outputs
+        check_null_ptr!(0, plugin);
+        let wrapper = &*(plugin as *const Self);
+
+        wrapper.supported_bus_configs.len() as u32
+    }
+
+    unsafe extern "C" fn ext_audio_ports_config_get(
+        plugin: *const clap_plugin,
+        index: u32,
+        config: *mut clap_audio_ports_config,
+    ) -> bool {
+        check_null_ptr!(false, plugin, config);
+        let wrapper = &*(plugin as *const Self);
+
+        match wrapper.supported_bus_configs.get(index as usize) {
+            Some(bus_config) => {
+                let name = match bus_config {
+                    BusConfig {
+                        num_input_channels: _,
+                        num_output_channels: 1,
+                    } => String::from("Mono"),
+                    BusConfig {
+                        num_input_channels: _,
+                        num_output_channels: 2,
+                    } => String::from("Stereo"),
+                    BusConfig {
+                        num_input_channels,
+                        num_output_channels,
+                    } => format!("{num_input_channels} inputs, {num_output_channels} outputs"),
+                };
+                let input_port_type = match bus_config.num_input_channels {
+                    1 => CLAP_PORT_MONO,
+                    2 => CLAP_PORT_STEREO,
+                    _ => ptr::null(),
+                };
+                let output_port_type = match bus_config.num_output_channels {
+                    1 => CLAP_PORT_MONO,
+                    2 => CLAP_PORT_STEREO,
+                    _ => ptr::null(),
+                };
+
+                *config = std::mem::zeroed();
+                let config = &mut *config;
+                config.id = index;
+                strlcpy(&mut config.name, &name);
+                config.input_channel_count = bus_config.num_input_channels;
+                config.input_port_type = input_port_type;
+                config.output_channel_count = bus_config.num_output_channels;
+                config.output_port_type = output_port_type;
+
+                true
+            }
+            None => {
+                nih_debug_assert_failure!(
+                    "Host tried to query out of bounds audio port config {}",
+                    index
+                );
+
+                false
+            }
+        }
+    }
+
+    unsafe extern "C" fn ext_audio_ports_config_select(
+        plugin: *const clap_plugin,
+        config_id: clap_id,
+    ) -> bool {
+        check_null_ptr!(false, plugin);
+        let wrapper = &*(plugin as *const Self);
+
+        // We use the vector indices for the config ID
+        match wrapper.supported_bus_configs.get(config_id as usize) {
+            Some(bus_config) => {
+                wrapper.current_bus_config.store(*bus_config);
+
+                true
+            }
+            None => {
+                nih_debug_assert_failure!(
+                    "Host tried to select out of bounds audio port config {}",
+                    config_id
+                );
+
+                false
+            }
         }
     }
 
