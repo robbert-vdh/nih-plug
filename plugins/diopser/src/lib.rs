@@ -361,6 +361,14 @@ impl Diopser {
             .next_step(smoothing_interval);
         let spread_style = self.params.filter_spread_style.value();
 
+        // Used to calculate the linear spread. This is calculated in such a way that the range
+        // never dips below 0.
+        let max_octave_spread = if spread_octaves >= 0.0 {
+            frequency - (frequency * 2.0f32.powf(-spread_octaves))
+        } else {
+            (frequency * 2.0f32.powf(spread_octaves)) - frequency
+        };
+
         const MIN_FREQUENCY: f32 = 5.0;
         let max_frequency = self.sample_rate / 2.05;
         for filter_idx in 0..self.params.filter_stages.value as usize {
@@ -372,7 +380,7 @@ impl Diopser {
             // filter
             let filter_frequency = match spread_style {
                 SpreadStyle::Octaves => frequency * 2.0f32.powf(spread_octaves * filter_proportion),
-                SpreadStyle::Linear => frequency * 2.0f32.powf(spread_octaves) * filter_proportion,
+                SpreadStyle::Linear => frequency + (max_octave_spread * filter_proportion),
             }
             .clamp(MIN_FREQUENCY, max_frequency);
 
