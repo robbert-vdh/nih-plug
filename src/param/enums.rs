@@ -173,7 +173,7 @@ impl Param for EnumParamInner {
     }
 
     fn step_count(&self) -> Option<usize> {
-        Some(self.len())
+        Some(self.len() - 1)
     }
 
     fn plain_value(&self) -> Self::Plain {
