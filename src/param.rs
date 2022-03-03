@@ -79,7 +79,7 @@ pub trait Param: Display {
     fn update_smoother(&mut self, sample_rate: f32, reset: bool);
 
     /// Allocate memory for block-based smoothing. The
-    /// [`Plugin::initialize_block_smoothers()`][crate::Plugin::initialize_block_smoothers()] method
+    /// [`Plugin::initialize_block_smoothers()`][crate::prelude::Plugin::initialize_block_smoothers()] method
     /// will do this for every smoother.
     fn initialize_block_smoother(&mut self, max_block_size: usize);
 

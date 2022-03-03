@@ -1,3 +1,5 @@
+//! Utilities to handle smoothing parameter changes over time.
+
 use atomic_float::AtomicF32;
 use atomic_refcell::{AtomicRefCell, AtomicRefMut};
 use std::sync::atomic::{AtomicI32, Ordering};
@@ -42,7 +44,7 @@ pub struct Smoother<T> {
     target: T,
 
     /// A dense buffer containing smoothed values for an entire block of audio. Useful when using
-    /// [`Buffer::iter_blocks()`][crate::Buffer::iter_blocks()] to process small blocks of audio
+    /// [`Buffer::iter_blocks()`][crate::prelude::Buffer::iter_blocks()] to process small blocks of audio
     /// multiple times.
     block_values: AtomicRefCell<Vec<T>>,
 }
@@ -82,8 +84,8 @@ impl<T: Default> Smoother<T> {
     }
 
     /// Allocate memory to store smoothed values for an entire block of audio. Call this in
-    /// [`Plugin::initialize()`][crate::Plugin::initialize()] with the same max block size you are
-    /// going to pass to [`Buffer::iter_blocks()`][crate::Buffer::iter_blocks()].
+    /// [`Plugin::initialize()`][crate::prelude::Plugin::initialize()] with the same max block size you are
+    /// going to pass to [`Buffer::iter_blocks()`][crate::prelude::Buffer::iter_blocks()].
     pub fn initialize_block_smoother(&mut self, max_block_size: usize) {
         self.block_values
             .borrow_mut()
@@ -136,10 +138,10 @@ impl Smoother<f32> {
     }
 
     /// Produce smoothed values for an entire block of audio. Used in conjunction with
-    /// [`Buffer::iter_blocks()`][crate::Buffer::iter_blocks()]. Make sure to call
-    /// [`Plugin::initialize_block_smoothers()`][crate::Plugin::initialize_block_smoothers()] with
+    /// [`Buffer::iter_blocks()`][crate::prelude::Buffer::iter_blocks()]. Make sure to call
+    /// [`Plugin::initialize_block_smoothers()`][crate::prelude::Plugin::initialize_block_smoothers()] with
     /// the same maximum buffer block size as the one passed to `iter_blocks()` in your
-    /// [`Plugin::initialize()`][crate::Plugin::initialize()] function first to allocate memory for
+    /// [`Plugin::initialize()`][crate::prelude::Plugin::initialize()] function first to allocate memory for
     /// the block smoothing.
     ///
     /// Returns a `None` value if the block length exceed's the allocated capacity.
@@ -238,10 +240,10 @@ impl Smoother<i32> {
     }
 
     /// Produce smoothed values for an entire block of audio. Used in conjunction with
-    /// [`Buffer::iter_blocks()`][crate::Buffer::iter_blocks()]. Make sure to call
-    /// [`Plugin::initialize_block_smoothers()`][crate::Plugin::initialize_block_smoothers()] with
+    /// [`Buffer::iter_blocks()`][crate::prelude::Buffer::iter_blocks()]. Make sure to call
+    /// [`Plugin::initialize_block_smoothers()`][crate::prelude::Plugin::initialize_block_smoothers()] with
     /// the same maximum buffer block size as the one passed to `iter_blocks()` in your
-    /// [`Plugin::initialize()`][crate::Plugin::initialize()] function first to allocate memory for
+    /// [`Plugin::initialize()`][crate::prelude::Plugin::initialize()] function first to allocate memory for
     /// the block smoothing.
     ///
     /// Returns a `None` value if the block length exceed's the allocated capacity.

@@ -33,8 +33,8 @@ pub struct SamplesIter<'slice, 'sample: 'slice> {
 }
 
 /// Can construct iterators over actual iterator over the channel data for a sample, yielded by
-/// [`Samples`]. Can be turned into an iterator, or [`Channels::iter_mut()`] can be used to iterate
-/// over the channel data multiple times, or more efficiently you can use
+/// [`SamplesIter`]. Can be turned into an iterator, or [`Channels::iter_mut()`] can be used to
+/// iterate over the channel data multiple times, or more efficiently you can use
 /// [`Channels::get_unchecked_mut()`] to do the same thing.
 pub struct Channels<'slice, 'sample: 'slice> {
     /// The raw output buffers.
@@ -262,10 +262,10 @@ impl<'a> Buffer<'a> {
     /// SIMD.
     ///
     /// The parameter smoothers can also produce smoothed values for an entire block using
-    /// [`Smoother::next_block()`][crate::Smoother::next_block()]. Before using this, you will need
-    /// to call
-    /// [`Plugin::initialize_block_smoothers()`][crate::Plugin::initialize_block_smoothers()] with
-    /// the same `max_block_size` in your initialization function first.
+    /// [`Smoother::next_block()`][crate::prelude::Smoother::next_block()]. Before using this, you
+    /// will need to call
+    /// [`Plugin::initialize_block_smoothers()`][crate::prelude::Plugin::initialize_block_smoothers()]
+    /// with the same `max_block_size` in your initialization function first.
     ///
     /// You can use this to obtain block-slices from a buffer so you can pass them to a library:
     ///

@@ -57,7 +57,7 @@ pub trait Plugin: Default + Send + Sync + 'static {
     /// [`Editor::spawn()`]. A plugin editor likely wants to interact with the plugin's parameters
     /// and other shared data, so you'll need to move [`Arc`] pointing to any data you want to
     /// access into the editor. You can later modify the parameters through the
-    /// [`GuiContext`][crate::GuiContext] and [`ParamSetter`][crate::ParamSetter] after the editor
+    /// [`GuiContext`][crate::prelude::GuiContext] and [`ParamSetter`][crate::prelude::ParamSetter] after the editor
     /// GUI has been created.
     fn editor(&self) -> Option<Box<dyn Editor>> {
         None
@@ -102,9 +102,9 @@ pub trait Plugin: Default + Send + Sync + 'static {
     /// either per-sample per-channel, or per-block per-channel per-sample. The first approach is
     /// preferred for plugins that don't require block-based processing because of their use of
     /// per-sample SIMD or excessive branching. The parameter smoothers can also work in both modes:
-    /// use [`Smoother::next()`][crate::Smoother::next()] for per-sample processing, and
-    /// [`Smoother::next_block()`][crate::Smoother::next_block()] for block-based processing. In
-    /// order to use block-based smoothing, you will need to call
+    /// use [`Smoother::next()`][crate::prelude::Smoother::next()] for per-sample processing, and
+    /// [`Smoother::next_block()`][crate::prelude::Smoother::next_block()] for block-based
+    /// processing. In order to use block-based smoothing, you will need to call
     /// [`initialize_block_smoothers()`][Self::initialize_block_smoothers()] in your
     /// [`initialize()`][Self::initialize()] function first to reserve enough capacity in the
     /// smoothers.
@@ -119,7 +119,7 @@ pub trait Plugin: Default + Send + Sync + 'static {
     /// memory, this should be called in [`initialize()`][Self::initialize()]. If you are going to
     /// use [`Buffer::iter_blocks()`] and want to use parameter smoothing in those blocks, then call
     /// this function with the same maximum block size first before calling
-    /// [`Smoother::next_block()`][crate::Smoother::next_block()].
+    /// [`Smoother::next_block()`][crate::prelude::Smoother::next_block()].
     fn initialize_block_smoothers(&mut self, max_block_size: usize) {
         for param in self.params().param_map().values_mut() {
             unsafe { param.initialize_block_smoother(max_block_size) };
@@ -193,7 +193,7 @@ pub trait Editor: Send + Sync {
     /// Create an instance of the plugin's editor and embed it in the parent window. As explained in
     /// [`Plugin::editor()`], you can then read the parameter values directly from your [`Params`]
     /// object, and modifying the values can be done using the functions on the
-    /// [`ParamSetter`][crate::ParamSetter]. When you change a parameter value that way it will be
+    /// [`ParamSetter`][crate::prelude::ParamSetter]. When you change a parameter value that way it will be
     /// broadcasted to the host and also updated in your [`Params`] struct.
     ///
     /// This function should return a handle to the editor, which will be dropped when the editor

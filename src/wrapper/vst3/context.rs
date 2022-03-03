@@ -11,7 +11,7 @@ use crate::param::internals::ParamPtr;
 use crate::plugin::{NoteEvent, Vst3Plugin};
 
 /// A [`GuiContext`] implementation for the wrapper. This is passed to the plugin in
-/// [`Editor::spawn()`][crate::Editor::spawn()] so it can interact with the rest of the plugin and
+/// [`Editor::spawn()`][crate::prelude::Editor::spawn()] so it can interact with the rest of the plugin and
 /// with the host for things like setting parameters.
 pub(crate) struct WrapperGuiContext<P: Vst3Plugin> {
     pub(super) inner: Arc<WrapperInner<P>>,

@@ -1,9 +1,12 @@
+//! Documentation is currently a work in progress. Import everything from the [`prelude`] module and
+//! check out the example plugins to get started.
+
 #![cfg_attr(feature = "simd", feature(portable_simd))]
 
 #[macro_use]
 pub mod debug;
 
-/// Everything you'd need to use NIH-plug. Import this with `use nih_plug::prelude::*;`.
+/// Everything you'll need to use NIH-plug. Import this with `use nih_plug::prelude::*;`.
 pub mod prelude;
 
 // These modules have also been re-exported in the prelude.
