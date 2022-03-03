@@ -40,7 +40,7 @@ use std::ffi::{c_void, CStr};
 use std::os::raw::c_char;
 use std::ptr;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::thread::{self, ThreadId};
 
 use super::context::WrapperProcessContext;
@@ -65,6 +65,9 @@ lazy_static! {
 pub struct Wrapper<P: ClapPlugin> {
     // Keep the vtable as the first field so we can do a simple pointer cast
     pub clap_plugin: clap_plugin,
+
+    /// A reference to this object, upgraded to an `Arc<Self>` for the GUI context.
+    this: RwLock<Weak<Self>>,
 
     /// The wrapped plugin instance.
     plugin: RwLock<P>,
@@ -247,6 +250,8 @@ impl<P: ClapPlugin> Wrapper<P> {
                 on_main_thread: Self::on_main_thread,
             },
 
+            this: RwLock::new(Weak::new()),
+
             plugin: RwLock::new(P::default()),
             current_bus_config: AtomicCell::new(BusConfig {
                 num_input_channels: P::DEFAULT_NUM_INPUTS,
@@ -372,7 +377,12 @@ impl<P: ClapPlugin> Wrapper<P> {
             .map(|(_, hash, ptr)| (*ptr, hash))
             .collect();
 
-        Arc::new(wrapper)
+        // Finally, the wrapper needs to contain a reference to itself so we can create GuiContexts
+        // when opening plugin editors
+        let wrapper = Arc::new(wrapper);
+        *wrapper.this.write() = Arc::downgrade(&wrapper);
+
+        wrapper
     }
 
     fn make_process_context(&self) -> WrapperProcessContext<'_, P> {
