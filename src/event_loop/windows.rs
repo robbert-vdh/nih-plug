@@ -33,7 +33,7 @@ const NOTIFY_MESSAGE_ID: u32 = WM_USER;
 /// casted from a regular pointer.
 type PollCallback = Box<dyn Fn()>;
 
-/// See [super::EventLoop].
+/// See [`EventLoop`][super::EventLoop].
 pub(crate) struct WindowsEventLoop<T, E> {
     /// The thing that ends up executing these tasks. The tasks are usually executed from the worker
     /// thread, but if the current thread is the main thread then the task cna also be executed

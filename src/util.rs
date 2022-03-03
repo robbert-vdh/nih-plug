@@ -10,7 +10,7 @@ pub fn db_to_gain(dbs: f32) -> f32 {
 }
 
 /// Convert a voltage gain ratio to decibels. Gain ratios that aren't positive will be treated as
-/// [MINUS_INFINITY_DB].
+/// [`MINUS_INFINITY_DB`].
 pub fn gain_to_db(gain: f32) -> f32 {
     if gain > 0.0 {
         gain.log10() * 20.0

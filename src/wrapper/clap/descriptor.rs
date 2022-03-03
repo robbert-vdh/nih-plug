@@ -11,7 +11,8 @@ use crate::plugin::ClapPlugin;
 /// A static descriptor for a plugin. This is used in both the descriptor and on the plugin object
 /// itself.
 ///
-/// This cannot be cloned as [Self::clap_features_ptrs] contains pointers to [Self::clap_features].
+/// This cannot be cloned as [`Self::clap_features_ptrs`] contains pointers to
+/// [Self::clap_features].
 pub struct PluginDescriptor<P: ClapPlugin> {
     // We need [CString]s for all of `ClapPlugin`'s `&str` fields
     clap_id: CString,

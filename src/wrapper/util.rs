@@ -50,7 +50,7 @@ pub fn strlcpy(dest: &mut [c_char], src: &str) {
     dest[copy_len] = 0;
 }
 
-/// The same as [strlcpy()], but for VST3's fun UTF-16 strings instead.
+/// The same as [`strlcpy()`], but for VST3's fun UTF-16 strings instead.
 pub fn u16strlcpy(dest: &mut [TChar], src: &str) {
     if dest.is_empty() {
         return;

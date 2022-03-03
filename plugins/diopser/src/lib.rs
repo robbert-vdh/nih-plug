@@ -57,7 +57,7 @@ struct Diopser {
     sample_rate: f32,
 
     /// All of the all-pass filters, with vectorized coefficients so they can be calculated for
-    /// multiple channels at once. [DiopserParams::num_stages] controls how many filters are
+    /// multiple channels at once. [`DiopserParams::num_stages`] controls how many filters are
     /// actually active.
     #[cfg(feature = "simd")]
     filters: [filter::Biquad<f32x2>; MAX_NUM_FILTERS],
@@ -315,8 +315,9 @@ impl Plugin for Diopser {
 }
 
 impl Diopser {
-    /// Check if the filters need to be updated beased on [Self::should_update_filters] and the
-    /// smoothing interval, and update them as needed.
+    /// Check if the filters need to be updated beased on
+    /// [`should_update_filters`][Self::should_update_filters] and the smoothing interval, and
+    /// update them as needed.
     fn maybe_update_filters(&mut self, smoothing_interval: u32) {
         // In addition to updating the filters, we should also clear the filter's state when
         // changing a setting we can't neatly interpolate between.

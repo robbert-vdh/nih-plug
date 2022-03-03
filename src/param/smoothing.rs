@@ -42,7 +42,8 @@ pub struct Smoother<T> {
     target: T,
 
     /// A dense buffer containing smoothed values for an entire block of audio. Useful when using
-    /// [crate::Buffer::iter_blocks()] to process small blocks of audio multiple times.
+    /// [`Buffer::iter_blocks()`][crate::Buffer::iter_blocks()] to process small blocks of audio
+    /// multiple times.
     block_values: AtomicRefCell<Vec<T>>,
 }
 
@@ -74,15 +75,15 @@ impl<T: Default> Smoother<T> {
         Default::default()
     }
 
-    /// Whether calling [Self::next()] will yield a new value or an old value. Useful if you need to
-    /// recompute something wheenver this parameter changes.
+    /// Whether calling [`next()`][Self::next()] will yield a new value or an old value. Useful if
+    /// you need to recompute something wheenver this parameter changes.
     pub fn is_smoothing(&self) -> bool {
         self.steps_left.load(Ordering::Relaxed) > 0
     }
 
     /// Allocate memory to store smoothed values for an entire block of audio. Call this in
-    /// [crate::Plugin::initialize()] with the same max block size you are going to pass to
-    /// [crate::Buffer::iter_blocks()].
+    /// [`Plugin::initialize()`][crate::Plugin::initialize()] with the same max block size you are
+    /// going to pass to [`Buffer::iter_blocks()`][crate::Buffer::iter_blocks()].
     pub fn initialize_block_smoother(&mut self, max_block_size: usize) {
         self.block_values
             .borrow_mut()
@@ -135,10 +136,11 @@ impl Smoother<f32> {
     }
 
     /// Produce smoothed values for an entire block of audio. Used in conjunction with
-    /// [crate::Buffer::iter_blocks()]. Make sure to call
-    /// [crate::Plugin::initialize_block_smoothers()] with the same maximum buffer block size as the
-    /// one passed to `iter_blocks()` in your [crate::Plugin::initialize()] function first to
-    /// allocate memory for the block smoothing.
+    /// [`Buffer::iter_blocks()`][crate::Buffer::iter_blocks()]. Make sure to call
+    /// [`Plugin::initialize_block_smoothers()`][crate::Plugin::initialize_block_smoothers()] with
+    /// the same maximum buffer block size as the one passed to `iter_blocks()` in your
+    /// [`Plugin::initialize()`][crate::Plugin::initialize()] function first to allocate memory for
+    /// the block smoothing.
     ///
     /// Returns a `None` value if the block length exceed's the allocated capacity.
     ///
@@ -163,10 +165,10 @@ impl Smoother<f32> {
         }))
     }
 
-    /// [Self::next()], but with the ability to skip forward in the smoother. [Self::next()] is
-    /// equivalent to calling this function with a `steps` value of 1. Calling this function with a
-    /// `steps` value of `n` means will cause you to skip the next `n - 1` values and return the
-    /// `n`th value.
+    /// [`next()`][Self::next()], but with the ability to skip forward in the smoother.
+    /// [`next()`][Self::next()] is equivalent to calling this function with a `steps` value of 1.
+    /// Calling this function with a `steps` value of `n` means will cause you to skip the next `n -
+    /// 1` values and return the `n`th value.
     #[inline]
     pub fn next_step(&self, steps: u32) -> f32 {
         nih_debug_assert_ne!(steps, 0);
@@ -236,10 +238,11 @@ impl Smoother<i32> {
     }
 
     /// Produce smoothed values for an entire block of audio. Used in conjunction with
-    /// [crate::Buffer::iter_blocks()]. Make sure to call
-    /// [crate::Plugin::initialize_block_smoothers()] with the same maximum buffer block size as the
-    /// one passed to `iter_blocks()` in your [crate::Plugin::initialize()] function first to
-    /// allocate memory for the block smoothing.
+    /// [`Buffer::iter_blocks()`][crate::Buffer::iter_blocks()]. Make sure to call
+    /// [`Plugin::initialize_block_smoothers()`][crate::Plugin::initialize_block_smoothers()] with
+    /// the same maximum buffer block size as the one passed to `iter_blocks()` in your
+    /// [`Plugin::initialize()`][crate::Plugin::initialize()] function first to allocate memory for
+    /// the block smoothing.
     ///
     /// Returns a `None` value if the block length exceed's the allocated capacity.
     ///
@@ -260,10 +263,10 @@ impl Smoother<i32> {
         }))
     }
 
-    /// [Self::next()], but with the ability to skip forward in the smoother. [Self::next()] is
-    /// equivalent to calling this function with a `steps` value of 1. Calling this function with a
-    /// `steps` value of `n` means will cause you to skip the next `n - 1` values and return the
-    /// `n`th value.
+    /// [`next()`][Self::next()], but with the ability to skip forward in the smoother.
+    /// [`next()`][Self::next()] is equivalent to calling this function with a `steps` value of 1.
+    /// Calling this function with a `steps` value of `n` means will cause you to skip the next `n -
+    /// 1` values and return the `n`th value.
     pub fn next_step(&self, steps: u32) -> i32 {
         nih_debug_assert_ne!(steps, 0);
 

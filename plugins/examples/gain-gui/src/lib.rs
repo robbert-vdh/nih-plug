@@ -18,7 +18,7 @@ struct Gain {
 
     /// Needed to normalize the peak meter's response based on the sample rate.
     peak_meter_decay_weight: f32,
-    /// The current data for the peak meter. This is stored as an [Arc] so we can share it between
+    /// The current data for the peak meter. This is stored as an [`Arc`] so we can share it between
     /// the GUI and the audio processing parts. If you have more state to share, then it's a good
     /// idea to put all of that in a struct behind a single `Arc`.
     ///

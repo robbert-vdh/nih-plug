@@ -7,13 +7,13 @@ pub enum FloatRange {
     Linear { min: f32, max: f32 },
     /// The range is skewed by a factor. Values above 1.0 will make the end of the range wider,
     /// while values between 0 and 1 will skew the range towards the start. Use
-    /// [FloatRange::skew_factor()] for a more intuitively way to calculate the skew factor where
+    /// [`FloatRange::skew_factor()`] for a more intuitively way to calculate the skew factor where
     /// positive values skew the range towards the end while negative values skew the range toward
     /// the start.
     Skewed { min: f32, max: f32, factor: f32 },
-    /// The same as [FloatRange::Skewed], but with the skewing happening from a central point. This
-    /// central point is rescaled to be at 50% of the parameter's range for convenience of use. Git
-    /// blame this comment to find a version that doesn't do this.
+    /// The same as [`FloatRange::Skewed`], but with the skewing happening from a central point.
+    /// This central point is rescaled to be at 50% of the parameter's range for convenience of use.
+    /// Git blame this comment to find a version that doesn't do this.
     SymmetricalSkewed {
         min: f32,
         max: f32,
@@ -44,7 +44,7 @@ impl Default for IntRange {
 }
 
 impl FloatRange {
-    /// Calculate a skew factor for [FloatRange::Skewed] and [FloatRange::SymmetricalSkewed].
+    /// Calculate a skew factor for [`FloatRange::Skewed`] and [`FloatRange::SymmetricalSkewed`].
     /// Positive values make the end of the range wider while negative make the start of the range
     /// wider.
     pub fn skew_factor(factor: f32) -> f32 {

@@ -19,7 +19,7 @@ macro_rules! check_null_ptr {
     };
 }
 
-/// The same as [check_null_ptr!], but with a custom message.
+/// The same as [`check_null_ptr!`], but with a custom message.
 macro_rules! check_null_ptr_msg {
     ($msg:expr, $ptr:expr $(, $ptrs:expr)* $(, )?) => {
         if $ptr.is_null() $(|| $ptrs.is_null())* {
@@ -35,8 +35,8 @@ pub struct VstPtr<T: vst3_sys::ComInterface + ?Sized> {
     ptr: vst3_sys::VstPtr<T>,
 }
 
-/// The same as [VstPtr] with shared semnatics, but for objects we defined ourself since VstPtr only
-/// works for interfaces.
+/// The same as [`VstPtr`] with shared semnatics, but for objects we defined ourself since VstPtr
+/// only works for interfaces.
 #[repr(transparent)]
 pub struct ObjectPtr<T: IUnknown> {
     ptr: *const T,

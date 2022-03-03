@@ -334,7 +334,7 @@ impl<P: Vst3Plugin> IEditController for Wrapper<P> {
             u16strlcpy(&mut info.title, param_ptr.name());
             u16strlcpy(&mut info.short_title, param_ptr.name());
             u16strlcpy(&mut info.units, param_ptr.unit());
-            // TODO: The host assumes these steps are distirbuted linearly, so this may cause weird
+            // TODO: The host assumes these steps are distributed linearly, so this may cause weird
             //       behavior with skewed integers
             info.step_count = param_ptr.step_count().unwrap_or(0) as i32;
             info.default_normalized_value = *default_value as f64;

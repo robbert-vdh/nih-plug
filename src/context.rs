@@ -7,7 +7,8 @@ use crate::plugin::NoteEvent;
 // TODO: ProcessContext for parameter automation and sending events
 
 /// General callbacks the plugin can make during its lifetime. This is passed to the plugin during
-/// [crate::plugin::Plugin::initialize()] and as part of [crate::plugin::Plugin::process()].
+/// [`Plugin::initialize()`][crate::plugin::Plugin::initialize()] and as part of
+/// [`Plugin::process()`][crate::plugin::Plugin::process()].
 //
 // # Safety
 //
@@ -32,16 +33,16 @@ pub trait ProcessContext {
 }
 
 /// Callbacks the plugin can make when the user interacts with its GUI such as updating parameter
-/// values. This is passed to the plugin during [crate::Editor::spawn()]. All of these functions
-/// assume they're being called from the main GUI thread.
+/// values. This is passed to the plugin during [`Editor::spawn()`][crate::Editor::spawn()]. All of
+/// these functions assume they're being called from the main GUI thread.
 //
 // # Safety
 //
 // The implementing wrapper can assume that everything is being called from the main thread. Since
 // NIH-plug doesn't own the GUI event loop, this invariant cannot be part of the interface.
 pub trait GuiContext: Send + Sync + 'static {
-    /// Inform the host a parameter will be automated. Create a [ParamSetter] and use
-    /// [ParamSetter::begin_set_parameter] instead for a safe, user friendly API.
+    /// Inform the host a parameter will be automated. Create a [`ParamSetter`] and use
+    /// [`ParamSetter::begin_set_parameter()`] instead for a safe, user friendly API.
     ///
     /// # Safety
     ///
@@ -50,7 +51,8 @@ pub trait GuiContext: Send + Sync + 'static {
     unsafe fn raw_begin_set_parameter(&self, param: ParamPtr);
 
     /// Inform the host a parameter is being automated with an already normalized value. Create a
-    /// [ParamSetter] and use [ParamSetter::set_parameter] instead for a safe, user friendly API.
+    /// [`ParamSetter`] and use [`ParamSetter::set_parameter()`] instead for a safe, user friendly
+    /// API.
     ///
     /// # Safety
     ///
@@ -58,8 +60,8 @@ pub trait GuiContext: Send + Sync + 'static {
     /// mostly marked as unsafe for API reasons.
     unsafe fn raw_set_parameter_normalized(&self, param: ParamPtr, normalized: f32);
 
-    /// Inform the host a parameter has been automated. Create a [ParamSetter] and use
-    /// [ParamSetter::end_set_parameter] instead for a safe, user friendly API.
+    /// Inform the host a parameter has been automated. Create a [`ParamSetter`] and use
+    /// [`ParamSetter::end_set_parameter()`] instead for a safe, user friendly API.
     ///
     /// # Safety
     ///
@@ -68,8 +70,8 @@ pub trait GuiContext: Send + Sync + 'static {
     unsafe fn raw_end_set_parameter(&self, param: ParamPtr);
 
     /// Retrieve the default value for a parameter, in case you forgot. This does not perform a
-    /// callback Create a [ParamSetter] and use [ParamSetter::default_param_value] instead for a
-    /// safe, user friendly API.
+    /// callback Create a [`ParamSetter`] and use [`ParamSetter::default_param_value()`] instead for
+    /// a safe, user friendly API.
     ///
     /// # Safety
     ///
@@ -91,16 +93,17 @@ impl<'a> ParamSetter<'a> {
     }
 
     /// Inform the host that you will start automating a parmater. This needs to be called before
-    /// calling [Self::set_parameter()] for the specified parameter.
+    /// calling [`set_parameter()`][Self::set_parameter()] for the specified parameter.
     pub fn begin_set_parameter<P: Param>(&self, param: &P) {
         unsafe { self.context.raw_begin_set_parameter(param.as_ptr()) };
     }
 
     /// Set a parameter to the specified parameter value. You will need to call
-    /// [Self::begin_set_parameter()] before and [Self::end_set_parameter()] after calling this so
-    /// the host can properly record automation for the parameter. This can be called multiple times
-    /// in a row before calling [Self::end_set_parameter()], for instance when moving a slider
-    /// around.
+    /// [`begin_set_parameter()`][Self::begin_set_parameter()] before and
+    /// [`end_set_parameter()`][Self::end_set_parameter()] after calling this so the host can
+    /// properly record automation for the parameter. This can be called multiple times in a row
+    /// before calling [`end_set_parameter()`][Self::end_set_parameter()], for instance when moving
+    /// a slider around.
     ///
     /// This function assumes you're already calling this from a GUI thread. Calling any of these
     /// functions from any other thread may result in unexpected behavior.
@@ -111,20 +114,20 @@ impl<'a> ParamSetter<'a> {
     }
 
     /// Set a parameter to an already normalized value. Works exactly the same as
-    /// [Self::set_parameter] and needs to follow the same rules, but this may be useful when
-    /// implementing a GUI.
+    /// [`set_parameter()`][Self::set_parameter()] and needs to follow the same rules, but this may
+    /// be useful when implementing a GUI.
     ///
     /// This does not perform any snapping. Consider converting the normalized value to a plain
-    /// value and setting that with [Self::set_parameter()] instead so the normalized value known to
-    /// the host matches `param.normalized_value()`.
+    /// value and setting that with [`set_parameter()`][Self::set_parameter()] instead so the
+    /// normalized value known to the host matches `param.normalized_value()`.
     pub fn set_parameter_normalized<P: Param>(&self, param: &P, normalized: f32) {
         let ptr = param.as_ptr();
         unsafe { self.context.raw_set_parameter_normalized(ptr, normalized) };
     }
 
     /// Inform the host that you are done automating a parameter. This needs to be called after one
-    /// or more [Self::set_parameter()] calls for a parameter so the host knows the automation
-    /// gesture has finished.
+    /// or more [`set_parameter()`][Self::set_parameter()] calls for a parameter so the host knows
+    /// the automation gesture has finished.
     pub fn end_set_parameter<P: Param>(&self, param: &P) {
         unsafe { self.context.raw_end_set_parameter(param.as_ptr()) };
     }
@@ -138,7 +141,8 @@ impl<'a> ParamSetter<'a> {
         }
     }
 
-    /// The same as [Self::default_normalized_param_value], but without the normalization.
+    /// The same as [`default_normalized_param_value()`][Self::default_normalized_param_value()],
+    /// but without the normalization.
     pub fn default_param_value<P: Param>(&self, param: &P) -> P::Plain {
         param.preview_plain(self.default_normalized_param_value(param))
     }

@@ -37,7 +37,7 @@ pub trait Param: Display {
     fn plain_value(&self) -> Self::Plain;
 
     /// Set this parameter based on a plain, unnormalized value. This does **not** snap to step
-    /// sizes for continuous parameters (i.e. [FloatParam]).
+    /// sizes for continuous parameters (i.e. [`FloatParam`]).
     ///
     /// This does **not** update the smoother.
     fn set_plain_value(&mut self, plain: Self::Plain);
@@ -46,7 +46,7 @@ pub trait Param: Display {
     fn normalized_value(&self) -> f32;
 
     /// Set this parameter based on a normalized value. This **does** snap to step sizes for
-    /// continuous parameters (i.e. [FloatParam]).
+    /// continuous parameters (i.e. [`FloatParam`]).
     ///
     /// This does **not** update the smoother.
     fn set_normalized_value(&mut self, normalized: f32);
@@ -64,7 +64,7 @@ pub trait Param: Display {
     fn preview_normalized(&self, plain: Self::Plain) -> f32;
 
     /// Get the plain, unnormalized value for a normalized value, as a float. Used as part of the
-    /// wrappers. This **does** snap to step sizes for continuous parameters (i.e. [FloatParam]).
+    /// wrappers. This **does** snap to step sizes for continuous parameters (i.e. [`FloatParam`]).
     fn preview_plain(&self, normalized: f32) -> Self::Plain;
 
     /// Set this parameter based on a string. Returns whether the updating succeeded. That can fail
@@ -78,11 +78,12 @@ pub trait Param: Display {
     /// reset to the current value.
     fn update_smoother(&mut self, sample_rate: f32, reset: bool);
 
-    /// Allocate memory for block-based smoothing. The [crate::Plugin::initialize_block_smoothers()]
-    /// method will do this for every smoother.
+    /// Allocate memory for block-based smoothing. The
+    /// [`Plugin::initialize_block_smoothers()`][crate::Plugin::initialize_block_smoothers()] method
+    /// will do this for every smoother.
     fn initialize_block_smoother(&mut self, max_block_size: usize);
 
-    /// Internal implementation detail for implementing [internals::Params]. This should not be used
-    /// directly.
+    /// Internal implementation detail for implementing [`Params`][internals::Params]. This should
+    /// not be used directly.
     fn as_ptr(&self) -> internals::ParamPtr;
 }

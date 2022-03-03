@@ -33,15 +33,17 @@ pub trait Enum {
     fn variants() -> &'static [&'static str];
 
     /// Get the variant index (which may not be the same as the discriminator) corresponding to the
-    /// active variant. The index needs to correspond to the name in [Self::variants()].
+    /// active variant. The index needs to correspond to the name in
+    /// [`variants()`][Self::variants()].
     fn to_index(self) -> usize;
 
-    /// Get the variant corresponding to the variant with the same index in [Self::variants()]. This
-    /// must always return a value. If the index is out of range, return the first variatn.
+    /// Get the variant corresponding to the variant with the same index in
+    /// [`variants()`][Self::variants()]. This must always return a value. If the index is out of
+    /// range, return the first variatn.
     fn from_index(index: usize) -> Self;
 }
 
-/// An [IntParam]-backed categorical parameter that allows convenient conversion to and from a
+/// An [`IntParam`]-backed categorical parameter that allows convenient conversion to and from a
 /// simple enum. This enum must derive the re-exported [Enum] trait. Check the trait's documentation
 /// for more information on how this works.
 pub struct EnumParam<T: Enum> {
@@ -50,12 +52,12 @@ pub struct EnumParam<T: Enum> {
     inner: EnumParamInner,
 
     /// `T` is only used on the plugin side to convert back to an enum variant. Internally
-    /// everything works through the variants field on [EnumParamInner].
+    /// everything works through the variants field on [`EnumParamInner`].
     _marker: PhantomData<T>,
 }
 
-/// The type-erased internals for [EnumParam] so that the wrapper can interact with it. Acts like an
-/// [IntParam] but with different conversions from strings to values.
+/// The type-erased internals for [`EnumParam`] so that the wrapper can interact with it. Acts like
+/// an [`IntParam`] but with different conversions from strings to values.
 pub struct EnumParamInner {
     /// The integer parameter backing this enum parameter.
     pub(crate) inner: IntParam,

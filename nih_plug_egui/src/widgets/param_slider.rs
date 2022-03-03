@@ -13,7 +13,7 @@ lazy_static! {
     static ref DRAG_AMOUNT_MEMORY_ID: egui::Id = egui::Id::new((file!(), 1));
 }
 
-/// A slider widget similar to [egui::widgets::Slider] that knows about NIH-plug parameters ranges
+/// A slider widget similar to [`egui::widgets::Slider`] that knows about NIH-plug parameters ranges
 /// and can get values for it.
 ///
 /// TODO: Vertical orientation
@@ -31,7 +31,7 @@ pub struct ParamSlider<'a, P: Param> {
 
 impl<'a, P: Param> ParamSlider<'a, P> {
     /// Create a new slider for a parameter. Use the other methods to modify the slider before
-    /// passing it to [Ui::add()].
+    /// passing it to [`Ui::add()`].
     pub fn for_param(param: &'a P, setter: &'a ParamSetter<'a>) -> Self {
         Self {
             param,

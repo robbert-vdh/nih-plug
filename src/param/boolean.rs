@@ -142,7 +142,7 @@ impl Param for BoolParam {
 }
 
 impl BoolParam {
-    /// Build a new [Self]. Use the other associated functions to modify the behavior of the
+    /// Build a new [`BoolParam`]. Use the other associated functions to modify the behavior of the
     /// parameter.
     pub fn new(name: &'static str, default: bool) -> Self {
         Self {

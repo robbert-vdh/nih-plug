@@ -9,7 +9,7 @@ use std::thread::{self, JoinHandle, ThreadId};
 use super::{EventLoop, MainThreadExecutor};
 use crate::nih_log;
 
-/// See [super::EventLoop].
+/// See [`EventLoop`][super::EventLoop].
 #[cfg_attr(
     target_os = "macos",
     deprecated = "macOS needs to have its own event loop implementation, this implementation may not work correctly"
@@ -24,12 +24,12 @@ pub(crate) struct LinuxEventLoop<T, E> {
     /// queue.
     main_thread_id: ThreadId,
 
-    /// A thread that act as our worker thread. When [Self::do_maybe_async()] is called, this thread will be
-    /// woken up to execute the task on the executor. This is wrapped in an `Option` so the thread
-    /// can be taken out of it and joined when this struct gets dropped.
+    /// A thread that act as our worker thread. When [`do_maybe_async()`][Self::do_maybe_async()] is
+    /// called, this thread will be woken up to execute the task on the executor. This is wrapped in
+    /// an `Option` so the thread can be taken out of it and joined when this struct gets dropped.
     worker_thread: Option<JoinHandle<()>>,
     /// A channel for waking up the worker thread and having it perform one of the tasks from
-    /// [Message].
+    /// [`Message`].
     worker_thread_channel: channel::Sender<Message<T>>,
 }
 
@@ -98,7 +98,8 @@ impl<T, E> Drop for LinuxEventLoop<T, E> {
     }
 }
 
-/// The worker thread used in [EventLoop] that executes incmoing tasks on the event loop's executor.
+/// The worker thread used in [`EventLoop`] that executes incmoing tasks on the event loop's
+/// executor.
 fn worker_thread<T, E>(receiver: channel::Receiver<Message<T>>, executor: Weak<E>)
 where
     T: Send,

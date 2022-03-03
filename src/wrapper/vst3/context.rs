@@ -10,14 +10,14 @@ use crate::event_loop::EventLoop;
 use crate::param::internals::ParamPtr;
 use crate::plugin::{NoteEvent, Vst3Plugin};
 
-/// A [GuiContext] implementation for the wrapper. This is passed to the plugin in
-/// [crate::Editor::spawn()] so it can interact with the rest of the plugin and with the host for
-/// things like setting parameters.
+/// A [`GuiContext`] implementation for the wrapper. This is passed to the plugin in
+/// [`Editor::spawn()`][crate::Editor::spawn()] so it can interact with the rest of the plugin and
+/// with the host for things like setting parameters.
 pub(crate) struct WrapperGuiContext<P: Vst3Plugin> {
     pub(super) inner: Arc<WrapperInner<P>>,
 }
 
-/// A [ProcessContext] implementation for the wrapper. This is a separate object so it can hold on
+/// A [`ProcessContext`] implementation for the wrapper. This is a separate object so it can hold on
 /// to lock guards for event queues. Otherwise reading these events would require constant
 /// unnecessary atomic operations to lock the uncontested locks.
 pub(crate) struct WrapperProcessContext<'a, P: Vst3Plugin> {

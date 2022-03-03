@@ -24,16 +24,16 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// The wrapped plugin instance.
     pub plugin: RwLock<P>,
     /// The plugin's editor, if it has one. This object does not do anything on its own, but we need
-    /// to instantiate this in advance so we don't need to lock the entire [Plugin] object when
+    /// to instantiate this in advance so we don't need to lock the entire [`Plugin`] object when
     /// creating an editor.
     pub editor: Option<Arc<dyn Editor>>,
 
-    /// The host's `IComponentHandler` instance, if passed through
-    /// `IEditController::set_component_handler`.
+    /// The host's [`IComponentHandler`] instance, if passed through
+    /// [`IEditController::set_component_handler`].
     pub component_handler: AtomicRefCell<Option<VstPtr<dyn IComponentHandler>>>,
 
-    /// Our own [IPlugView] instance. This is set while the editor is actually visible (which is
-    /// different form the lifetimei of [super::WrapperView] itself).
+    /// Our own [`IPlugView`] instance. This is set while the editor is actually visible (which is
+    /// different form the lifetime of [`WrapperView`][super::WrapperView] itself).
     pub plug_view: RwLock<Option<ObjectPtr<WrapperView<P>>>>,
 
     /// A realtime-safe task queue so the plugin can schedule tasks that need to be run later on the
@@ -58,7 +58,7 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     pub bypass_state: AtomicBool,
     /// The last process status returned by the plugin. This is used for tail handling.
     pub last_process_status: AtomicCell<ProcessStatus>,
-    /// The current latency in samples, as set by the plugin through the [ProcessContext].
+    /// The current latency in samples, as set by the plugin through the [`ProcessContext`].
     pub current_latency: AtomicU32,
     /// Contains slices for the plugin's outputs. You can't directly create a nested slice form
     /// apointer to pointers, so this needs to be preallocated in the setup call and kept around
@@ -84,9 +84,10 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// Mappings from string parameter indentifiers to parameter hashes. Useful for debug logging
     /// and when storing and restorign plugin state.
     pub param_id_to_hash: HashMap<&'static str, u32>,
-    /// The inverse mapping from [Self::param_by_hash]. This is needed to be able to have an
-    /// ergonomic parameter setting API that uses references to the parameters instead of having to
-    /// add a setter function to the parameter (or even worse, have it be completely untyped).
+    /// The inverse mapping from [`param_by_hash`][Self::param_by_hash]. This is needed to be able
+    /// to have an ergonomic parameter setting API that uses references to the parameters instead of
+    /// having to add a setter function to the parameter (or even worse, have it be completely
+    /// untyped).
     pub param_ptr_to_hash: HashMap<ParamPtr, u32>,
 }
 
@@ -96,7 +97,7 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
 #[derive(Debug, Clone)]
 pub enum Task {
     /// Trigger a restart with the given restart flags. This is a bit set of the flags from
-    /// [vst3_sys::vst::RestartFlags].
+    /// [`vst3_sys::vst::RestartFlags`].
     TriggerRestart(i32),
 }
 

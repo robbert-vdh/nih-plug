@@ -5,21 +5,21 @@ use std::pin::Pin;
 
 use super::Param;
 
-/// Re-export for use in the [Params] proc-macro.
+/// Re-export for use in the [`Params`] proc-macro.
 pub use serde_json::from_str as deserialize_field;
-/// Re-export for use in the [Params] proc-macro.
+/// Re-export for use in the [`Params`] proc-macro.
 pub use serde_json::to_string as serialize_field;
 
 /// Describes a struct containing parameters and other persistent fields. The idea is that we can
-/// have a normal struct containing [super::FloatParam] and other parameter types with attributes
-/// assigning a unique identifier to each parameter. We can then build a mapping from those
-/// parameter IDs to the parameters using the [Params::param_map()] function. That way we can have
-/// easy to work with JUCE-style parameter objects in the plugin without needing to manually
-/// register each parameter, like you would in JUCE. When deriving this trait, any of those
+/// have a normal struct containing [`FloatParam`][super::FloatParam] and other parameter types with
+/// attributes assigning a unique identifier to each parameter. We can then build a mapping from
+/// those parameter IDs to the parameters using the [`Params::param_map()`] function. That way we
+/// can have easy to work with JUCE-style parameter objects in the plugin without needing to
+/// manually register each parameter, like you would in JUCE. When deriving this trait, any of those
 /// parameters should have the `#[id = "stable"]` attribute, where `stable` is an up to 6 character
 /// (to avoid collisions) string that will be used for the parameter's internal identifier.
 ///
-/// The other persistent parameters should be [PersistentField]s containing types that can be
+/// The other persistent parameters should be [`PersistentField`]s containing types that can be
 /// serialized and deserialized with Serde. When deriving this trait, any of those fields should be
 /// marked with `#[persist = "key"]`.
 ///
@@ -54,13 +54,14 @@ pub trait Params {
 
     /// Serialize all fields marked with `#[persist = "stable_name"]` into a hash map containing
     /// JSON-representations of those fields so they can be written to the plugin's state and
-    /// recalled later. This uses [serialize_field()] under the hood.
+    /// recalled later. This uses [`serialize_field()`] under the hood.
     fn serialize_fields(&self) -> HashMap<String, String>;
 
     /// Restore all fields marked with `#[persist = "stable_name"]` from a hashmap created by
-    /// [Self::serialize_fields()]. All of thse fields should be wrapped in a [PersistentField] with
-    /// thread safe interior mutability, like an `RwLock` or a `Mutex`. This gets called when the
-    /// plugin's state is being restored. This uses [deserialize_field()] under the hood.
+    /// [`serialize_fields()`][Self::serialize_fields()]. All of thse fields should be wrapped in a
+    /// [`PersistentField`] with thread safe interior mutability, like an `RwLock` or a `Mutex`.
+    /// This gets called when the plugin's state is being restored. This uses [deserialize_field()]
+    /// under the hood.
     fn deserialize_fields(&self, serialized: &HashMap<String, String>);
 }
 
@@ -96,17 +97,17 @@ where
         F: Fn(&T) -> R;
 }
 
-/// Generate a [ParamPtr] function that forwards the function call to the underlying `Param`. We
+/// Generate a [`ParamPtr`] function that forwards the function call to the underlying `Param`. We
 /// can't have an `.as_param()` function since the return type would differ depending on the
 /// underlying parameter type, so instead we need to type erase all of the functions individually.
 macro_rules! param_ptr_forward(
     (pub unsafe fn $method:ident(&self $(, $arg_name:ident: $arg_ty:ty)*) $(-> $ret:ty)?) => {
-        /// Calls the corresponding method on the underlying [Param] object.
+        /// Calls the corresponding method on the underlying [`Param`] object.
         ///
         /// # Safety
         ///
-        /// Calling this function is only safe as long as the object this [ParamPtr] was created for
-        /// is still alive.
+        /// Calling this function is only safe as long as the object this [`ParamPtr`] was created
+        /// for is still alive.
         pub unsafe fn $method(&self $(, $arg_name: $arg_ty)*) $(-> $ret)? {
             match &self {
                 ParamPtr::FloatParam(p) => (**p).$method($($arg_name),*),
@@ -119,12 +120,12 @@ macro_rules! param_ptr_forward(
     // XXX: Is there a way to combine these two? Hygienic macros don't let you call `&self` without
     //      it being defined in the macro.
     (pub unsafe fn $method:ident(&mut self $(, $arg_name:ident: $arg_ty:ty)*) $(-> $ret:ty)?) => {
-        /// Calls the corresponding method on the underlying [Param] object.
+        /// Calls the corresponding method on the underlying [`Param`] object.
         ///
         /// # Safety
         ///
-        /// Calling this function is only safe as long as the object this [ParamPtr] was created for
-        /// is still alive.
+        /// Calling this function is only safe as long as the object this [`ParamPtr`] was created
+        /// for is still alive.
         pub unsafe fn $method(&mut self $(, $arg_name: $arg_ty)*) $(-> $ret)? {
             match &self {
                 ParamPtr::FloatParam(p) => (**p).$method($($arg_name),*),

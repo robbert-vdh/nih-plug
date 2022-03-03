@@ -28,7 +28,7 @@ const VST3_PLATFORM_UIVIEW: &str = "UIView";
 #[allow(unused)]
 const VST3_PLATFORM_X11_WINDOW: &str = "X11EmbedWindowID";
 
-/// The plugin's [IPlugView] instance created in [IEditController::create_view] if `P` has an
+/// The plugin's [`IPlugView`] instance created in [`IEditController::create_view()`] if `P` has an
 /// editor. This is managed separately so the lifetime bounds match up.
 #[VST3(implements(IPlugView))]
 pub(crate) struct WrapperView<P: Vst3Plugin> {

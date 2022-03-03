@@ -12,7 +12,7 @@ use super::Param;
 /// process.
 ///
 /// You can either initialize the struct directly, using `..Default::default()` to fill in the
-/// unused fields, or you can use the builder interface with [Self::new()].
+/// unused fields, or you can use the builder interface with [`IntParam::new()`].
 //
 // XXX: To keep the API simple and to allow the optimizer to do its thing, the values are stored as
 //      plain primitive values that are modified through the `*mut` pointers from the plugin's
@@ -176,7 +176,7 @@ impl Param for IntParam {
 }
 
 impl IntParam {
-    /// Build a new [Self]. Use the other associated functions to modify the behavior of the
+    /// Build a new [`IntParam`]. Use the other associated functions to modify the behavior of the
     /// parameter.
     pub fn new(name: &'static str, default: i32, range: IntRange) -> Self {
         Self {
@@ -204,7 +204,7 @@ impl IntParam {
     }
 
     /// Display a unit when rendering this parameter to a string. Appended after the
-    /// [Self::value_to_string] function if that is also set. NIH-plug will not
+    /// [`value_to_string`][Self::value_to_string] function if that is also set. NIH-plug will not
     /// automatically add a space before the unit.
     pub fn with_unit(mut self, unit: &'static str) -> Self {
         self.unit = unit;

@@ -32,8 +32,8 @@ pub struct Biquad<T> {
     s2: T,
 }
 
-/// The coefficients `[b0, b1, b2, a1, a2]` for [Biquad]. These coefficients are all prenormalized,
-/// i.e. they have been divided by `a0`.
+/// The coefficients `[b0, b1, b2, a1, a2]` for [`Biquad`]. These coefficients are all
+/// prenormalized, i.e. they have been divided by `a0`.
 ///
 /// The type parameter T  should be either an `f32` or a SIMD type.
 #[derive(Clone, Copy, Debug)]

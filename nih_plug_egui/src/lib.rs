@@ -17,16 +17,16 @@ pub use egui;
 
 pub mod widgets;
 
-/// Create an [Editor] instance using an [::egui] GUI. Using the user state parameter is optional,
-/// but it can be useful for keeping track of some temporary GUI-only settings. See the `gui_gain`
-/// example for more information on how to use this. The [EguiState] passed to this function
-/// contains the GUI's intitial size, and this is kept in sync whenever the GUI gets resized. You
-/// can also use this to know if the GUI is open, so you can avoid performing potentially expensive
-/// calculations while the GUI is not open. If you want this size to be persisted when restoring a
-/// plugin instance, then you can store it in a `#[persist = "key"]` field on your parameters
-/// struct.
+/// Create an [`Editor`] instance using an [`egui`][::egui] GUI. Using the user state parameter is
+/// optional, but it can be useful for keeping track of some temporary GUI-only settings. See the
+/// `gui_gain` example for more information on how to use this. The [`EguiState`] passed to this
+/// function contains the GUI's intitial size, and this is kept in sync whenever the GUI gets
+/// resized. You can also use this to know if the GUI is open, so you can avoid performing
+/// potentially expensive calculations while the GUI is not open. If you want this size to be
+/// persisted when restoring a plugin instance, then you can store it in a `#[persist = "key"]`
+/// field on your parameters struct.
 ///
-/// See [EguiState::from_size()].
+/// See [`EguiState::from_size()`].
 //
 // TODO: DPI scaling, this needs to be implemented on the framework level
 pub fn create_egui_editor<T, U>(
@@ -53,7 +53,7 @@ pub struct EguiState {
 }
 
 impl EguiState {
-    /// Initialize the GUI's state. This is passed to [create_egui_editor()].
+    /// Initialize the GUI's state. This is passed to [`create_egui_editor()`].
     pub fn from_size(width: u32, height: u32) -> Arc<EguiState> {
         Arc::new(EguiState {
             size: AtomicCell::new((width, height)),
@@ -73,7 +73,7 @@ impl EguiState {
     }
 }
 
-/// An [Editor] implementation that calls an egui draw loop.
+/// An [`Editor`] implementation that calls an egui draw loop.
 struct EguiEditor<T> {
     egui_state: Arc<EguiState>,
     /// The plugin's state. This is kept in between editor openenings.
@@ -146,7 +146,7 @@ where
     }
 }
 
-/// The window handle used for [EguiEditor].
+/// The window handle used for [`EguiEditor`].
 struct EguiEditorHandle {
     egui_state: Arc<EguiState>,
     window: WindowHandle,

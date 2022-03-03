@@ -90,7 +90,7 @@ pub struct Wrapper<P: ClapPlugin> {
     /// The wrapped plugin instance.
     plugin: RwLock<P>,
     /// The plugin's editor, if it has one. This object does not do anything on its own, but we need
-    /// to instantiate this in advance so we don't need to lock the entire [Plugin] object when
+    /// to instantiate this in advance so we don't need to lock the entire [`Plugin`] object when
     /// creating an editor.
     editor: Option<Arc<dyn Editor>>,
     /// A handle for the currently active editor instance. The plugin should implement `Drop` on
@@ -112,8 +112,8 @@ pub struct Wrapper<P: ClapPlugin> {
     /// TODO: Maybe load these lazily at some point instead of needing to spool them all to this
     ///       queue first
     input_events: AtomicRefCell<VecDeque<NoteEvent>>,
-    /// The current latency in samples, as set by the plugin through the [ProcessContext]. uses the
-    /// latency extnesion
+    /// The current latency in samples, as set by the plugin through the [`ProcessContext`]. uses
+    /// the latency extnesion
     pub current_latency: AtomicU32,
     /// Contains slices for the plugin's outputs. You can't directly create a nested slice form
     /// apointer to pointers, so this needs to be preallocated in the setup call and kept around
@@ -171,9 +171,10 @@ pub struct Wrapper<P: ClapPlugin> {
     /// Mappings from string parameter indentifiers to parameter hashes. Useful for debug logging
     /// and when storing and restoring plugin state.
     param_id_to_hash: HashMap<&'static str, u32>,
-    /// The inverse mapping from [Self::param_by_hash]. This is needed to be able to have an
-    /// ergonomic parameter setting API that uses references to the parameters instead of having to
-    /// add a setter function to the parameter (or even worse, have it be completely untyped).
+    /// The inverse mapping from [`param_by_hash`][Self::param_by_hash]. This is needed to be able
+    /// to have an ergonomic parameter setting API that uses references to the parameters instead of
+    /// having to add a setter function to the parameter (or even worse, have it be completely
+    /// untyped).
     pub param_ptr_to_hash: HashMap<ParamPtr, u32>,
     /// A queue of parameter changes that should be output in either the next process call or in the
     /// next parameter flush.
@@ -190,18 +191,19 @@ pub struct Wrapper<P: ClapPlugin> {
     /// A queue of tasks that still need to be performed. Because CLAP lets the plugin request a
     /// host callback directly, we don't need to use the OsEventLoop we use in our other plugin
     /// implementations. Instead, we'll post tasks to this queue, ask the host to call
-    /// [Self::on_main_thread] on the main thread, and then continue to pop tasks off this queue
-    /// there until it is empty.
+    /// [`on_main_thread()`][Self::on_main_thread()] on the main thread, and then continue to pop
+    /// tasks off this queue there until it is empty.
     tasks: ArrayQueue<Task>,
     /// The ID of the main thread. In practice this is the ID of the thread that created this
-    /// object. If the host supports the thread check extension (and [Self::thread_check] thus
-    /// contains a value), then that extension is used instead.
+    /// object. If the host supports the thread check extension (and
+    /// [`host_thread_check`][Self::host_thread_check] thus contains a value), then that extension
+    /// is used instead.
     main_thread_id: ThreadId,
 }
 
 /// Tasks that can be sent from the plugin to be executed on the main thread in a non-blocking
 /// realtime safe way. Instead of using a random thread or the OS' event loop like in the Linux
-/// implementation, this uses [clap_host::request_callback()] instead.
+/// implementation, this uses [`clap_host::request_callback()`] instead.
 #[derive(Debug, Clone)]
 pub enum Task {
     /// Inform the host that the latency has changed.
@@ -223,11 +225,11 @@ pub struct OutputParamChange {
     /// The internal hash for the parameter.
     pub param_hash: u32,
     /// The 'plain' value as reported to CLAP. This is the normalized value multiplied by
-    /// [crate::Param::step_size].
+    /// [`Param::step_size()`][crate::Param::step_size()].
     pub clap_plain_value: f64,
 }
 
-/// Because CLAP has this [clap_host::request_host_callback()] function, we don't need to use
+/// Because CLAP has this [`clap_host::request_host_callback()`] function, we don't need to use
 /// `OsEventLoop` and can instead just request a main thread callback directly.
 impl<P: ClapPlugin> EventLoop<Task, Wrapper<P>> for Wrapper<P> {
     fn new_and_spawn(_executor: std::sync::Weak<Self>) -> Self {
@@ -613,8 +615,8 @@ impl<P: ClapPlugin> Wrapper<P> {
         }
     }
 
-    /// Handle an incoming CLAP event. You must clear [Self::input_events] first before calling this
-    /// from the process function.
+    /// Handle an incoming CLAP event. You must clear [`input_events`][Self::input_events] first
+    /// before calling this from the process function.
     ///
     /// To save on mutex operations when handing MIDI events, the lock guard for the input events
     /// need to be passed into this function.

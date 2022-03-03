@@ -33,9 +33,9 @@ pub struct SamplesIter<'slice, 'sample: 'slice> {
 }
 
 /// Can construct iterators over actual iterator over the channel data for a sample, yielded by
-/// [Samples]. Can be turned into an iterator, or [Channels::iter_mut()] can be used to iterate over
-/// the channel data multiple times, or more efficiently you can use [Channels::get_unchecked_mut()]
-/// to do the same thing.
+/// [`Samples`]. Can be turned into an iterator, or [`Channels::iter_mut()`] can be used to iterate
+/// over the channel data multiple times, or more efficiently you can use
+/// [`Channels::get_unchecked_mut()`] to do the same thing.
 pub struct Channels<'slice, 'sample: 'slice> {
     /// The raw output buffers.
     pub(self) buffers: *mut [&'sample mut [f32]],
@@ -43,7 +43,7 @@ pub struct Channels<'slice, 'sample: 'slice> {
     pub(self) _marker: PhantomData<&'slice mut [&'sample mut [f32]]>,
 }
 
-/// The actual iterator over the channel data for a sample, yielded by [Channels].
+/// The actual iterator over the channel data for a sample, yielded by [`Channels`].
 pub struct ChannelsIter<'slice, 'sample: 'slice> {
     /// The raw output buffers.
     pub(self) buffers: *mut [&'sample mut [f32]],
@@ -55,8 +55,8 @@ pub struct ChannelsIter<'slice, 'sample: 'slice> {
 // Per-block per-channel per-sample iterators
 
 /// An iterator over all samples in the buffer, slicing over the sample-dimension with a maximum
-/// size of [Self::max_block_size]. See [Buffer::iter_blocks()]. Yields both the block and the
-/// offset from the start of the buffer.
+/// size of `max_block_size`. See [`Buffer::iter_blocks()`]. Yields both the block and the offset
+/// from the start of the buffer.
 pub struct BlocksIter<'slice, 'sample: 'slice> {
     /// The raw output buffers.
     pub(self) buffers: *mut [&'sample mut [f32]],
@@ -65,8 +65,8 @@ pub struct BlocksIter<'slice, 'sample: 'slice> {
     pub(self) _marker: PhantomData<&'slice mut [&'sample mut [f32]]>,
 }
 
-/// A block yielded by [BlocksIter]. Can be iterated over once or multiple times, and also supports
-/// direct access to the block's samples if needed.
+/// A block yielded by [`BlocksIter`]. Can be iterated over once or multiple times, and also
+/// supports direct access to the block's samples if needed.
 pub struct Block<'slice, 'sample: 'slice> {
     /// The raw output buffers.
     pub(self) buffers: *mut [&'sample mut [f32]],
@@ -75,8 +75,8 @@ pub struct Block<'slice, 'sample: 'slice> {
     pub(self) _marker: PhantomData<&'slice mut [&'sample mut [f32]]>,
 }
 
-/// An iterator over all channels in a block yielded by [Block]. Analogous to [ChannelsIter] but for
-/// blocks.
+/// An iterator over all channels in a block yielded by [`Block`]. Analogous to [`ChannelsIter`] but
+/// for blocks.
 pub struct BlockChannelsIter<'slice, 'sample: 'slice> {
     /// The raw output buffers.
     pub(self) buffers: *mut [&'sample mut [f32]],
@@ -262,11 +262,12 @@ impl<'a> Buffer<'a> {
     /// SIMD.
     ///
     /// The parameter smoothers can also produce smoothed values for an entire block using
-    /// [crate::Smoother::next_block()]. Before using this, you will need to call
-    /// [crate::Plugin::initialize_block_smoothers()] with the same `max_block_size` in your
-    /// initialization function first.
+    /// [`Smoother::next_block()`][crate::Smoother::next_block()]. Before using this, you will need
+    /// to call
+    /// [`Plugin::initialize_block_smoothers()`][crate::Plugin::initialize_block_smoothers()] with
+    /// the same `max_block_size` in your initialization function first.
     ///
-    /// You can use this to obtain block-slices from a buffer so you can pass them to a libraryq:
+    /// You can use this to obtain block-slices from a buffer so you can pass them to a library:
     ///
     /// ```ignore
     /// for block in buffer.iter_blocks(128) {
@@ -309,7 +310,7 @@ impl<'slice, 'sample> Channels<'slice, 'sample> {
     }
 
     /// A resetting iterator. This lets you iterate over the same channels multiple times. Otherwise
-    /// you don't need to use this function as [Channels] already implements [Iterator].
+    /// you don't need to use this function as [`Channels`] already implements [Iterator].
     pub fn iter_mut(&mut self) -> ChannelsIter<'slice, 'sample> {
         ChannelsIter {
             buffers: self.buffers,
@@ -333,7 +334,7 @@ impl<'slice, 'sample> Channels<'slice, 'sample> {
         }
     }
 
-    /// The same as [Self::get_mut], but without any bounds checking.
+    /// The same as [`get_mut()`][Self::get_mut()], but without any bounds checking.
     ///
     /// # Safety
     ///
@@ -390,7 +391,7 @@ impl<'slice, 'sample> Channels<'slice, 'sample> {
     }
 
     /// Write data from a SIMD vector to this sample's channel data. This takes the padding added by
-    /// [Self::to_simd()] into account.
+    /// [`to_simd()`][Self::to_simd()] into account.
     #[cfg(feature = "simd")]
     #[allow(clippy::wrong_self_convention)]
     #[inline]
@@ -438,8 +439,8 @@ impl<'slice, 'sample> Block<'slice, 'sample> {
     }
 
     /// A resetting iterator. This lets you iterate over the same block multiple times. Otherwise
-    /// you don't need to use this function as [Block] already implements [Iterator]. You can also
-    /// use the direct accessor functions on this block instead.
+    /// you don't need to use this function as [`Block`] already implements [`Iterator`]. You can
+    /// also use the direct accessor functions on this block instead.
     pub fn iter_mut(&mut self) -> BlockChannelsIter<'slice, 'sample> {
         BlockChannelsIter {
             buffers: self.buffers,
@@ -450,7 +451,7 @@ impl<'slice, 'sample> Block<'slice, 'sample> {
         }
     }
 
-    /// Access a channel by index. Useful when you would otherwise iterate over this [Block]
+    /// Access a channel by index. Useful when you would otherwise iterate over this [`Block`]
     /// multiple times.
     #[inline]
     pub fn get_mut(&mut self, channel_index: usize) -> Option<&mut [f32]> {
@@ -464,7 +465,7 @@ impl<'slice, 'sample> Block<'slice, 'sample> {
         }
     }
 
-    /// The same as [Self::get_mut], but without any bounds checking.
+    /// The same as [`get_mut()`][Self::get_mut], but without any bounds checking.
     ///
     /// # Safety
     ///
@@ -533,7 +534,7 @@ impl<'slice, 'sample> Block<'slice, 'sample> {
     }
 
     /// Write data from a SIMD vector to this sample's channel data for a specific sample in this
-    /// block. This takes the padding added by [Self::to_simd()] into account.
+    /// block. This takes the padding added by [`to_simd()`][Self::to_simd()] into account.
     ///
     /// Returns `false` if `sample_index` is out of bounds.
     #[cfg(feature = "simd")]

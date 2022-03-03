@@ -5,6 +5,7 @@ use quote::quote;
 use std::collections::HashSet;
 use syn::spanned::Spanned;
 
+/// Derive the `Params` trait for your plugin's parameters struct. See the `Plugin` trait.
 #[proc_macro_derive(Params, attributes(id, persist, nested))]
 pub fn derive_params(input: TokenStream) -> TokenStream {
     let ast = syn::parse_macro_input!(input as syn::DeriveInput);
@@ -265,6 +266,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
     .into()
 }
 
+/// Derive the `Enum` trait for your simple enum parameters. See `EnumParam` for more information.
 #[proc_macro_derive(Enum, attributes(name))]
 pub fn derive_enum(input: TokenStream) -> TokenStream {
     let ast = syn::parse_macro_input!(input as syn::DeriveInput);

@@ -12,7 +12,7 @@ use super::Param;
 /// process.
 ///
 /// You can either initialize the struct directly, using `..Default::default()` to fill in the
-/// unused fields, or you can use the builder interface with [Self::new()].
+/// unused fields, or you can use the builder interface with [`FloatParam::new()`].
 //
 // XXX: To keep the API simple and to allow the optimizer to do its thing, the values are stored as
 //      plain primitive values that are modified through the `*mut` pointers from the plugin's
@@ -44,13 +44,13 @@ pub struct FloatParam {
     /// The distribution of the parameter's values.
     pub range: FloatRange,
     /// The distance between discrete steps in this parameter. Mostly useful for quantizing GUI
-    /// input. If this is set and if [Self::value_to_string] is not set, then this is also used when
-    /// formatting the parameter. This must be a positive, nonzero number.
+    /// input. If this is set and if [`value_to_string`][Self::value_to_string] is not set, then
+    /// this is also used when formatting the parameter. This must be a positive, nonzero number.
     pub step_size: Option<f32>,
     /// The parameter's human readable display name.
     pub name: &'static str,
-    /// The parameter value's unit, added after `value_to_string` if that is set. NIH-plug will not
-    /// automatically add a space before the unit.
+    /// The parameter value's unit, added after [`value_to_string`][Self::value_to_string] if that
+    /// is set. NIH-plug will not automatically add a space before the unit.
     pub unit: &'static str,
     /// Optional custom conversion function from a plain **unnormalized** value to a string.
     pub value_to_string: Option<Arc<dyn Fn(f32) -> String + Send + Sync>>,
@@ -197,7 +197,7 @@ impl Param for FloatParam {
 }
 
 impl FloatParam {
-    /// Build a new [Self]. Use the other associated functions to modify the behavior of the
+    /// Build a new [`FloatParam`]. Use the other associated functions to modify the behavior of the
     /// parameter.
     pub fn new(name: &'static str, default: f32, range: FloatRange) -> Self {
         Self {
@@ -225,7 +225,7 @@ impl FloatParam {
     }
 
     /// Display a unit when rendering this parameter to a string. Appended after the
-    /// [Self::value_to_string] function if that is also set. NIH-plug will not
+    /// [`value_to_string`][Self::value_to_string] function if that is also set. NIH-plug will not
     /// automatically add a space before the unit.
     pub fn with_unit(mut self, unit: &'static str) -> Self {
         self.unit = unit;
@@ -233,8 +233,8 @@ impl FloatParam {
     }
 
     /// Set the distance between steps of a [FloatParam]. Mostly useful for quantizing GUI input. If
-    /// this is set and if [Self::value_to_string] is not set, then this is also used when
-    /// formatting the parameter. This must be a positive, nonzero number.
+    /// this is set and if [`value_to_string`][Self::value_to_string] is not set, then this is also
+    /// used when formatting the parameter. This must be a positive, nonzero number.
     pub fn with_step_size(mut self, step_size: f32) -> Self {
         self.step_size = Some(step_size);
         self

@@ -108,7 +108,7 @@ pub fn chdir_workspace_root() -> Result<()> {
 /// Bundle a package using the provided `cargo build` arguments. Options from the `bundler.toml`
 /// file in the workspace's root are respected (see
 /// <https://github.com/robbert-vdh/nih-plug/blob/master/bundler.toml>). This requires the current
-/// working directory to have been set to the workspace's root using [chdir_workspace_root].
+/// working directory to have been set to the workspace's root using [`chdir_workspace_root()`].
 pub fn bundle(package: &str, args: &[String]) -> Result<()> {
     let bundle_name = match load_bundler_config()?.and_then(|c| c.get(package).cloned()) {
         Some(PackageConfig { name: Some(name) }) => name,
@@ -295,7 +295,7 @@ fn compilation_target(cross_compile_target: Option<&str>) -> Result<CompilationT
     }
 }
 
-/// The base directory for the compiled binaries. This does not use [CompilationTarget] as we need
+/// The base directory for the compiled binaries. This does not use [`CompilationTarget`] as we need
 /// to be able to differentiate between native and cross-compilation.
 fn target_base(cross_compile_target: Option<&str>) -> Result<&'static str> {
     match cross_compile_target {

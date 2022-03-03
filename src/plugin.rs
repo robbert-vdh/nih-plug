@@ -54,10 +54,11 @@ pub trait Plugin: Default + Send + Sync + 'static {
     fn params(&self) -> Pin<&dyn Params>;
 
     /// The plugin's editor, if it has one. The actual editor instance is created in
-    /// [Editor::spawn]. A plugin editor likely wants to interact with the plugin's parameters and
-    /// other shared data, so you'll need to move [Arc] pointing to any data you want to access into
-    /// the editor. You can later modify the parameters through the [crate::GuiContext] and
-    /// [crate::ParamSetter] after the editor GUI has been created.
+    /// [`Editor::spawn()`]. A plugin editor likely wants to interact with the plugin's parameters
+    /// and other shared data, so you'll need to move [`Arc`] pointing to any data you want to
+    /// access into the editor. You can later modify the parameters through the
+    /// [`GuiContext`][crate::GuiContext] and [`ParamSetter`][crate::ParamSetter] after the editor
+    /// GUI has been created.
     fn editor(&self) -> Option<Box<dyn Editor>> {
         None
     }
@@ -97,14 +98,16 @@ pub trait Plugin: Default + Send + Sync + 'static {
     /// abort the program when any allocation accurs in the process function while running in debug
     /// mode.
     ///
-    /// The framework provides convenient iterators on the [Buffer] object to process audio either
+    /// The framework provides convenient iterators on the [`Buffer`] object to process audio either
     /// either per-sample per-channel, or per-block per-channel per-sample. The first approach is
     /// preferred for plugins that don't require block-based processing because of their use of
     /// per-sample SIMD or excessive branching. The parameter smoothers can also work in both modes:
-    /// use [crate::Smoother::next()] for per-sample processing, and [crate::Smoother::next_block()]
-    /// for block-based processing. In order to use block-based smoothing, you will need to call
-    /// [Self::initialize_block_smoothers()] in your [Self::initialize()] function first to reserve
-    /// enough capacity in the smoothers.
+    /// use [`Smoother::next()`][crate::Smoother::next()] for per-sample processing, and
+    /// [`Smoother::next_block()`][crate::Smoother::next_block()] for block-based processing. In
+    /// order to use block-based smoothing, you will need to call
+    /// [`initialize_block_smoothers()`][Self::initialize_block_smoothers()] in your
+    /// [`initialize()`][Self::initialize()] function first to reserve enough capacity in the
+    /// smoothers.
     ///
     /// TODO: Provide a way to access auxiliary input channels if the IO configuration is
     ///       assymetric
@@ -113,10 +116,10 @@ pub trait Plugin: Default + Send + Sync + 'static {
     fn process(&mut self, buffer: &mut Buffer, context: &mut impl ProcessContext) -> ProcessStatus;
 
     /// Convenience function to allocate memory for block-based smoothing. Since this allocates
-    /// memory, this should be called in [Self::initialize()]. If you are going to use
-    /// [Buffer::iter_blocks] and want to use parameter smoothing in those blocks, then call this
-    /// function with the same maximum block size first before calling
-    /// [crate::Smoother::next_block()].
+    /// memory, this should be called in [`initialize()`][Self::initialize()]. If you are going to
+    /// use [`Buffer::iter_blocks()`] and want to use parameter smoothing in those blocks, then call
+    /// this function with the same maximum block size first before calling
+    /// [`Smoother::next_block()`][crate::Smoother::next_block()].
     fn initialize_block_smoothers(&mut self, max_block_size: usize) {
         for param in self.params().param_map().values_mut() {
             unsafe { param.initialize_block_smoother(max_block_size) };
@@ -152,13 +155,13 @@ pub trait Vst3Plugin: Plugin {
     ///
     /// This will be shuffled into a different byte order on Windows for project-compatibility.
     const VST3_CLASS_ID: [u8; 16];
-    /// One or more categories, separated by pipe characters (`|`), up to 127 characters. Anything
+    /// One or more categories, separated by pipe characters (`|), up to 127 characters. Anything
     /// logner than that will be truncated. See the VST3 SDK for examples of common categories:
     /// <https://github.com/steinbergmedia/vst3_pluginterfaces/blob/2ad397ade5b51007860bedb3b01b8afd2c5f6fba/vst/ivstaudioprocessor.h#L49-L90>
     const VST3_CATEGORIES: &'static str;
 
-    /// [Self::VST3_CLASS_ID] in the correct order for the current platform so projects and presets
-    /// can be shared between platforms. This should not be overridden.
+    /// [`VST3_CLASS_ID`][Self::VST3_CLASS_ID`] in the correct order for the current platform so
+    /// projects and presets can be shared between platforms. This should not be overridden.
     const PLATFORM_VST3_CLASS_ID: [u8; 16] = swap_vst3_uid_byte_order(Self::VST3_CLASS_ID);
 }
 
@@ -185,16 +188,16 @@ const fn swap_vst3_uid_byte_order(mut uid: [u8; 16]) -> [u8; 16] {
     uid
 }
 
-/// An editor for a [Plugin].
+/// An editor for a [`Plugin`].
 pub trait Editor: Send + Sync {
     /// Create an instance of the plugin's editor and embed it in the parent window. As explained in
-    /// [Plugin::editor], you can then read the parameter values directly from your [crate::Params]
+    /// [`Plugin::editor()`], you can then read the parameter values directly from your [`Params`]
     /// object, and modifying the values can be done using the functions on the
-    /// [crate::ParamSetter]. When you change a parameter value that way it will be broadcasted to
-    /// the host and also updated in your [Params] struct.
+    /// [`ParamSetter`][crate::ParamSetter]. When you change a parameter value that way it will be
+    /// broadcasted to the host and also updated in your [`Params`] struct.
     ///
     /// This function should return a handle to the editor, which will be dropped when the editor
-    /// gets closed. Implement the [Drop] trait on the returned handle if you need to explicitly
+    /// gets closed. Implement the [`Drop`] trait on the returned handle if you need to explicitly
     /// handle the editor's closing behavior.
     ///
     /// The wrapper guarantees that a previous handle has been dropped before this function is
