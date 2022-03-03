@@ -3,7 +3,6 @@
 use std::collections::HashMap;
 use std::pin::Pin;
 
-use super::range::Range;
 use super::Param;
 
 /// Re-export for use in the [Params] proc-macro.
@@ -51,7 +50,8 @@ pub trait Params {
     fn deserialize_fields(&self, serialized: &HashMap<String, String>);
 }
 
-/// Internal pointers to parameters. This is an implementation detail used by the wrappers.
+/// Internal pointers to parameters. This is an implementation detail used by the wrappers for type
+/// erasure.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub enum ParamPtr {
     FloatParam(*mut super::FloatParam),
@@ -82,136 +82,60 @@ where
         F: Fn(&T) -> R;
 }
 
+/// Generate a [ParamPtr] function that forwards the function call to the underlying `Param`. We
+/// can't have an `.as_param()` function since the return type would differ depending on the
+/// underlying parameter type, so instead we need to type erase all of the functions individually.
+macro_rules! param_ptr_forward(
+    (pub unsafe fn $method:ident(&self $(, $arg_name:ident: $arg_ty:ty)*) $(-> $ret:ty)?) => {
+        /// Calls the corresponding method on the underlying [Param] object.
+        ///
+        /// # Safety
+        ///
+        /// Calling this function is only safe as long as the object this [ParamPtr] was created for
+        /// is still alive.
+        pub unsafe fn $method(&self $(, $arg_name: $arg_ty)*) $(-> $ret)? {
+            match &self {
+                ParamPtr::FloatParam(p) => (**p).$method($($arg_name),*),
+                ParamPtr::IntParam(p) => (**p).$method($($arg_name),*),
+                ParamPtr::BoolParam(p) => (**p).$method($($arg_name),*),
+                ParamPtr::EnumParam(p) => (**p).$method($($arg_name),*),
+            }
+        }
+    };
+    // XXX: Is there a way to combine these two? Hygienic macros don't let you call `&self` without
+    //      it being defined in the macro.
+    (pub unsafe fn $method:ident(&mut self $(, $arg_name:ident: $arg_ty:ty)*) $(-> $ret:ty)?) => {
+        /// Calls the corresponding method on the underlying [Param] object.
+        ///
+        /// # Safety
+        ///
+        /// Calling this function is only safe as long as the object this [ParamPtr] was created for
+        /// is still alive.
+        pub unsafe fn $method(&mut self $(, $arg_name: $arg_ty)*) $(-> $ret)? {
+            match &self {
+                ParamPtr::FloatParam(p) => (**p).$method($($arg_name),*),
+                ParamPtr::IntParam(p) => (**p).$method($($arg_name),*),
+                ParamPtr::BoolParam(p) => (**p).$method($($arg_name),*),
+                ParamPtr::EnumParam(p) => (**p).$method($($arg_name),*),
+            }
+        }
+    };
+);
+
 impl ParamPtr {
-    /// Get the number of steps for this paramter, if it is stepped.
-    ///
-    /// # Safety
-    ///
-    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
-    /// still alive.
-    pub unsafe fn step_count(&self) -> Option<i32> {
-        match self {
-            ParamPtr::FloatParam(_) => None,
-            ParamPtr::IntParam(p) => match (**p).range {
-                Range::Linear { min, max } => Some(max - min),
-                Range::Skewed { min, max, .. } => Some(max - min),
-                Range::SymmetricalSkewed { min, max, .. } => Some(max - min),
-            },
-            ParamPtr::BoolParam(_) => Some(1),
-            ParamPtr::EnumParam(p) => Some((**p).len() as i32 - 1),
-        }
-    }
+    param_ptr_forward!(pub unsafe fn name(&self) -> &'static str);
+    param_ptr_forward!(pub unsafe fn step_count(&self) -> Option<usize>);
+    param_ptr_forward!(pub unsafe fn unit(&self) -> &'static str);
+    param_ptr_forward!(pub unsafe fn update_smoother(&self, sample_rate: f32, reset: bool));
+    param_ptr_forward!(pub unsafe fn initialize_block_smoother(&mut self, max_block_size: usize));
+    param_ptr_forward!(pub unsafe fn set_from_string(&mut self, string: &str) -> bool);
+    param_ptr_forward!(pub unsafe fn normalized_value(&self) -> f32);
+    param_ptr_forward!(pub unsafe fn set_normalized_value(&self, normalized: f32));
+    param_ptr_forward!(pub unsafe fn normalized_value_to_string(&self, normalized: f32, include_unit: bool) -> String);
+    param_ptr_forward!(pub unsafe fn string_to_normalized_value(&self, string: &str) -> Option<f32>);
 
-    /// Get the human readable name for this parameter.
-    ///
-    /// # Safety
-    ///
-    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
-    /// still alive.
-    pub unsafe fn name(&self) -> &'static str {
-        match &self {
-            ParamPtr::FloatParam(p) => (**p).name,
-            ParamPtr::IntParam(p) => (**p).name,
-            ParamPtr::BoolParam(p) => (**p).name,
-            ParamPtr::EnumParam(p) => (**p).inner.name,
-        }
-    }
-
-    /// Get the unit label for this parameter.
-    ///
-    /// # Safety
-    ///
-    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
-    /// still alive.
-    pub unsafe fn unit(&self) -> &'static str {
-        match &self {
-            ParamPtr::FloatParam(p) => (**p).unit,
-            ParamPtr::IntParam(p) => (**p).unit,
-            ParamPtr::BoolParam(_) => "",
-            ParamPtr::EnumParam(_) => "",
-        }
-    }
-
-    /// Update the smoother state to point to the current value. Also used when initializing and
-    /// restoring a plugin so everything is in sync. In that case the smoother should completely
-    /// reset to the current value.
-    ///
-    /// # Safety
-    ///
-    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
-    /// still alive.
-    pub unsafe fn update_smoother(&self, sample_rate: f32, reset: bool) {
-        match &self {
-            ParamPtr::FloatParam(p) => (**p).update_smoother(sample_rate, reset),
-            ParamPtr::IntParam(p) => (**p).update_smoother(sample_rate, reset),
-            ParamPtr::BoolParam(p) => (**p).update_smoother(sample_rate, reset),
-            ParamPtr::EnumParam(p) => (**p).update_smoother(sample_rate, reset),
-        }
-    }
-
-    /// Allocate memory for block-based smoothing. The [crate::Plugin::initialize_block_smoothers()]
-    /// method will do this for every smoother.
-    ///
-    /// # Safety
-    ///
-    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
-    /// still alive.
-    pub unsafe fn initialize_block_smoother(&mut self, max_block_size: usize) {
-        match &self {
-            ParamPtr::FloatParam(p) => (**p).initialize_block_smoother(max_block_size),
-            ParamPtr::IntParam(p) => (**p).initialize_block_smoother(max_block_size),
-            ParamPtr::BoolParam(p) => (**p).initialize_block_smoother(max_block_size),
-            ParamPtr::EnumParam(p) => (**p).initialize_block_smoother(max_block_size),
-        }
-    }
-
-    /// Set this parameter based on a string. Returns whether the updating succeeded. That can fail
-    /// if the string cannot be parsed.
-    ///
-    /// # Safety
-    ///
-    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
-    /// still alive.
-    pub unsafe fn set_from_string(&mut self, string: &str) -> bool {
-        match &self {
-            ParamPtr::FloatParam(p) => (**p).set_from_string(string),
-            ParamPtr::IntParam(p) => (**p).set_from_string(string),
-            ParamPtr::BoolParam(p) => (**p).set_from_string(string),
-            ParamPtr::EnumParam(p) => (**p).set_from_string(string),
-        }
-    }
-
-    /// Get the normalized `[0, 1]` value for this parameter.
-    ///
-    /// # Safety
-    ///
-    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
-    /// still alive.
-    pub unsafe fn normalized_value(&self) -> f32 {
-        match &self {
-            ParamPtr::FloatParam(p) => (**p).normalized_value(),
-            ParamPtr::IntParam(p) => (**p).normalized_value(),
-            ParamPtr::BoolParam(p) => (**p).normalized_value(),
-            ParamPtr::EnumParam(p) => (**p).normalized_value(),
-        }
-    }
-
-    /// Set this parameter based on a normalized value.
-    ///
-    /// This does **not** update the smoother.
-    ///
-    /// # Safety
-    ///
-    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
-    /// still alive.
-    pub unsafe fn set_normalized_value(&self, normalized: f32) {
-        match &self {
-            ParamPtr::FloatParam(p) => (**p).set_normalized_value(normalized),
-            ParamPtr::IntParam(p) => (**p).set_normalized_value(normalized),
-            ParamPtr::BoolParam(p) => (**p).set_normalized_value(normalized),
-            ParamPtr::EnumParam(p) => (**p).set_normalized_value(normalized),
-        }
-    }
+    // These functions involve casts since the plugin formats only do floating point types, so we
+    // can't generate them with the macro:
 
     /// Get the normalized value for a plain, unnormalized value, as a float. Used as part of the
     /// wrappers.
@@ -242,38 +166,6 @@ impl ParamPtr {
             ParamPtr::IntParam(p) => (**p).preview_plain(normalized) as f32,
             ParamPtr::BoolParam(_) => normalized,
             ParamPtr::EnumParam(p) => (**p).preview_plain(normalized) as f32,
-        }
-    }
-
-    /// Get the string representation for a normalized value. Used as part of the wrappers. Most
-    /// plugin formats already have support for units, in which case it shouldn't be part of this
-    /// string or some DAWs may show duplicate units.
-    ///
-    /// # Safety
-    ///
-    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
-    /// still alive.
-    pub unsafe fn normalized_value_to_string(&self, normalized: f32, include_unit: bool) -> String {
-        match &self {
-            ParamPtr::FloatParam(p) => (**p).normalized_value_to_string(normalized, include_unit),
-            ParamPtr::IntParam(p) => (**p).normalized_value_to_string(normalized, include_unit),
-            ParamPtr::BoolParam(p) => (**p).normalized_value_to_string(normalized, include_unit),
-            ParamPtr::EnumParam(p) => (**p).normalized_value_to_string(normalized, include_unit),
-        }
-    }
-
-    /// Get the string representation for a normalized value. Used as part of the wrappers.
-    ///
-    /// # Safety
-    ///
-    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
-    /// still alive.
-    pub unsafe fn string_to_normalized_value(&self, string: &str) -> Option<f32> {
-        match &self {
-            ParamPtr::FloatParam(p) => (**p).string_to_normalized_value(string),
-            ParamPtr::IntParam(p) => (**p).string_to_normalized_value(string),
-            ParamPtr::BoolParam(p) => (**p).string_to_normalized_value(string),
-            ParamPtr::EnumParam(p) => (**p).string_to_normalized_value(string),
         }
     }
 }
