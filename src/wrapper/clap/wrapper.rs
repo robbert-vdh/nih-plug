@@ -15,6 +15,7 @@ use clap_sys::ext::audio_ports::{
 use clap_sys::ext::audio_ports_config::{
     clap_audio_ports_config, clap_plugin_audio_ports_config, CLAP_EXT_AUDIO_PORTS_CONFIG,
 };
+use clap_sys::ext::gui::{clap_plugin_gui, CLAP_EXT_GUI};
 use clap_sys::ext::latency::{clap_host_latency, clap_plugin_latency, CLAP_EXT_LATENCY};
 use clap_sys::ext::params::{
     clap_param_info, clap_plugin_params, CLAP_EXT_PARAMS, CLAP_PARAM_IS_BYPASS,
@@ -34,6 +35,7 @@ use crossbeam::atomic::AtomicCell;
 use crossbeam::queue::ArrayQueue;
 use lazy_static::lazy_static;
 use parking_lot::{RwLock, RwLockWriteGuard};
+use std::any::Any;
 use std::cmp;
 use std::collections::{HashMap, VecDeque};
 use std::ffi::{c_void, CStr};
@@ -49,7 +51,7 @@ use super::util::ClapPtr;
 use crate::buffer::Buffer;
 use crate::event_loop::{EventLoop, MainThreadExecutor, TASK_QUEUE_CAPACITY};
 use crate::param::internals::ParamPtr;
-use crate::plugin::{BufferConfig, BusConfig, ClapPlugin, NoteEvent, ProcessStatus};
+use crate::plugin::{BufferConfig, BusConfig, ClapPlugin, Editor, NoteEvent, ProcessStatus};
 use crate::wrapper::state;
 use crate::wrapper::util::{hash_param_id, process_wrapper, strlcpy};
 
@@ -71,6 +73,13 @@ pub struct Wrapper<P: ClapPlugin> {
 
     /// The wrapped plugin instance.
     plugin: RwLock<P>,
+    /// The plugin's editor, if it has one. This object does not do anything on its own, but we need
+    /// to instantiate this in advance so we don't need to lock the entire [Plugin] object when
+    /// creating an editor.
+    editor: Option<Arc<dyn Editor>>,
+    /// A handle for the currently active editor instance. The plugin should implement `Drop` on
+    /// this handle for its closing behavior.
+    editor_handle: RwLock<Option<Box<dyn Any + Send + Sync>>>,
 
     /// The current IO configuration, modified through the `clap_plugin_audio_ports_config`
     /// extension.
@@ -113,6 +122,8 @@ pub struct Wrapper<P: ClapPlugin> {
     supported_bus_configs: Vec<BusConfig>,
 
     clap_plugin_audio_ports: clap_plugin_audio_ports,
+
+    clap_plugin_gui: clap_plugin_gui,
 
     clap_plugin_latency: clap_plugin_latency,
     host_latency: Option<ClapPtr<clap_host_latency>>,
@@ -219,6 +230,9 @@ impl<P: ClapPlugin> MainThreadExecutor<Task> for Wrapper<P> {
 
 impl<P: ClapPlugin> Wrapper<P> {
     pub fn new(host_callback: *const clap_host) -> Arc<Self> {
+        let plugin = RwLock::new(P::default());
+        let editor = plugin.read().editor().map(Arc::from);
+
         let plugin_descriptor = Box::new(PluginDescriptor::default());
 
         assert!(!host_callback.is_null());
@@ -252,7 +266,10 @@ impl<P: ClapPlugin> Wrapper<P> {
 
             this: RwLock::new(Weak::new()),
 
-            plugin: RwLock::new(P::default()),
+            plugin,
+            editor,
+            editor_handle: RwLock::new(None),
+
             current_bus_config: AtomicCell::new(BusConfig {
                 num_input_channels: P::DEFAULT_NUM_INPUTS,
                 num_output_channels: P::DEFAULT_NUM_OUTPUTS,
@@ -277,6 +294,18 @@ impl<P: ClapPlugin> Wrapper<P> {
             clap_plugin_audio_ports: clap_plugin_audio_ports {
                 count: Self::ext_audio_ports_count,
                 get: Self::ext_audio_ports_get,
+            },
+
+            clap_plugin_gui: clap_plugin_gui {
+                create: Self::ext_gui_create,
+                destroy: Self::ext_gui_destroy,
+                set_scale: Self::ext_gui_set_scale,
+                get_size: Self::ext_gui_get_size,
+                can_resize: Self::ext_gui_can_resize,
+                round_size: Self::ext_gui_round_size,
+                set_size: Self::ext_gui_set_size,
+                show: Self::ext_gui_show,
+                hide: Self::ext_gui_hide,
             },
 
             clap_plugin_latency: clap_plugin_latency {
@@ -705,13 +734,15 @@ impl<P: ClapPlugin> Wrapper<P> {
         let wrapper = &*(plugin as *const Self);
 
         // TODO: Implement the following extensions:
-        //       - gui
         //       - the non-freestanding GUI extensions depending on the platform
         let id = CStr::from_ptr(id);
         if id == CStr::from_ptr(CLAP_EXT_AUDIO_PORTS_CONFIG) {
             &wrapper.clap_plugin_audio_ports_config as *const _ as *const c_void
         } else if id == CStr::from_ptr(CLAP_EXT_AUDIO_PORTS) {
             &wrapper.clap_plugin_audio_ports as *const _ as *const c_void
+        } else if id == CStr::from_ptr(CLAP_EXT_GUI) && wrapper.editor.is_some() {
+            // Only report that we support this extension if the plugin has an editor
+            &wrapper.clap_plugin_gui as *const _ as *const c_void
         } else if id == CStr::from_ptr(CLAP_EXT_LATENCY) {
             &wrapper.clap_plugin_latency as *const _ as *const c_void
         } else if id == CStr::from_ptr(CLAP_EXT_PARAMS) {
@@ -909,6 +940,54 @@ impl<P: ClapPlugin> Wrapper<P> {
                 false
             }
         }
+    }
+
+    unsafe extern "C" fn ext_gui_create(plugin: *const clap_plugin) -> bool {
+        todo!()
+    }
+
+    unsafe extern "C" fn ext_gui_destroy(plugin: *const clap_plugin) {
+        todo!()
+    }
+
+    unsafe extern "C" fn ext_gui_set_scale(plugin: *const clap_plugin, scale: f64) -> bool {
+        todo!()
+    }
+
+    unsafe extern "C" fn ext_gui_get_size(
+        plugin: *const clap_plugin,
+        width: *mut u32,
+        height: *mut u32,
+    ) -> bool {
+        todo!()
+    }
+
+    unsafe extern "C" fn ext_gui_can_resize(plugin: *const clap_plugin) -> bool {
+        todo!()
+    }
+
+    unsafe extern "C" fn ext_gui_round_size(
+        plugin: *const clap_plugin,
+        width: *mut u32,
+        height: *mut u32,
+    ) {
+        todo!()
+    }
+
+    unsafe extern "C" fn ext_gui_set_size(
+        plugin: *const clap_plugin,
+        width: u32,
+        height: u32,
+    ) -> bool {
+        todo!()
+    }
+
+    unsafe extern "C" fn ext_gui_show(plugin: *const clap_plugin) {
+        todo!()
+    }
+
+    unsafe extern "C" fn ext_gui_hide(plugin: *const clap_plugin) {
+        todo!()
     }
 
     unsafe extern "C" fn ext_latency_get(plugin: *const clap_plugin) -> u32 {
