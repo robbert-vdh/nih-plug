@@ -57,11 +57,12 @@ cargo xtask bundle gain --release
 
 ### Plugin formats
 
-NIH-plug can currently export VST3 plugins, with CLAP support being worked on
-right now. Exporting a specific plugin format for a plugin is as simple as
-calling the `nih_export_<format>!(Foo);` macro. The `cargo xtask bundle` commane
-will detect which plugin formats your plugin supports and create the appropriate
-bundles accordingly, even when cross compiling.
+NIH-plug can currently export VST3 and
+[CLAP](https://github.com/free-audio/clap) plugins. Exporting a specific plugin
+format for a plugin is as simple as calling the `nih_export_<format>!(Foo);`
+macro. The `cargo xtask bundle` commane will detect which plugin formats your
+plugin supports and create the appropriate bundles accordingly, even when cross
+compiling.
 
 ### Example plugins
 
