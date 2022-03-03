@@ -2,6 +2,7 @@
 // explicitly pattern match on that unit
 #![allow(clippy::unused_unit)]
 
+use atomic_refcell::AtomicRefCell;
 use clap_sys::events::{
     clap_event_header, clap_event_note, clap_event_param_mod, clap_event_param_value,
     clap_input_events, clap_output_events, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_MIDI,
@@ -151,10 +152,10 @@ pub struct Wrapper<P: ClapPlugin> {
     clap_plugin_gui_win32: clap_plugin_gui_win32,
 
     clap_plugin_latency: clap_plugin_latency,
-    host_latency: Option<ClapPtr<clap_host_latency>>,
+    host_latency: AtomicRefCell<Option<ClapPtr<clap_host_latency>>>,
 
     clap_plugin_params: clap_plugin_params,
-    host_params: Option<ClapPtr<clap_host_params>>,
+    host_params: AtomicRefCell<Option<ClapPtr<clap_host_params>>>,
     // These fiels are exactly the same as their VST3 wrapper counterparts.
     //
     /// The keys from `param_map` in a stable order.
@@ -182,7 +183,7 @@ pub struct Wrapper<P: ClapPlugin> {
     ///      in the same order, right?
     output_parameter_changes: ArrayQueue<OutputParamChange>,
 
-    host_thread_check: Option<ClapPtr<clap_host_thread_check>>,
+    host_thread_check: AtomicRefCell<Option<ClapPtr<clap_host_thread_check>>>,
 
     clap_plugin_state: clap_plugin_state,
 
@@ -252,7 +253,7 @@ impl<P: ClapPlugin> EventLoop<Task, Wrapper<P>> for Wrapper<P> {
     fn is_main_thread(&self) -> bool {
         // If the host supports the thread check interface then we'll use that, otherwise we'll
         // check if this is the same thread as the one that created the plugin instance.
-        match &self.host_thread_check {
+        match &*self.host_thread_check.borrow() {
             Some(thread_check) => unsafe { (thread_check.is_main_thread)(&*self.host_callback) },
             None => thread::current().id() == self.main_thread_id,
         }
@@ -263,7 +264,7 @@ impl<P: ClapPlugin> MainThreadExecutor<Task> for Wrapper<P> {
     unsafe fn execute(&self, task: Task) {
         // This function is always called from the main thread, from [Self::on_main_thread].
         match task {
-            Task::LatencyChanged => match &self.host_latency {
+            Task::LatencyChanged => match &*self.host_latency.borrow() {
                 Some(host_latency) => (host_latency.changed)(&*self.host_callback),
                 None => nih_debug_assert_failure!("Host does not support the latency extension"),
             },
@@ -278,15 +279,10 @@ impl<P: ClapPlugin> Wrapper<P> {
 
         let plugin_descriptor = Box::new(PluginDescriptor::default());
 
+        // We're not allowed to query any extensions until the init function has been called, so we
+        // need a bunch of AtomicRefCells instead
         assert!(!host_callback.is_null());
         let host_callback = unsafe { ClapPtr::new(host_callback) };
-        let host_latency =
-            unsafe { query_host_extension::<clap_host_latency>(&host_callback, CLAP_EXT_LATENCY) };
-        let host_params =
-            unsafe { query_host_extension::<clap_host_params>(&host_callback, CLAP_EXT_PARAMS) };
-        let host_thread_check = unsafe {
-            query_host_extension::<clap_host_thread_check>(&host_callback, CLAP_EXT_THREAD_CHECK)
-        };
 
         let mut wrapper = Self {
             clap_plugin: clap_plugin {
@@ -370,7 +366,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             clap_plugin_latency: clap_plugin_latency {
                 get: Self::ext_latency_get,
             },
-            host_latency,
+            host_latency: AtomicRefCell::new(None),
 
             clap_plugin_params: clap_plugin_params {
                 count: Self::ext_params_count,
@@ -380,7 +376,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 text_to_value: Self::ext_params_text_to_value,
                 flush: Self::ext_params_flush,
             },
-            host_params,
+            host_params: AtomicRefCell::new(None),
             param_hashes: Vec::new(),
             param_by_hash: HashMap::new(),
             param_defaults_normalized: HashMap::new(),
@@ -388,7 +384,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             param_ptr_to_hash: HashMap::new(),
             output_parameter_changes: ArrayQueue::new(OUTPUT_EVENT_QUEUE_CAPACITY),
 
-            host_thread_check,
+            host_thread_check: AtomicRefCell::new(None),
 
             clap_plugin_state: clap_plugin_state {
                 save: Self::ext_state_save,
@@ -495,7 +491,7 @@ impl<P: ClapPlugin> Wrapper<P> {
     /// host (it will still be set on the plugin either way).
     pub fn queue_parameter_change(&self, change: OutputParamChange) -> bool {
         let result = self.output_parameter_changes.push(change).is_ok();
-        match &self.host_params {
+        match &*self.host_params.borrow() {
             Some(host_params) if !self.is_processing.load(Ordering::SeqCst) => {
                 unsafe { (host_params.request_flush)(&*self.host_callback) };
             }
@@ -679,8 +675,20 @@ impl<P: ClapPlugin> Wrapper<P> {
         }
     }
 
-    unsafe extern "C" fn init(_plugin: *const clap_plugin) -> bool {
-        // We don't need any special initialization
+    unsafe extern "C" fn init(plugin: *const clap_plugin) -> bool {
+        check_null_ptr!(false, plugin);
+        let wrapper = &*(plugin as *const Self);
+
+        // We weren't allowed to query these in the constructor, so we need to do it now intead.
+        *wrapper.host_latency.borrow_mut() =
+            query_host_extension::<clap_host_latency>(&wrapper.host_callback, CLAP_EXT_LATENCY);
+        *wrapper.host_params.borrow_mut() =
+            query_host_extension::<clap_host_params>(&wrapper.host_callback, CLAP_EXT_PARAMS);
+        *wrapper.host_thread_check.borrow_mut() = query_host_extension::<clap_host_thread_check>(
+            &wrapper.host_callback,
+            CLAP_EXT_THREAD_CHECK,
+        );
+
         true
     }
 
