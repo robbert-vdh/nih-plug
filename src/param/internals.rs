@@ -248,5 +248,20 @@ macro_rules! impl_persistent_field_parking_lot_mutex {
     };
 }
 
+impl<'a, T> PersistentField<'a, T> for atomic_refcell::AtomicRefCell<T>
+where
+    T: serde::Serialize + serde::Deserialize<'a> + Send + Sync,
+{
+    fn set(&self, new_value: T) {
+        *self.borrow_mut() = new_value;
+    }
+    fn map<F, R>(&self, f: F) -> R
+    where
+        F: Fn(&T) -> R,
+    {
+        f(&self.borrow())
+    }
+}
+
 impl_persistent_field_parking_lot_mutex!(parking_lot::Mutex<T>);
 impl_persistent_field_parking_lot_mutex!(parking_lot::FairMutex<T>);
