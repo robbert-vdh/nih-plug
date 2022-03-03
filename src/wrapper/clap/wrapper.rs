@@ -81,6 +81,7 @@ pub struct Wrapper<P: ClapPlugin> {
     /// this handle for its closing behavior.
     editor_handle: RwLock<Option<Box<dyn Any + Send + Sync>>>,
 
+    is_processing: AtomicBool,
     /// The current IO configuration, modified through the `clap_plugin_audio_ports_config`
     /// extension.
     current_bus_config: AtomicCell<BusConfig>,
@@ -270,6 +271,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             editor,
             editor_handle: RwLock::new(None),
 
+            is_processing: AtomicBool::new(false),
             current_bus_config: AtomicCell::new(BusConfig {
                 num_input_channels: P::DEFAULT_NUM_INPUTS,
                 num_output_channels: P::DEFAULT_NUM_OUTPUTS,
@@ -614,13 +616,22 @@ impl<P: ClapPlugin> Wrapper<P> {
         // We currently don't do anything here
     }
 
-    unsafe extern "C" fn start_processing(_plugin: *const clap_plugin) -> bool {
-        // We currently don't do anything here
+    unsafe extern "C" fn start_processing(plugin: *const clap_plugin) -> bool {
+        // We just need to keep track of our processing state so we can request a flush when
+        // updating parameters from the GUI while the processing loop isn't running
+        check_null_ptr!(false, plugin);
+        let wrapper = &*(plugin as *const Self);
+
+        wrapper.is_processing.store(true, Ordering::SeqCst);
+
         true
     }
 
-    unsafe extern "C" fn stop_processing(_plugin: *const clap_plugin) {
-        // We currently don't do anything here
+    unsafe extern "C" fn stop_processing(plugin: *const clap_plugin) {
+        check_null_ptr!((), plugin);
+        let wrapper = &*(plugin as *const Self);
+
+        wrapper.is_processing.store(false, Ordering::SeqCst);
     }
 
     unsafe extern "C" fn process(
