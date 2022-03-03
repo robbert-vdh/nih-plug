@@ -477,6 +477,18 @@ impl<P: ClapPlugin> Wrapper<P> {
         }
     }
 
+    /// Handle all incoming events from an event queue. This will clearn `self.input_events` first.
+    pub unsafe fn handle_in_events(&self, in_: &clap_input_events) {
+        let mut input_events = self.input_events.write();
+        input_events.clear();
+
+        let num_events = ((*in_).size)(&*in_);
+        for event_idx in 0..num_events {
+            let event = ((*in_).get)(&*in_, event_idx);
+            self.handle_event(event, &mut input_events);
+        }
+    }
+
     /// Handle an incoming CLAP event. You must clear [Self::input_events] first before calling this
     /// from the process function.
     ///
@@ -626,14 +638,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             // we'll process every incoming event.
             let process = &*process;
             if !process.in_events.is_null() {
-                let mut input_events = wrapper.input_events.write();
-                input_events.clear();
-
-                let num_events = ((*process.in_events).size)(&*process.in_events);
-                for event_idx in 0..num_events {
-                    let event = ((*process.in_events).get)(&*process.in_events, event_idx);
-                    wrapper.handle_event(event, &mut input_events);
-                }
+                wrapper.handle_in_events(&*process.in_events);
             }
 
             // I don't think this is a thing for CLAP since there's a dedicated flush function, but
@@ -1215,13 +1220,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         let wrapper = &*(plugin as *const Self);
 
         if !in_.is_null() {
-            let mut input_events = wrapper.input_events.write();
-
-            let num_events = ((*in_).size)(&*in_);
-            for event_idx in 0..num_events {
-                let event = ((*in_).get)(&*in_, event_idx);
-                wrapper.handle_event(event, &mut input_events);
-            }
+            wrapper.handle_in_events(&*in_);
         }
 
         // TODO: Handle automation/outputs
