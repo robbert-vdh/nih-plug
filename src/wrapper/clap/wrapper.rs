@@ -6,7 +6,7 @@ use clap_sys::events::{
     clap_event_header, clap_event_note, clap_event_param_mod, clap_event_param_value,
     clap_input_events, clap_output_events, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_MIDI,
     CLAP_EVENT_NOTE_EXPRESSION, CLAP_EVENT_NOTE_OFF, CLAP_EVENT_NOTE_ON, CLAP_EVENT_PARAM_MOD,
-    CLAP_EVENT_PARAM_VALUE,
+    CLAP_EVENT_PARAM_VALUE, CLAP_EVENT_SHOULD_RECORD,
 };
 use clap_sys::ext::audio_ports::{
     clap_audio_port_info, clap_plugin_audio_ports, CLAP_AUDIO_PORT_IS_MAIN, CLAP_EXT_AUDIO_PORTS,
@@ -39,6 +39,7 @@ use std::any::Any;
 use std::cmp;
 use std::collections::{HashMap, VecDeque};
 use std::ffi::{c_void, CStr};
+use std::mem;
 use std::os::raw::c_char;
 use std::ptr;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -62,6 +63,10 @@ pub const BYPASS_PARAM_ID: &str = "bypass";
 lazy_static! {
     pub static ref BYPASS_PARAM_HASH: u32 = hash_param_id(BYPASS_PARAM_ID);
 }
+
+/// How many output parameter changes we can store in our output parameter change queue. Storing
+/// more than this many parmaeters at a time will cause changes to get lost.
+const OUTPUT_EVENT_QUEUE_CAPACITY: usize = 2048;
 
 #[repr(C)]
 pub struct Wrapper<P: ClapPlugin> {
@@ -149,6 +154,13 @@ pub struct Wrapper<P: ClapPlugin> {
     /// ergonomic parameter setting API that uses references to the parameters instead of having to
     /// add a setter function to the parameter (or even worse, have it be completely untyped).
     param_ptr_to_hash: HashMap<ParamPtr, u32>,
+    /// A queue of parameter changes that should be output in either the next process call or in the
+    /// next parameter flush.
+    ///
+    /// XXX: There's no guarentee that a single parmaeter doesn't occur twice in this queue, but
+    ///      even if it does then that should still not be a problem because the host also reads it
+    ///      in the same order, right?
+    output_parameter_changes: ArrayQueue<OutputParamChange>,
 
     host_thread_check: Option<ClapPtr<clap_host_thread_check>>,
 
@@ -182,6 +194,16 @@ pub enum ClapParamUpdate {
     PlainValueSet(f64),
     /// Add a delta to the parameter's current plain value (so again, multiplied by the step size).
     PlainValueMod(f64),
+}
+
+/// A parameter change that should be output by the plugin, stored in a queue on the wrapper and
+/// written to the host either at the end of the process function or during a flush.
+struct OutputParamChange {
+    /// The internal hash for the parameter.
+    param_hash: u32,
+    /// The 'plain' value as reported to CLAP. This is the normalized value multiplied by
+    /// [crate::Param::step_size].
+    clap_plain_value: f64,
 }
 
 /// Because CLAP has this [clap_host::request_host_callback()] function, we don't need to use
@@ -328,6 +350,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             param_defaults_normalized: HashMap::new(),
             param_id_to_hash: HashMap::new(),
             param_ptr_to_hash: HashMap::new(),
+            output_parameter_changes: ArrayQueue::new(OUTPUT_EVENT_QUEUE_CAPACITY),
 
             host_thread_check,
 
@@ -488,6 +511,31 @@ impl<P: ClapPlugin> Wrapper<P> {
         for event_idx in 0..num_events {
             let event = ((*in_).get)(&*in_, event_idx);
             self.handle_event(event, &mut input_events);
+        }
+    }
+
+    /// Write the unflushed parameter changes to the host's output event queue.
+    pub unsafe fn handle_out_events(&self, out: &clap_output_events) {
+        // We'll always write these events to the first sample, so even when we add note output we
+        // shouldn't have to think about interleaving events here
+        while let Some(change) = self.output_parameter_changes.pop() {
+            let event = clap_event_param_value {
+                header: clap_event_header {
+                    size: mem::size_of::<clap_event_param_value>() as u32,
+                    time: 0,
+                    space_id: CLAP_CORE_EVENT_SPACE_ID,
+                    type_: CLAP_EVENT_PARAM_VALUE,
+                    flags: CLAP_EVENT_SHOULD_RECORD,
+                },
+                param_id: change.param_hash,
+                cookie: ptr::null_mut(),
+                port_index: -1,
+                key: -1,
+                channel: -1,
+                value: change.clap_plain_value,
+            };
+
+            (out.push_back)(out, &event.header);
         }
     }
 
@@ -727,7 +775,7 @@ impl<P: ClapPlugin> Wrapper<P> {
 
             let mut plugin = wrapper.plugin.write();
             let mut context = wrapper.make_process_context();
-            match plugin.process(&mut output_buffer, &mut context) {
+            let result = match plugin.process(&mut output_buffer, &mut context) {
                 ProcessStatus::Error(err) => {
                     nih_debug_assert_failure!("Process error: {}", err);
 
@@ -736,9 +784,14 @@ impl<P: ClapPlugin> Wrapper<P> {
                 ProcessStatus::Normal => CLAP_PROCESS_CONTINUE_IF_NOT_QUIET,
                 ProcessStatus::Tail(_) => CLAP_PROCESS_CONTINUE,
                 ProcessStatus::KeepAlive => CLAP_PROCESS_CONTINUE,
+            };
+
+            // After processing audio, send all spooled events to the host
+            if !process.out_events.is_null() {
+                wrapper.handle_out_events(&*process.out_events);
             }
 
-            // TODO: Handle parameter outputs/automation
+            result
         })
     }
 
@@ -1234,7 +1287,9 @@ impl<P: ClapPlugin> Wrapper<P> {
             wrapper.handle_in_events(&*in_);
         }
 
-        // TODO: Handle automation/outputs
+        if !out.is_null() {
+            wrapper.handle_out_events(&*out);
+        }
     }
 
     unsafe extern "C" fn ext_state_save(
