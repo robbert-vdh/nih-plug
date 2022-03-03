@@ -11,8 +11,7 @@ use vst3_sys::VST3;
 
 use super::inner::WrapperInner;
 use super::util::{ObjectPtr, VstPtr};
-use crate::plugin::{Editor, Vst3Plugin};
-use crate::ParentWindowHandle;
+use crate::plugin::{Editor, ParentWindowHandle, Vst3Plugin};
 
 // Alias needed for the VST3 attribute macro
 use vst3_sys as vst3_com;
@@ -121,6 +120,10 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
 
             kResultOk
         } else {
+            nih_debug_assert_failure!(
+                "Host tried to attach editor while the editor is already attached"
+            );
+
             kResultFalse
         }
     }
@@ -133,6 +136,8 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
 
             kResultOk
         } else {
+            nih_debug_assert_failure!("Host tried to remove the editor without an active editor");
+
             kResultFalse
         }
     }
