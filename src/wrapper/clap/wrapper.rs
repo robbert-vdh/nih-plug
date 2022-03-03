@@ -943,15 +943,36 @@ impl<P: ClapPlugin> Wrapper<P> {
     }
 
     unsafe extern "C" fn ext_gui_create(plugin: *const clap_plugin) -> bool {
-        todo!()
+        // This is a bit weird, because in CLAP 0.18 creating the editor window and embedding it in
+        // another window are separate, and those things are one and the same in our framework. So
+        // we'll just pretend we did something here.
+        check_null_ptr!(false, plugin);
+        let wrapper = &*(plugin as *const Self);
+
+        let editor_handle = wrapper.editor_handle.read();
+        if editor_handle.is_none() {
+            true
+        } else {
+            nih_debug_assert_failure!("Tried creating editor while the editor was already active");
+            false
+        }
     }
 
     unsafe extern "C" fn ext_gui_destroy(plugin: *const clap_plugin) {
-        todo!()
+        check_null_ptr!((), plugin);
+        let wrapper = &*(plugin as *const Self);
+
+        let mut editor_handle = wrapper.editor_handle.write();
+        if editor_handle.is_some() {
+            *editor_handle = None;
+        } else {
+            nih_debug_assert_failure!("Tried destroying editor while the editor was not active");
+        }
     }
 
-    unsafe extern "C" fn ext_gui_set_scale(plugin: *const clap_plugin, scale: f64) -> bool {
-        todo!()
+    unsafe extern "C" fn ext_gui_set_scale(_plugin: *const clap_plugin, _scale: f64) -> bool {
+        // TOOD: Implement DPI scaling
+        false
     }
 
     unsafe extern "C" fn ext_gui_get_size(
@@ -959,19 +980,31 @@ impl<P: ClapPlugin> Wrapper<P> {
         width: *mut u32,
         height: *mut u32,
     ) -> bool {
-        todo!()
+        check_null_ptr!(false, plugin, width, height);
+        let wrapper = &*(plugin as *const Self);
+
+        match &wrapper.editor {
+            Some(editor) => {
+                (*width, *height) = editor.size();
+                true
+            }
+            None => {
+                unreachable!("We don't return the editor extension on plugins without an editor");
+            }
+        }
     }
 
-    unsafe extern "C" fn ext_gui_can_resize(plugin: *const clap_plugin) -> bool {
-        todo!()
+    unsafe extern "C" fn ext_gui_can_resize(_plugin: *const clap_plugin) -> bool {
+        // TODO: Implement GUI resizing
+        false
     }
 
     unsafe extern "C" fn ext_gui_round_size(
-        plugin: *const clap_plugin,
-        width: *mut u32,
-        height: *mut u32,
+        _plugin: *const clap_plugin,
+        _width: *mut u32,
+        _height: *mut u32,
     ) {
-        todo!()
+        // TODO: Implement GUI resizing
     }
 
     unsafe extern "C" fn ext_gui_set_size(
@@ -979,15 +1012,28 @@ impl<P: ClapPlugin> Wrapper<P> {
         width: u32,
         height: u32,
     ) -> bool {
-        todo!()
+        // TODO: Implement GUI resizing
+        check_null_ptr!(false, plugin);
+        let wrapper = &*(plugin as *const Self);
+
+        match &wrapper.editor {
+            Some(editor) => {
+                let (editor_width, editor_height) = editor.size();
+                width == editor_width && height == editor_height
+            }
+            None => {
+                unreachable!("We don't return the editor extension on plugins without an editor");
+            }
+        }
     }
 
-    unsafe extern "C" fn ext_gui_show(plugin: *const clap_plugin) {
-        todo!()
+    unsafe extern "C" fn ext_gui_show(_plugin: *const clap_plugin) {
+        // TODO: Does this get used? Is this only for the free-standing window extension? (which we
+        //       don't implement) This wouldn't make any sense for embedded editors.
     }
 
-    unsafe extern "C" fn ext_gui_hide(plugin: *const clap_plugin) {
-        todo!()
+    unsafe extern "C" fn ext_gui_hide(_plugin: *const clap_plugin) {
+        // TODO: Same as the above
     }
 
     unsafe extern "C" fn ext_latency_get(plugin: *const clap_plugin) -> u32 {
