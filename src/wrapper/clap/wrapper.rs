@@ -18,7 +18,7 @@ use clap_sys::ext::audio_ports_config::{
 use clap_sys::ext::gui::{clap_plugin_gui, CLAP_EXT_GUI};
 use clap_sys::ext::latency::{clap_host_latency, clap_plugin_latency, CLAP_EXT_LATENCY};
 use clap_sys::ext::params::{
-    clap_param_info, clap_plugin_params, CLAP_EXT_PARAMS, CLAP_PARAM_IS_BYPASS,
+    clap_host_params, clap_param_info, clap_plugin_params, CLAP_EXT_PARAMS, CLAP_PARAM_IS_BYPASS,
     CLAP_PARAM_IS_STEPPED,
 };
 use clap_sys::ext::state::{clap_plugin_state, CLAP_EXT_STATE};
@@ -135,6 +135,7 @@ pub struct Wrapper<P: ClapPlugin> {
     host_latency: Option<ClapPtr<clap_host_latency>>,
 
     clap_plugin_params: clap_plugin_params,
+    host_params: Option<ClapPtr<clap_host_params>>,
     // These fiels are exactly the same as their VST3 wrapper counterparts.
     //
     /// The keys from `param_map` in a stable order.
@@ -146,14 +147,14 @@ pub struct Wrapper<P: ClapPlugin> {
     /// The default normalized parameter value for every parameter in `param_ids`. We need to store
     /// this in case the host requeries the parmaeter later. This is also indexed by the hash so we
     /// can retrieve them later for the UI if needed.
-    param_defaults_normalized: HashMap<u32, f32>,
+    pub param_defaults_normalized: HashMap<u32, f32>,
     /// Mappings from string parameter indentifiers to parameter hashes. Useful for debug logging
     /// and when storing and restoring plugin state.
     param_id_to_hash: HashMap<&'static str, u32>,
     /// The inverse mapping from [Self::param_by_hash]. This is needed to be able to have an
     /// ergonomic parameter setting API that uses references to the parameters instead of having to
     /// add a setter function to the parameter (or even worse, have it be completely untyped).
-    param_ptr_to_hash: HashMap<ParamPtr, u32>,
+    pub param_ptr_to_hash: HashMap<ParamPtr, u32>,
     /// A queue of parameter changes that should be output in either the next process call or in the
     /// next parameter flush.
     ///
@@ -198,12 +199,12 @@ pub enum ClapParamUpdate {
 
 /// A parameter change that should be output by the plugin, stored in a queue on the wrapper and
 /// written to the host either at the end of the process function or during a flush.
-struct OutputParamChange {
+pub struct OutputParamChange {
     /// The internal hash for the parameter.
-    param_hash: u32,
+    pub param_hash: u32,
     /// The 'plain' value as reported to CLAP. This is the normalized value multiplied by
     /// [crate::Param::step_size].
-    clap_plain_value: f64,
+    pub clap_plain_value: f64,
 }
 
 /// Because CLAP has this [clap_host::request_host_callback()] function, we don't need to use
@@ -262,6 +263,8 @@ impl<P: ClapPlugin> Wrapper<P> {
         let host_callback = unsafe { ClapPtr::new(host_callback) };
         let host_latency =
             unsafe { query_host_extension::<clap_host_latency>(&host_callback, CLAP_EXT_LATENCY) };
+        let host_params =
+            unsafe { query_host_extension::<clap_host_params>(&host_callback, CLAP_EXT_PARAMS) };
         let host_thread_check = unsafe {
             query_host_extension::<clap_host_thread_check>(&host_callback, CLAP_EXT_THREAD_CHECK)
         };
@@ -345,6 +348,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 text_to_value: Self::ext_params_text_to_value,
                 flush: Self::ext_params_flush,
             },
+            host_params,
             param_hashes: Vec::new(),
             param_by_hash: HashMap::new(),
             param_defaults_normalized: HashMap::new(),
@@ -441,9 +445,28 @@ impl<P: ClapPlugin> Wrapper<P> {
 
     fn make_process_context(&self) -> WrapperProcessContext<'_, P> {
         WrapperProcessContext {
-            plugin: self,
+            wrapper: self,
             input_events_guard: self.input_events.write(),
         }
+    }
+
+    /// Queue a parmeter change to be sent to the host at the end of the audio processing cycle, and
+    /// request a parameter flush from the host if the plugin is not currently processing audio. The
+    /// parameter's actual value will only be updated at that point so the value won't change in the
+    /// middle of a processing call.
+    ///
+    /// Returns `false` if the parameter value queue was full and the update will not be sent to the
+    /// host (it will still be set on the plugin either way).
+    pub fn queue_parameter_change(&self, change: OutputParamChange) -> bool {
+        let result = self.output_parameter_changes.push(change).is_ok();
+        match &self.host_params {
+            Some(host_params) if !self.is_processing.load(Ordering::SeqCst) => {
+                unsafe { (host_params.request_flush)(&*self.host_callback) };
+            }
+            _ => nih_debug_assert_failure!("The host does not support parameters? What?"),
+        }
+
+        result
     }
 
     /// Convenience function for setting a value for a parameter as triggered by a VST3 parameter
@@ -514,11 +537,20 @@ impl<P: ClapPlugin> Wrapper<P> {
         }
     }
 
-    /// Write the unflushed parameter changes to the host's output event queue.
+    /// Write the unflushed parameter changes to the host's output event queue. This will also
+    /// modify the actual parameter values, since we should only do that while the wrapped plugin is
+    /// not actually processing audio.
     pub unsafe fn handle_out_events(&self, out: &clap_output_events) {
         // We'll always write these events to the first sample, so even when we add note output we
         // shouldn't have to think about interleaving events here
+        let sample_rate = self.current_buffer_config.load().map(|c| c.sample_rate);
         while let Some(change) = self.output_parameter_changes.pop() {
+            self.update_plain_value_by_hash(
+                change.param_hash,
+                ClapParamUpdate::PlainValueSet(change.clap_plain_value),
+                sample_rate,
+            );
+
             let event = clap_event_param_value {
                 header: clap_event_header {
                     size: mem::size_of::<clap_event_param_value>() as u32,
