@@ -204,7 +204,11 @@ pub trait Editor: Send + Sync {
     //       otherwise be basically impossible to have this still be GUI-framework agnostic. Any
     //       callback that deos involve actual GUI operations will still be spooled to the IRunLoop
     //       instance.
-    fn spawn(&self, parent: ParentWindowHandle, context: Arc<dyn GuiContext>) -> Box<dyn Any>;
+    fn spawn(
+        &self,
+        parent: ParentWindowHandle,
+        context: Arc<dyn GuiContext>,
+    ) -> Box<dyn Any + Send + Sync>;
 
     /// Return the (currnent) size of the editor in pixels as a `(width, height)` pair.
     fn size(&self) -> (u32, u32);

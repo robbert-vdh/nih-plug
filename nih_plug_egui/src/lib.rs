@@ -88,7 +88,7 @@ where
         &self,
         parent: ParentWindowHandle,
         context: Arc<dyn nih_plug::GuiContext>,
-    ) -> Box<dyn std::any::Any> {
+    ) -> Box<dyn std::any::Any + Send + Sync> {
         let update = self.update.clone();
         let state = self.user_state.clone();
 
