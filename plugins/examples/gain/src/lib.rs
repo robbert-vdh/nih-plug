@@ -139,11 +139,11 @@ impl Plugin for Gain {
         buffer: &mut Buffer,
         _context: &mut impl ProcessContext,
     ) -> ProcessStatus {
-        for samples in buffer.iter_mut() {
+        for channel_samples in buffer.iter_mut() {
             // Smoothing is optionally built into the parameters themselves
             let gain = self.params.gain.smoothed.next();
 
-            for sample in samples {
+            for sample in channel_samples {
                 *sample *= util::db_to_gain(gain);
             }
         }

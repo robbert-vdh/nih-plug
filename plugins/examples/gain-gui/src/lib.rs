@@ -163,12 +163,12 @@ impl Plugin for Gain {
         buffer: &mut Buffer,
         _context: &mut impl ProcessContext,
     ) -> ProcessStatus {
-        for samples in buffer.iter_mut() {
+        for channel_samples in buffer.iter_mut() {
             let mut amplitude = 0.0;
-            let num_samples = samples.len();
+            let num_samples = channel_samples.len();
 
             let gain = self.params.gain.smoothed.next();
-            for sample in samples {
+            for sample in channel_samples {
                 *sample *= util::db_to_gain(gain);
                 amplitude += *sample;
             }
