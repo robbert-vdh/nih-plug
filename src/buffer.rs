@@ -1,3 +1,5 @@
+//! Adapters and utilities for working with audio buffers.
+
 use std::marker::PhantomData;
 
 #[cfg(feature = "simd")]

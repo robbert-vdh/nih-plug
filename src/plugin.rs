@@ -1,3 +1,5 @@
+//! Traits and structs describing plugins and editors.
+
 use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
 use std::any::Any;
 use std::pin::Pin;
