@@ -38,10 +38,10 @@ for download links.
 ### Current status
 
 It actually works! There's still lots of small things to implement, but the core
-functionality and including basic GUI support are there. Currently the Windows
-version has only been tested under Wine with
-[yabridge](https://github.com/robbert-vdh/yabridge), and the macOS version
-hasn't been tested at all. Feel free to be the first one!
+functionality and basic GUI support are there, with export targets and plugin
+bundling for both VST3 and CLAP. Currently the Windows support has only been
+tested under Wine with [yabridge](https://github.com/robbert-vdh/yabridge), and
+the macOS version hasn't been tested at all. Feel free to be the first one!
 
 ### Building
 
