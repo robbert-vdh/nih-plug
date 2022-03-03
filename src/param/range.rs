@@ -45,6 +45,9 @@ pub(crate) trait NormalizebleRange<T> {
 
     /// Snap a vlue to a step size, clamping to the minimum and maximum value of the range.
     fn snap_to_step(&self, value: T, step_size: T) -> T;
+
+    /// The number of steps in this range, if it is stepped. Used for the host's generic UI.
+    fn step_count(&self) -> Option<usize>;
 }
 
 impl Default for Range<f32> {
@@ -132,6 +135,10 @@ impl NormalizebleRange<f32> for Range<f32> {
 
         ((value / step_size).round() * step_size).clamp(*min, *max)
     }
+
+    fn step_count(&self) -> Option<usize> {
+        None
+    }
 }
 
 impl NormalizebleRange<i32> for Range<i32> {
@@ -196,6 +203,14 @@ impl NormalizebleRange<i32> for Range<i32> {
         // Integers are already discrete, and we don't allow setting step sizes on them through the
         // builder interface
         value
+    }
+
+    fn step_count(&self) -> Option<usize> {
+        match self {
+            Range::Linear { min, max } => Some((max - min) as usize),
+            Range::Skewed { min, max, .. } => Some((max - min) as usize),
+            Range::SymmetricalSkewed { min, max, .. } => Some((max - min) as usize),
+        }
     }
 }
 

@@ -54,6 +54,18 @@ impl Display for BoolParam {
 impl Param for BoolParam {
     type Plain = bool;
 
+    fn name(&self) -> &'static str {
+        self.name
+    }
+
+    fn unit(&self) -> &'static str {
+        ""
+    }
+
+    fn step_count(&self) -> Option<usize> {
+        Some(1)
+    }
+
     fn plain_value(&self) -> Self::Plain {
         self.value
     }

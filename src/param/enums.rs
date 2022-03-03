@@ -99,6 +99,18 @@ impl Display for EnumParamInner {
 impl<T: Enum> Param for EnumParam<T> {
     type Plain = T;
 
+    fn name(&self) -> &'static str {
+        self.inner.name()
+    }
+
+    fn unit(&self) -> &'static str {
+        self.inner.unit()
+    }
+
+    fn step_count(&self) -> Option<usize> {
+        self.inner.step_count()
+    }
+
     fn plain_value(&self) -> Self::Plain {
         T::from_index(self.inner.plain_value() as usize)
     }
@@ -151,6 +163,18 @@ impl<T: Enum> Param for EnumParam<T> {
 
 impl Param for EnumParamInner {
     type Plain = i32;
+
+    fn name(&self) -> &'static str {
+        self.inner.name
+    }
+
+    fn unit(&self) -> &'static str {
+        ""
+    }
+
+    fn step_count(&self) -> Option<usize> {
+        Some(self.len())
+    }
 
     fn plain_value(&self) -> Self::Plain {
         self.inner.plain_value()

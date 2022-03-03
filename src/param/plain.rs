@@ -101,6 +101,18 @@ macro_rules! impl_plainparam {
         impl Param for $ty {
             type Plain = $plain;
 
+            fn name(&self) -> &'static str {
+                self.name
+            }
+
+            fn unit(&self) -> &'static str {
+                self.unit
+            }
+
+            fn step_count(&self) -> Option<usize> {
+                self.range.step_count()
+            }
+
             fn plain_value(&self) -> Self::Plain {
                 self.value
             }
