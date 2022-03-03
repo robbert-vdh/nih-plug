@@ -105,7 +105,7 @@ pub struct Wrapper<P: ClapPlugin> {
     /// and output channel counts if that does not match one of those configurations (to do the
     /// least surprising thing).
     ///
-    /// TODO: Support surround setups once a plugin needs taht
+    /// TODO: Support surround setups once a plugin needs that
     supported_bus_configs: Vec<BusConfig>,
 
     clap_plugin_audio_ports: clap_plugin_audio_ports,
@@ -214,7 +214,7 @@ impl<P: ClapPlugin> MainThreadExecutor<Task> for Wrapper<P> {
 }
 
 impl<P: ClapPlugin> Wrapper<P> {
-    pub fn new(host_callback: *const clap_host) -> Self {
+    pub fn new(host_callback: *const clap_host) -> Box<Self> {
         let plugin_descriptor = Box::new(PluginDescriptor::default());
 
         assert!(!host_callback.is_null());
@@ -371,7 +371,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             .map(|(_, hash, ptr)| (*ptr, hash))
             .collect();
 
-        wrapper
+        Box::new(wrapper)
     }
 
     fn make_process_context(&self) -> WrapperProcessContext<'_, P> {
