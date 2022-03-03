@@ -4,6 +4,7 @@ use clap_sys::plugin_factory::clap_plugin_factory;
 use std::ffi::CStr;
 use std::os::raw::c_char;
 use std::ptr;
+use std::sync::Arc;
 
 use super::descriptor::PluginDescriptor;
 use super::plugin::Wrapper;
@@ -60,7 +61,10 @@ impl<P: ClapPlugin> Factory<P> {
 
         if !plugin_id.is_null() && CStr::from_ptr(plugin_id) == factory.plugin_descriptor.clap_id()
         {
-            &Box::leak(Wrapper::<P>::new(host)).clap_plugin
+            // Arc does not have a convenient leak function like Box, so this gets a bit awkward
+            // This pointer gets turned into an Arc and its reference count decremented in
+            // [Wrapper::destroy()]
+            &(*Arc::into_raw(Wrapper::<P>::new(host))).clap_plugin
         } else {
             ptr::null()
         }

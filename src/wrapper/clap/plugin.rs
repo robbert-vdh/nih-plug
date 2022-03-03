@@ -40,6 +40,7 @@ use std::ffi::{c_void, CStr};
 use std::os::raw::c_char;
 use std::ptr;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::Arc;
 use std::thread::{self, ThreadId};
 
 use super::context::WrapperProcessContext;
@@ -214,7 +215,7 @@ impl<P: ClapPlugin> MainThreadExecutor<Task> for Wrapper<P> {
 }
 
 impl<P: ClapPlugin> Wrapper<P> {
-    pub fn new(host_callback: *const clap_host) -> Box<Self> {
+    pub fn new(host_callback: *const clap_host) -> Arc<Self> {
         let plugin_descriptor = Box::new(PluginDescriptor::default());
 
         assert!(!host_callback.is_null());
@@ -371,7 +372,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             .map(|(_, hash, ptr)| (*ptr, hash))
             .collect();
 
-        Box::new(wrapper)
+        Arc::new(wrapper)
     }
 
     fn make_process_context(&self) -> WrapperProcessContext<'_, P> {
@@ -515,7 +516,7 @@ impl<P: ClapPlugin> Wrapper<P> {
     }
 
     unsafe extern "C" fn destroy(plugin: *const clap_plugin) {
-        Box::from_raw(plugin as *mut Self);
+        Arc::from_raw(plugin as *mut Self);
     }
 
     unsafe extern "C" fn activate(
