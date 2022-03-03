@@ -84,8 +84,6 @@ pub struct Wrapper<P: ClapPlugin> {
     input_events: RwLock<VecDeque<NoteEvent>>,
     /// The current latency in samples, as set by the plugin through the [ProcessContext]. uses the
     /// latency extnesion
-    ///
-    /// TODO: Implement the latency extension.
     pub current_latency: AtomicU32,
     /// Contains slices for the plugin's outputs. You can't directly create a nested slice form
     /// apointer to pointers, so this needs to be preallocated in the setup call and kept around
