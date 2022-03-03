@@ -5,9 +5,9 @@ use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::param::internals::ParamPtr;
+use crate::param::internals::{ParamPtr, Params};
 use crate::param::Param;
-use crate::{BufferConfig, Params};
+use crate::plugin::BufferConfig;
 
 /// A plain, unnormalized value for a parameter.
 #[derive(Debug, Serialize, Deserialize)]

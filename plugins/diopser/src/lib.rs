@@ -19,12 +19,7 @@
 #[macro_use]
 extern crate nih_plug;
 
-use nih_plug::{
-    formatters, Buffer, BufferConfig, BusConfig, ClapPlugin, Plugin, ProcessContext, ProcessStatus,
-    Vst3Plugin,
-};
-use nih_plug::{BoolParam, FloatParam, FloatRange, IntParam, IntRange, Params, SmoothingStyle};
-use nih_plug::{Enum, EnumParam};
+use nih_plug::prelude::*;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;

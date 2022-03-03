@@ -7,7 +7,7 @@ use baseview::{Size, WindowHandle, WindowOpenOptions, WindowScalePolicy};
 use crossbeam::atomic::AtomicCell;
 use egui::Context;
 use egui_baseview::EguiWindow;
-use nih_plug::{Editor, ParamSetter, ParentWindowHandle};
+use nih_plug::prelude::{Editor, GuiContext, ParamSetter, ParentWindowHandle};
 use parking_lot::RwLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -88,7 +88,7 @@ where
     fn spawn(
         &self,
         parent: ParentWindowHandle,
-        context: Arc<dyn nih_plug::GuiContext>,
+        context: Arc<dyn GuiContext>,
     ) -> Box<dyn std::any::Any + Send + Sync> {
         let update = self.update.clone();
         let state = self.user_state.clone();

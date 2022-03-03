@@ -2,7 +2,7 @@ use egui::{vec2, Response, Sense, Stroke, TextStyle, Ui, Vec2, Widget, WidgetTex
 use lazy_static::lazy_static;
 
 use super::util;
-use nih_plug::{Param, ParamSetter};
+use nih_plug::prelude::{Param, ParamSetter};
 
 /// When shift+dragging a parameter, one pixel dragged corresponds to this much change in the
 /// noramlized parameter.

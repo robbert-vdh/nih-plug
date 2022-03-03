@@ -1,11 +1,7 @@
 #[macro_use]
 extern crate nih_plug;
 
-use nih_plug::{
-    formatters, util, Buffer, BufferConfig, BusConfig, ClapPlugin, Plugin, ProcessContext,
-    ProcessStatus, Vst3Plugin,
-};
-use nih_plug::{BoolParam, FloatParam, FloatRange, Params, Smoother, SmoothingStyle};
+use nih_plug::prelude::*;
 use parking_lot::RwLock;
 use std::pin::Pin;
 use std::sync::Arc;

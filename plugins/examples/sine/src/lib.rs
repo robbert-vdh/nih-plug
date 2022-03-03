@@ -1,11 +1,7 @@
 #[macro_use]
 extern crate nih_plug;
 
-use nih_plug::{
-    formatters, util, Buffer, BufferConfig, BusConfig, ClapPlugin, Plugin, ProcessContext,
-    ProcessStatus, Vst3Plugin,
-};
-use nih_plug::{BoolParam, FloatParam, FloatRange, Params, Smoother, SmoothingStyle};
+use nih_plug::prelude::*;
 use std::f32::consts;
 use std::pin::Pin;
 
@@ -144,11 +140,11 @@ impl Plugin for Sine {
                 'midi_events: loop {
                     match next_event {
                         Some(event) if event.timing() == sample_id as u32 => match event {
-                            nih_plug::NoteEvent::NoteOn { note, .. } => {
+                            NoteEvent::NoteOn { note, .. } => {
                                 self.midi_note_freq = util::midi_note_to_freq(note);
                                 self.midi_note_gain.set_target(self.sample_rate, 1.0);
                             }
-                            nih_plug::NoteEvent::NoteOff { note, .. } => {
+                            NoteEvent::NoteOff { note, .. } => {
                                 if self.midi_note_freq == util::midi_note_to_freq(note) {
                                     self.midi_note_gain.set_target(self.sample_rate, 0.0);
                                 }

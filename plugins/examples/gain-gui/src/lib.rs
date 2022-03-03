@@ -2,11 +2,7 @@
 extern crate nih_plug;
 
 use atomic_float::AtomicF32;
-use nih_plug::{
-    util, Buffer, BufferConfig, BusConfig, ClapPlugin, Editor, Plugin, ProcessContext,
-    ProcessStatus, Vst3Plugin,
-};
-use nih_plug::{FloatParam, FloatRange, IntParam, IntRange, Params, SmoothingStyle};
+use nih_plug::prelude::*;
 use nih_plug_egui::{create_egui_editor, egui, widgets, EguiState};
 use std::pin::Pin;
 use std::sync::Arc;

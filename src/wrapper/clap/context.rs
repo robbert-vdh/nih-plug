@@ -4,11 +4,10 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use super::wrapper::{OutputParamChange, Task, Wrapper};
-use crate::context::ProcessContext;
+use crate::context::{GuiContext, ProcessContext};
 use crate::event_loop::EventLoop;
 use crate::param::internals::ParamPtr;
 use crate::plugin::{ClapPlugin, NoteEvent};
-use crate::GuiContext;
 
 /// A [`GuiContext`] implementation for the wrapper. This is passed to the plugin in
 /// [`Editor::spawn()`][crate::Editor::spawn()] so it can interact with the rest of the plugin and

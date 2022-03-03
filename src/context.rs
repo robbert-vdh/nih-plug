@@ -81,8 +81,8 @@ pub trait GuiContext: Send + Sync + 'static {
 }
 
 /// A convenience helper for setting parameter values. Any changes made here will be broadcasted to
-/// the host and reflected in the plugin's [crate::param::internals::Params] object. These functions
-/// should only be called from the main thread.
+/// the host and reflected in the plugin's [`Params`][crate::param::internals::Params] object. These
+/// functions should only be called from the main thread.
 pub struct ParamSetter<'a> {
     context: &'a dyn GuiContext,
 }

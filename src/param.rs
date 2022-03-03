@@ -1,4 +1,4 @@
-//! TODO: Document how to use the [Param] trait. Also mention both interfaces: direct initialization
+//! TODO: Document how to use the [`Param`] trait. Also mention both interfaces: direct initialization
 //!       + `..Default::default()`, and the builder interface. For the moment, just look at the gain
 //!       example.
 
