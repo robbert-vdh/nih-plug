@@ -20,10 +20,12 @@ use crate::param::internals::Params;
 /// - Sample accurate automation (this would be great, but sadly few hosts even support it so until
 ///   they do we'll ignore that it's a thing)
 /// - Parameter hierarchies/groups
-/// - Bypass parameters, right now the VST3 wrapper generates one for you
+/// - Bypass parameters, right now the plugin wrappers generates one for you but there's no way to
+///   interact with it yet
 /// - Outputting parameter changes from the plugin
 /// - MIDI CC handling
-/// - Outputting MIDI events
+/// - Outputting MIDI events from the process function (you can output parmaeter changes from an
+///   editor GUI)
 #[allow(unused_variables)]
 pub trait Plugin: Default + Send + Sync + 'static {
     const NAME: &'static str;
