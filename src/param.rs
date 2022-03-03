@@ -7,7 +7,8 @@ use std::fmt::Display;
 // Parameter types
 mod boolean;
 pub mod enums;
-mod plain;
+mod float;
+mod integer;
 
 pub mod internals;
 pub mod range;
@@ -15,7 +16,8 @@ pub mod smoothing;
 
 pub use boolean::BoolParam;
 pub use enums::EnumParam;
-pub use plain::{FloatParam, IntParam};
+pub use float::FloatParam;
+pub use integer::IntParam;
 
 /// Describes a single parameter of any type.
 pub trait Param: Display {

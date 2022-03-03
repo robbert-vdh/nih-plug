@@ -23,7 +23,7 @@ use nih_plug::{
     formatters, Buffer, BufferConfig, BusConfig, ClapPlugin, Plugin, ProcessContext, ProcessStatus,
     Vst3Plugin,
 };
-use nih_plug::{BoolParam, FloatParam, IntParam, Params, Range, SmoothingStyle};
+use nih_plug::{BoolParam, FloatParam, FloatRange, IntParam, IntRange, Params, SmoothingStyle};
 use nih_plug::{Enum, EnumParam};
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -140,7 +140,7 @@ impl DiopserParams {
             filter_stages: IntParam::new(
                 "Filter Stages",
                 0,
-                Range::Linear {
+                IntRange::Linear {
                     min: 0,
                     max: MAX_NUM_FILTERS as i32,
                 },
@@ -155,10 +155,10 @@ impl DiopserParams {
             filter_frequency: FloatParam::new(
                 "Filter Frequency",
                 200.0,
-                Range::Skewed {
+                FloatRange::Skewed {
                     min: 5.0, // This must never reach 0
                     max: 20_000.0,
-                    factor: Range::skew_factor(-2.5),
+                    factor: FloatRange::skew_factor(-2.5),
                 },
             )
             // This needs quite a bit of smoothing to avoid artifacts
@@ -170,10 +170,10 @@ impl DiopserParams {
                 // The actual default neutral Q-value would be `sqrt(2) / 2`, but this value
                 // produces slightly less ringing.
                 0.5,
-                Range::Skewed {
+                FloatRange::Skewed {
                     min: 0.01, // This must also never reach 0
                     max: 30.0,
-                    factor: Range::skew_factor(-2.5),
+                    factor: FloatRange::skew_factor(-2.5),
                 },
             )
             .with_smoother(SmoothingStyle::Logarithmic(100.0))
@@ -181,10 +181,10 @@ impl DiopserParams {
             filter_spread_octaves: FloatParam::new(
                 "Filter Spread Octaves",
                 0.0,
-                Range::SymmetricalSkewed {
+                FloatRange::SymmetricalSkewed {
                     min: -5.0,
                     max: 5.0,
-                    factor: Range::skew_factor(-1.0),
+                    factor: FloatRange::skew_factor(-1.0),
                     center: 0.0,
                 },
             )
@@ -202,7 +202,7 @@ impl DiopserParams {
             automation_precision: FloatParam::new(
                 "Automation precision",
                 normalize_automation_precision(128),
-                Range::Linear { min: 0.0, max: 1.0 },
+                FloatRange::Linear { min: 0.0, max: 1.0 },
             )
             .with_unit("%")
             .with_value_to_string(Arc::new(|value| format!("{:.0}", value * 100.0))),

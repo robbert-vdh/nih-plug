@@ -3,10 +3,10 @@ extern crate nih_plug;
 
 use atomic_float::AtomicF32;
 use nih_plug::{
-    util, Buffer, BufferConfig, BusConfig, ClapPlugin, Editor, IntParam, Plugin, ProcessContext,
+    util, Buffer, BufferConfig, BusConfig, ClapPlugin, Editor, Plugin, ProcessContext,
     ProcessStatus, Vst3Plugin,
 };
-use nih_plug::{FloatParam, Params, Range, SmoothingStyle};
+use nih_plug::{FloatParam, FloatRange, IntParam, IntRange, Params, SmoothingStyle};
 use nih_plug_egui::{create_egui_editor, egui, widgets, EguiState};
 use std::pin::Pin;
 use std::sync::Arc;
@@ -54,7 +54,7 @@ impl Default for GainParams {
             gain: FloatParam::new(
                 "Gain",
                 0.0,
-                Range::Linear {
+                FloatRange::Linear {
                     min: -30.0,
                     max: 30.0,
                 },
@@ -62,15 +62,7 @@ impl Default for GainParams {
             .with_smoother(SmoothingStyle::Linear(50.0))
             .with_step_size(0.01)
             .with_unit(" dB"),
-            some_int: IntParam::new(
-                "Something",
-                3,
-                Range::Skewed {
-                    min: 0,
-                    max: 3,
-                    factor: Range::skew_factor(1.0),
-                },
-            ),
+            some_int: IntParam::new("Something", 3, IntRange::Linear { min: 0, max: 3 }),
         }
     }
 }
@@ -103,7 +95,7 @@ impl Plugin for Gain {
                     // This is a fancy widget that can get all the information it needs to properly
                     // display and modify the parameter from the parametr itself
                     // It's not yet fully implemented, as the text is missing.
-                    ui.label("Some random wierdly distributed integer");
+                    ui.label("Some random integer");
                     ui.add(widgets::ParamSlider::for_param(&params.some_int, setter));
 
                     ui.label("Gain");

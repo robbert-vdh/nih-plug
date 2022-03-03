@@ -17,7 +17,7 @@ pub use buffer::Buffer;
 pub use context::{GuiContext, ParamSetter, ProcessContext};
 pub use param::enums::{Enum, EnumParam};
 pub use param::internals::Params;
-pub use param::range::Range;
+pub use param::range::{FloatRange, IntRange};
 pub use param::smoothing::{Smoother, SmoothingStyle};
 pub use param::{BoolParam, FloatParam, IntParam, Param};
 pub use plugin::{

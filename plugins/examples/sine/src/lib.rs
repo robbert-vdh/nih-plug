@@ -5,7 +5,7 @@ use nih_plug::{
     formatters, util, Buffer, BufferConfig, BusConfig, ClapPlugin, Plugin, ProcessContext,
     ProcessStatus, Vst3Plugin,
 };
-use nih_plug::{BoolParam, FloatParam, Params, Range, Smoother, SmoothingStyle};
+use nih_plug::{BoolParam, FloatParam, FloatRange, Params, Smoother, SmoothingStyle};
 use std::f32::consts;
 use std::pin::Pin;
 
@@ -58,7 +58,7 @@ impl Default for SineParams {
             gain: FloatParam::new(
                 "Gain",
                 -10.0,
-                Range::Linear {
+                FloatRange::Linear {
                     min: -30.0,
                     max: 0.0,
                 },
@@ -69,10 +69,10 @@ impl Default for SineParams {
             frequency: FloatParam::new(
                 "Frequency",
                 420.0,
-                Range::Skewed {
+                FloatRange::Skewed {
                     min: 1.0,
                     max: 20_000.0,
-                    factor: Range::skew_factor(-2.0),
+                    factor: FloatRange::skew_factor(-2.0),
                 },
             )
             .with_smoother(SmoothingStyle::Linear(10.0))

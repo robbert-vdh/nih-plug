@@ -5,7 +5,7 @@ use nih_plug::{
     formatters, util, Buffer, BufferConfig, BusConfig, ClapPlugin, Plugin, ProcessContext,
     ProcessStatus, Vst3Plugin,
 };
-use nih_plug::{BoolParam, FloatParam, Params, Range, Smoother, SmoothingStyle};
+use nih_plug::{BoolParam, FloatParam, FloatRange, Params, Smoother, SmoothingStyle};
 use parking_lot::RwLock;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -47,7 +47,7 @@ impl Default for GainParams {
                 value: 0.0,
                 smoothed: Smoother::new(SmoothingStyle::Linear(50.0)),
                 value_changed: None,
-                range: Range::Linear {
+                range: FloatRange::Linear {
                     min: -30.0,
                     max: 30.0,
                 },

@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use super::internals::ParamPtr;
-use super::range::Range;
+use super::range::IntRange;
 use super::{IntParam, Param};
 
 // Re-export the derive macro
@@ -71,7 +71,7 @@ impl<T: Enum + Default> Default for EnumParam<T> {
             inner: EnumParamInner {
                 inner: IntParam {
                     value: T::default().to_index() as i32,
-                    range: Range::Linear {
+                    range: IntRange::Linear {
                         min: 0,
                         max: variants.len() as i32 - 1,
                     },
@@ -245,7 +245,7 @@ impl<T: Enum + 'static> EnumParam<T> {
             inner: EnumParamInner {
                 inner: IntParam {
                     value: T::to_index(default) as i32,
-                    range: Range::Linear {
+                    range: IntRange::Linear {
                         min: 0,
                         max: variants.len() as i32 - 1,
                     },
