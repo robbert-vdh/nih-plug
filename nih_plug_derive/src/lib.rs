@@ -237,7 +237,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
 
                 let nested_fields: &[&dyn Params] = &[#(&self.#nested_fields_idents),*];
                 for nested_params in nested_fields {
-                    unsafe { serialized.extend(Pin::new_unchecked(*nested_params).serialized_fields()) };
+                    unsafe { serialized.extend(Pin::new_unchecked(*nested_params).serialize_fields()) };
                 }
 
                 serialized
