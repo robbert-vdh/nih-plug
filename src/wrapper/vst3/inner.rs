@@ -7,11 +7,10 @@ use std::sync::Arc;
 use vst3_sys::base::{kInvalidArgument, kResultOk, tresult};
 use vst3_sys::vst::IComponentHandler;
 
-use super::context::WrapperProcessContext;
+use super::context::{WrapperGuiContext, WrapperProcessContext};
 use super::util::{ObjectPtr, VstPtr, BYPASS_PARAM_HASH, BYPASS_PARAM_ID};
 use super::view::WrapperView;
 use crate::buffer::Buffer;
-use crate::context::GuiContext;
 use crate::event_loop::{EventLoop, MainThreadExecutor, OsEventLoop};
 use crate::param::internals::ParamPtr;
 use crate::plugin::{BufferConfig, BusConfig, Editor, NoteEvent, ProcessStatus, Vst3Plugin};
@@ -188,6 +187,10 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         wrapper
     }
 
+    pub fn make_gui_context(self: Arc<Self>) -> Arc<WrapperGuiContext<P>> {
+        Arc::new(WrapperGuiContext { inner: self })
+    }
+
     pub fn make_process_context(&self) -> WrapperProcessContext<'_, P> {
         WrapperProcessContext {
             inner: self,
@@ -221,72 +224,6 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             kResultOk
         } else {
             kInvalidArgument
-        }
-    }
-}
-
-// We can't use a nice standalone context object for this as we don't have any control over the
-// lifetime since we currently try to stay GUI framework agnostic. Because of that, the only
-// alternative is to pass an `Arc<Self as GuiContext>` to the plugin and hope it doesn't do anything
-// weird with it.
-impl<P: Vst3Plugin> GuiContext for WrapperInner<P> {
-    // All of these functions are supposed to be called from the main thread, so we'll put some
-    // trust in the caller and assume that this is indeed the case
-    unsafe fn raw_begin_set_parameter(&self, param: ParamPtr) {
-        match &*self.component_handler.read() {
-            Some(handler) => match self.param_ptr_to_hash.get(&param) {
-                Some(hash) => {
-                    handler.begin_edit(*hash);
-                }
-                None => nih_debug_assert_failure!("Unknown parameter: {:?}", param),
-            },
-            None => nih_debug_assert_failure!("Component handler not yet set"),
-        }
-    }
-
-    unsafe fn raw_set_parameter_normalized(&self, param: ParamPtr, normalized: f32) {
-        match &*self.component_handler.read() {
-            Some(handler) => match self.param_ptr_to_hash.get(&param) {
-                Some(hash) => {
-                    // Only update the parameters manually if the host is not processing audio. If
-                    // the plugin is currently processing audio, the host will pass this change back
-                    // to the plugin in the audio callback. This also prevents the values from
-                    // changing in the middle of the process callback, which would be unsound.
-                    if !self.is_processing.load(Ordering::SeqCst) {
-                        self.set_normalized_value_by_hash(
-                            *hash,
-                            normalized,
-                            self.current_buffer_config.load().map(|c| c.sample_rate),
-                        );
-                    }
-
-                    handler.perform_edit(*hash, normalized as f64);
-                }
-                None => nih_debug_assert_failure!("Unknown parameter: {:?}", param),
-            },
-            None => nih_debug_assert_failure!("Component handler not yet set"),
-        }
-    }
-
-    unsafe fn raw_end_set_parameter(&self, param: ParamPtr) {
-        match &*self.component_handler.read() {
-            Some(handler) => match self.param_ptr_to_hash.get(&param) {
-                Some(hash) => {
-                    handler.end_edit(*hash);
-                }
-                None => nih_debug_assert_failure!("Unknown parameter: {:?}", param),
-            },
-            None => nih_debug_assert_failure!("Component handler not yet set"),
-        }
-    }
-
-    unsafe fn raw_default_normalized_param_value(&self, param: ParamPtr) -> f32 {
-        match self.param_ptr_to_hash.get(&param) {
-            Some(hash) => self.param_defaults_normalized[hash],
-            None => {
-                nih_debug_assert_failure!("Unknown parameter: {:?}", param);
-                0.5
-            }
         }
     }
 }

@@ -113,10 +113,10 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
                 }
             };
 
-            *editor_handle = Some(
-                self.editor
-                    .spawn(ParentWindowHandle { handle }, self.inner.clone()),
-            );
+            *editor_handle = Some(self.editor.spawn(
+                ParentWindowHandle { handle },
+                self.inner.clone().make_gui_context(),
+            ));
             *self.inner.plug_view.write() = Some(ObjectPtr::from(self));
 
             kResultOk
