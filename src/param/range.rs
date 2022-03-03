@@ -1,6 +1,11 @@
 //! Different ranges for numeric parameters.
 
 /// A distribution for a parameter's range. All range endpoints are inclusive.
+///
+/// TODO: Hosts will do weird things when using skewed ranges for integers because of the steps.
+///       Perhaps it would be best to just only allow linear ranges for integers. Bitwig for
+///       instance will send a parameter change rounding the value down when restoring a plugin
+///       patch.
 #[derive(Debug)]
 pub enum Range<T> {
     /// The values are uniformly distributed between `min` and `max`.
