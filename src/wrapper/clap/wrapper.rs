@@ -265,7 +265,17 @@ impl<P: ClapPlugin> MainThreadExecutor<Task> for Wrapper<P> {
         // This function is always called from the main thread, from [Self::on_main_thread].
         match task {
             Task::LatencyChanged => match &*self.host_latency.borrow() {
-                Some(host_latency) => (host_latency.changed)(&*self.host_callback),
+                Some(host_latency) => {
+                    // XXX: The CLAP docs mention that you should request a restart if this happens
+                    //      while the plugin is activated (which is not entirely the same thing as
+                    //      is processing, but we'll treat it as the same thing). In practice just
+                    //      calling the latency changed function also seems to work just fine.
+                    if self.is_processing.load(Ordering::SeqCst) {
+                        (self.host_callback.request_restart)(&*self.host_callback)
+                    } else {
+                        (host_latency.changed)(&*self.host_callback)
+                    }
+                }
                 None => nih_debug_assert_failure!("Host does not support the latency extension"),
             },
         };
