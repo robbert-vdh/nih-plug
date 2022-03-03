@@ -7,7 +7,7 @@ use std::ptr;
 use std::sync::Arc;
 
 use super::descriptor::PluginDescriptor;
-use super::plugin::Wrapper;
+use super::wrapper::Wrapper;
 use crate::ClapPlugin;
 
 /// The plugin's factory. Initialized using a lazy_static from the entry poiunt's `get_factory()`

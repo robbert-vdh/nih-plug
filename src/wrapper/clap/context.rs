@@ -2,7 +2,7 @@ use parking_lot::RwLockWriteGuard;
 use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 
-use super::plugin::{Task, Wrapper};
+use super::wrapper::{Task, Wrapper};
 use crate::context::ProcessContext;
 use crate::event_loop::EventLoop;
 use crate::plugin::{ClapPlugin, NoteEvent};
