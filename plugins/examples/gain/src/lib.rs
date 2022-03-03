@@ -19,14 +19,25 @@ struct GainParams {
     #[id = "gain"]
     pub gain: FloatParam,
 
-    #[id = "as_long_as_this_name_stays_constant"]
-    pub the_field_name_can_change: BoolParam,
+    #[id = "stable"]
+    pub but_field_names_can_change: BoolParam,
 
     /// This field isn't used in this exampleq, but anything written to the vector would be restored
     /// together with a preset/state file saved for this plugin. This can be useful for storign
     /// things like sample data.
     #[persist = "industry_secrets"]
     pub random_data: RwLock<Vec<f32>>,
+
+    /// You can also nest parameter structs. This is only for your own organization: they will still
+    /// appear as a flat list to the host.
+    #[nested]
+    pub sub_params: SubParams,
+}
+
+#[derive(Params)]
+struct SubParams {
+    #[id = "thing"]
+    pub nested_parameter: FloatParam,
 }
 
 impl Default for Gain {
@@ -63,7 +74,7 @@ impl Default for GainParams {
                 // // ..Default::default(),
             },
             // ...or use the builder interface:
-            the_field_name_can_change: BoolParam::new("Important value", false).with_callback(
+            but_field_names_can_change: BoolParam::new("Important value", false).with_callback(
                 Arc::new(|_new_value: bool| {
                     // If, for instance, updating this parameter would require other parts of the
                     // plugin's internal state to be updated other values to also be updated, then
@@ -73,6 +84,18 @@ impl Default for GainParams {
             // Persisted fields can be intialized like any other fields, and they'll keep their when
             // restoring the plugin's state.
             random_data: RwLock::new(Vec::new()),
+            sub_params: SubParams {
+                nested_parameter: FloatParam::new(
+                    "Unused Nested Parameter",
+                    0.5,
+                    FloatRange::Skewed {
+                        min: 2.0,
+                        max: 2.4,
+                        factor: FloatRange::skew_factor(2.0),
+                    },
+                )
+                .with_value_to_string(formatters::f32_rounded(2)),
+            },
         }
     }
 }

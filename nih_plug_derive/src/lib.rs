@@ -5,7 +5,7 @@ use quote::quote;
 use std::collections::HashSet;
 use syn::spanned::Spanned;
 
-#[proc_macro_derive(Params, attributes(id, persist))]
+#[proc_macro_derive(Params, attributes(id, persist, nested))]
 pub fn derive_params(input: TokenStream) -> TokenStream {
     let ast = syn::parse_macro_input!(input as syn::DeriveInput);
 
@@ -25,16 +25,21 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
         }
     };
 
-    // We only care about fields with `id` and `persist` attributes. For the `id` fields we'll build
-    // a mapping function that creates a hashmap containing pointers to those parmaeters. For the
-    // `persist` function we'll create functions that serialize and deserialize those fields
-    // individually (so they can be added and removed independently of eachother) using JSON.
+    // We only care about fields with `id`, `persist`, and `nested` attributes. For the `id` fields
+    // we'll build a mapping function that creates a hashmap containing pointers to those
+    // parmaeters. For the `persist` function we'll create functions that serialize and deserialize
+    // those fields individually (so they can be added and removed independently of eachother) using
+    // JSON. The `nested` fields should also implement the `Params` trait and their fields will be
+    // inherited and added to this field's lists.
     let mut param_mapping_insert_tokens = Vec::new();
     let mut param_id_string_tokens = Vec::new();
     let mut field_serialize_tokens = Vec::new();
     let mut field_deserialize_tokens = Vec::new();
+    let mut nested_fields_idents = Vec::new();
 
     // We'll also enforce that there are no duplicate keys at compile time
+    // TODO: This doesn't work for nested fields since we don't know anything about the fields on
+    //       the nested structs
     let mut param_ids = HashSet::new();
     let mut persist_ids = HashSet::new();
     for field in fields.named {
@@ -46,6 +51,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
         // These two attributes are mutually exclusive
         let mut id_attr: Option<String> = None;
         let mut persist_attr: Option<String> = None;
+        let mut nested = false;
         for attr in &field.attrs {
             if attr.path.is_ident("id") {
                 match attr.parse_meta() {
@@ -91,6 +97,26 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                         )
                         .to_compile_error()
                         .into()
+                    }
+                };
+            } else if attr.path.is_ident("nested") {
+                match attr.parse_meta() {
+                    Ok(syn::Meta::Path(_)) => {
+                        if !nested {
+                            nested = true;
+                        } else {
+                            return syn::Error::new(attr.span(), "Duplicate nested attribute")
+                                .to_compile_error()
+                                .into();
+                        }
+                    }
+                    _ => {
+                        return syn::Error::new(
+                            attr.span(),
+                            "The nested attribute should not have any arguments: #[nested]",
+                        )
+                        .to_compile_error()
+                        .into();
                     }
                 };
             }
@@ -169,6 +195,10 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
             }
             (None, None) => (),
         }
+
+        if nested {
+            nested_fields_idents.push(field_name.clone());
+        }
     }
 
     quote! {
@@ -180,20 +210,35 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                 use ::nih_plug::Param;
 
                 let mut param_map = std::collections::HashMap::new();
-
                 #(#param_mapping_insert_tokens)*
+
+                let nested_fields: &[&dyn Params] = &[#(&self.#nested_fields_idents),*];
+                for nested_params in nested_fields {
+                    unsafe { param_map.extend(Pin::new_unchecked(*nested_params).param_map()) };
+                }
 
                 param_map
             }
 
-            fn param_ids(self: std::pin::Pin<&Self>) -> &'static [&'static str] {
-                &[#(#param_id_string_tokens)*]
+            fn param_ids(self: std::pin::Pin<&Self>) -> Vec<&'static str> {
+                let mut ids = vec![#(#param_id_string_tokens)*];
+
+                let nested_fields: &[&dyn Params] = &[#(&self.#nested_fields_idents),*];
+                for nested_params in nested_fields {
+                    unsafe { ids.append(&mut Pin::new_unchecked(*nested_params).param_ids()) };
+                }
+
+                ids
             }
 
             fn serialize_fields(&self) -> ::std::collections::HashMap<String, String> {
                 let mut serialized = ::std::collections::HashMap::new();
-
                 #(#field_serialize_tokens)*
+
+                let nested_fields: &[&dyn Params] = &[#(&self.#nested_fields_idents),*];
+                for nested_params in nested_fields {
+                    unsafe { serialized.extend(Pin::new_unchecked(*nested_params).serialized_fields()) };
+                }
 
                 serialized
             }
@@ -202,8 +247,17 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                 for (field_name, data) in serialized {
                     match field_name.as_str() {
                         #(#field_deserialize_tokens)*
-                        _ => nih_log!("Unknown field name: {}", field_name),
+                        _ => nih_log!("Unknown serialized field name: {} (this may not be accurate)", field_name),
                     }
+                }
+
+                // FIXME: The above warning will course give false postiives when using nested
+                //        parameter structs. An easy fix would be to use
+                //        https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.drain_filter
+                //        once that gets stabilized.
+                let nested_fields: &[&dyn Params] = &[#(&self.#nested_fields_idents),*];
+                for nested_params in nested_fields {
+                    unsafe { Pin::new_unchecked(*nested_params).deserialize_fields(serialized) };
                 }
             }
         }

@@ -15,10 +15,21 @@ pub use serde_json::to_string as serialize_field;
 /// assigning a unique identifier to each parameter. We can then build a mapping from those
 /// parameter IDs to the parameters using the [Params::param_map()] function. That way we can have
 /// easy to work with JUCE-style parameter objects in the plugin without needing to manually
-/// register each parameter, like you would in JUCE.
+/// register each parameter, like you would in JUCE. When deriving this trait, any of those
+/// parameters should have the `#[id = "stable"]` attribute, where `stable` is an up to 6 character
+/// (to avoid collisions) string that will be used for the parameter's internal identifier.
 ///
 /// The other persistent parameters should be [PersistentField]s containing types that can be
-/// serialized and deserialized with Serde.
+/// serialized and deserialized with Serde. When deriving this trait, any of those fields should be
+/// marked with `#[persist = "key"]`.
+///
+/// And finally when deriving this trait, it is also possible to inherit the parameters from other
+/// `Params` objects by adding the `#[nested]` attribute to those fields. Parameter IDs and
+/// persisting keys still need to be **unique** when usting nested parameter structs. This currently
+/// has the following caveats:
+///
+/// - Enforcing that parameter IDs and persist keys are unique does not work across nested structs.
+/// - Deserializing persisted fields will give false positives about fields not existing.
 ///
 /// Take a look at the example gain plugin to see how this should be used.
 ///
@@ -26,8 +37,6 @@ pub use serde_json::to_string as serialize_field;
 ///
 /// This implementation is safe when using from the wrapper because the plugin object needs to be
 /// pinned, and it can never outlive the wrapper.
-//
-// TODO: Add a `#[nested]` attribute for nested params objects
 pub trait Params {
     /// Create a mapping from unique parameter IDs to parameters. This is done for every parameter
     /// field marked with `#[id = "stable_name"]`. Dereferencing the pointers stored in the values
@@ -36,7 +45,12 @@ pub trait Params {
 
     /// All parameter IDs from `param_map`, in a stable order. This order will be used to display
     /// the parameters.
-    fn param_ids(self: Pin<&Self>) -> &'static [&'static str];
+    ///
+    /// TODO: This used to be a static slice, but now that we supported nested parameter objects
+    ///       that's become a bit more difficult since Rust does not have a convenient way to
+    ///       concatenate an arbitrary number of static slices. There's probably a better way to do
+    ///       this.
+    fn param_ids(self: Pin<&Self>) -> Vec<&'static str>;
 
     /// Serialize all fields marked with `#[persist = "stable_name"]` into a hash map containing
     /// JSON-representations of those fields so they can be written to the plugin's state and

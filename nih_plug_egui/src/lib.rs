@@ -23,7 +23,8 @@ pub mod widgets;
 /// contains the GUI's intitial size, and this is kept in sync whenever the GUI gets resized. You
 /// can also use this to know if the GUI is open, so you can avoid performing potentially expensive
 /// calculations while the GUI is not open. If you want this size to be persisted when restoring a
-/// plugin instance, then you can store it in a `#[persist]` field on your parameters struct.
+/// plugin instance, then you can store it in a `#[persist = "key"]` field on your parameters
+/// struct.
 ///
 /// See [EguiState::from_size()].
 //
