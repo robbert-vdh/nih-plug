@@ -1,3 +1,4 @@
+use atomic_refcell::AtomicRefCell;
 use crossbeam::atomic::AtomicCell;
 use parking_lot::RwLock;
 use std::collections::{HashMap, VecDeque};
@@ -29,7 +30,7 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
 
     /// The host's `IComponentHandler` instance, if passed through
     /// `IEditController::set_component_handler`.
-    pub component_handler: RwLock<Option<VstPtr<dyn IComponentHandler>>>,
+    pub component_handler: AtomicRefCell<Option<VstPtr<dyn IComponentHandler>>>,
 
     /// Our own [IPlugView] instance. This is set while the editor is actually visible (which is
     /// different form the lifetimei of [super::WrapperView] itself).
@@ -42,7 +43,7 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// mutably borrow the event loop, so reads will never be contested.
     ///
     /// TODO: Is there a better type for Send+Sync late initializaiton?
-    pub event_loop: RwLock<MaybeUninit<OsEventLoop<Task, Self>>>,
+    pub event_loop: AtomicRefCell<MaybeUninit<OsEventLoop<Task, Self>>>,
 
     /// Whether the plugin is currently processing audio. In other words, the last state
     /// `IAudioProcessor::setActive()` has been called with.
@@ -63,12 +64,12 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// apointer to pointers, so this needs to be preallocated in the setup call and kept around
     /// between process calls. This buffer owns the vector, because otherwise it would need to store
     /// a mutable reference to the data contained in this mutex.
-    pub output_buffer: RwLock<Buffer<'static>>,
+    pub output_buffer: AtomicRefCell<Buffer<'static>>,
     /// The incoming events for the plugin, if `P::ACCEPTS_MIDI` is set.
     ///
     /// TODO: Maybe load these lazily at some point instead of needing to spool them all to this
     ///       queue first
-    pub input_events: RwLock<VecDeque<NoteEvent>>,
+    pub input_events: AtomicRefCell<VecDeque<NoteEvent>>,
 
     /// The keys from `param_map` in a stable order.
     pub param_hashes: Vec<u32>,
@@ -109,11 +110,11 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             plugin,
             editor,
 
-            component_handler: RwLock::new(None),
+            component_handler: AtomicRefCell::new(None),
 
             plug_view: RwLock::new(None),
 
-            event_loop: RwLock::new(MaybeUninit::uninit()),
+            event_loop: AtomicRefCell::new(MaybeUninit::uninit()),
 
             is_processing: AtomicBool::new(false),
             // Some hosts, like the current version of Bitwig and Ardour at the time of writing,
@@ -128,8 +129,8 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             bypass_state: AtomicBool::new(false),
             last_process_status: AtomicCell::new(ProcessStatus::Normal),
             current_latency: AtomicU32::new(0),
-            output_buffer: RwLock::new(Buffer::default()),
-            input_events: RwLock::new(VecDeque::with_capacity(512)),
+            output_buffer: AtomicRefCell::new(Buffer::default()),
+            input_events: AtomicRefCell::new(VecDeque::with_capacity(512)),
 
             param_hashes: Vec::new(),
             param_by_hash: HashMap::new(),
@@ -181,7 +182,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         //        serving multiple plugin instances, Arc can't be used because its reference count
         //        is separate from the internal COM-style reference count.
         let wrapper: Arc<WrapperInner<P>> = wrapper.into();
-        *wrapper.event_loop.write() =
+        *wrapper.event_loop.borrow_mut() =
             MaybeUninit::new(OsEventLoop::new_and_spawn(Arc::downgrade(&wrapper)));
 
         wrapper
@@ -194,7 +195,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
     pub fn make_process_context(&self) -> WrapperProcessContext<'_, P> {
         WrapperProcessContext {
             inner: self,
-            input_events_guard: self.input_events.write(),
+            input_events_guard: self.input_events.borrow_mut(),
         }
     }
 
@@ -237,7 +238,7 @@ impl<P: Vst3Plugin> MainThreadExecutor<Task> for WrapperInner<P> {
         //       function for checking if a to be scheduled task can be handled right ther and
         //       then).
         match task {
-            Task::TriggerRestart(flags) => match &*self.component_handler.read() {
+            Task::TriggerRestart(flags) => match &*self.component_handler.borrow() {
                 Some(handler) => {
                     handler.restart_component(flags);
                 }

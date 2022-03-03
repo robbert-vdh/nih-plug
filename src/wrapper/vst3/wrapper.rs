@@ -465,7 +465,7 @@ impl<P: Vst3Plugin> IEditController for Wrapper<P> {
         &self,
         handler: SharedVstPtr<dyn vst3_sys::vst::IComponentHandler>,
     ) -> tresult {
-        *self.inner.component_handler.write() = handler.upgrade().map(VstPtr::from);
+        *self.inner.component_handler.borrow_mut() = handler.upgrade().map(VstPtr::from);
 
         kResultOk
     }
@@ -599,7 +599,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
             // f32` to a `&mut [&mut f32]` in the process call
             self.inner
                 .output_buffer
-                .write()
+                .borrow_mut()
                 .with_raw_vec(|output_slices| {
                     output_slices.resize_with(bus_config.num_output_channels as usize, || &mut [])
                 });
@@ -667,7 +667,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
 
             // And also incoming note events if the plugin accepts MDII
             if P::ACCEPTS_MIDI {
-                let mut input_events = self.inner.input_events.write();
+                let mut input_events = self.inner.input_events.borrow_mut();
                 if let Some(events) = data.input_events.upgrade() {
                     let num_events = events.get_event_count();
 
@@ -731,7 +731,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
 
             // This vector has been preallocated to contain enough slices as there are output
             // channels
-            let mut output_buffer = self.inner.output_buffer.write();
+            let mut output_buffer = self.inner.output_buffer.borrow_mut();
             output_buffer.with_raw_vec(|output_slices| {
                 nih_debug_assert_eq!(num_output_channels, output_slices.len());
                 for (output_channel_idx, output_channel_slice) in

@@ -1,4 +1,4 @@
-use parking_lot::RwLockWriteGuard;
+use atomic_refcell::AtomicRefMut;
 use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -22,7 +22,7 @@ pub(crate) struct WrapperGuiContext<P: ClapPlugin> {
 /// unnecessary atomic operations to lock the uncontested RwLocks.
 pub(crate) struct WrapperProcessContext<'a, P: ClapPlugin> {
     pub(super) wrapper: &'a Wrapper<P>,
-    pub(super) input_events_guard: RwLockWriteGuard<'a, VecDeque<NoteEvent>>,
+    pub(super) input_events_guard: AtomicRefMut<'a, VecDeque<NoteEvent>>,
 }
 
 impl<P: ClapPlugin> GuiContext for WrapperGuiContext<P> {

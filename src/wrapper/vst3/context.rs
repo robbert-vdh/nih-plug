@@ -1,4 +1,4 @@
-use parking_lot::RwLockWriteGuard;
+use atomic_refcell::AtomicRefMut;
 use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -19,17 +19,17 @@ pub(crate) struct WrapperGuiContext<P: Vst3Plugin> {
 
 /// A [ProcessContext] implementation for the wrapper. This is a separate object so it can hold on
 /// to lock guards for event queues. Otherwise reading these events would require constant
-/// unnecessary atomic operations to lock the uncontested RwLocks.
+/// unnecessary atomic operations to lock the uncontested locks.
 pub(crate) struct WrapperProcessContext<'a, P: Vst3Plugin> {
     pub(super) inner: &'a WrapperInner<P>,
-    pub(super) input_events_guard: RwLockWriteGuard<'a, VecDeque<NoteEvent>>,
+    pub(super) input_events_guard: AtomicRefMut<'a, VecDeque<NoteEvent>>,
 }
 
 impl<P: Vst3Plugin> GuiContext for WrapperGuiContext<P> {
     // All of these functions are supposed to be called from the main thread, so we'll put some
     // trust in the caller and assume that this is indeed the case
     unsafe fn raw_begin_set_parameter(&self, param: ParamPtr) {
-        match &*self.inner.component_handler.read() {
+        match &*self.inner.component_handler.borrow() {
             Some(handler) => match self.inner.param_ptr_to_hash.get(&param) {
                 Some(hash) => {
                     handler.begin_edit(*hash);
@@ -41,7 +41,7 @@ impl<P: Vst3Plugin> GuiContext for WrapperGuiContext<P> {
     }
 
     unsafe fn raw_set_parameter_normalized(&self, param: ParamPtr, normalized: f32) {
-        match &*self.inner.component_handler.read() {
+        match &*self.inner.component_handler.borrow() {
             Some(handler) => match self.inner.param_ptr_to_hash.get(&param) {
                 Some(hash) => {
                     // Only update the parameters manually if the host is not processing audio. If
@@ -68,7 +68,7 @@ impl<P: Vst3Plugin> GuiContext for WrapperGuiContext<P> {
     }
 
     unsafe fn raw_end_set_parameter(&self, param: ParamPtr) {
-        match &*self.inner.component_handler.read() {
+        match &*self.inner.component_handler.borrow() {
             Some(handler) => match self.inner.param_ptr_to_hash.get(&param) {
                 Some(hash) => {
                     handler.end_edit(*hash);
@@ -95,7 +95,7 @@ impl<P: Vst3Plugin> ProcessContext for WrapperProcessContext<'_, P> {
         // Only trigger a restart if it's actually needed
         let old_latency = self.inner.current_latency.swap(samples, Ordering::SeqCst);
         if old_latency != samples {
-            let task_posted = unsafe { self.inner.event_loop.read().assume_init_ref() }
+            let task_posted = unsafe { self.inner.event_loop.borrow().assume_init_ref() }
                 .do_maybe_async(Task::TriggerRestart(
                     vst3_sys::vst::RestartFlags::kLatencyChanged as i32,
                 ));

@@ -2,7 +2,7 @@
 // explicitly pattern match on that unit
 #![allow(clippy::unused_unit)]
 
-use atomic_refcell::AtomicRefCell;
+use atomic_refcell::{AtomicRefCell, AtomicRefMut};
 use clap_sys::events::{
     clap_event_header, clap_event_note, clap_event_param_mod, clap_event_param_value,
     clap_input_events, clap_output_events, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_MIDI,
@@ -35,7 +35,7 @@ use clap_sys::stream::{clap_istream, clap_ostream};
 use crossbeam::atomic::AtomicCell;
 use crossbeam::queue::ArrayQueue;
 use lazy_static::lazy_static;
-use parking_lot::{RwLock, RwLockWriteGuard};
+use parking_lot::RwLock;
 use raw_window_handle::RawWindowHandle;
 use std::any::Any;
 use std::cmp;
@@ -85,7 +85,7 @@ pub struct Wrapper<P: ClapPlugin> {
     pub clap_plugin: clap_plugin,
 
     /// A reference to this object, upgraded to an `Arc<Self>` for the GUI context.
-    this: RwLock<Weak<Self>>,
+    this: AtomicRefCell<Weak<Self>>,
 
     /// The wrapped plugin instance.
     plugin: RwLock<P>,
@@ -111,7 +111,7 @@ pub struct Wrapper<P: ClapPlugin> {
     ///
     /// TODO: Maybe load these lazily at some point instead of needing to spool them all to this
     ///       queue first
-    input_events: RwLock<VecDeque<NoteEvent>>,
+    input_events: AtomicRefCell<VecDeque<NoteEvent>>,
     /// The current latency in samples, as set by the plugin through the [ProcessContext]. uses the
     /// latency extnesion
     pub current_latency: AtomicU32,
@@ -119,7 +119,7 @@ pub struct Wrapper<P: ClapPlugin> {
     /// apointer to pointers, so this needs to be preallocated in the setup call and kept around
     /// between process calls. This buffer owns the vector, because otherwise it would need to store
     /// a mutable reference to the data contained in this mutex.
-    pub output_buffer: RwLock<Buffer<'static>>,
+    pub output_buffer: AtomicRefCell<Buffer<'static>>,
 
     /// Needs to be boxed because the plugin object is supposed to contain a static reference to
     /// this.
@@ -305,7 +305,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 on_main_thread: Self::on_main_thread,
             },
 
-            this: RwLock::new(Weak::new()),
+            this: AtomicRefCell::new(Weak::new()),
 
             plugin,
             editor,
@@ -318,9 +318,9 @@ impl<P: ClapPlugin> Wrapper<P> {
             }),
             current_buffer_config: AtomicCell::new(None),
             bypass_state: AtomicBool::new(false),
-            input_events: RwLock::new(VecDeque::with_capacity(512)),
+            input_events: AtomicRefCell::new(VecDeque::with_capacity(512)),
             current_latency: AtomicU32::new(0),
-            output_buffer: RwLock::new(Buffer::default()),
+            output_buffer: AtomicRefCell::new(Buffer::default()),
 
             plugin_descriptor,
 
@@ -466,7 +466,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         // Finally, the wrapper needs to contain a reference to itself so we can create GuiContexts
         // when opening plugin editors
         let wrapper = Arc::new(wrapper);
-        *wrapper.this.write() = Arc::downgrade(&wrapper);
+        *wrapper.this.borrow_mut() = Arc::downgrade(&wrapper);
 
         wrapper
     }
@@ -478,7 +478,7 @@ impl<P: ClapPlugin> Wrapper<P> {
     fn make_process_context(&self) -> WrapperProcessContext<'_, P> {
         WrapperProcessContext {
             wrapper: self,
-            input_events_guard: self.input_events.write(),
+            input_events_guard: self.input_events.borrow_mut(),
         }
     }
 
@@ -559,7 +559,7 @@ impl<P: ClapPlugin> Wrapper<P> {
 
     /// Handle all incoming events from an event queue. This will clearn `self.input_events` first.
     pub unsafe fn handle_in_events(&self, in_: &clap_input_events) {
-        let mut input_events = self.input_events.write();
+        let mut input_events = self.input_events.borrow_mut();
         input_events.clear();
 
         let num_events = ((*in_).size)(&*in_);
@@ -611,7 +611,7 @@ impl<P: ClapPlugin> Wrapper<P> {
     pub unsafe fn handle_event(
         &self,
         event: *const clap_event_header,
-        input_events: &mut RwLockWriteGuard<VecDeque<NoteEvent>>,
+        input_events: &mut AtomicRefMut<VecDeque<NoteEvent>>,
     ) {
         let raw_event = &*event;
         match (raw_event.space_id, raw_event.type_) {
@@ -723,9 +723,12 @@ impl<P: ClapPlugin> Wrapper<P> {
         ) {
             // Preallocate enough room in the output slices vector so we can convert a `*mut *mut
             // f32` to a `&mut [&mut f32]` in the process call
-            wrapper.output_buffer.write().with_raw_vec(|output_slices| {
-                output_slices.resize_with(bus_config.num_output_channels as usize, || &mut [])
-            });
+            wrapper
+                .output_buffer
+                .borrow_mut()
+                .with_raw_vec(|output_slices| {
+                    output_slices.resize_with(bus_config.num_output_channels as usize, || &mut [])
+                });
 
             // Also store this for later, so we can reinitialize the plugin after restoring state
             wrapper.current_buffer_config.store(Some(buffer_config));
@@ -808,7 +811,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             // TODO: The audio buffers have a latency field, should we use those?
             // TODO: Like with VST3, should we expose some way to access or set the silence/constant
             //       flags?
-            let mut output_buffer = wrapper.output_buffer.write();
+            let mut output_buffer = wrapper.output_buffer.borrow_mut();
             output_buffer.with_raw_vec(|output_slices| {
                 nih_debug_assert_eq!(num_output_channels, output_slices.len());
                 for (output_channel_idx, output_channel_slice) in
