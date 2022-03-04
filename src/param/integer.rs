@@ -118,7 +118,7 @@ impl Param for IntParam {
         let value = self.preview_plain(normalized);
         match (&self.value_to_string, include_unit) {
             (Some(f), true) => format!("{}{}", f(value), self.unit),
-            (Some(f), false) => format!("{}", f(value)),
+            (Some(f), false) => f(value),
             (None, true) => format!("{}{}", value, self.unit),
             (None, false) => format!("{}", value),
         }

@@ -307,6 +307,7 @@ impl<'a> Buffer<'a> {
 
 impl<'slice, 'sample> Channels<'slice, 'sample> {
     /// Get the number of channels.
+    #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         unsafe { (*self.buffers).len() }
     }
@@ -436,6 +437,7 @@ impl<'slice, 'sample> Channels<'slice, 'sample> {
 
 impl<'slice, 'sample> Block<'slice, 'sample> {
     /// Get the number of samples (not channels) in the block.
+    #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         self.current_block_end - self.current_block_start
     }
