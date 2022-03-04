@@ -91,6 +91,10 @@ impl<P: Vst3Plugin> GuiContext for WrapperGuiContext<P> {
 }
 
 impl<P: Vst3Plugin> ProcessContext for WrapperProcessContext<'_, P> {
+    fn next_midi_event(&mut self) -> Option<NoteEvent> {
+        self.input_events_guard.pop_front()
+    }
+
     fn set_latency_samples(&self, samples: u32) {
         // Only trigger a restart if it's actually needed
         let old_latency = self.inner.current_latency.swap(samples, Ordering::SeqCst);
@@ -101,9 +105,5 @@ impl<P: Vst3Plugin> ProcessContext for WrapperProcessContext<'_, P> {
                 ));
             nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
         }
-    }
-
-    fn next_midi_event(&mut self) -> Option<NoteEvent> {
-        self.input_events_guard.pop_front()
     }
 }

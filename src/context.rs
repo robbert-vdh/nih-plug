@@ -15,16 +15,16 @@ use crate::plugin::NoteEvent;
 // The implementing wrapper needs to be able to handle concurrent requests, and it should perform
 // the actual callback within [MainThreadQueue::do_maybe_async].
 pub trait ProcessContext {
-    /// Update the current latency of the plugin. If the plugin is currently processing audio, then
-    /// this may cause audio playback to be restarted.
-    fn set_latency_samples(&self, samples: u32);
-
     /// Return the next note event, if there is one. The event contains the timing
     ///
     /// TODO: Rethink this API, both in terms of ergonomics, and if we can do this in a way that
     ///       doesn't require locks (because of the thread safe-ness, which we don't really need
     ///       here)
     fn next_midi_event(&mut self) -> Option<NoteEvent>;
+
+    /// Update the current latency of the plugin. If the plugin is currently processing audio, then
+    /// this may cause audio playback to be restarted.
+    fn set_latency_samples(&self, samples: u32);
 
     // TODO: Add this, this works similar to [GuiContext::set_parameter] but it adds the parameter
     //       change to a queue (or directly to the VST3 plugin's parameter output queues) instead of
