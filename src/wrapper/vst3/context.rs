@@ -5,7 +5,7 @@ use std::sync::Arc;
 use vst3_sys::vst::IComponentHandler;
 
 use super::inner::{Task, WrapperInner};
-use crate::context::{GuiContext, ProcessContext};
+use crate::context::{GuiContext, ProcessContext, Transport};
 use crate::event_loop::EventLoop;
 use crate::param::internals::ParamPtr;
 use crate::plugin::{NoteEvent, Vst3Plugin};
@@ -23,6 +23,7 @@ pub(crate) struct WrapperGuiContext<P: Vst3Plugin> {
 pub(crate) struct WrapperProcessContext<'a, P: Vst3Plugin> {
     pub(super) inner: &'a WrapperInner<P>,
     pub(super) input_events_guard: AtomicRefMut<'a, VecDeque<NoteEvent>>,
+    pub(super) transport: Transport,
 }
 
 impl<P: Vst3Plugin> GuiContext for WrapperGuiContext<P> {
@@ -91,6 +92,10 @@ impl<P: Vst3Plugin> GuiContext for WrapperGuiContext<P> {
 }
 
 impl<P: Vst3Plugin> ProcessContext for WrapperProcessContext<'_, P> {
+    fn transport(&self) -> &Transport {
+        &self.transport
+    }
+
     fn next_midi_event(&mut self) -> Option<NoteEvent> {
         self.input_events_guard.pop_front()
     }

@@ -17,6 +17,7 @@ use widestring::U16CStr;
 use super::inner::WrapperInner;
 use super::util::{VstPtr, BYPASS_PARAM_HASH, BYPASS_PARAM_ID};
 use super::view::WrapperView;
+use crate::context::Transport;
 use crate::plugin::{BufferConfig, BusConfig, NoteEvent, ProcessStatus, Vst3Plugin};
 use crate::wrapper::state;
 use crate::wrapper::util::{process_wrapper, u16strlcpy};
@@ -236,7 +237,9 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
             self.inner.plugin.write().initialize(
                 &bus_config,
                 &buffer_config,
-                &mut self.inner.make_process_context(),
+                &mut self
+                    .inner
+                    .make_process_context(Transport::new(buffer_config.sample_rate)),
             );
         }
 
@@ -593,7 +596,9 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
         if self.inner.plugin.write().initialize(
             &bus_config,
             &buffer_config,
-            &mut self.inner.make_process_context(),
+            &mut self
+                .inner
+                .make_process_context(Transport::new(buffer_config.sample_rate)),
         ) {
             // Preallocate enough room in the output slices vector so we can convert a `*mut *mut
             // f32` to a `&mut [&mut f32]` in the process call
@@ -634,7 +639,8 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                 .inner
                 .current_buffer_config
                 .load()
-                .map(|c| c.sample_rate);
+                .expect("Process call without prior setup call")
+                .sample_rate;
             if let Some(param_changes) = data.input_param_changes.upgrade() {
                 let num_param_queues = param_changes.get_parameter_count();
                 for change_queue_idx in 0..num_param_queues {
@@ -658,7 +664,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                             self.inner.set_normalized_value_by_hash(
                                 param_hash,
                                 value as f32,
-                                sample_rate,
+                                Some(sample_rate),
                             );
                         }
                     }
@@ -771,8 +777,43 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                 }
             }
 
+            // Some of the fields are left empty because VST3 does not provide this information, but
+            // the methods on [`Transport`] can reconstruct these values from the other fields
+            let mut transport = Transport::new(sample_rate);
+            if !data.context.is_null() {
+                let context = &*data.context;
+
+                // These constants are missing from vst3-sys, see:
+                // https://steinbergmedia.github.io/vst3_doc/vstinterfaces/structSteinberg_1_1Vst_1_1ProcessContext.html
+                transport.playing = context.state & (1 << 1) != 0; // kPlaying
+                transport.recording = context.state & (1 << 3) != 0; // kRecording
+                if context.state & (1 << 10) != 0 {
+                    // kTempoValid
+                    transport.tempo = Some(context.tempo);
+                }
+                if context.state & (1 << 13) != 0 {
+                    // kTimeSigValid
+                    transport.time_sig_numerator = Some(context.time_sig_num);
+                    transport.time_sig_denominator = Some(context.time_sig_den);
+                }
+                transport.pos_samples = Some(context.project_time_samples);
+                if context.state & (1 << 9) != 0 {
+                    // kProjectTimeMusicValid
+                    transport.pos_beats = Some(context.project_time_music);
+                }
+                if context.state & (1 << 11) != 0 {
+                    // kBarPositionValid
+                    transport.bar_start_pos_beats = Some(context.bar_position_music);
+                }
+                if context.state & (1 << 2) != 0 && context.state & (1 << 12) != 0 {
+                    // kCycleActive && kCycleValid
+                    transport.loop_range_beats =
+                        Some((context.cycle_start_music, context.cycle_end_music));
+                }
+            }
+
             let mut plugin = self.inner.plugin.write();
-            let mut context = self.inner.make_process_context();
+            let mut context = self.inner.make_process_context(transport);
             match plugin.process(&mut output_buffer, &mut context) {
                 ProcessStatus::Error(err) => {
                     nih_debug_assert_failure!("Process error: {}", err);

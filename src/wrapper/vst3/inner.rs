@@ -12,6 +12,7 @@ use super::context::{WrapperGuiContext, WrapperProcessContext};
 use super::util::{ObjectPtr, VstPtr, BYPASS_PARAM_HASH, BYPASS_PARAM_ID};
 use super::view::WrapperView;
 use crate::buffer::Buffer;
+use crate::context::Transport;
 use crate::event_loop::{EventLoop, MainThreadExecutor, OsEventLoop};
 use crate::param::internals::ParamPtr;
 use crate::plugin::{BufferConfig, BusConfig, Editor, NoteEvent, ProcessStatus, Vst3Plugin};
@@ -193,10 +194,11 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         Arc::new(WrapperGuiContext { inner: self })
     }
 
-    pub fn make_process_context(&self) -> WrapperProcessContext<'_, P> {
+    pub fn make_process_context(&self, transport: Transport) -> WrapperProcessContext<'_, P> {
         WrapperProcessContext {
             inner: self,
             input_events_guard: self.input_events.borrow_mut(),
+            transport,
         }
     }
 

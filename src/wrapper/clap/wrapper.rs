@@ -7,7 +7,10 @@ use clap_sys::events::{
     clap_event_header, clap_event_note, clap_event_param_mod, clap_event_param_value,
     clap_input_events, clap_output_events, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_MIDI,
     CLAP_EVENT_NOTE_EXPRESSION, CLAP_EVENT_NOTE_OFF, CLAP_EVENT_NOTE_ON, CLAP_EVENT_PARAM_MOD,
-    CLAP_EVENT_PARAM_VALUE, CLAP_EVENT_SHOULD_RECORD,
+    CLAP_EVENT_PARAM_VALUE, CLAP_EVENT_SHOULD_RECORD, CLAP_TRANSPORT_HAS_BEATS_TIMELINE,
+    CLAP_TRANSPORT_HAS_SECONDS_TIMELINE, CLAP_TRANSPORT_HAS_TEMPO,
+    CLAP_TRANSPORT_HAS_TIME_SIGNATURE, CLAP_TRANSPORT_IS_LOOP_ACTIVE, CLAP_TRANSPORT_IS_PLAYING,
+    CLAP_TRANSPORT_IS_RECORDING, CLAP_TRANSPORT_IS_WITHIN_PRE_ROLL,
 };
 use clap_sys::ext::audio_ports::{
     clap_audio_port_info, clap_plugin_audio_ports, CLAP_AUDIO_PORT_IS_MAIN, CLAP_EXT_AUDIO_PORTS,
@@ -24,6 +27,7 @@ use clap_sys::ext::params::{
 };
 use clap_sys::ext::state::{clap_plugin_state, CLAP_EXT_STATE};
 use clap_sys::ext::thread_check::{clap_host_thread_check, CLAP_EXT_THREAD_CHECK};
+use clap_sys::fixedpoint::{CLAP_BEATTIME_FACTOR, CLAP_SECTIME_FACTOR};
 use clap_sys::host::clap_host;
 use clap_sys::id::{clap_id, CLAP_INVALID_ID};
 use clap_sys::plugin::clap_plugin;
@@ -59,6 +63,7 @@ use super::context::{WrapperGuiContext, WrapperProcessContext};
 use super::descriptor::PluginDescriptor;
 use super::util::ClapPtr;
 use crate::buffer::Buffer;
+use crate::context::Transport;
 use crate::event_loop::{EventLoop, MainThreadExecutor, TASK_QUEUE_CAPACITY};
 use crate::param::internals::ParamPtr;
 use crate::plugin::{
@@ -487,10 +492,11 @@ impl<P: ClapPlugin> Wrapper<P> {
         Arc::new(WrapperGuiContext { wrapper: self })
     }
 
-    fn make_process_context(&self) -> WrapperProcessContext<'_, P> {
+    fn make_process_context(&self, transport: Transport) -> WrapperProcessContext<'_, P> {
         WrapperProcessContext {
             wrapper: self,
             input_events_guard: self.input_events.borrow_mut(),
+            transport,
         }
     }
 
@@ -731,7 +737,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         if wrapper.plugin.write().initialize(
             &bus_config,
             &buffer_config,
-            &mut wrapper.make_process_context(),
+            &mut wrapper.make_process_context(Transport::new(buffer_config.sample_rate)),
         ) {
             // Preallocate enough room in the output slices vector so we can convert a `*mut *mut
             // f32` to a `&mut [&mut f32]` in the process call
@@ -864,8 +870,63 @@ impl<P: ClapPlugin> Wrapper<P> {
                 }
             }
 
+            // Some of the fields are left empty because CLAP does not provide this information, but
+            // the methods on [`Transport`] can reconstruct these values from the other fields
+            let sample_rate = wrapper
+                .current_buffer_config
+                .load()
+                .expect("Process call without prior initialization call")
+                .sample_rate;
+            let mut transport = Transport::new(sample_rate);
+            if !process.transport.is_null() {
+                let context = &*process.transport;
+
+                transport.playing = context.flags & CLAP_TRANSPORT_IS_PLAYING != 0;
+                transport.recording = context.flags & CLAP_TRANSPORT_IS_RECORDING != 0;
+                transport.preroll_active =
+                    Some(context.flags & CLAP_TRANSPORT_IS_WITHIN_PRE_ROLL != 0);
+                if context.flags & CLAP_TRANSPORT_HAS_TEMPO != 0 {
+                    transport.tempo = Some(context.tempo);
+                }
+                if context.flags & CLAP_TRANSPORT_HAS_TIME_SIGNATURE != 0 {
+                    transport.time_sig_numerator = Some(context.tsig_num as i32);
+                    transport.time_sig_denominator = Some(context.tsig_denom as i32);
+                }
+                if context.flags & CLAP_TRANSPORT_HAS_BEATS_TIMELINE != 0 {
+                    transport.pos_beats =
+                        Some(context.song_pos_beats as f64 / CLAP_BEATTIME_FACTOR as f64);
+                }
+                if context.flags & CLAP_TRANSPORT_HAS_SECONDS_TIMELINE != 0 {
+                    transport.pos_seconds =
+                        Some(context.song_pos_seconds as f64 / CLAP_SECTIME_FACTOR as f64);
+                }
+                // TODO: CLAP does not mention whether this is behind a flag or not
+                transport.bar_start_pos_beats =
+                    Some(context.bar_start as f64 / CLAP_BEATTIME_FACTOR as f64);
+                transport.bar_number = Some(context.bar_number);
+                // TODO: They also aren't very clear about this, but presumably if the loop is
+                //       active and the corresponding song transport information is available then
+                //       this is also available
+                if context.flags & CLAP_TRANSPORT_IS_LOOP_ACTIVE != 0
+                    && context.flags & CLAP_TRANSPORT_HAS_BEATS_TIMELINE != 0
+                {
+                    transport.loop_range_beats = Some((
+                        context.loop_start_beats as f64 / CLAP_BEATTIME_FACTOR as f64,
+                        context.loop_end_beats as f64 / CLAP_BEATTIME_FACTOR as f64,
+                    ));
+                }
+                if context.flags & CLAP_TRANSPORT_IS_LOOP_ACTIVE != 0
+                    && context.flags & CLAP_TRANSPORT_HAS_SECONDS_TIMELINE != 0
+                {
+                    transport.loop_range_seconds = Some((
+                        context.loop_start_seconds as f64 / CLAP_SECTIME_FACTOR as f64,
+                        context.loop_end_seconds as f64 / CLAP_SECTIME_FACTOR as f64,
+                    ));
+                }
+            }
+
             let mut plugin = wrapper.plugin.write();
-            let mut context = wrapper.make_process_context();
+            let mut context = wrapper.make_process_context(transport);
             let result = match plugin.process(&mut output_buffer, &mut context) {
                 ProcessStatus::Error(err) => {
                     nih_debug_assert_failure!("Process error: {}", err);
@@ -1606,7 +1667,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             wrapper.plugin.write().initialize(
                 &bus_config,
                 &buffer_config,
-                &mut wrapper.make_process_context(),
+                &mut wrapper.make_process_context(Transport::new(buffer_config.sample_rate)),
             );
         }
 

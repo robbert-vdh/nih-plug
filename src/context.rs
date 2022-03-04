@@ -15,6 +15,9 @@ use crate::plugin::NoteEvent;
 // The implementing wrapper needs to be able to handle concurrent requests, and it should perform
 // the actual callback within [MainThreadQueue::do_maybe_async].
 pub trait ProcessContext {
+    /// Get information about the current transport position and status.
+    fn transport(&self) -> &Transport;
+
     /// Return the next note event, if there is one. The event contains the timing
     ///
     /// TODO: Rethink this API, both in terms of ergonomics, and if we can do this in a way that
@@ -82,7 +85,7 @@ pub trait GuiContext: Send + Sync + 'static {
 
 /// Information about the plugin's transport. Depending on the plugin API and the host not all
 /// fields may be available.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Transport {
     /// Whether the transport is currently running.
     pub playing: bool,
@@ -144,6 +147,30 @@ pub struct ParamSetter<'a> {
 
 // TODO: These conversions have not really been tested yet, there might be an error in there somewhere
 impl Transport {
+    /// Initialize the transport struct without any information.
+    pub(crate) fn new(sample_rate: f32) -> Self {
+        Self {
+            playing: false,
+            recording: false,
+            preroll_active: None,
+
+            sample_rate,
+            tempo: None,
+            time_sig_numerator: None,
+            time_sig_denominator: None,
+
+            pos_samples: None,
+            pos_seconds: None,
+            pos_beats: None,
+            bar_start_pos_beats: None,
+            bar_number: None,
+
+            loop_range_samples: None,
+            loop_range_seconds: None,
+            loop_range_beats: None,
+        }
+    }
+
     /// The position in the song in samples. Will be calculated from other information if needed.
     pub fn pos_samples(&self) -> Option<i64> {
         match (

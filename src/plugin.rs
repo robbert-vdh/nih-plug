@@ -18,7 +18,6 @@ use crate::param::internals::Params;
 /// - Sidechain inputs
 /// - Multiple output busses
 /// - Special handling for offline processing
-/// - Transport and other context information in the process call
 /// - Sample accurate automation (this would be great, but sadly few hosts even support it so until
 ///   they do we'll ignore that it's a thing)
 /// - Parameter hierarchies/groups

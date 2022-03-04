@@ -4,7 +4,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use super::wrapper::{OutputParamChange, Task, Wrapper};
-use crate::context::{GuiContext, ProcessContext};
+use crate::context::{GuiContext, ProcessContext, Transport};
 use crate::event_loop::EventLoop;
 use crate::param::internals::ParamPtr;
 use crate::plugin::{ClapPlugin, NoteEvent};
@@ -22,6 +22,7 @@ pub(crate) struct WrapperGuiContext<P: ClapPlugin> {
 pub(crate) struct WrapperProcessContext<'a, P: ClapPlugin> {
     pub(super) wrapper: &'a Wrapper<P>,
     pub(super) input_events_guard: AtomicRefMut<'a, VecDeque<NoteEvent>>,
+    pub(super) transport: Transport,
 }
 
 impl<P: ClapPlugin> GuiContext for WrapperGuiContext<P> {
@@ -71,6 +72,10 @@ impl<P: ClapPlugin> GuiContext for WrapperGuiContext<P> {
 }
 
 impl<P: ClapPlugin> ProcessContext for WrapperProcessContext<'_, P> {
+    fn transport(&self) -> &Transport {
+        &self.transport
+    }
+
     fn next_midi_event(&mut self) -> Option<NoteEvent> {
         self.input_events_guard.pop_front()
     }
