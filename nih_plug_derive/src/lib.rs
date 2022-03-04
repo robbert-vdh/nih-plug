@@ -248,7 +248,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                 for (field_name, data) in serialized {
                     match field_name.as_str() {
                         #(#field_deserialize_tokens)*
-                        _ => nih_log!("Unknown serialized field name: {} (this may not be accurate)", field_name),
+                        _ => ::nih_plug::nih_log!("Unknown serialized field name: {} (this may not be accurate)", field_name),
                     }
                 }
 
