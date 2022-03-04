@@ -16,16 +16,17 @@
 
 #![cfg_attr(feature = "simd", feature(portable_simd))]
 
+#[cfg(not(feature = "simd"))]
+compile_error!("Compiling without SIMD support is currently not supported");
+
 #[macro_use]
 extern crate nih_plug;
 
 use nih_plug::prelude::*;
 use std::pin::Pin;
+use std::simd::f32x2;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-
-#[cfg(feature = "simd")]
-use std::simd::f32x2;
 
 mod filter;
 
@@ -54,10 +55,7 @@ struct Diopser {
     /// All of the all-pass filters, with vectorized coefficients so they can be calculated for
     /// multiple channels at once. [`DiopserParams::num_stages`] controls how many filters are
     /// actually active.
-    #[cfg(feature = "simd")]
     filters: [filter::Biquad<f32x2>; MAX_NUM_FILTERS],
-    #[cfg(not(feature = "simd"))]
-    filters: Vec<[filter::Biquad<f32>; MAX_NUM_FILTERS]>,
 
     /// If this is set at the start of the processing cycle, then the filter coefficients should be
     /// updated. For the regular filter parameters we can look at the smoothers, but this is needed
@@ -118,10 +116,7 @@ impl Default for Diopser {
 
             sample_rate: 1.0,
 
-            #[cfg(feature = "simd")]
             filters: [filter::Biquad::default(); MAX_NUM_FILTERS],
-            #[cfg(not(feature = "simd"))]
-            filters: Vec::new(),
 
             should_update_filters,
             next_filter_smoothing_in: 1,
@@ -227,17 +222,8 @@ impl Plugin for Diopser {
     }
 
     fn accepts_bus_config(&self, config: &BusConfig) -> bool {
-        // The scalar version can handle any channel config, while the SIMD version can only do
-        // stereo
-        #[cfg(feature = "simd")]
-        {
-            config.num_input_channels == config.num_output_channels
-                && config.num_input_channels == 2
-        }
-        #[cfg(not(feature = "simd"))]
-        {
-            config.num_input_channels == config.num_output_channels && config.num_input_channels > 0
-        }
+        // The SIMD version only supports stereo
+        config.num_input_channels == config.num_output_channels && config.num_input_channels == 2
     }
 
     fn initialize(
@@ -246,14 +232,6 @@ impl Plugin for Diopser {
         buffer_config: &BufferConfig,
         _context: &mut impl ProcessContext,
     ) -> bool {
-        #[cfg(not(feature = "simd"))]
-        {
-            self.filters = vec![
-                [Default::default(); MAX_NUM_FILTERS];
-                _bus_config.num_input_channels as usize
-            ];
-        }
-
         // Initialize the filters on the first process call
         self.sample_rate = buffer_config.sample_rate;
         self.should_update_filters.store(true, Ordering::Release);
@@ -277,32 +255,17 @@ impl Plugin for Diopser {
 
             // We can compute the filters for both channels at once. The SIMD version thus now only
             // supports steroo audio.
-            #[cfg(feature = "simd")]
+            let mut samples = unsafe { channel_samples.to_simd_unchecked() };
+
+            for filter in self
+                .filters
+                .iter_mut()
+                .take(self.params.filter_stages.value as usize)
             {
-                let mut samples = unsafe { channel_samples.to_simd_unchecked() };
-
-                for filter in self
-                    .filters
-                    .iter_mut()
-                    .take(self.params.filter_stages.value as usize)
-                {
-                    samples = filter.process(samples);
-                }
-
-                unsafe { channel_samples.from_simd_unchecked(samples) };
+                samples = filter.process(samples);
             }
 
-            #[cfg(not(feature = "simd"))]
-            // We get better cache locality by iterating over the filters and then over the channels
-            for filter_idx in 0..self.params.filter_stages.value as usize {
-                for (channel_idx, filters) in self.filters.iter_mut().enumerate() {
-                    // We can also use `channel_samples.iter_mut()`, but the compiler isn't able to
-                    // optmize that iterator away and it would add a ton of overhead over indexing
-                    // the buffer directly
-                    let sample = unsafe { channel_samples.get_unchecked_mut(channel_idx) };
-                    *sample = filters[filter_idx].process(*sample);
-                }
-            }
+            unsafe { channel_samples.from_simd_unchecked(samples) };
         }
 
         ProcessStatus::Normal
@@ -381,23 +344,10 @@ impl Diopser {
             }
             .clamp(MIN_FREQUENCY, max_frequency);
 
-            let coefficients =
+            self.filters[filter_idx].coefficients =
                 filter::BiquadCoefficients::allpass(self.sample_rate, filter_frequency, resonance);
-
-            #[cfg(feature = "simd")]
-            {
-                self.filters[filter_idx].coefficients = coefficients;
-                if reset_filters {
-                    self.filters[filter_idx].reset();
-                }
-            }
-
-            #[cfg(not(feature = "simd"))]
-            for channel in self.filters.iter_mut() {
-                channel[filter_idx].coefficients = coefficients;
-                if reset_filters {
-                    channel[filter_idx].reset();
-                }
+            if reset_filters {
+                self.filters[filter_idx].reset();
             }
         }
     }

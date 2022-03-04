@@ -16,8 +16,6 @@
 
 use std::f32::consts;
 use std::ops::{Add, Mul, Sub};
-
-#[cfg(feature = "simd")]
 use std::simd::f32x2;
 
 /// A simple biquad filter with functions for generating coefficients for an all-pass filter.
@@ -136,7 +134,6 @@ impl SimdType for f32 {
     }
 }
 
-#[cfg(feature = "simd")]
 impl SimdType for f32x2 {
     fn from_f32(value: f32) -> Self {
         f32x2::splat(value)

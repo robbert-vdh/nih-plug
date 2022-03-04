@@ -10,7 +10,8 @@ crate-type = ["cdylib"]
 
 [features]
 default = ["simd"]
-# Make it go fast, vroom. Requires a nightly compiler.
+# Make it go fast, vroom. Requires a nightly compiler. Support for the non-SIMD
+# version has been removed at the moment.
 simd = ["nih_plug/simd"]
 
 [dependencies]

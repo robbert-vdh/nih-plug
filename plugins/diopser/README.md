@@ -34,17 +34,9 @@ on macOS.
 
 ### Building
 
-After installing [Rust](https://rustup.rs/) with the nightly toolchain you can
-compile Diopser as follows
+After installing [Rust](https://rustup.rs/) with the nightly toolchain (because
+of the use of SIMD), you can compile Diopser as follows
 
 ```shell
 cargo +nightly xtask bundle gain --release
-```
-
-If you don't have access to a nightly compiler (`rustup default nightly && rustup update`),
-then you can compile a version without SIMD at a 2x penalty by disabling the
-SIMD feature:
-
-```shell
-cargo xtask bundle gain --release --no-default-features
 ```
