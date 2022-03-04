@@ -1,7 +1,15 @@
 // Re-export the proc macro
 pub use nih_plug_derive::Params;
 
-pub use super::debug::*;
+// And the other macros
+pub use super::nih_debug_assert;
+pub use super::nih_debug_assert_eq;
+pub use super::nih_debug_assert_failure;
+pub use super::nih_debug_assert_ne;
+pub use super::nih_export_clap;
+pub use super::nih_export_vst3;
+pub use super::nih_log;
+
 pub use super::formatters;
 pub use super::util;
 

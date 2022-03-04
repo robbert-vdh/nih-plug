@@ -1,6 +1,3 @@
-#[macro_use]
-extern crate nih_plug;
-
 use nih_plug::prelude::*;
 use std::f32::consts;
 use std::pin::Pin;

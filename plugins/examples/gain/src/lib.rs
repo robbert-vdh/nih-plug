@@ -1,6 +1,3 @@
-#[macro_use]
-extern crate nih_plug;
-
 use nih_plug::prelude::*;
 use parking_lot::RwLock;
 use std::pin::Pin;

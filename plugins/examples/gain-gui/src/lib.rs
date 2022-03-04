@@ -1,6 +1,3 @@
-#[macro_use]
-extern crate nih_plug;
-
 use atomic_float::AtomicF32;
 use nih_plug::prelude::*;
 use nih_plug_egui::{create_egui_editor, egui, widgets, EguiState};

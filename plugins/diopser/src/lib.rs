@@ -16,9 +16,6 @@
 
 #![cfg_attr(feature = "simd", feature(portable_simd))]
 
-#[macro_use]
-extern crate nih_plug;
-
 use nih_plug::prelude::*;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
