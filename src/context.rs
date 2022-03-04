@@ -82,6 +82,7 @@ pub trait GuiContext: Send + Sync + 'static {
 
 /// Information about the plugin's transport. Depending on the plugin API and the host not all
 /// fields may be available.
+#[derive(Debug, Default)]
 pub struct Transport {
     /// Whether the transport is currently running.
     pub playing: bool,
