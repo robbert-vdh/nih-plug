@@ -23,11 +23,13 @@ compile_error!("Compiling without SIMD support is currently not supported");
 extern crate nih_plug;
 
 use nih_plug::prelude::*;
+use nih_plug_egui::EguiState;
 use std::pin::Pin;
 use std::simd::f32x2;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+mod editor;
 mod filter;
 
 /// How many all-pass filters we can have in series at most. The filter stages parameter determines
@@ -42,12 +44,10 @@ const MAX_AUTOMATION_STEP_SIZE: u32 = 512;
 // All features from the original Diopser have been implemented (and the spread control has been
 // improved). Other features I want to implement are:
 // - Briefly muting the output when changing the number of filters to get rid of the clicks
-// - A GUI
-//
-// TODO: Decide on whether to keep the scalar version or to just only support SIMD. Issue is that
-//       packed_simd requires a nightly compiler.
+// - A proper GUI
 struct Diopser {
-    params: Pin<Box<DiopserParams>>,
+    params: Pin<Arc<DiopserParams>>,
+    editor_state: Arc<EguiState>,
 
     /// Needed for computing the filter coefficients.
     sample_rate: f32,
@@ -72,7 +72,7 @@ struct Diopser {
 // TODO: Some combinations of parameters can cause really loud resonance. We should limit the
 //       resonance and filter stages parameter ranges in the GUI until the user unlocks.
 #[derive(Params)]
-struct DiopserParams {
+pub struct DiopserParams {
     /// The number of all-pass filters applied in series.
     #[id = "stages"]
     filter_stages: IntParam,
@@ -112,7 +112,8 @@ impl Default for Diopser {
         let should_update_filters = Arc::new(AtomicBool::new(false));
 
         Self {
-            params: Box::pin(DiopserParams::new(should_update_filters.clone())),
+            params: Arc::pin(DiopserParams::new(should_update_filters.clone())),
+            editor_state: editor::default_state(),
 
             sample_rate: 1.0,
 
@@ -125,7 +126,7 @@ impl Default for Diopser {
 }
 
 impl DiopserParams {
-    pub fn new(should_update_filters: Arc<AtomicBool>) -> Self {
+    fn new(should_update_filters: Arc<AtomicBool>) -> Self {
         Self {
             filter_stages: IntParam::new(
                 "Filter Stages",
@@ -219,6 +220,10 @@ impl Plugin for Diopser {
 
     fn params(&self) -> Pin<&dyn Params> {
         self.params.as_ref()
+    }
+
+    fn editor(&self) -> Option<Box<dyn Editor>> {
+        editor::create(self.params.clone(), self.editor_state.clone())
     }
 
     fn accepts_bus_config(&self, config: &BusConfig) -> bool {

@@ -85,6 +85,8 @@ impl Plugin for Gain {
             (),
             move |egui_ctx, setter, _state| {
                 egui::CentralPanel::default().show(egui_ctx, |ui| {
+                    // NOTE: See `plugins/diopser/src/editor.rs` for an example using the generic UI widget
+
                     // This is a fancy widget that can get all the information it needs to properly
                     // display and modify the parameter from the parametr itself
                     // It's not yet fully implemented, as the text is missing.
