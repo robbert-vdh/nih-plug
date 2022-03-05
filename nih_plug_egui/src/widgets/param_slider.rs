@@ -68,6 +68,10 @@ impl<'a, P: Param> ParamSlider<'a, P> {
         self.param.normalized_value()
     }
 
+    fn string_value(&self) -> String {
+        format!("{}", self.param)
+    }
+
     fn begin_drag(&self) {
         self.setter.begin_set_parameter(self.param);
     }
@@ -242,7 +246,7 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                 ui.memory().surrender_focus(kb_edit_id);
             }
         } else {
-            let text = WidgetText::from(format!("{}", self.param)).into_galley(
+            let text = WidgetText::from(self.string_value()).into_galley(
                 ui,
                 None,
                 ui.available_width() - (padding.x * 2.0),
@@ -257,7 +261,7 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                     .data
                     .get_temp_mut_or_default::<Arc<Mutex<String>>>(*VALUE_ENTRY_MEMORY_ID)
                     .clone();
-                value_entry_mutex.lock().clear();
+                *value_entry_mutex.lock() = self.string_value();
             }
 
             if ui.is_rect_visible(response.rect) {
