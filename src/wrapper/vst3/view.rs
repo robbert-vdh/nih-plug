@@ -1,12 +1,14 @@
+use atomic_float::AtomicF32;
 use parking_lot::RwLock;
 use raw_window_handle::RawWindowHandle;
 use std::any::Any;
 use std::ffi::{c_void, CStr};
 use std::mem;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use vst3_com::utils::SharedVstPtr;
 use vst3_sys::base::{kInvalidArgument, kResultFalse, kResultOk, tresult, TBool};
-use vst3_sys::gui::{IPlugFrame, IPlugView};
+use vst3_sys::gui::{IPlugFrame, IPlugView, IPlugViewContentScaleSupport};
 use vst3_sys::VST3;
 
 use super::inner::WrapperInner;
@@ -30,19 +32,30 @@ const VST3_PLATFORM_X11_WINDOW: &str = "X11EmbedWindowID";
 
 /// The plugin's [`IPlugView`] instance created in [`IEditController::create_view()`] if `P` has an
 /// editor. This is managed separately so the lifetime bounds match up.
-#[VST3(implements(IPlugView))]
+#[VST3(implements(IPlugView, IPlugViewContentScaleSupport))]
 pub(crate) struct WrapperView<P: Vst3Plugin> {
     inner: Arc<WrapperInner<P>>,
     editor: Arc<dyn Editor>,
     editor_handle: RwLock<Option<Box<dyn Any>>>,
 
-    /// The `IPlugFrame` instance passed by the host during `IPlugView::set_frame`.
+    /// The `IPlugFrame` instance passed by the host during [IPlugView::set_frame()].
     pub plug_frame: RwLock<Option<VstPtr<dyn IPlugFrame>>>,
+    /// The DPI scaling factor as passed to the [IPlugViewContentScaleSupport::set_scale_factor()]
+    /// function. Defaults to 1.0, and will be kept there on macOS. When reporting and handling size
+    /// the sizes communicated to and from the DAW should be scaled by this factor since NIH-plug's
+    /// APIs only deal in logical pixels.
+    scaling_factor: AtomicF32,
 }
 
 impl<P: Vst3Plugin> WrapperView<P> {
     pub fn new(inner: Arc<WrapperInner<P>>, editor: Arc<dyn Editor>) -> Box<Self> {
-        Self::allocate(inner, editor, RwLock::new(None), RwLock::new(None))
+        Self::allocate(
+            inner,
+            editor,
+            RwLock::new(None),
+            RwLock::new(None),
+            AtomicF32::new(1.0),
+        )
     }
 }
 
@@ -171,19 +184,35 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
 
         *size = mem::zeroed();
 
-        let (width, height) = self.editor.size();
+        let (unscaled_width, unscaled_height) = self.editor.size();
+        let scaling_factor = self.scaling_factor.load(Ordering::Relaxed);
         let size = &mut *size;
         size.left = 0;
-        size.right = width as i32;
+        size.right = (unscaled_width as f32 * scaling_factor).round() as i32;
         size.top = 0;
-        size.bottom = height as i32;
+        size.bottom = (unscaled_height as f32 * scaling_factor).round() as i32;
 
         kResultOk
     }
 
-    unsafe fn on_size(&self, _new_size: *mut vst3_sys::gui::ViewRect) -> tresult {
+    unsafe fn on_size(&self, new_size: *mut vst3_sys::gui::ViewRect) -> tresult {
         // TODO: Implement resizing
-        kResultOk
+        check_null_ptr!(new_size);
+
+        let (unscaled_width, unscaled_height) = self.editor.size();
+        let scaling_factor = self.scaling_factor.load(Ordering::Relaxed);
+        let (editor_width, editor_height) = (
+            (unscaled_width as f32 * scaling_factor).round() as i32,
+            (unscaled_height as f32 * scaling_factor).round() as i32,
+        );
+
+        let width = (*new_size).right - (*new_size).left;
+        let height = (*new_size).bottom - (*new_size).top;
+        if width == editor_width && height == editor_height {
+            kResultOk
+        } else {
+            kResultFalse
+        }
     }
 
     unsafe fn on_focus(&self, _state: TBool) -> tresult {
@@ -211,6 +240,23 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
 
         // TODO: Add this with the resizing
         if (*rect).right - (*rect).left > 0 && (*rect).bottom - (*rect).top > 0 {
+            kResultOk
+        } else {
+            kResultFalse
+        }
+    }
+}
+
+impl<P: Vst3Plugin> IPlugViewContentScaleSupport for WrapperView<P> {
+    unsafe fn set_scale_factor(&self, factor: f32) -> tresult {
+        // On macOS scaling is done by the OS, and all window sizes are in logical pixels
+        if cfg!(target_os = "macos") {
+            nih_debug_assert_failure!("Ignoring host request to set explicit DPI scaling factor");
+            return kResultFalse;
+        }
+
+        if self.editor.set_scale_factor(factor) {
+            self.scaling_factor.store(factor, Ordering::Relaxed);
             kResultOk
         } else {
             kResultFalse

@@ -2,6 +2,7 @@
 // explicitly pattern match on that unit
 #![allow(clippy::unused_unit)]
 
+use atomic_float::AtomicF32;
 use atomic_refcell::{AtomicRefCell, AtomicRefMut};
 use clap_sys::events::{
     clap_event_header, clap_event_note, clap_event_param_mod, clap_event_param_value,
@@ -101,6 +102,11 @@ pub struct Wrapper<P: ClapPlugin> {
     /// A handle for the currently active editor instance. The plugin should implement `Drop` on
     /// this handle for its closing behavior.
     editor_handle: RwLock<Option<Box<dyn Any + Send + Sync>>>,
+    /// The DPI scaling factor as passed to the [IPlugViewContentScaleSupport::set_scale_factor()]
+    /// function. Defaults to 1.0, and will be kept there on macOS. When reporting and handling size
+    /// the sizes communicated to and from the DAW should be scaled by this factor since NIH-plug's
+    /// APIs only deal in logical pixels.
+    editor_scaling_factor: AtomicF32,
 
     is_processing: AtomicBool,
     /// The current IO configuration, modified through the `clap_plugin_audio_ports_config`
@@ -327,6 +333,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             plugin,
             editor,
             editor_handle: RwLock::new(None),
+            editor_scaling_factor: AtomicF32::new(1.0),
 
             is_processing: AtomicBool::new(false),
             current_bus_config: AtomicCell::new(BusConfig {
@@ -1205,9 +1212,29 @@ impl<P: ClapPlugin> Wrapper<P> {
         }
     }
 
-    unsafe extern "C" fn ext_gui_set_scale(_plugin: *const clap_plugin, _scale: f64) -> bool {
-        // TOOD: Implement DPI scaling
-        false
+    unsafe extern "C" fn ext_gui_set_scale(plugin: *const clap_plugin, scale: f64) -> bool {
+        check_null_ptr!(false, plugin);
+        let wrapper = &*(plugin as *const Self);
+
+        // On macOS scaling is done by the OS, and all window sizes are in logical pixels
+        if cfg!(target_os = "macos") {
+            nih_debug_assert_failure!("Ignoring host request to set explicit DPI scaling factor");
+            return false;
+        }
+
+        if wrapper
+            .editor
+            .as_ref()
+            .unwrap()
+            .set_scale_factor(scale as f32)
+        {
+            wrapper
+                .editor_scaling_factor
+                .store(scale as f32, std::sync::atomic::Ordering::Relaxed);
+            true
+        } else {
+            false
+        }
     }
 
     unsafe extern "C" fn ext_gui_get_size(
@@ -1218,15 +1245,14 @@ impl<P: ClapPlugin> Wrapper<P> {
         check_null_ptr!(false, plugin, width, height);
         let wrapper = &*(plugin as *const Self);
 
-        match &wrapper.editor {
-            Some(editor) => {
-                (*width, *height) = editor.size();
-                true
-            }
-            None => {
-                unreachable!("We don't return the editor extension on plugins without an editor");
-            }
-        }
+        let (unscaled_width, unscaled_height) = wrapper.editor.as_ref().unwrap().size();
+        let scaling_factor = wrapper.editor_scaling_factor.load(Ordering::Relaxed);
+        (*width, *height) = (
+            (unscaled_width as f32 * scaling_factor).round() as u32,
+            (unscaled_height as f32 * scaling_factor).round() as u32,
+        );
+
+        true
     }
 
     unsafe extern "C" fn ext_gui_can_resize(_plugin: *const clap_plugin) -> bool {
@@ -1251,15 +1277,14 @@ impl<P: ClapPlugin> Wrapper<P> {
         check_null_ptr!(false, plugin);
         let wrapper = &*(plugin as *const Self);
 
-        match &wrapper.editor {
-            Some(editor) => {
-                let (editor_width, editor_height) = editor.size();
-                width == editor_width && height == editor_height
-            }
-            None => {
-                unreachable!("We don't return the editor extension on plugins without an editor");
-            }
-        }
+        let (unscaled_width, unscaled_height) = wrapper.editor.as_ref().unwrap().size();
+        let scaling_factor = wrapper.editor_scaling_factor.load(Ordering::Relaxed);
+        let (editor_width, editor_height) = (
+            (unscaled_width as f32 * scaling_factor).round() as u32,
+            (unscaled_height as f32 * scaling_factor).round() as u32,
+        );
+
+        width == editor_width && height == editor_height
     }
 
     unsafe extern "C" fn ext_gui_show(_plugin: *const clap_plugin) {

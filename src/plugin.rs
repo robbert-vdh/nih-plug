@@ -201,6 +201,9 @@ pub trait Editor: Send + Sync {
     /// gets closed. Implement the [`Drop`] trait on the returned handle if you need to explicitly
     /// handle the editor's closing behavior.
     ///
+    /// If [`set_scale_factor()`][Self::set_scale_factor()] has been called, then any created
+    /// windows should have their sizes multiplied by that factor.
+    ///
     /// The wrapper guarantees that a previous handle has been dropped before this function is
     /// called again.
     //
@@ -216,14 +219,24 @@ pub trait Editor: Send + Sync {
         context: Arc<dyn GuiContext>,
     ) -> Box<dyn Any + Send + Sync>;
 
-    /// Return the (currnent) size of the editor in pixels as a `(width, height)` pair.
+    /// Return the (currnent) size of the editor in pixels as a `(width, height)` pair. This size
+    /// must be reported in _logical pixels_, i.e. the size before being multiplied by the DPI
+    /// scaling factor to get the actual physical screen pixels.
     fn size(&self) -> (u32, u32);
+
+    /// Set the DPI scaling factor, if supported. The plugin APIs don't make any guarantees on when
+    /// this is called, but for now just assume it will be the first function that gets called
+    /// before creating the editor. If this is set, then any windows created by this editor should
+    /// have their sizes multiplied by this scaling factor on Windows and Linux.
+    ///
+    /// Right now this is never called on macOS since DPI scaling is built into the operating system
+    /// there.
+    fn set_scale_factor(&self, factor: f32) -> bool;
 
     // TODO: Reconsider adding a tick function here for the Linux `IRunLoop`. To keep this platform
     //       and API agnostic, add a way to ask the GuiContext if the wrapper already provides a
     //       tick function. If it does not, then the Editor implementation must handle this by
     //       itself. This would also need an associated `PREFERRED_FRAME_RATE` constant.
-    // TODO: Add the things needed for DPI scaling
     // TODO: Resizing
 }
 

@@ -27,8 +27,6 @@ pub mod widgets;
 /// field on your parameters struct.
 ///
 /// See [`EguiState::from_size()`].
-//
-// TODO: DPI scaling, this needs to be implemented on the framework level
 pub fn create_egui_editor<T, U>(
     egui_state: Arc<EguiState>,
     user_state: T,
@@ -42,6 +40,8 @@ where
         egui_state,
         user_state: Arc::new(RwLock::new(user_state)),
         update: Arc::new(update),
+
+        scaling_factor: AtomicCell::new(None),
     }))
 }
 
@@ -53,7 +53,8 @@ pub struct EguiState {
 }
 
 impl EguiState {
-    /// Initialize the GUI's state. This is passed to [`create_egui_editor()`].
+    /// Initialize the GUI's state. This value can be passed to [`create_egui_editor()`]. The window
+    /// size is in logical pixels, so before it is multiplied by the DPI scaling factor.
     pub fn from_size(width: u32, height: u32) -> Arc<EguiState> {
         Arc::new(EguiState {
             size: AtomicCell::new((width, height)),
@@ -61,7 +62,7 @@ impl EguiState {
         })
     }
 
-    /// Return a `(width, height)` pair for the current size of the GUI.
+    /// Return a `(width, height)` pair for the current size of the GUI in logical pixels.
     pub fn size(&self) -> (u32, u32) {
         self.size.load()
     }
@@ -79,6 +80,10 @@ struct EguiEditor<T> {
     /// The plugin's state. This is kept in between editor openenings.
     user_state: Arc<RwLock<T>>,
     update: Arc<dyn Fn(&Context, &ParamSetter, &mut T) + 'static + Send + Sync>,
+
+    /// The scaling factor reported by the host, if any. On macOS this will never be set and we
+    /// should use the system scaling factor instead.
+    scaling_factor: AtomicCell<Option<f32>>,
 }
 
 impl<T> Editor for EguiEditor<T>
@@ -93,16 +98,19 @@ where
         let update = self.update.clone();
         let state = self.user_state.clone();
 
-        let (width, height) = self.egui_state.size();
+        let (unscaled_width, unscaled_height) = self.egui_state.size();
+        let scaling_factor = self.scaling_factor.load();
         let window = EguiWindow::open_parented(
             &parent,
             WindowOpenOptions {
                 title: String::from("egui window"),
-                size: Size::new(width as f64, height as f64),
-                // TODO: Implement the plugin-specific DPI scaling APIs with a method on the
-                //       `GuiContext` when baseview gets window resizing. For some reason passing
-                //       1.0 here causes the UI to be scaled on macOS but not the mouse events.
-                scale: WindowScalePolicy::SystemScaleFactor,
+                // Baseview should be doing the DPI scaling for us
+                size: Size::new(unscaled_width as f64, unscaled_height as f64),
+                // NOTE: For some reason passing 1.0 here causes the UI to be scaled on macOS but
+                //       not the mouse events.
+                scale: scaling_factor
+                    .map(|factor| WindowScalePolicy::ScaleFactor(factor as f64))
+                    .unwrap_or(WindowScalePolicy::SystemScaleFactor),
                 gl_config: Some(GlConfig {
                     version: (3, 2),
                     red_bits: 8,
@@ -143,6 +151,11 @@ where
 
     fn size(&self) -> (u32, u32) {
         self.egui_state.size()
+    }
+
+    fn set_scale_factor(&self, factor: f32) -> bool {
+        self.scaling_factor.store(Some(factor));
+        true
     }
 }
 
