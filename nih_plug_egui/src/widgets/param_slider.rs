@@ -55,6 +55,10 @@ impl<'a, P: Param> ParamSlider<'a, P> {
         self
     }
 
+    fn plain_value(&self) -> P::Plain {
+        self.param.plain_value()
+    }
+
     fn normalized_value(&self) -> f32 {
         self.param.normalized_value()
     }
@@ -64,12 +68,12 @@ impl<'a, P: Param> ParamSlider<'a, P> {
     }
 
     fn set_normalized_value(&self, normalized: f32) {
-        if normalized != self.normalized_value() {
-            // This snaps to the nearest plain value if the parameter is stepped in some wayA
-            // TODO: As an optimization, we could add a `const CONTINUOUS: bool` to the parameter to
-            //       avoid this normalized->plain->normalized conversion for parameters that don't need
-            //       it
-            let value = self.param.preview_plain(normalized);
+        // This snaps to the nearest plain value if the parameter is stepped in some way.
+        // TODO: As an optimization, we could add a `const CONTINUOUS: bool` to the parameter to
+        //       avoid this normalized->plain->normalized conversion for parameters that don't need
+        //       it
+        let value = self.param.preview_plain(normalized);
+        if value != self.plain_value() {
             self.setter.set_parameter(self.param, value);
         }
     }
