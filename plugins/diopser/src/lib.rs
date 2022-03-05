@@ -201,7 +201,7 @@ impl DiopserParams {
     }
 }
 
-#[derive(Enum, Debug)]
+#[derive(Enum, Debug, PartialEq)]
 enum SpreadStyle {
     Octaves,
     Linear,

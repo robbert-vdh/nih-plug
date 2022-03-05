@@ -46,7 +46,7 @@ pub trait Enum {
 /// An [`IntParam`]-backed categorical parameter that allows convenient conversion to and from a
 /// simple enum. This enum must derive the re-exported [Enum] trait. Check the trait's documentation
 /// for more information on how this works.
-pub struct EnumParam<T: Enum> {
+pub struct EnumParam<T: Enum + PartialEq> {
     /// A type-erased version of this parameter so the wrapper can do its thing without needing to
     /// know about `T`.
     inner: EnumParamInner,
@@ -65,7 +65,7 @@ pub struct EnumParamInner {
     variants: &'static [&'static str],
 }
 
-impl<T: Enum + Default> Default for EnumParam<T> {
+impl<T: Enum + PartialEq + Default> Default for EnumParam<T> {
     fn default() -> Self {
         let variants = T::variants();
 
@@ -86,7 +86,7 @@ impl<T: Enum + Default> Default for EnumParam<T> {
     }
 }
 
-impl<T: Enum> Display for EnumParam<T> {
+impl<T: Enum + PartialEq> Display for EnumParam<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.inner.fmt(f)
     }
@@ -98,7 +98,7 @@ impl Display for EnumParamInner {
     }
 }
 
-impl<T: Enum> Param for EnumParam<T> {
+impl<T: Enum + PartialEq> Param for EnumParam<T> {
     type Plain = T;
 
     fn name(&self) -> &'static str {
@@ -237,7 +237,7 @@ impl Param for EnumParamInner {
     }
 }
 
-impl<T: Enum + 'static> EnumParam<T> {
+impl<T: Enum + PartialEq + 'static> EnumParam<T> {
     /// Build a new [Self]. Use the other associated functions to modify the behavior of the
     /// parameter.
     pub fn new(name: &'static str, default: T) -> Self {

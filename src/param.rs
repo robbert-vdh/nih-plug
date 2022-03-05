@@ -22,7 +22,7 @@ pub use integer::IntParam;
 /// Describes a single parameter of any type.
 pub trait Param: Display {
     /// The plain parameter type.
-    type Plain;
+    type Plain: PartialEq;
 
     /// Get the human readable name for this parameter.
     fn name(&self) -> &'static str;
