@@ -39,13 +39,15 @@ pub fn create(
     let param_map = params.param_map();
     let param_ids = params.param_ids();
 
-    egui::containers::ScrollArea::vertical().show(ui, |ui| {
-        for id in param_ids {
-            let param = param_map[id];
-            ui.label(unsafe { param.name() });
-            unsafe { widget.add_widget_raw(ui, &param, setter) };
-        }
-    });
+    egui::containers::ScrollArea::vertical()
+        // Take up all remaining space, use a wrapper container to adjust how much space that is
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            for id in param_ids {
+                let param = param_map[id];
+                unsafe { widget.add_widget_raw(ui, &param, setter) };
+            }
+        });
 }
 
 impl ParamWidget for GenericSlider {
