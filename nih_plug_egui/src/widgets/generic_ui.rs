@@ -3,7 +3,7 @@
 
 use std::pin::Pin;
 
-use egui::Ui;
+use egui::{TextStyle, Ui, Vec2};
 use nih_plug::context::ParamSetter;
 use nih_plug::param::internals::ParamPtr;
 use nih_plug::prelude::{Param, Params};
@@ -39,12 +39,20 @@ pub fn create(
     let param_map = params.param_map();
     let param_ids = params.param_ids();
 
+    let padding = Vec2::splat(ui.text_style_height(&TextStyle::Body) * 0.2);
     egui::containers::ScrollArea::vertical()
         // Take up all remaining space, use a wrapper container to adjust how much space that is
         .auto_shrink([false, false])
         .show(ui, |ui| {
-            for id in param_ids {
+            for (widget_idx, id) in param_ids.into_iter().enumerate() {
                 let param = param_map[id];
+
+                // This list looks weird without a little padding
+                if widget_idx > 0 {
+                    ui.allocate_space(padding);
+                }
+
+                ui.label(unsafe { param.name() });
                 unsafe { widget.add_widget_raw(ui, &param, setter) };
             }
         });
