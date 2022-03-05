@@ -189,12 +189,12 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                 // Like double clicking, Ctrl+Click should reset the parameter
                 self.reset_param();
                 response.mark_changed();
-            } else if ui.input().modifiers.alt && self.draw_value {
-                // Allow typing in the value on an Alt+Click. Right now this is shown as part of the
-                // value field, so it only makes sense when we're drawing that.
-                // FIXME: This releases the focus again when you release the mouse button without
-                //        moving the mouse a bit for some reason
-                self.begin_keyboard_entry(ui);
+            // // FIXME: This releases the focus again when you release the mouse button without
+            // //        moving the mouse a bit for some reason
+            // } else if ui.input().modifiers.alt && self.draw_value {
+            //     // Allow typing in the value on an Alt+Click. Right now this is shown as part of the
+            //     // value field, so it only makes sense when we're drawing that.
+            //     self.begin_keyboard_entry(ui);
             } else if ui.input().modifiers.shift {
                 // And shift dragging should switch to a more granulra input method
                 self.granular_drag(ui, response.drag_delta());
