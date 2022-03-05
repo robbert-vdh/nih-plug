@@ -60,6 +60,7 @@ pub fn create(
 
 impl ParamWidget for GenericSlider {
     fn add_widget<P: Param>(&self, ui: &mut Ui, param: &P, setter: &ParamSetter) {
-        ui.add(ParamSlider::for_param(param, setter));
+        // Make these sliders a bit wider, else they look a bit odd
+        ui.add(ParamSlider::for_param(param, setter).with_width(100.0));
     }
 }

@@ -27,6 +27,7 @@ pub struct ParamSlider<'a, P: Param> {
     setter: &'a ParamSetter<'a>,
 
     draw_value: bool,
+    slider_width: Option<f32>,
 }
 
 impl<'a, P: Param> ParamSlider<'a, P> {
@@ -36,13 +37,21 @@ impl<'a, P: Param> ParamSlider<'a, P> {
         Self {
             param,
             setter,
+
             draw_value: true,
+            slider_width: None,
         }
     }
 
     /// Don't draw the text slider's current value after the slider.
     pub fn without_value(mut self) -> Self {
         self.draw_value = false;
+        self
+    }
+
+    /// Set a custom width for the slider.
+    pub fn with_width(mut self, width: f32) -> Self {
+        self.slider_width = Some(width);
         self
     }
 
@@ -212,26 +221,24 @@ impl<'a, P: Param> ParamSlider<'a, P> {
 
 impl<P: Param> Widget for ParamSlider<'_, P> {
     fn ui(self, ui: &mut Ui) -> Response {
+        let slider_width = self
+            .slider_width
+            .unwrap_or_else(|| ui.spacing().slider_width);
+
         ui.horizontal(|ui| {
             // Allocate space, but add some padding on the top and bottom to make it look a bit slimmer.
             let height = ui
                 .text_style_height(&TextStyle::Body)
-                .max(ui.spacing().interact_size.y);
-            let slider_height = ui.painter().round_to_pixel(height * 0.65);
+                .max(ui.spacing().interact_size.y * 0.8);
+            let slider_height = ui.painter().round_to_pixel(height * 0.8);
             let response = ui
                 .vertical(|ui| {
-                    ui.allocate_space(vec2(
-                        ui.spacing().slider_width,
-                        (height - slider_height) / 2.0,
-                    ));
+                    ui.allocate_space(vec2(slider_width, (height - slider_height) / 2.0));
                     let response = ui.allocate_response(
-                        vec2(ui.spacing().slider_width, slider_height),
+                        vec2(slider_width, slider_height),
                         Sense::click_and_drag(),
                     );
-                    ui.allocate_space(vec2(
-                        ui.spacing().slider_width,
-                        (height - slider_height) / 2.0,
-                    ));
+                    ui.allocate_space(vec2(slider_width, (height - slider_height) / 2.0));
                     response
                 })
                 .inner;
