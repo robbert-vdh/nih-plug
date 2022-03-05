@@ -137,9 +137,8 @@ pub trait ClapPlugin: Plugin {
     const CLAP_DESCRIPTION: &'static str;
     /// Arbitrary keywords describing the plugin. See the CLAP specification for examples:
     /// <https://github.com/free-audio/clap/blob/main/include/clap/plugin.h>.
-    //
-    // TODO: CLAP mentions that `win32-dpi-aware` is a special keyword that informs the host that
-    //       the plugin is DPI aware, can and should we have special handling for this?
+    ///
+    /// On windows `win32-dpi-aware` is automatically added.
     const CLAP_FEATURES: &'static [&'static str];
     /// A URL to the plugin's manual, CLAP does not specify what to do when there is none.
     //
