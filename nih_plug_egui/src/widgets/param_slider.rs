@@ -33,6 +33,9 @@ pub struct ParamSlider<'a, P: Param> {
 
     draw_value: bool,
     slider_width: Option<f32>,
+
+    /// Will be set in the `ui()` function so we can request keyboard input focus on Alt+click.
+    keyboard_focus_id: Option<egui::Id>,
 }
 
 impl<'a, P: Param> ParamSlider<'a, P> {
@@ -45,6 +48,8 @@ impl<'a, P: Param> ParamSlider<'a, P> {
 
             draw_value: true,
             slider_width: None,
+
+            keyboard_focus_id: None,
         }
     }
 
@@ -70,6 +75,24 @@ impl<'a, P: Param> ParamSlider<'a, P> {
 
     fn string_value(&self) -> String {
         format!("{}", self.param)
+    }
+
+    /// Enable the keyboard entry part of the widget.
+    fn begin_keyboard_entry(&self, ui: &Ui) {
+        ui.memory().request_focus(self.keyboard_focus_id.unwrap());
+
+        // Always initialize the field to the current value, that seems nicer than having to
+        // being typing from scratch
+        let value_entry_mutex = ui
+            .memory()
+            .data
+            .get_temp_mut_or_default::<Arc<Mutex<String>>>(*VALUE_ENTRY_MEMORY_ID)
+            .clone();
+        *value_entry_mutex.lock() = self.string_value();
+    }
+
+    fn keyboard_entry_active(&self, ui: &Ui) -> bool {
+        ui.memory().has_focus(self.keyboard_focus_id.unwrap())
     }
 
     fn begin_drag(&self) {
@@ -152,10 +175,9 @@ impl<'a, P: Param> ParamSlider<'a, P> {
         ui.memory().data.insert_temp(*DRAG_AMOUNT_MEMORY_ID, amount);
     }
 
-    fn slider_ui(&self, ui: &mut Ui, response: &Response) {
+    fn slider_ui(&self, ui: &mut Ui, response: &mut Response) {
         // Handle user input
         // TODO: Optionally (since it can be annoying) add scrolling behind a builder option
-        // TODO: Optionally add alt+click for value entry?
         if response.drag_started() {
             // When beginning a drag or dragging normally, reset the memory used to keep track of
             // our granular drag
@@ -166,19 +188,29 @@ impl<'a, P: Param> ParamSlider<'a, P> {
             if ui.input().modifiers.command {
                 // Like double clicking, Ctrl+Click should reset the parameter
                 self.reset_param();
+                response.mark_changed();
+            } else if ui.input().modifiers.alt && self.draw_value {
+                // Allow typing in the value on an Alt+Click. Right now this is shown as part of the
+                // value field, so it only makes sense when we're drawing that.
+                // FIXME: This releases the focus again when you release the mouse button without
+                //        moving the mouse a bit for some reason
+                self.begin_keyboard_entry(ui);
             } else if ui.input().modifiers.shift {
                 // And shift dragging should switch to a more granulra input method
                 self.granular_drag(ui, response.drag_delta());
+                response.mark_changed();
             } else {
                 let proportion =
                     egui::emath::remap_clamp(click_pos.x, response.rect.x_range(), 0.0..=1.0)
                         as f64;
                 self.set_normalized_value(proportion as f32);
+                response.mark_changed();
                 Self::set_drag_amount_memory(ui, 0.0);
             }
         }
         if response.double_clicked() {
             self.reset_param();
+            response.mark_changed();
         }
         if response.drag_released() {
             self.end_drag();
@@ -217,11 +249,8 @@ impl<'a, P: Param> ParamSlider<'a, P> {
 
         // Either show the parameter's label, or show a text entry field if the parameter's label
         // has been clicked on
-        // FIXME: There doesn't seem to be a way to generate IDs in the public API, not sure how
-        //        you're supposed to do this
-        let (kb_edit_id, _) = ui.allocate_space(Vec2::ZERO);
-        let kb_edit_active = ui.memory().has_focus(kb_edit_id);
-        if kb_edit_active {
+        let keyboard_focus_id = self.keyboard_focus_id.unwrap();
+        if self.keyboard_entry_active(ui) {
             let value_entry_mutex = ui
                 .memory()
                 .data
@@ -231,19 +260,19 @@ impl<'a, P: Param> ParamSlider<'a, P> {
 
             ui.add(
                 TextEdit::singleline(&mut *value_entry)
-                    .id(kb_edit_id)
+                    .id(keyboard_focus_id)
                     .font(TextStyle::Monospace),
             );
             if ui.input().key_pressed(Key::Escape) {
                 // Cancel when pressing escape
-                ui.memory().surrender_focus(kb_edit_id);
+                ui.memory().surrender_focus(keyboard_focus_id);
             } else if ui.input().key_pressed(Key::Enter) {
                 // And try to set the value by string when pressing enter
                 self.begin_drag();
                 self.set_from_string(&*value_entry);
                 self.end_drag();
 
-                ui.memory().surrender_focus(kb_edit_id);
+                ui.memory().surrender_focus(keyboard_focus_id);
             }
         } else {
             let text = WidgetText::from(self.string_value()).into_galley(
@@ -255,13 +284,7 @@ impl<'a, P: Param> ParamSlider<'a, P> {
 
             let response = ui.allocate_response(text.size() + (padding * 2.0), Sense::click());
             if response.clicked() {
-                ui.memory().request_focus(kb_edit_id);
-                let value_entry_mutex = ui
-                    .memory()
-                    .data
-                    .get_temp_mut_or_default::<Arc<Mutex<String>>>(*VALUE_ENTRY_MEMORY_ID)
-                    .clone();
-                *value_entry_mutex.lock() = self.string_value();
+                self.begin_keyboard_entry(ui);
             }
 
             if ui.is_rect_visible(response.rect) {
@@ -287,7 +310,7 @@ impl<'a, P: Param> ParamSlider<'a, P> {
 }
 
 impl<P: Param> Widget for ParamSlider<'_, P> {
-    fn ui(self, ui: &mut Ui) -> Response {
+    fn ui(mut self, ui: &mut Ui) -> Response {
         let slider_width = self
             .slider_width
             .unwrap_or_else(|| ui.spacing().slider_width);
@@ -298,19 +321,25 @@ impl<P: Param> Widget for ParamSlider<'_, P> {
                 .text_style_height(&TextStyle::Body)
                 .max(ui.spacing().interact_size.y * 0.8);
             let slider_height = ui.painter().round_to_pixel(height * 0.8);
-            let response = ui
+            let mut response = ui
                 .vertical(|ui| {
                     ui.allocate_space(vec2(slider_width, (height - slider_height) / 2.0));
                     let response = ui.allocate_response(
                         vec2(slider_width, slider_height),
                         Sense::click_and_drag(),
                     );
-                    ui.allocate_space(vec2(slider_width, (height - slider_height) / 2.0));
+                    let (kb_edit_id, _) =
+                        ui.allocate_space(vec2(slider_width, (height - slider_height) / 2.0));
+                    // Allocate an automatic ID for keeping track of keyboard focus state
+                    // FIXME: There doesn't seem to be a way to generate IDs in the public API, not sure how
+                    //        you're supposed to do this
+                    self.keyboard_focus_id = Some(kb_edit_id);
+
                     response
                 })
                 .inner;
 
-            self.slider_ui(ui, &response);
+            self.slider_ui(ui, &mut response);
             if self.draw_value {
                 self.value_ui(ui);
             }
