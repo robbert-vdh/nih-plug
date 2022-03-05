@@ -1,5 +1,8 @@
-use egui::{vec2, Response, Sense, Stroke, TextStyle, Ui, Vec2, Widget, WidgetText};
+use std::sync::Arc;
+
+use egui::{vec2, Key, Response, Sense, Stroke, TextEdit, TextStyle, Ui, Vec2, Widget, WidgetText};
 use lazy_static::lazy_static;
+use parking_lot::Mutex;
 
 use super::util;
 use nih_plug::prelude::{Param, ParamSetter};
@@ -11,10 +14,12 @@ const GRANULAR_DRAG_MULTIPLIER: f32 = 0.0015;
 lazy_static! {
     static ref DRAG_NORMALIZED_START_VALUE_MEMORY_ID: egui::Id = egui::Id::new((file!(), 0));
     static ref DRAG_AMOUNT_MEMORY_ID: egui::Id = egui::Id::new((file!(), 1));
+    static ref VALUE_ENTRY_MEMORY_ID: egui::Id = egui::Id::new((file!(), 2));
 }
 
 /// A slider widget similar to [`egui::widgets::Slider`] that knows about NIH-plug parameters ranges
-/// and can get values for it.
+/// and can get values for it. The slider supports double click and control click to reset,
+/// shift+drag for granular dragging, text value entry by clicking on the value text.
 ///
 /// TODO: Vertical orientation
 /// TODO: Check below for more input methods that should be added
@@ -78,7 +83,19 @@ impl<'a, P: Param> ParamSlider<'a, P> {
         }
     }
 
-    // This still needs to be part of a drag gestur
+    /// Begin and end drag still need to be called when using this. Returns `false` if the string
+    /// could no tbe parsed.
+    fn set_from_string(&self, string: &str) -> bool {
+        match self.param.string_to_normalized_value(string) {
+            Some(normalized_value) => {
+                self.set_normalized_value(normalized_value);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Begin and end drag still need to be called when using this..
     fn reset_param(&self) {
         let normalized_default = self.setter.default_normalized_param_value(self.param);
         self.setter
@@ -194,31 +211,73 @@ impl<'a, P: Param> ParamSlider<'a, P> {
         let should_draw_frame = ui.visuals().button_frame;
         let padding = ui.spacing().button_padding;
 
-        let text = WidgetText::from(format!("{}", self.param)).into_galley(
-            ui,
-            None,
-            ui.available_width() - (padding.x * 2.0),
-            TextStyle::Button,
-        );
+        // Either show the parameter's label, or show a text entry field if the parameter's label
+        // has been clicked on
+        // FIXME: There doesn't seem to be a way to generate IDs in the public API, not sure how
+        //        you're supposed to do this
+        let (kb_edit_id, _) = ui.allocate_space(Vec2::ZERO);
+        let kb_edit_active = ui.memory().has_focus(kb_edit_id);
+        if kb_edit_active {
+            let value_entry_mutex = ui
+                .memory()
+                .data
+                .get_temp_mut_or_default::<Arc<Mutex<String>>>(*VALUE_ENTRY_MEMORY_ID)
+                .clone();
+            let mut value_entry = value_entry_mutex.lock();
 
-        let (_, rect) = ui.allocate_space(text.size() + (padding * 2.0));
-        if ui.is_rect_visible(rect) {
-            if should_draw_frame {
-                let fill = visuals.bg_fill;
-                let stroke = visuals.bg_stroke;
-                ui.painter().rect(
-                    rect.expand(visuals.expansion),
-                    visuals.rounding,
-                    fill,
-                    stroke,
-                );
+            ui.add(
+                TextEdit::singleline(&mut *value_entry)
+                    .id(kb_edit_id)
+                    .font(TextStyle::Monospace),
+            );
+            if ui.input().key_pressed(Key::Escape) {
+                // Cancel when pressing escape
+                ui.memory().surrender_focus(kb_edit_id);
+            } else if ui.input().key_pressed(Key::Enter) {
+                // And try to set the value by string when pressing enter
+                self.begin_drag();
+                self.set_from_string(&*value_entry);
+                self.end_drag();
+
+                ui.memory().surrender_focus(kb_edit_id);
+            }
+        } else {
+            let text = WidgetText::from(format!("{}", self.param)).into_galley(
+                ui,
+                None,
+                ui.available_width() - (padding.x * 2.0),
+                TextStyle::Button,
+            );
+
+            let response = ui.allocate_response(text.size() + (padding * 2.0), Sense::click());
+            if response.clicked() {
+                ui.memory().request_focus(kb_edit_id);
+                let value_entry_mutex = ui
+                    .memory()
+                    .data
+                    .get_temp_mut_or_default::<Arc<Mutex<String>>>(*VALUE_ENTRY_MEMORY_ID)
+                    .clone();
+                value_entry_mutex.lock().clear();
             }
 
-            let text_pos = ui
-                .layout()
-                .align_size_within_rect(text.size(), rect.shrink2(padding))
-                .min;
-            text.paint_with_visuals(ui.painter(), text_pos, &visuals);
+            if ui.is_rect_visible(response.rect) {
+                if should_draw_frame {
+                    let fill = visuals.bg_fill;
+                    let stroke = visuals.bg_stroke;
+                    ui.painter().rect(
+                        response.rect.expand(visuals.expansion),
+                        visuals.rounding,
+                        fill,
+                        stroke,
+                    );
+                }
+
+                let text_pos = ui
+                    .layout()
+                    .align_size_within_rect(text.size(), response.rect.shrink2(padding))
+                    .min;
+                text.paint_with_visuals(ui.painter(), text_pos, &visuals);
+            }
         }
     }
 }
