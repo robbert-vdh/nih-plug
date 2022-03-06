@@ -245,6 +245,11 @@ impl<'a> Buffer<'a> {
         }
     }
 
+    /// Return the numer of channels in this buffer.
+    pub fn channels(&self) -> usize {
+        self.output_slices.len()
+    }
+
     /// Returns true if this buffer does not contain any samples.
     pub fn is_empty(&self) -> bool {
         self.output_slices.is_empty() || self.output_slices[0].is_empty()
