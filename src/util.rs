@@ -7,6 +7,20 @@ pub use stft::StftHelper;
 
 pub const MINUS_INFINITY_DB: f32 = -100.0;
 
+/// Temporarily allow allocations within `func` if NIH-plug was configured with the
+/// `assert_process_allocs` feature.
+#[cfg(all(debug_assertions, feature = "assert_process_allocs"))]
+pub fn permit_alloc<T, F: FnOnce() -> T>(func: F) -> T {
+    assert_no_alloc::permit_alloc(func)
+}
+
+/// Temporarily allow allocations within `func` if NIH-plug was configured with the
+/// `assert_process_allocs` feature.
+#[cfg(not(all(debug_assertions, feature = "assert_process_allocs")))]
+pub fn permit_alloc<T, F: FnOnce() -> T>(func: F) -> T {
+    func
+}
+
 /// Convert decibels to a voltage gain ratio, treating anything below -100 dB as minus infinity.
 pub fn db_to_gain(dbs: f32) -> f32 {
     if dbs > MINUS_INFINITY_DB {
