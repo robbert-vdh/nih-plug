@@ -18,7 +18,7 @@ pub fn permit_alloc<T, F: FnOnce() -> T>(func: F) -> T {
 /// `assert_process_allocs` feature.
 #[cfg(not(all(debug_assertions, feature = "assert_process_allocs")))]
 pub fn permit_alloc<T, F: FnOnce() -> T>(func: F) -> T {
-    func
+    func()
 }
 
 /// Convert decibels to a voltage gain ratio, treating anything below -100 dB as minus infinity.
