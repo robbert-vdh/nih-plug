@@ -1,6 +1,8 @@
 use nih_plug::prelude::*;
 use std::pin::Pin;
 
+const WINDOW_SIZE: usize = 2048;
+
 struct Stft {
     params: Pin<Box<StftParams>>,
 
@@ -15,7 +17,7 @@ impl Default for Stft {
         Self {
             params: Box::pin(StftParams::default()),
 
-            stft: util::StftHelper::new(2, 512),
+            stft: util::StftHelper::new(2, WINDOW_SIZE),
         }
     }
 }
@@ -56,7 +58,7 @@ impl Plugin for Stft {
     ) -> bool {
         // Normally we'd also initialize the STFT helper for the correct channel count here, but we
         // only do stereo so that's not necessary
-        self.stft.set_block_size(512);
+        self.stft.set_block_size(WINDOW_SIZE);
         context.set_latency_samples(self.stft.latency_samples());
 
         true
