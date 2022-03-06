@@ -236,6 +236,15 @@ impl ExactSizeIterator for BlocksIter<'_, '_> {}
 impl ExactSizeIterator for BlockChannelsIter<'_, '_> {}
 
 impl<'a> Buffer<'a> {
+    /// Return the numer of samples in this buffer.
+    pub fn len(&self) -> usize {
+        if self.output_slices.is_empty() {
+            0
+        } else {
+            self.output_slices[0].len()
+        }
+    }
+
     /// Returns true if this buffer does not contain any samples.
     pub fn is_empty(&self) -> bool {
         self.output_slices.is_empty() || self.output_slices[0].is_empty()
