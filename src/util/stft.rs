@@ -1,5 +1,6 @@
 //! Utilities for buffering audio, likely used as part of a short-term Fourier transform.
 
+use super::window::multiply_with_window;
 use crate::buffer::Buffer;
 
 /// Process the input buffer in equal sized blocks, running a callback on each block to transform
@@ -106,8 +107,10 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
     /// For efficiency's sake this function will reuse the same vector for all calls to
     /// `process_cb`. This means you can only access a single channel's worth of windowed data at a
     /// time. The arguments to that function are `process_cb(channel_idx, sidechain_buffer_idx,
-    /// data)`, where `sidechain_buffer_idx` will be `None` for the main buffer. If there are any
-    /// sidechain buffers, then they will be processed before the main buffer.
+    /// real_fft_buffer)`, where `sidechain_buffer_idx` will be `None` for the main buffer. If there
+    /// are any sidechain buffers, then they will be processed before the main buffer.
+    /// `real_fft_buffer` will be a slice of `block_size` real valued samples. This can be passed
+    /// directly to an FFT algorithm.
     ///
     /// # Panics
     ///
@@ -222,7 +225,7 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
                             self.current_pos,
                             sidechain_ring_buffer,
                         );
-                        multiply_scratch_buffer(&mut self.scratch_buffer, window_function);
+                        multiply_with_window(&mut self.scratch_buffer, window_function);
                         process_cb(channel_idx, Some(sidechain_idx), &mut self.scratch_buffer);
                     }
                 }
@@ -238,10 +241,11 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
                         self.current_pos,
                         input_ring_buffer,
                     );
-                    multiply_scratch_buffer(&mut self.scratch_buffer, window_function);
+                    multiply_with_window(&mut self.scratch_buffer, window_function);
                     process_cb(channel_idx, None, &mut self.scratch_buffer);
 
                     // The actual overlap-add part of the equation
+                    multiply_with_window(&mut self.scratch_buffer, window_function);
                     add_scratch_to_ring_buffer(
                         &self.scratch_buffer,
                         self.current_pos,
@@ -266,19 +270,10 @@ fn copy_ring_to_scratch_buffer(
     current_pos: usize,
     ring_buffer: &[f32],
 ) {
-    let block_size = scratch_buffer.len();
+    let block_size = ring_buffer.len();
     let num_copy_before_wrap = block_size - current_pos;
     scratch_buffer[0..num_copy_before_wrap].copy_from_slice(&ring_buffer[current_pos..block_size]);
     scratch_buffer[num_copy_before_wrap..block_size].copy_from_slice(&ring_buffer[0..current_pos]);
-}
-
-/// Multiply the scratch buffer by some window function. Also free function because you can't do
-/// split borrows with methods.
-#[inline]
-fn multiply_scratch_buffer(scratch_buffer: &mut [f32], window_function: &[f32]) {
-    for (sample, window_sample) in scratch_buffer.iter_mut().zip(window_function) {
-        *sample *= window_sample;
-    }
 }
 
 /// Add data from the scratch buffer to the specified ring buffer. When writing samples from this
@@ -286,7 +281,7 @@ fn multiply_scratch_buffer(scratch_buffer: &mut [f32], window_function: &[f32]) 
 #[inline]
 fn add_scratch_to_ring_buffer(scratch_buffer: &[f32], current_pos: usize, ring_buffer: &mut [f32]) {
     // TODO: This could also use some SIMD
-    let block_size = scratch_buffer.len();
+    let block_size = ring_buffer.len();
     let num_copy_before_wrap = block_size - current_pos;
     for (scratch_sample, ring_sample) in scratch_buffer[0..num_copy_before_wrap]
         .iter()

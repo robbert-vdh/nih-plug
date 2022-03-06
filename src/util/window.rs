@@ -15,3 +15,12 @@ pub fn hann(size: usize) -> Vec<f32> {
         })
         .collect()
 }
+
+/// Multiply a buffer with a window function.
+#[inline]
+pub fn multiply_with_window(buffer: &mut [f32], window_function: &[f32]) {
+    // TODO: ALso use SIMD here if available
+    for (sample, window_sample) in buffer.iter_mut().zip(window_function) {
+        *sample *= window_sample;
+    }
+}
