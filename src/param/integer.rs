@@ -190,6 +190,19 @@ impl IntParam {
     /// Set up a smoother that can gradually interpolate changes made to this parameter, preventing
     /// clicks and zipper noises.
     pub fn with_smoother(mut self, style: SmoothingStyle) -> Self {
+        // Logarithmic smoothing will cause problems if the range goes through zero since then you
+        // end up multplying by zero
+        let goes_through_zero = match (&style, &self.range) {
+            (SmoothingStyle::Logarithmic(_), IntRange::Linear { min, max }) => {
+                *min == 0 || *max == 0 || min.signum() != max.signum()
+            }
+            _ => false,
+        };
+        nih_debug_assert!(
+            !goes_through_zero,
+            "Logarithmic smoothing does not work with ranges that go through zero"
+        );
+
         self.smoothed = Smoother::new(style);
         self
     }
