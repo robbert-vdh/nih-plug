@@ -131,11 +131,13 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
         let main_buffer_len = main_buffer.len();
         let num_channels = main_buffer.channels();
         let block_size = self.main_input_ring_buffers[0].len();
-        let window_interval = block_size / overlap_times;
+        let window_interval = (block_size / overlap_times) as i32;
         let mut already_processed_samples = 0;
         while already_processed_samples < main_buffer_len {
             let remaining_samples = main_buffer_len - already_processed_samples;
-            let samples_until_next_window = (window_interval - self.current_pos) % window_interval;
+            let samples_until_next_window = ((window_interval - self.current_pos as i32 - 1)
+                .rem_euclid(window_interval)
+                + 1) as usize;
             let samples_to_process = samples_until_next_window.min(remaining_samples);
 
             // Copy the input from `main_buffer` to the ring buffer while copying last block's

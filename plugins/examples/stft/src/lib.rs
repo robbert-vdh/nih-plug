@@ -7,6 +7,7 @@ struct Stft {
     params: Pin<Box<StftParams>>,
 
     stft: util::StftHelper,
+    window_function: Vec<f32>,
 }
 
 #[derive(Params)]
@@ -18,6 +19,7 @@ impl Default for Stft {
             params: Box::pin(StftParams::default()),
 
             stft: util::StftHelper::new(2, WINDOW_SIZE),
+            window_function: util::window::hann(WINDOW_SIZE),
         }
     }
 }
