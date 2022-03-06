@@ -7,11 +7,12 @@ use std::f32;
 /// <https://en.wikipedia.org/wiki/Hann_function>
 pub fn hann(size: usize) -> Vec<f32> {
     // We want to scale `[0, size - 1]` to `[0, pi]`.
-    let scale = (size as f32 - 1.0).recip() * f32::consts::PI;
+    // XXX: The `sin^2()` version results in weird rounding errors that cause spectral leakeage
+    let scale = (size as f32 - 1.0).recip() * f32::consts::TAU;
     (0..size)
         .map(|i| {
-            let sin = (i as f32 * scale).sin();
-            sin * sin
+            let cos = (i as f32 * scale).cos();
+            0.5 - (0.5 * cos)
         })
         .collect()
 }
