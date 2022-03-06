@@ -260,6 +260,12 @@ impl<'a> Buffer<'a> {
         &mut self.output_slices
     }
 
+    /// The same as [`as_slice()`][Self::as_slice()], but for a non-mutable reference. This is
+    /// usually not needed.
+    pub fn as_slice_immutable(&self) -> &[&'a mut [f32]] {
+        &self.output_slices
+    }
+
     /// Iterate over the samples, returning a channel iterator for each sample.
     pub fn iter_mut<'slice>(&'slice mut self) -> SamplesIter<'slice, 'a> {
         SamplesIter {

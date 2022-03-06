@@ -1,5 +1,9 @@
 //! General conversion functions and utilities.
 
+mod stft;
+
+pub use stft::StftHelper;
+
 pub const MINUS_INFINITY_DB: f32 = -100.0;
 
 /// Convert decibels to a voltage gain ratio, treating anything below -100 dB as minus infinity.
