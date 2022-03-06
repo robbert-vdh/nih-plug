@@ -1,3 +1,6 @@
+use fftw::array::AlignedVec;
+use fftw::plan::{C2RPlan, C2RPlan32, R2CPlan, R2CPlan32};
+use fftw::types::{c32, Flag};
 use nih_plug::prelude::*;
 use std::pin::Pin;
 
@@ -7,25 +10,82 @@ const OVERLAP_TIMES: usize = 4;
 struct Stft {
     params: Pin<Box<StftParams>>,
 
+    /// An adapter that performs most of the overlap-add algorithm for us.
     stft: util::StftHelper,
+    /// A Hann window window, passed to the overlap-add helper.
     window_function: Vec<f32>,
+
+    /// The FFT of a simple low pass FIR filter.
+    lp_filter_kernel: Vec<c32>,
+
+    /// The algorithms for the FFT and IFFT operations.
+    plan: Plan,
+    /// Scratch buffers for computing our FFT. The [`StftHelper`] already contains a buffer for the
+    /// real values.
+    complex_fft_scratch_buffer: AlignedVec<c32>,
 }
 
+/// FFTW uses raw pointers which aren't Send+Sync, so we'll wrap this in a separate struct.
+struct Plan {
+    r2c_plan: R2CPlan32,
+    c2r_plan: C2RPlan32,
+}
+
+unsafe impl Send for Plan {}
+unsafe impl Sync for Plan {}
+
 #[derive(Params)]
-#[allow(clippy::derivable_impls)]
 struct StftParams {}
 
 impl Default for Stft {
     fn default() -> Self {
+        let mut r2c_plan: R2CPlan32 = R2CPlan32::aligned(&[WINDOW_SIZE], Flag::MEASURE).unwrap();
+        let c2r_plan: C2RPlan32 = C2RPlan32::aligned(&[WINDOW_SIZE], Flag::MEASURE).unwrap();
+        let mut real_fft_scratch_buffer: AlignedVec<f32> = AlignedVec::new(WINDOW_SIZE);
+        let mut complex_fft_scratch_buffer: AlignedVec<c32> = AlignedVec::new(WINDOW_SIZE / 2 + 1);
+
+        // Build a super simple low pass filter from one of the built in window function
+        const FILTER_WINDOW_SIZE: usize = 33;
+        let filter_window = util::window::hann(FILTER_WINDOW_SIZE);
+        real_fft_scratch_buffer[0..FILTER_WINDOW_SIZE].copy_from_slice(&filter_window);
+
+        // Our STFT functions will have a window function applied, so we need to do the same thing
+        // with this filter
+        let window_function = util::window::hann(WINDOW_SIZE);
+        util::window::multiply_with_window(&mut real_fft_scratch_buffer, &window_function);
+
+        // And make sure to normalize this so convolution sums to 1
+        let filter_sum_recip = real_fft_scratch_buffer.iter().sum::<f32>().recip();
+        for sample in real_fft_scratch_buffer.as_slice_mut() {
+            *sample *= filter_sum_recip;
+        }
+
+        r2c_plan
+            .r2c(
+                &mut real_fft_scratch_buffer,
+                &mut complex_fft_scratch_buffer,
+            )
+            .unwrap();
+
         Self {
             params: Box::pin(StftParams::default()),
 
             stft: util::StftHelper::new(2, WINDOW_SIZE),
-            window_function: util::window::hann(WINDOW_SIZE),
+            window_function,
+
+            lp_filter_kernel: complex_fft_scratch_buffer
+                .iter()
+                .take(WINDOW_SIZE)
+                .copied()
+                .collect(),
+
+            plan: Plan { r2c_plan, c2r_plan },
+            complex_fft_scratch_buffer,
         }
     }
 }
 
+#[allow(clippy::derivable_impls)]
 impl Default for StftParams {
     fn default() -> Self {
         Self {}
@@ -73,18 +133,43 @@ impl Plugin for Stft {
         buffer: &mut Buffer,
         _context: &mut impl ProcessContext,
     ) -> ProcessStatus {
-        const GAIN_COMPENSATION: f32 = 2.0 / OVERLAP_TIMES as f32;
+        const GAIN_COMPENSATION: f32 = 1.0 / OVERLAP_TIMES as f32 / WINDOW_SIZE as f32;
+
         self.stft.process_overlap_add(
             buffer,
             [],
             &self.window_function,
             OVERLAP_TIMES,
-            |_channel_idx, _, block| {
-                for sample in block {
-                    // TODO: Use the FFTW bindings and do some STFT operation here instead of
-                    //       reducing the gain at a 2048 sample latency...
-                    *sample *= GAIN_COMPENSATION;
+            |_channel_idx, _, real_fft_scratch_buffer| {
+                // Forward FFT, the helper has already applied window function
+                self.plan
+                    .r2c_plan
+                    .r2c(
+                        real_fft_scratch_buffer,
+                        &mut self.complex_fft_scratch_buffer,
+                    )
+                    .unwrap();
+
+                // As per the convolution theorem we can simply multiply these two buffers. We'll
+                // also apply the gain compensation at this point.
+                for (fft_bin, kernel_bin) in self
+                    .complex_fft_scratch_buffer
+                    .as_slice_mut()
+                    .iter_mut()
+                    .zip(&self.lp_filter_kernel)
+                {
+                    *fft_bin *= *kernel_bin * GAIN_COMPENSATION;
                 }
+
+                // Inverse FFT back into the scratch buffer. This will be added to a ring buffer
+                // which gets written back to the host at a one block delay.
+                self.plan
+                    .c2r_plan
+                    .c2r(
+                        &mut self.complex_fft_scratch_buffer,
+                        real_fft_scratch_buffer,
+                    )
+                    .unwrap();
             },
         );
 
