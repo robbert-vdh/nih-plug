@@ -2,6 +2,7 @@ use fftw::array::AlignedVec;
 use fftw::plan::{C2RPlan, C2RPlan32, R2CPlan, R2CPlan32};
 use fftw::types::{c32, Flag};
 use nih_plug::prelude::*;
+use std::f32;
 use std::pin::Pin;
 
 const WINDOW_SIZE: usize = 2048;
@@ -49,8 +50,11 @@ impl Default for Stft {
         let filter_window = util::window::hann(FILTER_WINDOW_SIZE);
         real_fft_scratch_buffer[0..FILTER_WINDOW_SIZE].copy_from_slice(&filter_window);
 
-        // And make sure to normalize this so convolution sums to 1
-        let filter_normalization_factor = real_fft_scratch_buffer.iter().sum::<f32>().recip();
+        // And make sure to normalize this so convolution sums to `e` which together with the
+        // compensation for the windowing causes everything to stay about at unit level. Don't ask
+        // my why this number.
+        let filter_normalization_factor =
+            real_fft_scratch_buffer.iter().sum::<f32>().recip() * f32::consts::E;
         for sample in real_fft_scratch_buffer.as_slice_mut() {
             *sample *= filter_normalization_factor;
         }
@@ -130,7 +134,7 @@ impl Plugin for Stft {
     ) -> ProcessStatus {
         // Compensate for the window function, the overlap, and the extra gain introduced by the
         // IDFT operation
-        const GAIN_COMPENSATION: f32 = 2.0 / OVERLAP_TIMES as f32 / WINDOW_SIZE as f32;
+        const GAIN_COMPENSATION: f32 = 1.0 / OVERLAP_TIMES as f32 / WINDOW_SIZE as f32;
 
         self.stft.process_overlap_add(
             buffer,

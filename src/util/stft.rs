@@ -248,6 +248,7 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
                     process_cb(channel_idx, None, &mut self.scratch_buffer);
 
                     // The actual overlap-add part of the equation
+                    multiply_with_window(&mut self.scratch_buffer, window_function);
                     add_scratch_to_ring_buffer(
                         &self.scratch_buffer,
                         self.current_pos,
