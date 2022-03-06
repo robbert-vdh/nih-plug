@@ -100,6 +100,9 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
     /// [`ProcessContext::set_latency()`][`crate::prelude::ProcessContext::set_latency()`] in your
     /// plugin's initialization function.
     ///
+    /// This function does not apply any gain compensation for the windowing. You will need to do
+    /// that yoruself depending on your window function and the amount of overlap.
+    ///
     /// For efficiency's sake this function will reuse the same vector for all calls to
     /// `process_cb`. This means you can only access a single channel's worth of windowed data at a
     /// time. The arguments to that function are `process_cb(channel_idx, sidechain_buffer_idx,
@@ -120,7 +123,6 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
         sidechain_buffers: [&Buffer; NUM_SIDECHAIN_INPUTS],
         window_function: &[f32],
         overlap_times: usize,
-        overlap_gain_compensation: f32,
         mut process_cb: F,
     ) where
         F: FnMut(usize, Option<usize>, &mut [f32]),
@@ -227,7 +229,6 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
                         &self.scratch_buffer,
                         self.current_pos,
                         output_ring_buffer,
-                        overlap_gain_compensation,
                     );
                 }
             }
@@ -270,7 +271,6 @@ fn add_scratch_to_ring_buffer(
     scratch_buffer: &[f32],
     current_pos: usize,
     ring_buffer: &mut [f32],
-    gain_compensation: f32,
 ) {
     // TODO: This could also use some SIMD
     let block_size = scratch_buffer.len();
@@ -279,14 +279,12 @@ fn add_scratch_to_ring_buffer(
         .iter()
         .zip(&mut ring_buffer[current_pos..block_size])
     {
-        // TODO: Moving this gain compensation to the window is more efficient, but that makes the
-        //       interface less nice to work with
-        *ring_sample += *scratch_sample * gain_compensation;
+        *ring_sample += *scratch_sample;
     }
     for (scratch_sample, ring_sample) in scratch_buffer[num_copy_before_wrap..block_size]
         .iter()
         .zip(&mut ring_buffer[0..current_pos])
     {
-        *ring_sample += *scratch_sample * gain_compensation;
+        *ring_sample += *scratch_sample;
     }
 }
