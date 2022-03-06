@@ -138,10 +138,9 @@ impl Plugin for Stft {
 
         self.stft.process_overlap_add(
             buffer,
-            [],
             &self.window_function,
             OVERLAP_TIMES,
-            |_channel_idx, _, real_fft_scratch_buffer| {
+            |_channel_idx, real_fft_scratch_buffer| {
                 // Forward FFT, the helper has already applied window function
                 self.plan
                     .r2c_plan

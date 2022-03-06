@@ -240,6 +240,7 @@ impl ExactSizeIterator for BlockChannelsIter<'_, '_> {}
 
 impl<'a> Buffer<'a> {
     /// Return the numer of samples in this buffer.
+    #[inline]
     pub fn len(&self) -> usize {
         if self.output_slices.is_empty() {
             0
@@ -331,6 +332,7 @@ impl<'a> Buffer<'a> {
 impl<'slice, 'sample> Channels<'slice, 'sample> {
     /// Get the number of channels.
     #[allow(clippy::len_without_is_empty)]
+    #[inline]
     pub fn len(&self) -> usize {
         unsafe { (*self.buffers).len() }
     }
@@ -461,8 +463,15 @@ impl<'slice, 'sample> Channels<'slice, 'sample> {
 impl<'slice, 'sample> Block<'slice, 'sample> {
     /// Get the number of samples (not channels) in the block.
     #[allow(clippy::len_without_is_empty)]
+    #[inline]
     pub fn len(&self) -> usize {
         self.current_block_end - self.current_block_start
+    }
+
+    /// Return the numer of channels in this buffer.
+    #[inline]
+    pub fn channels(&self) -> usize {
+        unsafe { (*self.buffers).len() }
     }
 
     /// A resetting iterator. This lets you iterate over the same block multiple times. Otherwise
@@ -480,6 +489,32 @@ impl<'slice, 'sample> Block<'slice, 'sample> {
 
     /// Access a channel by index. Useful when you would otherwise iterate over this [`Block`]
     /// multiple times.
+    #[inline]
+    pub fn get(&self, channel_index: usize) -> Option<&[f32]> {
+        // SAFETY: The block bound has already been checked
+        unsafe {
+            Some(
+                (*self.buffers)
+                    .get(channel_index)?
+                    .get_unchecked(self.current_block_start..self.current_block_end),
+            )
+        }
+    }
+
+    /// The same as [`get()`][Self::get], but without any bounds checking.
+    ///
+    /// # Safety
+    ///
+    /// `channel_index` must be in the range `0..Self::len()`.
+    #[inline]
+    pub unsafe fn get_unchecked(&self, channel_index: usize) -> &[f32] {
+        (*self.buffers)
+            .get_unchecked(channel_index)
+            .get_unchecked(self.current_block_start..self.current_block_end)
+    }
+
+    /// Access a mutable channel by index. Useful when you would otherwise iterate over this
+    /// [`Block`] multiple times.
     #[inline]
     pub fn get_mut(&mut self, channel_index: usize) -> Option<&mut [f32]> {
         // SAFETY: The block bound has already been checked
