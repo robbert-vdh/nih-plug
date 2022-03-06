@@ -108,6 +108,9 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
     ///
     /// Panics if `main_buffer` or the buffers in `sidechain_buffers` do not have the same number of
     /// channels as this [`StftHelper`].
+    ///
+    /// TODO: Maybe introduce a trait here so this can be used with things that aren't whole buffers
+    /// TODO: And also introduce that aforementioned read-only process function (`analyze()?`)
     pub fn process<F>(
         &mut self,
         main_buffer: &mut Buffer,
