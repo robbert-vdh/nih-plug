@@ -117,6 +117,9 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
     ///
     /// TODO: Maybe introduce a trait here so this can be used with things that aren't whole buffers
     /// TODO: And also introduce that aforementioned read-only process function (`analyze()?`)
+    /// TODO: Add more useful ways to do STFT and other buffered operations. I just went with this
+    ///       approach because it's what I needed myself, but generic combinators like this could
+    ///       also be useful for other operations.
     pub fn process_overlap_add<F>(
         &mut self,
         main_buffer: &mut Buffer,
