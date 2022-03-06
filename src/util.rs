@@ -1,6 +1,7 @@
 //! General conversion functions and utilities.
 
 mod stft;
+pub mod window;
 
 pub use stft::StftHelper;
 
