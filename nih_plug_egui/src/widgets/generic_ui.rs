@@ -15,6 +15,11 @@ use super::ParamSlider;
 pub trait ParamWidget {
     fn add_widget<P: Param>(&self, ui: &mut Ui, param: &P, setter: &ParamSetter);
 
+    /// The same as [`add_widget()`][Self::add_widget()], but for a `ParamPtr`.
+    ///
+    /// # Safety
+    ///
+    /// Undefined behavior of the `ParamPtr` does not point to a valid parameter.
     unsafe fn add_widget_raw(&self, ui: &mut Ui, param: &ParamPtr, setter: &ParamSetter) {
         match param {
             ParamPtr::FloatParam(p) => self.add_widget(ui, &**p, setter),

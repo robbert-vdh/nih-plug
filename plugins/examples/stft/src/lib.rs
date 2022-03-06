@@ -12,6 +12,7 @@ struct Stft {
 }
 
 #[derive(Params)]
+#[allow(clippy::derivable_impls)]
 struct StftParams {}
 
 impl Default for Stft {
