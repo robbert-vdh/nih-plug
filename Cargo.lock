@@ -856,6 +856,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "stft"
+version = "0.1.0"
+dependencies = [
+ "nih_plug",
+]
+
+[[package]]
 name = "syn"
 version = "1.0.86"
 source = "registry+https://github.com/rust-lang/crates.io-index"

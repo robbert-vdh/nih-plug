@@ -77,6 +77,10 @@ examples.
 - [**sine**](plugins/examples/sine) is a simple test tone generator plugin with
   frequency smoothing that can also make use of MIDI input instead of generating
   a static signal based on the plugin's parameters.
+- [**stft**](plugins/examples/stft) shows off some of NIH-plug's other optional
+  helper features, like an adapter to process audio in buffered blocks meant for
+  short-term Fourier transform operations, all using the compositional `Buffer`
+  interface.
 
 ## Licensing
 

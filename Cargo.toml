@@ -21,6 +21,7 @@ members = [
   "plugins/examples/gain",
   "plugins/examples/gain-gui",
   "plugins/examples/sine",
+  "plugins/examples/stft",
 
   "plugins/diopser",
 ]
