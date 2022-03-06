@@ -206,9 +206,23 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
                 // Because we're processing in smaller windows, the input ring buffers sadly does
                 // not always contain the full contiguous range we're interested in because they map
                 // wrap around. Because premade FFT algorithms typically can't handle this, we'll
-                // start with copying
-
-                // TODO: Sdiechain
+                // start with copying the wrapped ranges from our ring buffers to the scratch
+                // buffer. Then we apply the windowing function and this it along to
+                for (sidechain_idx, sidechain_ring_buffers) in
+                    self.sidechain_ring_buffers.iter().enumerate()
+                {
+                    for (channel_idx, sidechain_ring_buffer) in
+                        sidechain_ring_buffers.iter().enumerate()
+                    {
+                        copy_ring_to_scratch_buffer(
+                            &mut self.scratch_buffer,
+                            self.current_pos,
+                            sidechain_ring_buffer,
+                        );
+                        multiply_scratch_buffer(&mut self.scratch_buffer, window_function);
+                        process_cb(channel_idx, Some(sidechain_idx), &mut self.scratch_buffer);
+                    }
+                }
 
                 for (channel_idx, (input_ring_buffer, output_ring_buffer)) in self
                     .main_input_ring_buffers
@@ -267,11 +281,7 @@ fn multiply_scratch_buffer(scratch_buffer: &mut [f32], window_function: &[f32]) 
 /// Add data from the scratch buffer to the specified ring buffer. When writing samples from this
 /// ring buffer back to the host's outputs they must be cleared to prevent infinite feedback.
 #[inline]
-fn add_scratch_to_ring_buffer(
-    scratch_buffer: &[f32],
-    current_pos: usize,
-    ring_buffer: &mut [f32],
-) {
+fn add_scratch_to_ring_buffer(scratch_buffer: &[f32], current_pos: usize, ring_buffer: &mut [f32]) {
     // TODO: This could also use some SIMD
     let block_size = scratch_buffer.len();
     let num_copy_before_wrap = block_size - current_pos;
