@@ -49,15 +49,11 @@ impl Default for Stft {
         let filter_window = util::window::hann(FILTER_WINDOW_SIZE);
         real_fft_scratch_buffer[0..FILTER_WINDOW_SIZE].copy_from_slice(&filter_window);
 
-        // Our STFT functions will have a window function applied, so we need to do the same thing
-        // with this filter
-        let window_function = util::window::hann(WINDOW_SIZE);
-        util::window::multiply_with_window(&mut real_fft_scratch_buffer, &window_function);
-
-        // And make sure to normalize this so convolution sums to 1
-        let filter_sum_recip = real_fft_scratch_buffer.iter().sum::<f32>().recip();
+        // And make sure to normalize this so the levels doesn't change much after convolving
+        let filter_normalization_factor =
+            real_fft_scratch_buffer.iter().sum::<f32>().recip() * 2.0f32.sqrt() * 2.0;
         for sample in real_fft_scratch_buffer.as_slice_mut() {
-            *sample *= filter_sum_recip;
+            *sample *= filter_normalization_factor;
         }
 
         r2c_plan
@@ -71,7 +67,7 @@ impl Default for Stft {
             params: Box::pin(StftParams::default()),
 
             stft: util::StftHelper::new(2, WINDOW_SIZE),
-            window_function,
+            window_function: util::window::hann(WINDOW_SIZE),
 
             lp_filter_kernel: complex_fft_scratch_buffer
                 .iter()
