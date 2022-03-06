@@ -6,7 +6,7 @@ use std::f32;
 ///
 /// <https://en.wikipedia.org/wiki/Hann_function>
 pub fn hann(size: usize) -> Vec<f32> {
-    // We want to scale `[0, size]` to `[0, pi]`.
+    // We want to scale `[0, size - 1]` to `[0, pi]`.
     let scale = (size as f32 - 1.0).recip() * f32::consts::PI;
     (0..size)
         .map(|i| {
