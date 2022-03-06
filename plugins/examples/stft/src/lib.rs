@@ -2,6 +2,7 @@ use nih_plug::prelude::*;
 use std::pin::Pin;
 
 const WINDOW_SIZE: usize = 2048;
+const OVERLAP_TIMES: usize = 4;
 
 struct Stft {
     params: Pin<Box<StftParams>>,
@@ -71,15 +72,20 @@ impl Plugin for Stft {
         buffer: &mut Buffer,
         _context: &mut impl ProcessContext,
     ) -> ProcessStatus {
-        self.stft.process(buffer, [], |block, _| {
-            for channel_samples in block.iter_mut() {
-                for sample in channel_samples {
-                    // TODO: Use the FFTW bindings and do some STFT operation here instead of
-                    //       reducing the gain at a 512 sample latency...
-                    *sample *= 0.5;
-                }
-            }
-        });
+        self.stft.process_overlap_add(
+            buffer,
+            [],
+            &self.window_function,
+            OVERLAP_TIMES,
+            2.0 / OVERLAP_TIMES as f32, // Gain compensation for the overlap
+            |_channel_idx, _, _block| {
+                // for sample in block {
+                //     // TODO: Use the FFTW bindings and do some STFT operation here instead of
+                //     //       reducing the gain at a 2048 sample latency...
+                //     *sample *= 0.5;
+                // }
+            },
+        );
 
         ProcessStatus::Normal
     }
