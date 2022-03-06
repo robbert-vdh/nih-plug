@@ -92,12 +92,13 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
 
     /// Process the audio in `main_buffer` and in any sidechain buffers in small overlapping blocks
     /// with a window function applied, adding up the results for the main buffer so they can be
-    /// written back to the host. Whenever a new block is available, `process_cb()` gets called with
-    /// a new audio block of the specified size with the windowing function already applied. The
-    /// summed reults will then be written back to `main_buffer` exactly one block later, which
-    /// means that this function will introduce one block of latency. This can be compensated by
-    /// calling [`ProcessContext::set_latency()`][`crate::prelude::ProcessContext::set_latency()`]
-    /// in your plugin's initialization function.
+    /// written back to the host. The window overlap amount is compensated automatically when adding
+    /// up these samples. Whenever a new block is available, `process_cb()` gets called with a new
+    /// audio block of the specified size with the windowing function already applied. The summed
+    /// reults will then be written back to `main_buffer` exactly one block later, which means that
+    /// this function will introduce one block of latency. This can be compensated by calling
+    /// [`ProcessContext::set_latency()`][`crate::prelude::ProcessContext::set_latency()`] in your
+    /// plugin's initialization function.
     ///
     /// For efficiency's sake this function will reuse the same vector for all calls to
     /// `process_cb`. This means you can only access a single channel's worth of windowed data at a
@@ -119,12 +120,14 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
         sidechain_buffers: [&Buffer; NUM_SIDECHAIN_INPUTS],
         window_function: &[f32],
         overlap_times: usize,
+        overlap_gain_compensation: f32,
         mut process_cb: F,
     ) where
         F: FnMut(usize, Option<usize>, &mut [f32]),
     {
         assert_eq!(main_buffer.channels(), self.main_input_ring_buffers.len());
         assert_eq!(window_function.len(), self.main_input_ring_buffers[0].len());
+        assert!(overlap_times > 0);
 
         // We'll copy samples from `*_buffer` into `*_ring_buffers` while simultaneously copying
         // already processed samples from `main_ring_buffers` in into `main_buffer`
@@ -224,6 +227,7 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
                         &self.scratch_buffer,
                         self.current_pos,
                         output_ring_buffer,
+                        overlap_gain_compensation,
                     );
                 }
             }
@@ -262,7 +266,12 @@ fn multiply_scratch_buffer(scratch_buffer: &mut [f32], window_function: &[f32]) 
 /// Add data from the scratch buffer to the specified ring buffer. When writing samples from this
 /// ring buffer back to the host's outputs they must be cleared to prevent infinite feedback.
 #[inline]
-fn add_scratch_to_ring_buffer(scratch_buffer: &[f32], current_pos: usize, ring_buffer: &mut [f32]) {
+fn add_scratch_to_ring_buffer(
+    scratch_buffer: &[f32],
+    current_pos: usize,
+    ring_buffer: &mut [f32],
+    gain_compensation: f32,
+) {
     // TODO: This could also use some SIMD
     let block_size = scratch_buffer.len();
     let num_copy_before_wrap = block_size - current_pos;
@@ -270,12 +279,14 @@ fn add_scratch_to_ring_buffer(scratch_buffer: &[f32], current_pos: usize, ring_b
         .iter()
         .zip(&mut ring_buffer[current_pos..block_size])
     {
-        *ring_sample += *scratch_sample;
+        // TODO: Moving this gain compensation to the window is more efficient, but that makes the
+        //       interface less nice to work with
+        *ring_sample += *scratch_sample * gain_compensation;
     }
     for (scratch_sample, ring_sample) in scratch_buffer[num_copy_before_wrap..block_size]
         .iter()
         .zip(&mut ring_buffer[0..current_pos])
     {
-        *ring_sample += *scratch_sample;
+        *ring_sample += *scratch_sample * gain_compensation;
     }
 }
