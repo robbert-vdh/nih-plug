@@ -205,6 +205,9 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
                 }
             }
 
+            already_processed_samples += samples_to_process;
+            self.current_pos = (self.current_pos + samples_to_process) % block_size;
+
             // At this point we either have `already_processed_samples == main_buffer_len`, or
             // `self.current_pos % window_interval == 0`. If it's the latter, then we can process a
             // new block.
@@ -253,10 +256,6 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
                     );
                 }
             }
-
-            // Do this after handling the block or else we'll copy the wrong samples.
-            already_processed_samples += samples_to_process;
-            self.current_pos = (self.current_pos + samples_to_process) % block_size;
         }
     }
 }
