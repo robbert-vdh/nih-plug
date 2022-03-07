@@ -945,6 +945,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "puberty_simulator"
+version = "0.1.0"
+dependencies = [
+ "fftw",
+ "nih_plug",
+]
+
+[[package]]
 name = "quick-xml"
 version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

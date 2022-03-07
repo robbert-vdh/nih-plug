@@ -32,6 +32,12 @@ for download links.
   Useful for oomphing up kickdrums and basses, transforming synths into their
   evil phase-y cousin, and making everything sound like a cheap Sci-Fi laser
   beam.
+- [**Puberty Simulator**](plugins/puberty_simulator) simulates the changes the
+  male voice goes through during puberty with this One Weird Plugin! If it was
+  not already yet clear from that sentence, this plugin is a joke, but it might
+  actually be useful (or at least interesting) in some situations. This plugin
+  pitches the signal down an octave, but it also has the side effect of causing
+  things to sound like a cracking voice or to make them slightly out of tune.
 
 ## Framework
 

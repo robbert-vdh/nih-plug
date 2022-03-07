@@ -24,6 +24,7 @@ members = [
   "plugins/examples/stft",
 
   "plugins/diopser",
+  "plugins/puberty_simulator",
 ]
 
 [features]
