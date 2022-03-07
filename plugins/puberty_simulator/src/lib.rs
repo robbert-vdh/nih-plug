@@ -25,7 +25,9 @@ use std::sync::Arc;
 const MIN_WINDOW_SIZE: usize = 64;
 const DEFAULT_WINDOW_SIZE: usize = 1024;
 const MAX_WINDOW_SIZE: usize = 32768;
-const OVERLAP_TIMES: usize = 4;
+const MIN_OVERLAP_TIMES: usize = 2;
+const DEFAULT_OVERLAP_TIMES: usize = 4;
+const MAX_OVERLAP_TIMES: usize = 32;
 
 struct PubertySimulator {
     params: Pin<Box<PubertySimulatorParams>>,
@@ -62,6 +64,10 @@ struct PubertySimulatorParams {
     /// The size of the FFT window as a power of two (to prevent invalid inputs).
     #[id = "wndsz"]
     window_size_order: IntParam,
+    /// The amount of overlap to use in the overlap-add algorithm as a power of two (again to
+    /// prevent invalid inputs).
+    #[id = "ovrlap"]
+    overlap_times_order: IntParam,
 }
 
 impl Default for PubertySimulator {
@@ -84,6 +90,10 @@ impl Default for PubertySimulator {
 
 impl Default for PubertySimulatorParams {
     fn default() -> Self {
+        let power_of_two_val2str = Arc::new(|value| format!("{}", 1 << value));
+        let power_of_two_str2val =
+            Arc::new(|string: &str| string.parse().ok().map(|n: i32| (n as f32).log2() as i32));
+
         Self {
             pitch_octaves: FloatParam::new(
                 "Pitch",
@@ -109,10 +119,18 @@ impl Default for PubertySimulatorParams {
                     max: (MAX_WINDOW_SIZE as f32).log2() as i32,
                 },
             )
-            .with_value_to_string(Arc::new(|value| format!("{}", 1 << value)))
-            .with_string_to_value(Arc::new(|string| {
-                string.parse().ok().map(|n: i32| (n as f32).log2() as i32)
-            })),
+            .with_value_to_string(power_of_two_val2str.clone())
+            .with_string_to_value(power_of_two_str2val.clone()),
+            overlap_times_order: IntParam::new(
+                "Window Overlap",
+                (DEFAULT_OVERLAP_TIMES as f32).log2() as i32,
+                IntRange::Linear {
+                    min: (MIN_OVERLAP_TIMES as f32).log2() as i32,
+                    max: (MAX_OVERLAP_TIMES as f32).log2() as i32,
+                },
+            )
+            .with_value_to_string(power_of_two_val2str)
+            .with_string_to_value(power_of_two_str2val),
         }
     }
 }
@@ -161,8 +179,9 @@ impl Plugin for PubertySimulator {
         // Compensate for the window function, the overlap, and the extra gain introduced by the
         // IDFT operation
         let window_size = self.window_size();
+        let overlap_times = self.overlap_times();
         let sample_rate = context.transport().sample_rate;
-        let gain_compensation: f32 = 2.0 / OVERLAP_TIMES as f32 / window_size as f32;
+        let gain_compensation: f32 = 2.0 / overlap_times as f32 / window_size as f32;
 
         // If the window size has changed since the last process call, reset the buffers and chance
         // our latency. All of these buffers already have enough capacity
@@ -180,7 +199,7 @@ impl Plugin for PubertySimulator {
         self.stft.process_overlap_add(
             buffer,
             &self.window_function,
-            OVERLAP_TIMES,
+            overlap_times,
             |channel_idx, real_fft_scratch_buffer| {
                 // This loop runs whenever there's a block ready, so we can't easily do any post- or
                 // pre-processing without muddying up the interface. But if this is channel 0, then
@@ -190,7 +209,7 @@ impl Plugin for PubertySimulator {
                         .params
                         .pitch_octaves
                         .smoothed
-                        .next_step((window_size / OVERLAP_TIMES) as u32);
+                        .next_step((window_size / overlap_times) as u32);
                 }
                 // Negated because pitching down should cause us to take values from higher frequency bins
                 let frequency_multiplier = 2.0f32.powf(-smoothed_pitch_value);
@@ -256,6 +275,10 @@ impl Plugin for PubertySimulator {
 impl PubertySimulator {
     fn window_size(&self) -> usize {
         1 << self.params.window_size_order.value as usize
+    }
+
+    fn overlap_times(&self) -> usize {
+        1 << self.params.overlap_times_order.value as usize
     }
 
     /// `window_size` should not exceed `MAX_WINDOW_SIZE` or this will allocate.
