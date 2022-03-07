@@ -181,7 +181,7 @@ impl Plugin for PubertySimulator {
         let window_size = self.window_size();
         let overlap_times = self.overlap_times();
         let sample_rate = context.transport().sample_rate;
-        let gain_compensation: f32 = 2.0 / overlap_times as f32 / window_size as f32;
+        let gain_compensation: f32 = 1.0 / (overlap_times as f32).log2() / window_size as f32;
 
         // If the window size has changed since the last process call, reset the buffers and chance
         // our latency. All of these buffers already have enough capacity
