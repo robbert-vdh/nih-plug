@@ -1438,7 +1438,6 @@ impl<P: ClapPlugin> Wrapper<P> {
             // Stepped parameters are unnormalized float parameters since there's no separate step
             // range option
             // TODO: This should probably be encapsulated in some way so we don't forget about this in one place
-            // TODO: Like with VST3, this won't actually do the correct thing with skewed stepped parameters
             param_info.max_value = step_count.unwrap_or(1) as f64;
             param_info.default_value = *default_value as f64 * step_count.unwrap_or(1) as f64;
         }
@@ -1462,7 +1461,6 @@ impl<P: ClapPlugin> Wrapper<P> {
             };
             true
         } else if let Some(param_ptr) = wrapper.param_by_hash.get(&param_id) {
-            // TODO: As explained above, this may do strange things with skewed discrete parameters
             *value =
                 param_ptr.normalized_value() as f64 * param_ptr.step_count().unwrap_or(1) as f64;
             true
