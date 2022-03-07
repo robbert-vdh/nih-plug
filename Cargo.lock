@@ -4,9 +4,9 @@ version = 3
 
 [[package]]
 name = "ab_glyph"
-version = "0.2.14"
+version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d54a65e0d4f66f8536c98cb3ca81ca33b7e2ca43442465507a3a62291ec0d9e4"
+checksum = "24606928a235e73cdef55a0c909719cadd72fce573e5713d58cb2952d8f5794c"
 dependencies = [
  "ab_glyph_rasterizer",
  "owned_ttf_parser",
@@ -46,9 +46,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.55"
+version = "1.0.56"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "159bb86af3a200e19a068f4224eae4c8bb2d0fa054c7e5d1cacd5cef95e684cd"
+checksum = "4361135be9122e0870de935d7c439aef945b9f9ddd4199a553b5270b49c82a27"
 
 [[package]]
 name = "assert_no_alloc"
@@ -77,7 +77,7 @@ checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 [[package]]
 name = "baseview"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/baseview.git?branch=feature/mouse-event-modifiers#a8ef4ddc1c53e48a2c2ca7379f89e6573a250407"
+source = "git+https://github.com/robbert-vdh/baseview.git?branch=feature/mouse-event-modifiers#8e7f854c537712a30ba388bdce8764f10b466652"
 dependencies = [
  "cocoa",
  "core-foundation",
@@ -169,7 +169,7 @@ dependencies = [
 [[package]]
 name = "clap-sys"
 version = "0.1.0"
-source = "git+https://github.com/glowcoil/clap-sys?rev=3ef7048e1d3b426a7c6b02b5d3ae18f14874d4e5#3ef7048e1d3b426a7c6b02b5d3ae18f14874d4e5"
+source = "git+https://github.com/robbert-vdh/clap-sys?branch=update/clap-0.20#d795c86022e0229cb219d68675329dadf1778a86"
 
 [[package]]
 name = "clipboard-win"
@@ -887,9 +887,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.9.0"
+version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da32515d9f6e6e489d7bc9d84c71b060db7247dc035bbe44eac88cf87486d8d5"
+checksum = "87f3e037eac156d1775da914196f0f37741a274155e34a0b7e427c35d2a2ecb9"
 
 [[package]]
 name = "owned_ttf_parser"

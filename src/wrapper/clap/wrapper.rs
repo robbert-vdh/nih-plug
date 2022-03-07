@@ -20,11 +20,14 @@ use clap_sys::ext::audio_ports::{
 use clap_sys::ext::audio_ports_config::{
     clap_audio_ports_config, clap_plugin_audio_ports_config, CLAP_EXT_AUDIO_PORTS_CONFIG,
 };
-use clap_sys::ext::gui::{clap_plugin_gui, CLAP_EXT_GUI};
+use clap_sys::ext::gui::{
+    clap_plugin_gui, clap_window, CLAP_EXT_GUI, CLAP_WINDOW_API_COCOA, CLAP_WINDOW_API_WIN32,
+    CLAP_WINDOW_API_X11,
+};
 use clap_sys::ext::latency::{clap_host_latency, clap_plugin_latency, CLAP_EXT_LATENCY};
 use clap_sys::ext::params::{
-    clap_host_params, clap_param_info, clap_plugin_params, CLAP_EXT_PARAMS, CLAP_PARAM_IS_BYPASS,
-    CLAP_PARAM_IS_STEPPED,
+    clap_host_params, clap_param_info, clap_plugin_params, CLAP_EXT_PARAMS,
+    CLAP_PARAM_IS_AUTOMATABLE, CLAP_PARAM_IS_BYPASS, CLAP_PARAM_IS_STEPPED,
 };
 use clap_sys::ext::state::{clap_plugin_state, CLAP_EXT_STATE};
 use clap_sys::ext::thread_check::{clap_host_thread_check, CLAP_EXT_THREAD_CHECK};
@@ -47,18 +50,11 @@ use std::cmp;
 use std::collections::{HashMap, VecDeque};
 use std::ffi::{c_void, CStr};
 use std::mem;
-use std::os::raw::{c_char, c_ulong};
+use std::os::raw::c_char;
 use std::ptr;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 use std::thread::{self, ThreadId};
-
-#[cfg(target_os = "macos")]
-use clap_sys::ext::gui_cocoa::{clap_plugin_gui_cocoa, CLAP_EXT_GUI_COCOA};
-#[cfg(target_os = "windows")]
-use clap_sys::ext::gui_win32::{clap_hwnd, clap_plugin_gui_win32, CLAP_EXT_GUI_WIN32};
-#[cfg(all(target_family = "unix", not(target_os = "macos")))]
-use clap_sys::ext::gui_x11::{clap_plugin_gui_x11, CLAP_EXT_GUI_X11};
 
 use super::context::{WrapperGuiContext, WrapperProcessContext};
 use super::descriptor::PluginDescriptor;
@@ -152,15 +148,6 @@ pub struct Wrapper<P: ClapPlugin> {
     clap_plugin_audio_ports: clap_plugin_audio_ports,
 
     clap_plugin_gui: clap_plugin_gui,
-
-    // These are now platform specific, but after CLAP 0.19 this will all be merged into the regular
-    // GUI extension
-    #[cfg(all(target_family = "unix", not(target_os = "macos")))]
-    clap_plugin_gui_x11: clap_plugin_gui_x11,
-    #[cfg(target_os = "macos")]
-    clap_plugin_gui_cocoa: clap_plugin_gui_cocoa,
-    #[cfg(target_os = "windows")]
-    clap_plugin_gui_win32: clap_plugin_gui_win32,
 
     clap_plugin_latency: clap_plugin_latency,
     host_latency: AtomicRefCell<Option<ClapPtr<clap_host_latency>>>,
@@ -323,6 +310,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 deactivate: Self::deactivate,
                 start_processing: Self::start_processing,
                 stop_processing: Self::stop_processing,
+                reset: Self::reset,
                 process: Self::process,
                 get_extension: Self::get_extension,
                 on_main_thread: Self::on_main_thread,
@@ -363,28 +351,19 @@ impl<P: ClapPlugin> Wrapper<P> {
             },
 
             clap_plugin_gui: clap_plugin_gui {
+                is_api_supported: Self::ext_gui_is_api_supported,
                 create: Self::ext_gui_create,
                 destroy: Self::ext_gui_destroy,
                 set_scale: Self::ext_gui_set_scale,
                 get_size: Self::ext_gui_get_size,
                 can_resize: Self::ext_gui_can_resize,
-                round_size: Self::ext_gui_round_size,
+                adjust_size: Self::ext_gui_adjust_size,
                 set_size: Self::ext_gui_set_size,
+                set_parent: Self::ext_gui_set_parent,
+                set_transient: Self::ext_gui_set_transient,
+                suggest_title: Self::ext_gui_suggest_title,
                 show: Self::ext_gui_show,
                 hide: Self::ext_gui_hide,
-            },
-
-            #[cfg(all(target_family = "unix", not(target_os = "macos")))]
-            clap_plugin_gui_x11: clap_plugin_gui_x11 {
-                attach: Self::ext_gui_x11_attach,
-            },
-            #[cfg(target_os = "macos")]
-            clap_plugin_gui_cocoa: clap_plugin_gui_cocoa {
-                attach: Self::ext_gui_cocoa_attach,
-            },
-            #[cfg(target_os = "windows")]
-            clap_plugin_gui_win32: clap_plugin_gui_win32 {
-                attach: Self::ext_gui_win32_attach,
             },
 
             clap_plugin_latency: clap_plugin_latency {
@@ -624,7 +603,8 @@ impl<P: ClapPlugin> Wrapper<P> {
                 value: change.clap_plain_value,
             };
 
-            (out.push_back)(out, &event.header);
+            let push_succesful = (out.try_push)(out, &event.header);
+            nih_debug_assert!(push_succesful);
         }
     }
 
@@ -784,6 +764,10 @@ impl<P: ClapPlugin> Wrapper<P> {
         let wrapper = &*(plugin as *const Self);
 
         wrapper.is_processing.store(false, Ordering::SeqCst);
+    }
+
+    unsafe extern "C" fn reset(_plugin: *const clap_plugin) {
+        // TODO: Split `Plugin::intialize()` into an initialize and a reset function
     }
 
     unsafe extern "C" fn process(
@@ -963,21 +947,9 @@ impl<P: ClapPlugin> Wrapper<P> {
 
         let id = CStr::from_ptr(id);
 
-        // These extensions are only relevant on the respective platforms and they will be removed
-        // entirely in CLAP 0.19
-        #[cfg(all(target_family = "unix", not(target_os = "macos")))]
-        if id == CStr::from_ptr(CLAP_EXT_GUI_X11) && wrapper.editor.is_some() {
-            return &wrapper.clap_plugin_gui_x11 as *const _ as *const c_void;
-        }
-        #[cfg(target_os = "macos")]
-        if id == CStr::from_ptr(CLAP_EXT_GUI_COCOA) && wrapper.editor.is_some() {
-            return &wrapper.clap_plugin_gui_cocoa as *const _ as *const c_void;
-        }
-        #[cfg(target_os = "windows")]
-        if id == CStr::from_ptr(CLAP_EXT_GUI_WIN32) && wrapper.editor.is_some() {
-            return &wrapper.clap_plugin_gui_win32 as *const _ as *const c_void;
-        }
-
+        // TODO: Implement:
+        //       - event_filter
+        //       - tail
         if id == CStr::from_ptr(CLAP_EXT_AUDIO_PORTS_CONFIG) {
             &wrapper.clap_plugin_audio_ports_config as *const _ as *const c_void
         } else if id == CStr::from_ptr(CLAP_EXT_AUDIO_PORTS) {
@@ -1184,10 +1156,45 @@ impl<P: ClapPlugin> Wrapper<P> {
         }
     }
 
-    unsafe extern "C" fn ext_gui_create(plugin: *const clap_plugin) -> bool {
-        // This is a bit weird, because in CLAP 0.18 creating the editor window and embedding it in
-        // another window are separate, and those things are one and the same in our framework. So
-        // we'll just pretend we did something here.
+    unsafe extern "C" fn ext_gui_is_api_supported(
+        _plugin: *const clap_plugin,
+        api: *const c_char,
+        is_floating: bool,
+    ) -> bool {
+        // We don't do standalone floating windows
+        if is_floating {
+            return false;
+        }
+
+        #[cfg(all(target_family = "unix", not(target_os = "macos")))]
+        if CStr::from_ptr(api) == CStr::from_ptr(CLAP_WINDOW_API_X11) {
+            return true;
+        }
+        #[cfg(target_os = "macos")]
+        if CStr::from_ptr(api) == CStr::from_ptr(CLAP_WINDOW_API_COCOA) {
+            return true;
+        }
+        #[cfg(target_os = "windows")]
+        if CStr::from_ptr(api) == CStr::from_ptr(CLAP_WINDOW_API_WIN32) {
+            return true;
+        }
+
+        false
+    }
+
+    unsafe extern "C" fn ext_gui_create(
+        plugin: *const clap_plugin,
+        api: *const c_char,
+        is_floating: bool,
+    ) -> bool {
+        // Double check this in case the host didn't
+        if !Self::ext_gui_is_api_supported(plugin, api, is_floating) {
+            return false;
+        }
+
+        // In CLAP creating the editor window and embedding it in another window are separate, and
+        // those things are one and the same in our framework. So we'll just pretend we did
+        // something here.
         check_null_ptr!(false, plugin);
         let wrapper = &*(plugin as *const Self);
 
@@ -1245,6 +1252,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         check_null_ptr!(false, plugin, width, height);
         let wrapper = &*(plugin as *const Self);
 
+        // For macOS the scaling factor is always 1
         let (unscaled_width, unscaled_height) = wrapper.editor.as_ref().unwrap().size();
         let scaling_factor = wrapper.editor_scaling_factor.load(Ordering::Relaxed);
         (*width, *height) = (
@@ -1260,12 +1268,13 @@ impl<P: ClapPlugin> Wrapper<P> {
         false
     }
 
-    unsafe extern "C" fn ext_gui_round_size(
+    unsafe extern "C" fn ext_gui_adjust_size(
         _plugin: *const clap_plugin,
         _width: *mut u32,
         _height: *mut u32,
-    ) {
+    ) -> bool {
         // TODO: Implement GUI resizing
+        false
     }
 
     unsafe extern "C" fn ext_gui_set_size(
@@ -1287,113 +1296,35 @@ impl<P: ClapPlugin> Wrapper<P> {
         width == editor_width && height == editor_height
     }
 
-    unsafe extern "C" fn ext_gui_show(_plugin: *const clap_plugin) {
-        // TODO: Does this get used? Is this only for the free-standing window extension? (which we
-        //       don't implement) This wouldn't make any sense for embedded editors.
-    }
-
-    unsafe extern "C" fn ext_gui_hide(_plugin: *const clap_plugin) {
-        // TODO: Same as the above
-    }
-
-    #[cfg(all(target_family = "unix", not(target_os = "macos")))]
-    unsafe extern "C" fn ext_gui_x11_attach(
+    unsafe extern "C" fn ext_gui_set_parent(
         plugin: *const clap_plugin,
-        // TODO: Should we do anything with the display name?
-        _display_name: *const c_char,
-        window: c_ulong,
-    ) -> bool {
-        check_null_ptr!(false, plugin);
-        // For this function we need the underlying Arc so we can pass it to the editor
-        let wrapper = Arc::from_raw(plugin as *const Self);
-
-        let result = {
-            let mut editor_handle = wrapper.editor_handle.write();
-            if editor_handle.is_none() {
-                let handle = {
-                    let mut handle = raw_window_handle::XcbHandle::empty();
-                    handle.window = window as u32;
-                    RawWindowHandle::Xcb(handle)
-                };
-
-                // This extension is only exposed when we have an editor
-                *editor_handle = Some(wrapper.editor.as_ref().unwrap().spawn(
-                    ParentWindowHandle { handle },
-                    wrapper.clone().make_gui_context(),
-                ));
-
-                true
-            } else {
-                nih_debug_assert_failure!(
-                    "Host tried to attach editor while the editor is already attached"
-                );
-
-                false
-            }
-        };
-
-        // Leak the Arc again since we only needed a clone to pass to the GuiContext
-        let _ = Arc::into_raw(wrapper);
-
-        result
-    }
-
-    #[cfg(target_os = "macos")]
-    unsafe extern "C" fn ext_gui_cocoa_attach(
-        plugin: *const clap_plugin,
-        ns_view: *mut c_void,
-    ) -> bool {
-        check_null_ptr!(false, plugin, ns_view);
-        // For this function we need the underlying Arc so we can pass it to the editor
-        let wrapper = Arc::from_raw(plugin as *const Self);
-
-        let result = {
-            let mut editor_handle = wrapper.editor_handle.write();
-            if editor_handle.is_none() {
-                let handle = {
-                    let mut handle = raw_window_handle::AppKitHandle::empty();
-                    handle.ns_view = ns_view;
-                    RawWindowHandle::AppKit(handle)
-                };
-
-                // This extension is only exposed when we have an editor
-                *editor_handle = Some(wrapper.editor.as_ref().unwrap().spawn(
-                    ParentWindowHandle { handle },
-                    wrapper.clone().make_gui_context(),
-                ));
-
-                true
-            } else {
-                nih_debug_assert_failure!(
-                    "Host tried to attach editor while the editor is already attached"
-                );
-
-                false
-            }
-        };
-
-        // Leak the Arc again since we only needed a clone to pass to the GuiContext
-        let _ = Arc::into_raw(wrapper);
-
-        result
-    }
-
-    #[cfg(target_os = "windows")]
-    unsafe extern "C" fn ext_gui_win32_attach(
-        plugin: *const clap_plugin,
-        window: clap_hwnd,
+        window: *const clap_window,
     ) -> bool {
         check_null_ptr!(false, plugin, window);
         // For this function we need the underlying Arc so we can pass it to the editor
         let wrapper = Arc::from_raw(plugin as *const Self);
 
+        let window = &*window;
+
         let result = {
             let mut editor_handle = wrapper.editor_handle.write();
             if editor_handle.is_none() {
-                let handle = {
+                let api = CStr::from_ptr(window.api);
+                let handle = if api == CStr::from_ptr(CLAP_WINDOW_API_X11) {
+                    let mut handle = raw_window_handle::XcbHandle::empty();
+                    handle.window = window.specific.x11 as u32;
+                    RawWindowHandle::Xcb(handle)
+                } else if api == CStr::from_ptr(CLAP_WINDOW_API_COCOA) {
+                    let mut handle = raw_window_handle::AppKitHandle::empty();
+                    handle.ns_view = window.specific.cocoa;
+                    RawWindowHandle::AppKit(handle)
+                } else if api == CStr::from_ptr(CLAP_WINDOW_API_WIN32) {
                     let mut handle = raw_window_handle::Win32Handle::empty();
-                    handle.hwnd = window;
+                    handle.hwnd = window.specific.win32;
                     RawWindowHandle::Win32(handle)
+                } else {
+                    nih_debug_assert_failure!("Host passed an invalid API");
+                    return false;
                 };
 
                 // This extension is only exposed when we have an editor
@@ -1416,6 +1347,29 @@ impl<P: ClapPlugin> Wrapper<P> {
         let _ = Arc::into_raw(wrapper);
 
         result
+    }
+
+    unsafe extern "C" fn ext_gui_set_transient(
+        _plugin: *const clap_plugin,
+        _window: *const clap_window,
+    ) -> bool {
+        // This is only relevant for floating windows
+        false
+    }
+
+    unsafe extern "C" fn ext_gui_suggest_title(_plugin: *const clap_plugin, _title: *const c_char) {
+        // This is only relevant for floating windows
+    }
+
+    unsafe extern "C" fn ext_gui_show(_plugin: *const clap_plugin) -> bool {
+        // TODO: Does this get used? Is this only for the free-standing window extension? (which we
+        //       don't implement) This wouldn't make any sense for embedded editors.
+        false
+    }
+
+    unsafe extern "C" fn ext_gui_hide(_plugin: *const clap_plugin) -> bool {
+        // TODO: Same as the above
+        false
     }
 
     unsafe extern "C" fn ext_latency_get(plugin: *const clap_plugin) -> u32 {
@@ -1454,7 +1408,8 @@ impl<P: ClapPlugin> Wrapper<P> {
         let param_info = &mut *param_info;
         if param_index == wrapper.param_hashes.len() as i32 {
             param_info.id = *BYPASS_PARAM_HASH;
-            param_info.flags = CLAP_PARAM_IS_STEPPED | CLAP_PARAM_IS_BYPASS;
+            param_info.flags =
+                CLAP_PARAM_IS_STEPPED | CLAP_PARAM_IS_BYPASS | CLAP_PARAM_IS_AUTOMATABLE;
             param_info.cookie = ptr::null_mut();
             strlcpy(&mut param_info.name, "Bypass");
             strlcpy(&mut param_info.module, "");
@@ -1469,9 +1424,9 @@ impl<P: ClapPlugin> Wrapper<P> {
 
             param_info.id = *param_hash;
             param_info.flags = if step_count.is_some() {
-                CLAP_PARAM_IS_STEPPED
+                CLAP_PARAM_IS_STEPPED | CLAP_PARAM_IS_AUTOMATABLE
             } else {
-                0
+                CLAP_PARAM_IS_AUTOMATABLE
             };
             param_info.cookie = ptr::null_mut();
             strlcpy(&mut param_info.name, param_ptr.name());
