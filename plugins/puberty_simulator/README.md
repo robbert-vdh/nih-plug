@@ -1,11 +1,11 @@
 # Puberty Simulator
 
-Simulate the changes the male voice goes through during puberty with this One
-Weird Plugin! If it was not already yet clear from that sentence, this plugin is
-a joke, but it might actually be useful (or at least interesting) in some
+This patent pending One Weird Plugin simulates the male voice change during
+puberty! If it was not already obvious from that sentence, this plugin is a
+joke, but it might actually be useful (or at least interesting) in some
 situations. This plugin pitches the signal down an octave, but it also has the
 side effect of causing things to sound like a cracking voice or to make them
-slightly out of tune.
+sound slightly out of tune.
 
 ## Download
 
