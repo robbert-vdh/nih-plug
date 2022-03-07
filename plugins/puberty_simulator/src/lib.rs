@@ -49,7 +49,10 @@ unsafe impl Send for Plan {}
 unsafe impl Sync for Plan {}
 
 #[derive(Params)]
-struct PubertySimulatorParams {}
+struct PubertySimulatorParams {
+    #[id = "pitch"]
+    pitch_octaves: FloatParam,
+}
 
 impl Default for PubertySimulator {
     fn default() -> Self {
@@ -68,10 +71,20 @@ impl Default for PubertySimulator {
     }
 }
 
-#[allow(clippy::derivable_impls)]
 impl Default for PubertySimulatorParams {
     fn default() -> Self {
-        Self {}
+        Self {
+            pitch_octaves: FloatParam::new(
+                "Pitch",
+                -1.0,
+                FloatRange::Linear {
+                    min: -5.0,
+                    max: 5.0,
+                },
+            )
+            .with_unit(" Octaves")
+            .with_value_to_string(formatters::f32_rounded(2)),
+        }
     }
 }
 
@@ -111,14 +124,14 @@ impl Plugin for PubertySimulator {
         true
     }
 
-    fn process(
-        &mut self,
-        buffer: &mut Buffer,
-        _context: &mut impl ProcessContext,
-    ) -> ProcessStatus {
+    fn process(&mut self, buffer: &mut Buffer, context: &mut impl ProcessContext) -> ProcessStatus {
         // Compensate for the window function, the overlap, and the extra gain introduced by the
         // IDFT operation
         const GAIN_COMPENSATION: f32 = 1.0 / OVERLAP_TIMES as f32 / WINDOW_SIZE as f32;
+
+        // Negated because pitching down should cause us to take values from higher frequency bins
+        let frequency_multiplier = 2.0f32.powf(-self.params.pitch_octaves.value);
+        let sample_rate = context.transport().sample_rate;
 
         self.stft.process_overlap_add(
             buffer,
@@ -134,47 +147,46 @@ impl Plugin for PubertySimulator {
                     )
                     .unwrap();
 
-                // This simply takes the complex sinusoid from the frequency bin for double this
-                // bin's frequency
-                for bin_idx in 0..self.complex_fft_scratch_buffer.len() {
-                    // TODO: Since we're always doubling now this can be a lot simpler, but it may
-                    //       be interesting to add some more options here later
-                    // let frequency = bin_idx as f32 / WINDOW_SIZE as f32 * sample_rate;
-                    // let target_frequency = frequency * 2.0;
+                // This simply interpolates between the complex sinusoids from the frequency bins
+                // for this bin's frequency scaled by the octave pitch multiplies. The iteration
+                // order dependson the pitch shifting direction since we're doing it in place.
+                let num_bins = self.complex_fft_scratch_buffer.len();
+                let mut process_bin = |bin_idx| {
+                    let frequency = bin_idx as f32 / WINDOW_SIZE as f32 * sample_rate;
+                    let target_frequency = frequency * frequency_multiplier;
 
-                    // // Simple linear interpolation
-                    // let target_bin = target_frequency / sample_rate * WINDOW_SIZE as f32;
-                    // let target_bin_low = target_bin.floor() as usize;
-                    // let target_bin_high = target_bin.ceil() as usize;
-                    // let target_low_t = target_bin % 1.0;
-                    // let target_high_t = 1.0 - target_low_t;
-                    // let target_low = self
-                    //     .complex_fft_scratch_buffer
-                    //     .get(target_bin_low)
-                    //     .copied()
-                    //     .unwrap_or_default();
-                    // let target_high = self
-                    //     .complex_fft_scratch_buffer
-                    //     .get(target_bin_high)
-                    //     .copied()
-                    //     .unwrap_or_default();
-
-                    // self.complex_fft_scratch_buffer[bin_idx] = (target_low * target_low_t
-                    //     + target_high * target_high_t)
-                    //     * 4.0 // Random extra gain, not sure
-                    //     * GAIN_COMPENSATION;
-
-                    let target_bin = bin_idx * 2;
-                    let target = self
+                    // Simple linear interpolation
+                    let target_bin = target_frequency / sample_rate * WINDOW_SIZE as f32;
+                    let target_bin_low = target_bin.floor() as usize;
+                    let target_bin_high = target_bin.ceil() as usize;
+                    let target_low_t = target_bin % 1.0;
+                    let target_high_t = 1.0 - target_low_t;
+                    let target_low = self
                         .complex_fft_scratch_buffer
-                        .get(target_bin)
+                        .get(target_bin_low)
+                        .copied()
+                        .unwrap_or_default();
+                    let target_high = self
+                        .complex_fft_scratch_buffer
+                        .get(target_bin_high)
                         .copied()
                         .unwrap_or_default();
 
-                    self.complex_fft_scratch_buffer[bin_idx] = target
+                    self.complex_fft_scratch_buffer[bin_idx] = (target_low * target_low_t
+                        + target_high * target_high_t)
                         * 6.0 // Random extra gain, not sure
                         * GAIN_COMPENSATION;
-                }
+                };
+
+                if frequency_multiplier >= 1.0 {
+                    for bin_idx in 0..num_bins {
+                        process_bin(bin_idx);
+                    }
+                } else {
+                    for bin_idx in (0..num_bins).rev() {
+                        process_bin(bin_idx);
+                    }
+                };
 
                 // Inverse FFT back into the scratch buffer. This will be added to a ring buffer
                 // which gets written back to the host at a one block delay.
