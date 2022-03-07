@@ -269,7 +269,7 @@ impl FloatParam {
     /// Use a custom conversion function to convert from a string to a plain, unnormalized
     /// value. If the string cannot be parsed, then this should return a `None`. If this
     /// happens while the parameter is being updated then the update will be canceled.
-    pub fn with_string_to_value<F>(
+    pub fn with_string_to_value(
         mut self,
         callback: Arc<dyn Fn(&str) -> Option<f32> + Send + Sync>,
     ) -> Self {
