@@ -728,7 +728,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             &mut wrapper.make_process_context(Transport::new(buffer_config.sample_rate)),
         ) {
             // As per-the trait docs we'll always call this after the initialization function
-            plugin.reset();
+            process_wrapper(|| plugin.reset());
 
             // Preallocate enough room in the output slices vector so we can convert a `*mut *mut
             // f32` to a `&mut [&mut f32]` in the process call
@@ -774,7 +774,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         check_null_ptr!((), plugin);
         let wrapper = &*(plugin as *const Self);
 
-        wrapper.plugin.write().reset();
+        process_wrapper(|| wrapper.plugin.write().reset());
     }
 
     unsafe extern "C" fn process(
@@ -1655,7 +1655,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 &buffer_config,
                 &mut wrapper.make_process_context(Transport::new(buffer_config.sample_rate)),
             );
-            plugin.reset();
+            process_wrapper(|| plugin.reset());
         }
 
         true

@@ -242,7 +242,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                     .inner
                     .make_process_context(Transport::new(buffer_config.sample_rate)),
             );
-            plugin.reset();
+            process_wrapper(|| plugin.reset());
         }
 
         kResultOk
@@ -602,7 +602,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                 .make_process_context(Transport::new(buffer_config.sample_rate)),
         ) {
             // As per-the trait docs we'll always call this after the initialization function
-            plugin.reset();
+            process_wrapper(|| plugin.reset());
 
             // Preallocate enough room in the output slices vector so we can convert a `*mut *mut
             // f32` to a `&mut [&mut f32]` in the process call
