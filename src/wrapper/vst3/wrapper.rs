@@ -234,13 +234,15 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
         // Reinitialize the plugin after loading state so it can respond to the new parameter values
         let bus_config = self.inner.current_bus_config.load();
         if let Some(buffer_config) = self.inner.current_buffer_config.load() {
-            self.inner.plugin.write().initialize(
+            let mut plugin = self.inner.plugin.write();
+            plugin.initialize(
                 &bus_config,
                 &buffer_config,
                 &mut self
                     .inner
                     .make_process_context(Transport::new(buffer_config.sample_rate)),
             );
+            plugin.reset();
         }
 
         kResultOk
@@ -591,13 +593,17 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
             param.update_smoother(buffer_config.sample_rate, true);
         }
 
-        if self.inner.plugin.write().initialize(
+        let mut plugin = self.inner.plugin.write();
+        if plugin.initialize(
             &bus_config,
             &buffer_config,
             &mut self
                 .inner
                 .make_process_context(Transport::new(buffer_config.sample_rate)),
         ) {
+            // As per-the trait docs we'll always call this after the initialization function
+            plugin.reset();
+
             // Preallocate enough room in the output slices vector so we can convert a `*mut *mut
             // f32` to a `&mut [&mut f32]` in the process call
             self.inner

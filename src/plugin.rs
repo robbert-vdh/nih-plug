@@ -83,6 +83,9 @@ pub trait Plugin: Default + Send + Sync + 'static {
     ///
     /// Before this point, the plugin should not have done any expensive initialization. Please
     /// don't be that plugin that takes twenty seconds to scan.
+    ///
+    /// After this function [`reset()`][Self::reset()] will always be called. If you need to clear
+    /// state, such as filters or envelopes, then you should do so in that function inistead.
     fn initialize(
         &mut self,
         bus_config: &BusConfig,
@@ -91,6 +94,11 @@ pub trait Plugin: Default + Send + Sync + 'static {
     ) -> bool {
         true
     }
+
+    /// Clear internal state such as filters and envelopes. This is always called after
+    /// [`initialize()`][Self::initialize(0)], and it may also be called at any other time from the
+    /// audio thread. You should thus not do any allocations in this function.
+    fn reset(&mut self) {}
 
     /// Process audio. The host's input buffers have already been copied to the output buffers if
     /// they are not processing audio in place (most hosts do however). All channels are also
