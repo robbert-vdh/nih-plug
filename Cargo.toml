@@ -7,7 +7,7 @@ license = "ISC"
 
 keywords = ["audio", "plugin", "vst", "vst3"]
 description = "A simple but modern API-agnostic audio plugin framework"
-repository = "https://github.com/robbert-vdh/nih-plugs"
+repository = "https://github.com/robbert-vdh/nih-plug"
 
 [workspace]
 members = [
