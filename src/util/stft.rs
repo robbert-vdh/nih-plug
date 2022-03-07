@@ -255,7 +255,6 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
     /// channels as this [`StftHelper`], if the sidechain buffers do not contain the same number of
     /// samples as the main buffer, or if the window function does not match the block size.
     ///
-    /// TODO: And also introduce that aforementioned read-only process function (`analyze()?`)
     /// TODO: Add more useful ways to do STFT and other buffered operations. I just went with this
     ///       approach because it's what I needed myself, but generic combinators like this could
     ///       also be useful for other operations.
@@ -323,54 +322,52 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
             // Copy the input from `main_buffer` to the ring buffer while copying last block's
             // result from the buffer to `main_buffer`
             // TODO: This might be able to be sped up a bit with SIMD
+
+            // For the main buffer
+            for sample_offset in 0..samples_to_process {
+                for channel_idx in 0..num_channels {
+                    let sample = unsafe {
+                        main_buffer.get_sample_unchecked_mut(
+                            channel_idx,
+                            already_processed_samples + sample_offset,
+                        )
+                    };
+                    let input_ring_buffer_sample = unsafe {
+                        self.main_input_ring_buffers
+                            .get_unchecked_mut(channel_idx)
+                            .get_unchecked_mut(self.current_pos + sample_offset)
+                    };
+                    let output_ring_buffer_sample = unsafe {
+                        self.main_output_ring_buffers
+                            .get_unchecked_mut(channel_idx)
+                            .get_unchecked_mut(self.current_pos + sample_offset)
+                    };
+                    *input_ring_buffer_sample = *sample;
+                    *sample = *output_ring_buffer_sample;
+                    // Very important, or else we'll overlap-add ourselves into a feedback hell
+                    *output_ring_buffer_sample = 0.0;
+                }
+            }
+
+            // And for the sidechain buffers we only need to copy the inputs
+            for (sidechain_buffer, sidechain_ring_buffers) in sidechain_buffers
+                .iter()
+                .zip(self.sidechain_ring_buffers.iter_mut())
             {
-                // For the main buffer
                 for sample_offset in 0..samples_to_process {
                     for channel_idx in 0..num_channels {
-                        // let main_buffer = main_buffer.as_slice();
                         let sample = unsafe {
-                            main_buffer.get_sample_unchecked_mut(
+                            sidechain_buffer.get_sample_unchecked(
                                 channel_idx,
                                 already_processed_samples + sample_offset,
                             )
                         };
-                        let input_ring_buffer_sample = unsafe {
-                            self.main_input_ring_buffers
+                        let ring_buffer_sample = unsafe {
+                            sidechain_ring_buffers
                                 .get_unchecked_mut(channel_idx)
                                 .get_unchecked_mut(self.current_pos + sample_offset)
                         };
-                        let output_ring_buffer_sample = unsafe {
-                            self.main_output_ring_buffers
-                                .get_unchecked_mut(channel_idx)
-                                .get_unchecked_mut(self.current_pos + sample_offset)
-                        };
-                        *input_ring_buffer_sample = *sample;
-                        *sample = *output_ring_buffer_sample;
-                        // Very important, or else we'll overlap-add ourselves into a feedback hell
-                        *output_ring_buffer_sample = 0.0;
-                    }
-                }
-
-                // And for the sidechain buffers we only need to copy the inputs
-                for (sidechain_buffer, sidechain_ring_buffers) in sidechain_buffers
-                    .iter()
-                    .zip(self.sidechain_ring_buffers.iter_mut())
-                {
-                    for sample_offset in 0..samples_to_process {
-                        for channel_idx in 0..num_channels {
-                            let sample = unsafe {
-                                sidechain_buffer.get_sample_unchecked(
-                                    channel_idx,
-                                    already_processed_samples + sample_offset,
-                                )
-                            };
-                            let ring_buffer_sample = unsafe {
-                                sidechain_ring_buffers
-                                    .get_unchecked_mut(channel_idx)
-                                    .get_unchecked_mut(self.current_pos + sample_offset)
-                            };
-                            *ring_buffer_sample = sample;
-                        }
+                        *ring_buffer_sample = sample;
                     }
                 }
             }
@@ -424,6 +421,73 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
                         self.current_pos,
                         output_ring_buffer,
                     );
+                }
+            }
+        }
+    }
+
+    /// Similar to [`process_overlap_add()`][Self::process_overlap_add()], but without the inverse
+    /// STFT part. `buffer` will only ever be read from. This can be useful for providing FFT data
+    /// for a spectrum analyzer in a plugin GUI. These is still a delay to the analysis equal to the
+    /// blcok size.
+    pub fn process_analyze_only<B, F>(
+        &mut self,
+        buffer: &B,
+        window_function: &[f32],
+        overlap_times: usize,
+        mut analyze_cb: F,
+    ) where
+        B: StftInput,
+        F: FnMut(usize, &mut [f32]),
+    {
+        assert_eq!(buffer.num_channels(), self.main_input_ring_buffers.len());
+        assert_eq!(window_function.len(), self.main_input_ring_buffers[0].len());
+        assert!(overlap_times > 0);
+
+        // See `process_overlap_add_sidechain` for an annotated version
+        let main_buffer_len = buffer.num_samples();
+        let num_channels = buffer.num_channels();
+        let block_size = self.main_input_ring_buffers[0].len();
+        let window_interval = (block_size / overlap_times) as i32;
+        let mut already_processed_samples = 0;
+        while already_processed_samples < main_buffer_len {
+            let remaining_samples = main_buffer_len - already_processed_samples;
+            let samples_until_next_window = ((window_interval - self.current_pos as i32 - 1)
+                .rem_euclid(window_interval)
+                + 1) as usize;
+            let samples_to_process = samples_until_next_window.min(remaining_samples);
+
+            for sample_offset in 0..samples_to_process {
+                for channel_idx in 0..num_channels {
+                    let sample = unsafe {
+                        buffer.get_sample_unchecked(
+                            channel_idx,
+                            already_processed_samples + sample_offset,
+                        )
+                    };
+                    let input_ring_buffer_sample = unsafe {
+                        self.main_input_ring_buffers
+                            .get_unchecked_mut(channel_idx)
+                            .get_unchecked_mut(self.current_pos + sample_offset)
+                    };
+                    *input_ring_buffer_sample = sample;
+                }
+            }
+
+            already_processed_samples += samples_to_process;
+            self.current_pos = (self.current_pos + samples_to_process) % block_size;
+
+            if samples_to_process == samples_until_next_window {
+                for (channel_idx, input_ring_buffer) in
+                    self.main_input_ring_buffers.iter().enumerate()
+                {
+                    copy_ring_to_scratch_buffer(
+                        &mut self.scratch_buffer,
+                        self.current_pos,
+                        input_ring_buffer,
+                    );
+                    multiply_with_window(&mut self.scratch_buffer, window_function);
+                    analyze_cb(channel_idx, &mut self.scratch_buffer);
                 }
             }
         }
