@@ -26,5 +26,5 @@ After installing [Rust](https://rustup.rs/), you can compile Puberty Simulator
 as follows:
 
 ```shell
-cargo xtask bundle gain --release
+cargo xtask bundle puberty_simulator --release
 ```
