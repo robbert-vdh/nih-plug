@@ -29,8 +29,11 @@ use std::simd::f32x2;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+use crate::spectrum::{SpectrumInput, SpectrumOutput};
+
 mod editor;
 mod filter;
+mod spectrum;
 
 /// How many all-pass filters we can have in series at most. The filter stages parameter determines
 /// how many filters are actually active.
@@ -67,6 +70,11 @@ struct Diopser {
     /// reduce the DSP load of automation parameters. It can also cause some fun sounding glitchy
     /// effects when the precision is low.
     next_filter_smoothing_in: i32,
+
+    /// When the GUI is open we compute the spectrum on the audio thread and send it to the GUI.
+    spectrum_input: SpectrumInput,
+    /// This can be cloned and moved into the editor.
+    spectrum_output: Arc<SpectrumOutput>,
 }
 
 // TODO: Some combinations of parameters can cause really loud resonance. We should limit the
@@ -111,6 +119,10 @@ impl Default for Diopser {
     fn default() -> Self {
         let should_update_filters = Arc::new(AtomicBool::new(false));
 
+        // We only do stereo right now so this is simple
+        let (spectrum_input, spectrum_output) =
+            SpectrumInput::new(Self::DEFAULT_NUM_OUTPUTS as usize);
+
         Self {
             params: Arc::pin(DiopserParams::new(should_update_filters.clone())),
             editor_state: editor::default_state(),
@@ -121,6 +133,9 @@ impl Default for Diopser {
 
             should_update_filters,
             next_filter_smoothing_in: 1,
+
+            spectrum_input,
+            spectrum_output: Arc::new(spectrum_output),
         }
     }
 }
@@ -271,6 +286,11 @@ impl Plugin for Diopser {
             }
 
             unsafe { channel_samples.from_simd_unchecked(samples) };
+        }
+
+        // Compute a spectrum for the GUI if needed
+        if self.editor_state.is_open() {
+            self.spectrum_input.compute(buffer);
         }
 
         ProcessStatus::Normal

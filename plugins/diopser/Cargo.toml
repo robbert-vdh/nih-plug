@@ -17,3 +17,7 @@ simd = ["nih_plug/simd"]
 [dependencies]
 nih_plug = { path = "../../", features = ["assert_process_allocs"] }
 nih_plug_egui = { path = "../../nih_plug_egui" }
+
+# For the GUI
+fftw = "0.7"
+triple_buffer = "6.0"
