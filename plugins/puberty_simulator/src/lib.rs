@@ -132,7 +132,7 @@ impl Plugin for PubertySimulator {
     fn process(&mut self, buffer: &mut Buffer, context: &mut impl ProcessContext) -> ProcessStatus {
         // Compensate for the window function, the overlap, and the extra gain introduced by the
         // IDFT operation
-        const GAIN_COMPENSATION: f32 = 1.0 / OVERLAP_TIMES as f32 / WINDOW_SIZE as f32;
+        const GAIN_COMPENSATION: f32 = 2.0 / OVERLAP_TIMES as f32 / WINDOW_SIZE as f32;
 
         let sample_rate = context.transport().sample_rate;
 
@@ -191,7 +191,7 @@ impl Plugin for PubertySimulator {
 
                     self.complex_fft_scratch_buffer[bin_idx] = (target_low * target_low_t
                         + target_high * target_high_t)
-                        * 6.0 // Random extra gain, not sure
+                        * 3.0 // Random extra gain, not sure
                         * GAIN_COMPENSATION;
                 };
 
@@ -203,7 +203,7 @@ impl Plugin for PubertySimulator {
                     for bin_idx in (0..num_bins).rev() {
                         process_bin(bin_idx);
                     }
-                };
+                }
 
                 // Inverse FFT back into the scratch buffer. This will be added to a ring buffer
                 // which gets written back to the host at a one block delay.
