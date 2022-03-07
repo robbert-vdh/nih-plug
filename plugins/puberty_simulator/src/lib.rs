@@ -84,6 +84,9 @@ impl Default for PubertySimulatorParams {
                     center: 0.0,
                 },
             )
+            // This doesn't need smoothing to prevent zippers because we're already going
+            // overlap-add, but sounds kind of slick
+            .with_smoother(SmoothingStyle::Linear(100.0))
             .with_unit(" Octaves")
             .with_value_to_string(formatters::f32_rounded(2)),
         }
@@ -131,15 +134,27 @@ impl Plugin for PubertySimulator {
         // IDFT operation
         const GAIN_COMPENSATION: f32 = 1.0 / OVERLAP_TIMES as f32 / WINDOW_SIZE as f32;
 
-        // Negated because pitching down should cause us to take values from higher frequency bins
-        let frequency_multiplier = 2.0f32.powf(-self.params.pitch_octaves.value);
         let sample_rate = context.transport().sample_rate;
 
+        let mut smoothed_pitch_value = 0.0;
         self.stft.process_overlap_add(
             buffer,
             &self.window_function,
             OVERLAP_TIMES,
-            |_channel_idx, real_fft_scratch_buffer| {
+            |channel_idx, real_fft_scratch_buffer| {
+                // This loop runs whenever there's a block ready, so we can't easily do any post- or
+                // pre-processing without muddying up the interface. But if this is channel 0, then
+                // we're dealing with a new block. We'll use this for our parameter smoothing.
+                if channel_idx == 0 {
+                    smoothed_pitch_value = self
+                        .params
+                        .pitch_octaves
+                        .smoothed
+                        .next_step((WINDOW_SIZE / OVERLAP_TIMES) as u32);
+                }
+                // Negated because pitching down should cause us to take values from higher frequency bins
+                let frequency_multiplier = 2.0f32.powf(-smoothed_pitch_value);
+
                 // Forward FFT, the helper has already applied window function
                 self.plan
                     .r2c_plan
