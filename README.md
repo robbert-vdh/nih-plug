@@ -1,6 +1,6 @@
 # NIH-plug
 
-[![Tests](https://github.com/robbert-vdh/nih-plugs/actions/workflows/test.yml/badge.svg)](https://github.com/robbert-vdh/nih-plugs/actions/workflows/test.yml)
+[![Tests](https://github.com/robbert-vdh/nih-plug/actions/workflows/test.yml/badge.svg?branch=master)](https://github.com/robbert-vdh/nih-plug/actions/workflows/test.yml?query=branch%3Amaster)
 
 This is a work in progress JUCE-lite-lite written in Rust to do some experiments
 with, as well as a small collection of plugins. The idea is to have a statefull
