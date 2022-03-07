@@ -252,11 +252,14 @@ impl Plugin for Diopser {
         buffer_config: &BufferConfig,
         _context: &mut impl ProcessContext,
     ) -> bool {
-        // Initialize the filters on the first process call
         self.sample_rate = buffer_config.sample_rate;
-        self.should_update_filters.store(true, Ordering::Release);
 
         true
+    }
+
+    fn reset(&mut self) {
+        // Initialize and/or reset the filters on the next process call
+        self.should_update_filters.store(true, Ordering::Release);
     }
 
     fn process(

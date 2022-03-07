@@ -115,17 +115,10 @@ impl Plugin for Gain {
         config.num_input_channels == config.num_output_channels && config.num_input_channels > 0
     }
 
-    fn initialize(
-        &mut self,
-        _bus_config: &BusConfig,
-        _buffer_config: &BufferConfig,
-        _context: &mut impl ProcessContext,
-    ) -> bool {
-        // This plugin doesn't need any special initialization, but if you need to do anything
-        // expensive then this would be the place. State is kept around while when the host
-        // reconfigures the plugin.
-        true
-    }
+    // This plugin doesn't need any special initialization, but if you need to do anything expensive
+    // then this would be the place. State is kept around while when the host reconfigures the
+    // plugin. If we did need special initialization, we could implement the `initialize()` and/or
+    // `reset()` methods
 
     fn process(
         &mut self,

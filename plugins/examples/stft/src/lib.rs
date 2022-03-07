@@ -116,12 +116,16 @@ impl Plugin for Stft {
         _buffer_config: &BufferConfig,
         context: &mut impl ProcessContext,
     ) -> bool {
-        // Normally we'd also initialize the STFT helper for the correct channel count here, but we
-        // only do stereo so that's not necessary
-        self.stft.set_block_size(WINDOW_SIZE);
         context.set_latency_samples(self.stft.latency_samples());
 
         true
+    }
+
+    fn reset(&mut self) {
+        // Normally we'd also initialize the STFT helper for the correct channel count here, but we
+        // only do stereo so that's not necessary. Setting the block size also zeroes out the
+        // buffers.
+        self.stft.set_block_size(WINDOW_SIZE);
     }
 
     fn process(
