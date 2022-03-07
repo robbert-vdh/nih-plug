@@ -77,9 +77,11 @@ impl Default for PubertySimulatorParams {
             pitch_octaves: FloatParam::new(
                 "Pitch",
                 -1.0,
-                FloatRange::Linear {
+                FloatRange::SymmetricalSkewed {
                     min: -5.0,
                     max: 5.0,
+                    factor: FloatRange::skew_factor(-1.0),
+                    center: 0.0,
                 },
             )
             .with_unit(" Octaves")
