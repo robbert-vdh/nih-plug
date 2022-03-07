@@ -20,8 +20,11 @@ use fftw::types::{c32, Flag};
 use nih_plug::prelude::*;
 use std::f32;
 use std::pin::Pin;
+use std::sync::Arc;
 
-const WINDOW_SIZE: usize = 1024;
+const MIN_WINDOW_SIZE: usize = 64;
+const DEFAULT_WINDOW_SIZE: usize = 1024;
+const MAX_WINDOW_SIZE: usize = 32768;
 const OVERLAP_TIMES: usize = 4;
 
 struct PubertySimulator {
@@ -29,13 +32,15 @@ struct PubertySimulator {
 
     /// An adapter that performs most of the overlap-add algorithm for us.
     stft: util::StftHelper,
-    /// A Hann window window, passed to the overlap-add helper.
+    /// Contains a Hann window function of the current window length, passed to the overlap-add
+    /// helper. Allocated with a `MAX_WINDOW_SIZE` initial capacity.
     window_function: Vec<f32>,
 
     /// The algorithms for the FFT and IFFT operations.
     plan: Plan,
     /// Scratch buffers for computing our FFT. The [`StftHelper`] already contains a buffer for the
-    /// real values.
+    /// real values. This type cannot be resized, so we'll simply take a slice of it with the
+    /// correct length instead.
     complex_fft_scratch_buffer: AlignedVec<c32>,
 }
 
@@ -50,8 +55,13 @@ unsafe impl Sync for Plan {}
 
 #[derive(Params)]
 struct PubertySimulatorParams {
+    /// The pitch change in octaves.
     #[id = "pitch"]
     pitch_octaves: FloatParam,
+
+    /// The size of the FFT window as a power of two (to prevent invalid inputs).
+    #[id = "wndsz"]
+    window_size_order: IntParam,
 }
 
 impl Default for PubertySimulator {
@@ -59,14 +69,15 @@ impl Default for PubertySimulator {
         Self {
             params: Box::pin(PubertySimulatorParams::default()),
 
-            stft: util::StftHelper::new(2, WINDOW_SIZE),
-            window_function: util::window::hann(WINDOW_SIZE),
+            stft: util::StftHelper::new(2, MAX_WINDOW_SIZE),
+            window_function: Vec::with_capacity(MAX_WINDOW_SIZE),
 
             plan: Plan {
-                r2c_plan: R2CPlan32::aligned(&[WINDOW_SIZE], Flag::MEASURE).unwrap(),
-                c2r_plan: C2RPlan32::aligned(&[WINDOW_SIZE], Flag::MEASURE).unwrap(),
+                // These will be initialized with proper values during the initialization
+                r2c_plan: R2CPlan32::aligned(&[1], Flag::MEASURE).unwrap(),
+                c2r_plan: C2RPlan32::aligned(&[1], Flag::MEASURE).unwrap(),
             },
-            complex_fft_scratch_buffer: AlignedVec::new(WINDOW_SIZE / 2 + 1),
+            complex_fft_scratch_buffer: AlignedVec::new(MAX_WINDOW_SIZE / 2 + 1),
         }
     }
 }
@@ -89,6 +100,19 @@ impl Default for PubertySimulatorParams {
             .with_smoother(SmoothingStyle::Linear(100.0))
             .with_unit(" Octaves")
             .with_value_to_string(formatters::f32_rounded(2)),
+
+            window_size_order: IntParam::new(
+                "Window Size",
+                (DEFAULT_WINDOW_SIZE as f32).log2() as i32,
+                IntRange::Linear {
+                    min: (MIN_WINDOW_SIZE as f32).log2() as i32,
+                    max: (MAX_WINDOW_SIZE as f32).log2() as i32,
+                },
+            )
+            .with_value_to_string(Arc::new(|value| format!("{}", 1 << value)))
+            .with_string_to_value(Arc::new(|string| {
+                string.parse().ok().map(|n: i32| (n as f32).log2() as i32)
+            })),
         }
     }
 }
@@ -123,8 +147,12 @@ impl Plugin for PubertySimulator {
     ) -> bool {
         // Normally we'd also initialize the STFT helper for the correct channel count here, but we
         // only do stereo so that's not necessary
-        self.stft.set_block_size(WINDOW_SIZE);
-        context.set_latency_samples(self.stft.latency_samples());
+        let window_size = self.window_size();
+        if self.window_function.len() != window_size {
+            self.resize_for_window(window_size);
+
+            context.set_latency_samples(self.stft.latency_samples());
+        }
 
         true
     }
@@ -132,9 +160,21 @@ impl Plugin for PubertySimulator {
     fn process(&mut self, buffer: &mut Buffer, context: &mut impl ProcessContext) -> ProcessStatus {
         // Compensate for the window function, the overlap, and the extra gain introduced by the
         // IDFT operation
-        const GAIN_COMPENSATION: f32 = 2.0 / OVERLAP_TIMES as f32 / WINDOW_SIZE as f32;
-
+        let window_size = self.window_size();
         let sample_rate = context.transport().sample_rate;
+        let gain_compensation: f32 = 2.0 / OVERLAP_TIMES as f32 / window_size as f32;
+
+        // If the window size has changed since the last process call, reset the buffers and chance
+        // our latency. All of these buffers already have enough capacity
+        if self.window_function.len() != window_size {
+            self.resize_for_window(window_size);
+
+            context.set_latency_samples(self.stft.latency_samples());
+        }
+
+        // Since this type cannot be resized, we'll simply slice the full buffer instead
+        let complex_fft_scratch_buffer =
+            &mut self.complex_fft_scratch_buffer.as_slice_mut()[..window_size / 2 + 1];
 
         let mut smoothed_pitch_value = 0.0;
         self.stft.process_overlap_add(
@@ -150,7 +190,7 @@ impl Plugin for PubertySimulator {
                         .params
                         .pitch_octaves
                         .smoothed
-                        .next_step((WINDOW_SIZE / OVERLAP_TIMES) as u32);
+                        .next_step((window_size / OVERLAP_TIMES) as u32);
                 }
                 // Negated because pitching down should cause us to take values from higher frequency bins
                 let frequency_multiplier = 2.0f32.powf(-smoothed_pitch_value);
@@ -158,41 +198,36 @@ impl Plugin for PubertySimulator {
                 // Forward FFT, the helper has already applied window function
                 self.plan
                     .r2c_plan
-                    .r2c(
-                        real_fft_scratch_buffer,
-                        &mut self.complex_fft_scratch_buffer,
-                    )
+                    .r2c(real_fft_scratch_buffer, complex_fft_scratch_buffer)
                     .unwrap();
 
                 // This simply interpolates between the complex sinusoids from the frequency bins
                 // for this bin's frequency scaled by the octave pitch multiplies. The iteration
                 // order dependson the pitch shifting direction since we're doing it in place.
-                let num_bins = self.complex_fft_scratch_buffer.len();
+                let num_bins = complex_fft_scratch_buffer.len();
                 let mut process_bin = |bin_idx| {
-                    let frequency = bin_idx as f32 / WINDOW_SIZE as f32 * sample_rate;
+                    let frequency = bin_idx as f32 / window_size as f32 * sample_rate;
                     let target_frequency = frequency * frequency_multiplier;
 
                     // Simple linear interpolation
-                    let target_bin = target_frequency / sample_rate * WINDOW_SIZE as f32;
+                    let target_bin = target_frequency / sample_rate * window_size as f32;
                     let target_bin_low = target_bin.floor() as usize;
                     let target_bin_high = target_bin.ceil() as usize;
                     let target_low_t = target_bin % 1.0;
                     let target_high_t = 1.0 - target_low_t;
-                    let target_low = self
-                        .complex_fft_scratch_buffer
+                    let target_low = complex_fft_scratch_buffer
                         .get(target_bin_low)
                         .copied()
                         .unwrap_or_default();
-                    let target_high = self
-                        .complex_fft_scratch_buffer
+                    let target_high = complex_fft_scratch_buffer
                         .get(target_bin_high)
                         .copied()
                         .unwrap_or_default();
 
-                    self.complex_fft_scratch_buffer[bin_idx] = (target_low * target_low_t
+                    complex_fft_scratch_buffer[bin_idx] = (target_low * target_low_t
                         + target_high * target_high_t)
                         * 3.0 // Random extra gain, not sure
-                        * GAIN_COMPENSATION;
+                        * gain_compensation;
                 };
 
                 if frequency_multiplier >= 1.0 {
@@ -209,15 +244,28 @@ impl Plugin for PubertySimulator {
                 // which gets written back to the host at a one block delay.
                 self.plan
                     .c2r_plan
-                    .c2r(
-                        &mut self.complex_fft_scratch_buffer,
-                        real_fft_scratch_buffer,
-                    )
+                    .c2r(complex_fft_scratch_buffer, real_fft_scratch_buffer)
                     .unwrap();
             },
         );
 
         ProcessStatus::Normal
+    }
+}
+
+impl PubertySimulator {
+    fn window_size(&self) -> usize {
+        1 << self.params.window_size_order.value as usize
+    }
+
+    /// `window_size` should not exceed `MAX_WINDOW_SIZE` or this will allocate.
+    fn resize_for_window(&mut self, window_size: usize) {
+        self.stft.set_block_size(window_size);
+        self.window_function.resize(window_size, 0.0);
+        util::window::hann_in_place(&mut self.window_function);
+
+        self.plan.r2c_plan = R2CPlan32::aligned(&[window_size], Flag::MEASURE).unwrap();
+        self.plan.c2r_plan = C2RPlan32::aligned(&[window_size], Flag::MEASURE).unwrap();
     }
 }
 

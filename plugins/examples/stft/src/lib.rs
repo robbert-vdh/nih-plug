@@ -13,7 +13,7 @@ struct Stft {
 
     /// An adapter that performs most of the overlap-add algorithm for us.
     stft: util::StftHelper,
-    /// A Hann window window, passed to the overlap-add helper.
+    /// A Hann window function, passed to the overlap-add helper.
     window_function: Vec<f32>,
 
     /// The FFT of a simple low pass FIR filter.
