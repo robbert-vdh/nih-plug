@@ -94,7 +94,7 @@ impl Default for CrispParams {
     #[allow(clippy::derivable_impls)]
     fn default() -> Self {
         Self {
-            amount: FloatParam::new("Amount", 0.2, FloatRange::Linear { min: 0.0, max: 1.0 })
+            amount: FloatParam::new("Amount", 0.35, FloatRange::Linear { min: 0.0, max: 1.0 })
                 .with_smoother(SmoothingStyle::Linear(10.0))
                 .with_unit("%")
                 .with_value_to_string(formatters::f32_percentage(0))
