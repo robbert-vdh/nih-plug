@@ -38,8 +38,8 @@ struct Crisp {
     prng: Pcg32iState,
 }
 
-// TODO: Filters
-// TODO: Mono/stereo/mid-side switch
+// TODO: Add a filter for the AM input
+// TODO: Add more kinds of noise
 #[derive(Params)]
 pub struct CrispParams {
     /// On a range of `[0, 1]`, how much of the modulated sound to mix in.
@@ -49,6 +49,9 @@ pub struct CrispParams {
     /// AMs the positive part of the waveform.
     #[id = "mode"]
     mode: EnumParam<Mode>,
+    /// How to handle stereo signals. See [`StereoMode`].
+    #[id = "stereo"]
+    stereo_mode: EnumParam<StereoMode>,
 
     /// Output gain, as voltage gain. Displayed in decibels.
     #[id = "output"]
@@ -66,6 +69,15 @@ enum Mode {
     /// AM only the negative part of the waveform.
     #[name = "Even Crispier (alt)"]
     EvenCrispierNegated,
+}
+
+/// Controls how to handle stereo input.
+#[derive(Enum, Debug, PartialEq)]
+enum StereoMode {
+    /// Use the same noise for both channels.
+    Mono,
+    /// Use a different noise source per channel.
+    Stereo,
 }
 
 impl Default for Crisp {
@@ -88,6 +100,7 @@ impl Default for CrispParams {
                 .with_value_to_string(formatters::f32_percentage(0))
                 .with_string_to_value(formatters::from_f32_percentage()),
             mode: EnumParam::new("Mode", Mode::EvenCrispier),
+            stereo_mode: EnumParam::new("Stereo Mode", StereoMode::Stereo),
             output_gain: FloatParam::new(
                 "Output",
                 1.0,
@@ -147,21 +160,44 @@ impl Plugin for Crisp {
             let output_gain = self.params.output_gain.smoothed.next();
 
             // TODO: SIMD-ize this to process both channels at once
-            for sample in channel_samples.into_iter() {
-                let noise = self.prng.next_f32() * 2.0 - 1.0;
-                // TODO: Avoid branching here later
-                let am_result = match self.params.mode.value() {
-                    Mode::Crispy => *sample * noise,
-                    Mode::EvenCrispier => sample.max(0.0) * noise,
-                    Mode::EvenCrispierNegated => sample.max(0.0) * noise,
-                };
-
-                *sample += am_result * amount;
-                *sample *= output_gain;
+            // TODO: Avoid branching twice here. Modern branch predictors are pretty good at this
+            //       though.
+            match self.params.stereo_mode.value() {
+                StereoMode::Mono => {
+                    let noise = self.gen_noise();
+                    for sample in channel_samples {
+                        *sample += self.do_am(*sample, noise) * amount;
+                        *sample *= output_gain;
+                    }
+                }
+                StereoMode::Stereo => {
+                    for sample in channel_samples {
+                        let noise = self.gen_noise();
+                        *sample += self.do_am(*sample, noise) * amount;
+                        *sample *= output_gain;
+                    }
+                }
             }
         }
 
         ProcessStatus::Normal
+    }
+}
+
+impl Crisp {
+    /// Generate a new uniform noise sample.
+    fn gen_noise(&mut self) -> f32 {
+        self.prng.next_f32() * 2.0 - 1.0
+    }
+
+    /// Perform the AM step depending on the mode.
+    fn do_am(&self, sample: f32, noise: f32) -> f32 {
+        // TODO: Avoid branching in the main loop, this just makes it a bit easier to prototype
+        match self.params.mode.value() {
+            Mode::Crispy => sample * noise,
+            Mode::EvenCrispier => sample.max(0.0) * noise,
+            Mode::EvenCrispierNegated => sample.max(0.0) * noise,
+        }
     }
 }
 
