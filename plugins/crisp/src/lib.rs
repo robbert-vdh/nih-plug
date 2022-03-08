@@ -45,10 +45,27 @@ pub struct CrispParams {
     /// On a range of `[0, 1]`, how much of the modulated sound to mix in.
     #[id = "amount"]
     amount: FloatParam,
+    /// What kind of AM to apply. The preset this was modelled after whether intentional or not only
+    /// AMs the positive part of the waveform.
+    #[id = "mode"]
+    mode: EnumParam<Mode>,
 
     /// Output gain, as voltage gain. Displayed in decibels.
     #[id = "output"]
     output_gain: FloatParam,
+}
+
+/// Controls the type of modulation to apply.
+#[derive(Enum, Debug, PartialEq)]
+enum Mode {
+    /// AM the entire waveform.
+    Crispy,
+    /// AM only the positive part of the waveform.
+    #[name = "Even Crispier"]
+    EvenCrispier,
+    /// AM only the negative part of the waveform.
+    #[name = "Even Crispier (alt)"]
+    EvenCrispierNegated,
 }
 
 impl Default for Crisp {
@@ -70,6 +87,7 @@ impl Default for CrispParams {
                 .with_unit("%")
                 .with_value_to_string(formatters::f32_percentage(0))
                 .with_string_to_value(formatters::from_f32_percentage()),
+            mode: EnumParam::new("Mode", Mode::EvenCrispier),
             output_gain: FloatParam::new(
                 "Output",
                 1.0,
@@ -131,9 +149,14 @@ impl Plugin for Crisp {
             // TODO: SIMD-ize this to process both channels at once
             for sample in channel_samples.into_iter() {
                 let noise = self.prng.next_f32() * 2.0 - 1.0;
-                let half_am = sample.max(0.0) * noise;
+                // TODO: Avoid branching here later
+                let am_result = match self.params.mode.value() {
+                    Mode::Crispy => *sample * noise,
+                    Mode::EvenCrispier => sample.max(0.0) * noise,
+                    Mode::EvenCrispierNegated => sample.max(0.0) * noise,
+                };
 
-                *sample += half_am * amount;
+                *sample += am_result * amount;
                 *sample *= output_gain;
             }
         }
