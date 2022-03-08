@@ -205,7 +205,7 @@ impl ClapPlugin for Crisp {
     const CLAP_ID: &'static str = "nl.robbertvanderhelm.crisp";
     const CLAP_DESCRIPTION: &'static str = "Adds a bright crispy top end to low bass sounds";
     const CLAP_FEATURES: &'static [&'static str] =
-        &["audio_effect", "stereo", "filter", "distortion"];
+        &["audio_effect", "stereo", "distortion", "filter"];
     const CLAP_MANUAL_URL: &'static str = Self::URL;
     const CLAP_SUPPORT_URL: &'static str = Self::URL;
 }
