@@ -211,7 +211,8 @@ impl DiopserParams {
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             )
             .with_unit("%")
-            .with_value_to_string(Arc::new(|value| format!("{:.0}", value * 100.0))),
+            .with_value_to_string(formatters::f32_percentage(0))
+            .with_string_to_value(formatters::from_f32_percentage()),
         }
     }
 }
