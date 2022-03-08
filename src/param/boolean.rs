@@ -95,6 +95,7 @@ impl Param for BoolParam {
     }
 
     fn string_to_normalized_value(&self, string: &str) -> Option<f32> {
+        let string = string.trim();
         let value = match &self.string_to_value {
             Some(f) => f(string),
             None => Some(string.eq_ignore_ascii_case("true") || string.eq_ignore_ascii_case("on")),
@@ -116,6 +117,7 @@ impl Param for BoolParam {
     }
 
     fn set_from_string(&mut self, string: &str) -> bool {
+        let string = string.trim();
         let value = match &self.string_to_value {
             Some(f) => f(string),
             None => Some(string.eq_ignore_ascii_case("true") || string.eq_ignore_ascii_case("on")),

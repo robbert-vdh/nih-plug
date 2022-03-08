@@ -200,9 +200,10 @@ impl Param for EnumParamInner {
     }
 
     fn string_to_normalized_value(&self, string: &str) -> Option<f32> {
+        let string = string.trim();
         self.variants
             .iter()
-            .position(|n| n == &string)
+            .position(|variant| variant == &string)
             .map(|idx| self.preview_normalized(idx as i32))
     }
 
@@ -215,7 +216,8 @@ impl Param for EnumParamInner {
     }
 
     fn set_from_string(&mut self, string: &str) -> bool {
-        match self.variants.iter().position(|n| n == &string) {
+        let string = string.trim();
+        match self.variants.iter().position(|variant| variant == &string) {
             Some(idx) => {
                 self.inner.set_plain_value(idx as i32);
                 true
