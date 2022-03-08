@@ -33,15 +33,23 @@ impl Pcg32iState {
     /// Initialize the PRNG, aka `*_srandom()`.
     ///
     /// <https://github.com/imneme/pcg-c/blob/83252d9c23df9c82ecb42210afed61a7b42402d7/include/pcg_variants.h#L757-L765>
-    pub fn new(state: u32, sequence: u32) -> Self {
+    pub const fn new(state: u32, sequence: u32) -> Self {
         let mut rng = Self {
             state: 0,
             inc: (sequence << 1) | 1,
         };
 
-        rng.step();
+        // https://github.com/imneme/pcg-c/blob/83252d9c23df9c82ecb42210afed61a7b42402d7/include/pcg_variants.h#L540-L543,
+        // inlined so we can make this a const function
+        rng.state = rng
+            .state
+            .wrapping_mul(PCG_DEFAULT_MULTIPLIER_32)
+            .wrapping_add(rng.inc);
         rng.state += state;
-        rng.step();
+        rng.state = rng
+            .state
+            .wrapping_mul(PCG_DEFAULT_MULTIPLIER_32)
+            .wrapping_add(rng.inc);
 
         rng
     }
@@ -52,7 +60,10 @@ impl Pcg32iState {
     #[inline]
     pub fn next_u32(&mut self) -> u32 {
         let old_state = self.state;
-        self.step();
+        self.state = self
+            .state
+            .wrapping_mul(PCG_DEFAULT_MULTIPLIER_32)
+            .wrapping_add(self.inc);
 
         let word = ((old_state >> ((old_state >> 28) + 4)) ^ old_state) * 277803737;
         (word >> 22) ^ word
@@ -69,11 +80,5 @@ impl Pcg32iState {
 
         let exponent_bits: u32 = ((f32::MAX_EXP - 1) as u32) << (f32::MANTISSA_DIGITS - 1);
         f32::from_bits(fraction | exponent_bits) - (1.0 - f32::EPSILON / 2.0)
-    }
-
-    /// <https://github.com/imneme/pcg-c/blob/83252d9c23df9c82ecb42210afed61a7b42402d7/include/pcg_variants.h#L540-L543>
-    #[inline]
-    fn step(&mut self) {
-        self.state = self.state * PCG_DEFAULT_MULTIPLIER_32 + self.inc;
     }
 }
