@@ -20,11 +20,11 @@ use std::pin::Pin;
 
 mod pcg;
 
-/// Hardcoded to make SIMD-ifying this a bit easier in the future
-const NUM_CHANNELS: usize = 2;
-
 /// These seeds being fixed makes bouncing deterministic.
 const INITIAL_PRNG_SEED: Pcg32iState = Pcg32iState::new(69, 420);
+
+/// Allow 100% amount to scale the gain to a bit above 100%, to make the effect even less subtle.
+const AMOUNT_GAIN_MULTIPLIER: f32 = 2.0;
 
 /// This plugin essentially layers the sound with another copy of the signal AM'ed with white (or
 /// filtered) noise. That other copy of the sound may have a low pass filter applied to it since
@@ -101,15 +101,14 @@ impl Plugin for Crisp {
         _context: &mut impl ProcessContext,
     ) -> ProcessStatus {
         for channel_samples in buffer.iter_mut() {
-            let amount = self.params.amount.smoothed.next();
+            let amount = self.params.amount.smoothed.next() * AMOUNT_GAIN_MULTIPLIER;
 
             // TODO: SIMD-ize this to process both channels at once
-            // TODO: This does not sound quite right
             for sample in channel_samples.into_iter() {
                 let noise = self.prng.next_f32() * 2.0 - 1.0;
-                let am = *sample * noise;
+                let half_am = sample.max(0.0) * noise;
 
-                *sample += am * amount;
+                *sample += half_am * amount;
             }
         }
 
