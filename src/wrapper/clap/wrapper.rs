@@ -66,6 +66,7 @@ use crate::param::internals::ParamPtr;
 use crate::plugin::{
     BufferConfig, BusConfig, ClapPlugin, Editor, NoteEvent, ParentWindowHandle, ProcessStatus,
 };
+use crate::util::permit_alloc;
 use crate::wrapper::state;
 use crate::wrapper::util::{hash_param_id, process_wrapper, strlcpy};
 
@@ -255,7 +256,9 @@ impl<P: ClapPlugin> EventLoop<Task, Wrapper<P>> for Wrapper<P> {
         // check if this is the same thread as the one that created the plugin instance.
         match &*self.host_thread_check.borrow() {
             Some(thread_check) => unsafe { (thread_check.is_main_thread)(&*self.host_callback) },
-            None => thread::current().id() == self.main_thread_id,
+            // FIXME: `thread::current()` may allocate the first time it's called, is there a safe
+            //        nonallocating version of this without using huge OS-specific libraries?
+            None => permit_alloc(|| thread::current().id() == self.main_thread_id),
         }
     }
 }

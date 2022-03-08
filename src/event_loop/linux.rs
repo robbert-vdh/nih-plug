@@ -8,6 +8,7 @@ use std::thread::{self, JoinHandle, ThreadId};
 
 use super::{EventLoop, MainThreadExecutor};
 use crate::nih_log;
+use crate::util::permit_alloc;
 
 /// See [`EventLoop`][super::EventLoop].
 #[cfg_attr(
@@ -83,7 +84,9 @@ where
     }
 
     fn is_main_thread(&self) -> bool {
-        thread::current().id() == self.main_thread_id
+        // FIXME: `thread::current()` may allocate the first time it's called, is there a safe
+        //        nonallocating version of this without using huge OS-specific libraries?
+        permit_alloc(|| thread::current().id() == self.main_thread_id)
     }
 }
 
