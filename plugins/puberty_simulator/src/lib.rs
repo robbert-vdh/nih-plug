@@ -179,8 +179,16 @@ impl Plugin for PubertySimulator {
                 // that's good enough for now. An alternative would be to replan on a worker thread,
                 // but this makes switching between window sizes a bit cleaner.
                 .map(|order| Plan {
-                    r2c_plan: R2CPlan32::aligned(&[1 << order], Flag::ESTIMATE).unwrap(),
-                    c2r_plan: C2RPlan32::aligned(&[1 << order], Flag::ESTIMATE).unwrap(),
+                    r2c_plan: R2CPlan32::aligned(
+                        &[1 << order],
+                        Flag::ESTIMATE | Flag::DESTROYINPUT,
+                    )
+                    .unwrap(),
+                    c2r_plan: C2RPlan32::aligned(
+                        &[1 << order],
+                        Flag::ESTIMATE | Flag::DESTROYINPUT,
+                    )
+                    .unwrap(),
                 })
                 .collect();
             self.plan_for_order = Some(

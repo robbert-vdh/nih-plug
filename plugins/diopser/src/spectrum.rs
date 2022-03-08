@@ -75,7 +75,11 @@ impl SpectrumInput {
             spectrum_result_buffer: [0.0; SPECTRUM_WINDOW_SIZE / 2],
 
             plan: Plan {
-                r2c_plan: R2CPlan32::aligned(&[SPECTRUM_WINDOW_SIZE], Flag::MEASURE).unwrap(),
+                r2c_plan: R2CPlan32::aligned(
+                    &[SPECTRUM_WINDOW_SIZE],
+                    Flag::MEASURE | Flag::DESTROYINPUT,
+                )
+                .unwrap(),
             },
             compensated_window_function: util::window::hann(SPECTRUM_WINDOW_SIZE)
                 .into_iter()

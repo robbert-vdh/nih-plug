@@ -40,8 +40,10 @@ struct StftParams {}
 
 impl Default for Stft {
     fn default() -> Self {
-        let mut r2c_plan: R2CPlan32 = R2CPlan32::aligned(&[WINDOW_SIZE], Flag::MEASURE).unwrap();
-        let c2r_plan: C2RPlan32 = C2RPlan32::aligned(&[WINDOW_SIZE], Flag::MEASURE).unwrap();
+        let mut r2c_plan: R2CPlan32 =
+            R2CPlan32::aligned(&[WINDOW_SIZE], Flag::MEASURE | Flag::DESTROYINPUT).unwrap();
+        let c2r_plan: C2RPlan32 =
+            C2RPlan32::aligned(&[WINDOW_SIZE], Flag::MEASURE | Flag::DESTROYINPUT).unwrap();
         let mut real_fft_scratch_buffer: AlignedVec<f32> = AlignedVec::new(WINDOW_SIZE);
         let mut complex_fft_scratch_buffer: AlignedVec<c32> = AlignedVec::new(WINDOW_SIZE / 2 + 1);
 
