@@ -17,17 +17,39 @@
 use nih_plug::prelude::*;
 use std::pin::Pin;
 
+/// Hardcoded to make SIMD-ifying this a bit easier in the future
+const NUM_CHANNELS: usize = 2;
+
+/// These seeds being fixed makes bouncing deterministic.
+const INITIAL_PRNG_SEEDS: [u32; 2] = [69, 420];
+
+/// This plugin essentially layers the sound with another copy of the signal AM'ed with white (or
+/// filtered) noise. That other copy of the sound may have a low pass filter applied to it since
+/// this effect just turns into literal noise at high frequencies.
 struct Crisp {
     params: Pin<Box<CrispParams>>,
+
+    /// The OS RNG is only used for the initial seeds, after that we'll implement PCG ourselves so
+    /// we can easily SIMD-ify this in the future.
+    prng_seeds: [u32; NUM_CHANNELS],
 }
 
+// TODO: Filters
+// TODO: Mono/stereo/mid-side switch
+// TODO: Output gain
 #[derive(Params)]
-pub struct CrispParams {}
+pub struct CrispParams {
+    /// On a range of `[0, 1]`, how much of the modulated sound to mix in.
+    #[id = "amount"]
+    amount: FloatParam,
+}
 
 impl Default for Crisp {
     fn default() -> Self {
         Self {
             params: Box::pin(CrispParams::default()),
+
+            prng_seeds: INITIAL_PRNG_SEEDS,
         }
     }
 }
@@ -35,7 +57,13 @@ impl Default for Crisp {
 impl Default for CrispParams {
     #[allow(clippy::derivable_impls)]
     fn default() -> Self {
-        Self {}
+        Self {
+            amount: FloatParam::new("Amount", 0.2, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_smoother(SmoothingStyle::Linear(10.0))
+                .with_unit("%")
+                .with_value_to_string(formatters::f32_percentage(0))
+                .with_string_to_value(formatters::from_f32_percentage()),
+        }
     }
 }
 
@@ -59,11 +87,26 @@ impl Plugin for Crisp {
         config.num_input_channels == config.num_output_channels && config.num_input_channels == 2
     }
 
+    fn reset(&mut self) {
+        // By using the same seeds each time bouncing can be made deterministic
+        self.prng_seeds = INITIAL_PRNG_SEEDS;
+    }
+
     fn process(
         &mut self,
         buffer: &mut Buffer,
         _context: &mut impl ProcessContext,
     ) -> ProcessStatus {
+        for channel_samples in buffer.iter_mut() {
+            let amount = self.params.amount.smoothed.next();
+
+            // TODO: SIMD-ize this to process both channels at once
+            for (channel_idx, sample) in channel_samples.into_iter().enumerate() {
+                // TODO: Calculate some uniformly (or Gaussian?) distributed white noise in the
+                //       range of `[-1, 1]`, add that scaled by `amount` to `sample`.
+            }
+        }
+
         ProcessStatus::Normal
     }
 }
