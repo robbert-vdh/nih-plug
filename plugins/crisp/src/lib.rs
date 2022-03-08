@@ -27,9 +27,9 @@ const INITIAL_PRNG_SEED: Pcg32iState = Pcg32iState::new(69, 420);
 /// Allow 100% amount to scale the gain to a bit above 100%, to make the effect even less subtle.
 const AMOUNT_GAIN_MULTIPLIER: f32 = 2.0;
 
-/// This plugin essentially layers the sound with another copy of the signal AM'ed with white (or
-/// filtered) noise. That other copy of the sound may have a low pass filter applied to it since
-/// this effect just turns into literal noise at high frequencies.
+/// This plugin essentially layers the sound with another copy of the signal ring modulated with
+/// white (or filtered) noise. That other copy of the sound may have a low pass filter applied to it
+/// since this effect just turns into literal noise at high frequencies.
 struct Crisp {
     params: Pin<Box<CrispParams>>,
 
@@ -38,15 +38,15 @@ struct Crisp {
     prng: Pcg32iState,
 }
 
-// TODO: Add a filter for the AM input
+// TODO: Add a filter for the RM input
 // TODO: Add more kinds of noise
 #[derive(Params)]
 pub struct CrispParams {
     /// On a range of `[0, 1]`, how much of the modulated sound to mix in.
     #[id = "amount"]
     amount: FloatParam,
-    /// What kind of AM to apply. The preset this was modelled after whether intentional or not only
-    /// AMs the positive part of the waveform.
+    /// What kind of RM to apply. The preset this was modelled after whether intentional or not only
+    /// RMs the positive part of the waveform.
     #[id = "mode"]
     mode: EnumParam<Mode>,
     /// How to handle stereo signals. See [`StereoMode`].
@@ -61,12 +61,12 @@ pub struct CrispParams {
 /// Controls the type of modulation to apply.
 #[derive(Enum, Debug, PartialEq)]
 enum Mode {
-    /// AM the entire waveform.
+    /// RM the entire waveform.
     Crispy,
-    /// AM only the positive part of the waveform.
+    /// RM only the positive part of the waveform.
     #[name = "Even Crispier"]
     EvenCrispier,
-    /// AM only the negative part of the waveform.
+    /// RM only the negative part of the waveform.
     #[name = "Even Crispier (alt)"]
     EvenCrispierNegated,
 }
@@ -166,14 +166,14 @@ impl Plugin for Crisp {
                 StereoMode::Mono => {
                     let noise = self.gen_noise();
                     for sample in channel_samples {
-                        *sample += self.do_am(*sample, noise) * amount;
+                        *sample += self.do_ring_mod(*sample, noise) * amount;
                         *sample *= output_gain;
                     }
                 }
                 StereoMode::Stereo => {
                     for sample in channel_samples {
                         let noise = self.gen_noise();
-                        *sample += self.do_am(*sample, noise) * amount;
+                        *sample += self.do_ring_mod(*sample, noise) * amount;
                         *sample *= output_gain;
                     }
                 }
@@ -190,8 +190,8 @@ impl Crisp {
         self.prng.next_f32() * 2.0 - 1.0
     }
 
-    /// Perform the AM step depending on the mode.
-    fn do_am(&self, sample: f32, noise: f32) -> f32 {
+    /// Perform the RM step depending on the mode.
+    fn do_ring_mod(&self, sample: f32, noise: f32) -> f32 {
         // TODO: Avoid branching in the main loop, this just makes it a bit easier to prototype
         match self.params.mode.value() {
             Mode::Crispy => sample * noise,
