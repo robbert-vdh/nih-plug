@@ -99,9 +99,8 @@ impl Default for PubertySimulator {
 
 impl Default for PubertySimulatorParams {
     fn default() -> Self {
-        let power_of_two_val2str = Arc::new(|value| format!("{}", 1 << value));
-        let power_of_two_str2val =
-            Arc::new(|string: &str| string.parse().ok().map(|n: i32| (n as f32).log2() as i32));
+        let power_of_two_val2str = formatters::i32_power_of_two();
+        let power_of_two_str2val = formatters::from_i32_power_of_two();
 
         Self {
             pitch_octaves: FloatParam::new(
