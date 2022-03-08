@@ -17,6 +17,7 @@
 use nih_plug::prelude::*;
 use pcg::Pcg32iState;
 use std::pin::Pin;
+use std::sync::Arc;
 
 mod pcg;
 
@@ -39,12 +40,15 @@ struct Crisp {
 
 // TODO: Filters
 // TODO: Mono/stereo/mid-side switch
-// TODO: Output gain
 #[derive(Params)]
 pub struct CrispParams {
     /// On a range of `[0, 1]`, how much of the modulated sound to mix in.
     #[id = "amount"]
     amount: FloatParam,
+
+    /// Output gain, as voltage gain. Displayed in decibels.
+    #[id = "output"]
+    output_gain: FloatParam,
 }
 
 impl Default for Crisp {
@@ -66,6 +70,26 @@ impl Default for CrispParams {
                 .with_unit("%")
                 .with_value_to_string(formatters::f32_percentage(0))
                 .with_string_to_value(formatters::from_f32_percentage()),
+            output_gain: FloatParam::new(
+                "Output",
+                1.0,
+                // Because we're representing gain as decibels the range is already logarithmic
+                FloatRange::Linear {
+                    min: util::db_to_gain(-24.0),
+                    max: util::db_to_gain(0.0),
+                },
+            )
+            .with_smoother(SmoothingStyle::Logarithmic(10.0))
+            .with_unit(" dB")
+            .with_value_to_string(Arc::new(|value| format!("{:.2}", util::gain_to_db(value))))
+            .with_string_to_value(Arc::new(|string| {
+                string
+                    .trim()
+                    .trim_end_matches(" dB")
+                    .parse()
+                    .ok()
+                    .map(util::db_to_gain)
+            })),
         }
     }
 }
@@ -102,6 +126,7 @@ impl Plugin for Crisp {
     ) -> ProcessStatus {
         for channel_samples in buffer.iter_mut() {
             let amount = self.params.amount.smoothed.next() * AMOUNT_GAIN_MULTIPLIER;
+            let output_gain = self.params.output_gain.smoothed.next();
 
             // TODO: SIMD-ize this to process both channels at once
             for sample in channel_samples.into_iter() {
@@ -109,6 +134,7 @@ impl Plugin for Crisp {
                 let half_am = sample.max(0.0) * noise;
 
                 *sample += half_am * amount;
+                *sample *= output_gain;
             }
         }
 
