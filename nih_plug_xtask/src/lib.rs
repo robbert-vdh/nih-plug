@@ -63,8 +63,10 @@ pub fn main_with_args(command_name: &str, mut args: impl Iterator<Item = String>
         .context(format!("Missing command name\n\n{usage_string}",))?;
     match command.as_str() {
         "bundle" => {
-            // For convenience's sake we'll allow building multiple packages with -p just like carg
-            // obuild, but you can also build a single package without specifying -p
+            // For convenience's sake we'll allow building multiple packages with `-p` just like
+            // carg obuild, but you can also build a single package without specifying `-p`. Since
+            // multiple packages can be built in parallel if we pass all of these flags to a single
+            // `cargo build` we'll first build all of these packages and only then bundle them.
             let mut args = args.peekable();
             let mut packages = Vec::new();
             if args.peek().map(|s| s.as_str()) == Some("-p") {
@@ -82,9 +84,11 @@ pub fn main_with_args(command_name: &str, mut args: impl Iterator<Item = String>
             };
             let other_args: Vec<_> = args.collect();
 
+            // As explained above, for efficiency's sake this is a two step process
+            build(&packages, &other_args)?;
+
             bundle(&packages[0], &other_args)?;
             for package in packages.into_iter().skip(1) {
-                eprintln!();
                 bundle(&package, &other_args)?;
             }
 
@@ -105,8 +109,32 @@ pub fn chdir_workspace_root() -> Result<()> {
     std::env::set_current_dir(project_root).context("Could not change to project root directory")
 }
 
-/// Bundle a package using the provided `cargo build` arguments. Options from the `bundler.toml`
-/// file in the workspace's root are respected (see
+/// Build one or more packages using the provided `cargo build` arguments. This should be caleld
+/// before callingq [`bundle()`]. This requires the current working directory to have been set to
+/// the workspace's root using [`chdir_workspace_root()`].
+pub fn build(packages: &[String], args: &[String]) -> Result<()> {
+    let package_args = packages.iter().flat_map(|package| ["-p", package]);
+
+    let status = Command::new("cargo")
+        .arg("build")
+        .args(package_args)
+        .args(args)
+        .status()
+        .context(format!(
+            "Could not call cargo to build {}",
+            packages.join(", ")
+        ))?;
+    if !status.success() {
+        bail!("Could not build {}", packages.join(", "));
+    } else {
+        Ok(())
+    }
+}
+
+/// Bundle a package that was previoulsly built by a call to [`build()`] using the provided `cargo
+/// build` arguments. These two functions are split up because building can be done in parallel by
+/// Cargo itself while bundling is sequential. Options from the `bundler.toml` file in the
+/// workspace's root are respected (see
 /// <https://github.com/robbert-vdh/nih-plug/blob/master/bundler.toml>). This requires the current
 /// working directory to have been set to the workspace's root using [`chdir_workspace_root()`].
 pub fn bundle(package: &str, args: &[String]) -> Result<()> {
@@ -138,17 +166,6 @@ pub fn bundle(package: &str, args: &[String]) -> Result<()> {
             }
             _ => (),
         }
-    }
-
-    let status = Command::new("cargo")
-        .arg("build")
-        .arg("-p")
-        .arg(package)
-        .args(args)
-        .status()
-        .context(format!("Could not call cargo to build {package}"))?;
-    if !status.success() {
-        bail!("Could not build {}", package);
     }
 
     let compilation_target = compilation_target(cross_compile_target.as_deref())?;
