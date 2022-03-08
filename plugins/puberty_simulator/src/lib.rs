@@ -20,7 +20,6 @@ use fftw::types::{c32, Flag};
 use nih_plug::prelude::*;
 use std::f32;
 use std::pin::Pin;
-use std::sync::Arc;
 
 const MIN_WINDOW_ORDER: usize = 6;
 #[allow(dead_code)]
