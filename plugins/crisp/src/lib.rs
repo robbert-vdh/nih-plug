@@ -17,6 +17,8 @@
 use nih_plug::prelude::*;
 use std::pin::Pin;
 
+mod pcg;
+
 /// Hardcoded to make SIMD-ifying this a bit easier in the future
 const NUM_CHANNELS: usize = 2;
 
