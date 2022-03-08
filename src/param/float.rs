@@ -57,6 +57,9 @@ pub struct FloatParam {
     /// Optional custom conversion function from a string to a plain **unnormalized** value. If the
     /// string cannot be parsed, then this should return a `None`. If this happens while the
     /// parameter is being updated then the update will be canceled.
+    ///
+    /// The input string may or may not contain the unit, so you will need to be able to handle
+    /// that.
     pub string_to_value: Option<Arc<dyn Fn(&str) -> Option<f32> + Send + Sync>>,
 }
 
@@ -269,6 +272,9 @@ impl FloatParam {
     /// Use a custom conversion function to convert from a string to a plain, unnormalized
     /// value. If the string cannot be parsed, then this should return a `None`. If this
     /// happens while the parameter is being updated then the update will be canceled.
+    ///
+    /// The input string may or may not contain the unit, so you will need to be able to handle
+    /// that.
     pub fn with_string_to_value(
         mut self,
         callback: Arc<dyn Fn(&str) -> Option<f32> + Send + Sync>,
