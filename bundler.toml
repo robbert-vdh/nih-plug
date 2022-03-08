@@ -4,6 +4,9 @@
 # [package_name]
 # name = "Human Readable Plugin Name"  # defaults to <package_name>
 
+[crisp]
+name = "Crisp"
+
 [diopser]
 name = "Diopser"
 

@@ -277,6 +277,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "crisp"
+version = "0.1.0"
+dependencies = [
+ "nih_plug",
+]
+
+[[package]]
 name = "crossbeam"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

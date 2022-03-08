@@ -28,6 +28,8 @@ Come join us on the [Rust Audio Discord](https://discord.gg/ykxU3rt4Cb).
 Check each plugin's readme for more details on what the plugin actually does and
 for download links.
 
+- [**Crisp**](plugins/crisp) adds a bright crispy top end to any low bass sound.
+  Inspired by Polarity's [Fake Distortion](https://youtu.be/MKfFn4L1zeg) video.
 - [**Diopser**](plugins/diopser) is a totally original phase rotation plugin.
   Useful for oomphing up kickdrums and basses, transforming synths into their
   evil phase-y cousin, and making everything sound like a cheap Sci-Fi laser

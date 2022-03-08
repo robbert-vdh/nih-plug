@@ -23,6 +23,7 @@ members = [
   "plugins/examples/sine",
   "plugins/examples/stft",
 
+  "plugins/crisp",
   "plugins/diopser",
   "plugins/puberty_simulator",
 ]
