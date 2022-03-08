@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use nih_plug::prelude::*;
+use pcg::Pcg32iState;
 use std::pin::Pin;
 
 mod pcg;
@@ -23,7 +24,7 @@ mod pcg;
 const NUM_CHANNELS: usize = 2;
 
 /// These seeds being fixed makes bouncing deterministic.
-const INITIAL_PRNG_SEEDS: [u32; 2] = [69, 420];
+const INITIAL_PRNG_SEED: Pcg32iState = Pcg32iState::new(69, 420);
 
 /// This plugin essentially layers the sound with another copy of the signal AM'ed with white (or
 /// filtered) noise. That other copy of the sound may have a low pass filter applied to it since
@@ -31,9 +32,9 @@ const INITIAL_PRNG_SEEDS: [u32; 2] = [69, 420];
 struct Crisp {
     params: Pin<Box<CrispParams>>,
 
-    /// The OS RNG is only used for the initial seeds, after that we'll implement PCG ourselves so
-    /// we can easily SIMD-ify this in the future.
-    prng_seeds: [u32; NUM_CHANNELS],
+    /// A PRNG for generating noise, after that we'll implement PCG ourselves so we can easily
+    /// SIMD-ify this in the future.
+    prng: Pcg32iState,
 }
 
 // TODO: Filters
@@ -51,7 +52,7 @@ impl Default for Crisp {
         Self {
             params: Box::pin(CrispParams::default()),
 
-            prng_seeds: INITIAL_PRNG_SEEDS,
+            prng: INITIAL_PRNG_SEED,
         }
     }
 }
@@ -91,7 +92,7 @@ impl Plugin for Crisp {
 
     fn reset(&mut self) {
         // By using the same seeds each time bouncing can be made deterministic
-        self.prng_seeds = INITIAL_PRNG_SEEDS;
+        self.prng = INITIAL_PRNG_SEED;
     }
 
     fn process(
@@ -103,9 +104,12 @@ impl Plugin for Crisp {
             let amount = self.params.amount.smoothed.next();
 
             // TODO: SIMD-ize this to process both channels at once
-            for (channel_idx, sample) in channel_samples.into_iter().enumerate() {
-                // TODO: Calculate some uniformly (or Gaussian?) distributed white noise in the
-                //       range of `[-1, 1]`, add that scaled by `amount` to `sample`.
+            // TODO: This does not sound quite right
+            for sample in channel_samples.into_iter() {
+                let noise = self.prng.next_f32() * 2.0 - 1.0;
+                let am = *sample * noise;
+
+                *sample += am * amount;
             }
         }
 

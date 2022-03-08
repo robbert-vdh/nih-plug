@@ -65,7 +65,7 @@ impl Pcg32iState {
             .wrapping_mul(PCG_DEFAULT_MULTIPLIER_32)
             .wrapping_add(self.inc);
 
-        let word = ((old_state >> ((old_state >> 28) + 4)) ^ old_state) * 277803737;
+        let word = ((old_state >> ((old_state >> 28) + 4)) ^ old_state).wrapping_mul(277803737);
         (word >> 22) ^ word
     }
 
