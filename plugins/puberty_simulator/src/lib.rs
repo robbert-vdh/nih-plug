@@ -22,12 +22,24 @@ use std::f32;
 use std::pin::Pin;
 use std::sync::Arc;
 
-const MIN_WINDOW_SIZE: usize = 64;
-const DEFAULT_WINDOW_SIZE: usize = 1024;
-const MAX_WINDOW_SIZE: usize = 32768;
-const MIN_OVERLAP_TIMES: usize = 2;
-const DEFAULT_OVERLAP_TIMES: usize = 4;
-const MAX_OVERLAP_TIMES: usize = 32;
+const MIN_WINDOW_ORDER: usize = 6;
+#[allow(dead_code)]
+const MIN_WINDOW_SIZE: usize = 1 << MIN_WINDOW_ORDER; // 64
+const DEFAULT_WINDOW_ORDER: usize = 10;
+#[allow(dead_code)]
+const DEFAULT_WINDOW_SIZE: usize = 1 << DEFAULT_WINDOW_ORDER; // 1024
+const MAX_WINDOW_ORDER: usize = 15;
+const MAX_WINDOW_SIZE: usize = 1 << MAX_WINDOW_ORDER; // 32768
+
+const MIN_OVERLAP_ORDER: usize = 1;
+#[allow(dead_code)]
+const MIN_OVERLAP_TIMES: usize = 1 << MIN_OVERLAP_ORDER; // 2
+const DEFAULT_OVERLAP_ORDER: usize = 3;
+#[allow(dead_code)]
+const DEFAULT_OVERLAP_TIMES: usize = 1 << DEFAULT_OVERLAP_ORDER; // 4
+const MAX_OVERLAP_ORDER: usize = 5;
+#[allow(dead_code)]
+const MAX_OVERLAP_TIMES: usize = 1 << MAX_OVERLAP_ORDER; // 32
 
 struct PubertySimulator {
     params: Pin<Box<PubertySimulatorParams>>,
@@ -38,8 +50,9 @@ struct PubertySimulator {
     /// helper. Allocated with a `MAX_WINDOW_SIZE` initial capacity.
     window_function: Vec<f32>,
 
-    /// The algorithms for the FFT and IFFT operations.
-    plan: Plan,
+    /// The algorithms for the FFT and IFFT operations, for each supported order so we can switch
+    /// between them without replanning or allocations. Initialized during `initialize()`.
+    plan_for_order: Option<[Plan; MAX_WINDOW_ORDER - MIN_WINDOW_ORDER + 1]>,
     /// Scratch buffers for computing our FFT. The [`StftHelper`] already contains a buffer for the
     /// real values. This type cannot be resized, so we'll simply take a slice of it with the
     /// correct length instead.
@@ -78,11 +91,7 @@ impl Default for PubertySimulator {
             stft: util::StftHelper::new(2, MAX_WINDOW_SIZE),
             window_function: Vec::with_capacity(MAX_WINDOW_SIZE),
 
-            plan: Plan {
-                // These will be initialized with proper values during the initialization
-                r2c_plan: R2CPlan32::aligned(&[1], Flag::MEASURE).unwrap(),
-                c2r_plan: C2RPlan32::aligned(&[1], Flag::MEASURE).unwrap(),
-            },
+            plan_for_order: None,
             complex_fft_scratch_buffer: AlignedVec::new(MAX_WINDOW_SIZE / 2 + 1),
         }
     }
@@ -113,20 +122,20 @@ impl Default for PubertySimulatorParams {
 
             window_size_order: IntParam::new(
                 "Window Size",
-                (DEFAULT_WINDOW_SIZE as f32).log2() as i32,
+                DEFAULT_WINDOW_ORDER as i32,
                 IntRange::Linear {
-                    min: (MIN_WINDOW_SIZE as f32).log2() as i32,
-                    max: (MAX_WINDOW_SIZE as f32).log2() as i32,
+                    min: MIN_WINDOW_ORDER as i32,
+                    max: MAX_WINDOW_ORDER as i32,
                 },
             )
             .with_value_to_string(power_of_two_val2str.clone())
             .with_string_to_value(power_of_two_str2val.clone()),
             overlap_times_order: IntParam::new(
                 "Window Overlap",
-                (DEFAULT_OVERLAP_TIMES as f32).log2() as i32,
+                DEFAULT_OVERLAP_ORDER as i32,
                 IntRange::Linear {
-                    min: (MIN_OVERLAP_TIMES as f32).log2() as i32,
-                    max: (MAX_OVERLAP_TIMES as f32).log2() as i32,
+                    min: MIN_OVERLAP_ORDER as i32,
+                    max: MAX_OVERLAP_ORDER as i32,
                 },
             )
             .with_value_to_string(power_of_two_val2str)
@@ -163,6 +172,24 @@ impl Plugin for PubertySimulator {
         _buffer_config: &BufferConfig,
         context: &mut impl ProcessContext,
     ) -> bool {
+        if self.plan_for_order.is_none() {
+            let plan_for_order: Vec<Plan> = (MIN_WINDOW_ORDER..=MAX_WINDOW_ORDER)
+                // `Flag::MEASURE` is pretty slow above 1024 which hurts initialization time.
+                // `Flag::ESTIMATE` does not seem to hurt performance much at reasonable orders, so
+                // that's good enough for now. An alternative would be to replan on a worker thread,
+                // but this makes switching between window sizes a bit cleaner.
+                .map(|order| Plan {
+                    r2c_plan: R2CPlan32::aligned(&[1 << order], Flag::ESTIMATE).unwrap(),
+                    c2r_plan: C2RPlan32::aligned(&[1 << order], Flag::ESTIMATE).unwrap(),
+                })
+                .collect();
+            self.plan_for_order = Some(
+                plan_for_order
+                    .try_into()
+                    .unwrap_or_else(|_| panic!("Mismatched plan orders")),
+            );
+        }
+
         // Normally we'd also initialize the STFT helper for the correct channel count here, but we
         // only do stereo so that's not necessary
         let window_size = self.window_size();
@@ -199,6 +226,10 @@ impl Plugin for PubertySimulator {
         // Since this type cannot be resized, we'll simply slice the full buffer instead
         let complex_fft_scratch_buffer =
             &mut self.complex_fft_scratch_buffer.as_slice_mut()[..window_size / 2 + 1];
+        // These plans have already been made during initialization we can switch between versions
+        // without reallocating
+        let fft_plan = &mut self.plan_for_order.as_mut().unwrap()
+            [self.params.window_size_order.value as usize - MIN_WINDOW_ORDER];
 
         let mut smoothed_pitch_value = 0.0;
         self.stft.process_overlap_add(
@@ -220,7 +251,7 @@ impl Plugin for PubertySimulator {
                 let frequency_multiplier = 2.0f32.powf(-smoothed_pitch_value);
 
                 // Forward FFT, the helper has already applied window function
-                self.plan
+                fft_plan
                     .r2c_plan
                     .r2c(real_fft_scratch_buffer, complex_fft_scratch_buffer)
                     .unwrap();
@@ -266,7 +297,7 @@ impl Plugin for PubertySimulator {
 
                 // Inverse FFT back into the scratch buffer. This will be added to a ring buffer
                 // which gets written back to the host at a one block delay.
-                self.plan
+                fft_plan
                     .c2r_plan
                     .c2r(complex_fft_scratch_buffer, real_fft_scratch_buffer)
                     .unwrap();
@@ -288,12 +319,10 @@ impl PubertySimulator {
 
     /// `window_size` should not exceed `MAX_WINDOW_SIZE` or this will allocate.
     fn resize_for_window(&mut self, window_size: usize) {
+        // The FFT algorithms for this window size have already been planned
         self.stft.set_block_size(window_size);
         self.window_function.resize(window_size, 0.0);
         util::window::hann_in_place(&mut self.window_function);
-
-        self.plan.r2c_plan = R2CPlan32::aligned(&[window_size], Flag::MEASURE).unwrap();
-        self.plan.c2r_plan = C2RPlan32::aligned(&[window_size], Flag::MEASURE).unwrap();
     }
 }
 
