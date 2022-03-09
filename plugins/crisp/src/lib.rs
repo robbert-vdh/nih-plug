@@ -53,11 +53,11 @@ struct Crisp {
     /// Resonant filters for low passing the input signal before RM'ing, to allow this to work with
     /// inputs that already contain a lot of high freuqency content.
     rm_input_lpf: [filter::Biquad<f32>; NUM_CHANNELS as usize],
-    /// Resonant filters for high passing the noise signal, to make it even brighter.
+    /// Resonant filters for high- and then low- passing the noise signal, to make it even brighter.
     noise_hpf: [filter::Biquad<f32>; NUM_CHANNELS as usize],
+    noise_lpf: [filter::Biquad<f32>; NUM_CHANNELS as usize],
 }
 
-// TODO: Add more kinds of noise
 #[derive(Params)]
 pub struct CrispParams {
     /// On a range of `[0, 1]`, how much of the modulated sound to mix in.
@@ -83,6 +83,12 @@ pub struct CrispParams {
     /// The Q parameter for the high pass-filter applied to the noise.
     #[id = "nzhpfq"]
     noise_hpf_q: FloatParam,
+    /// The cutoff frequency for the low-pass filter applied to the noise.
+    #[id = "nzlpff"]
+    noise_lpf_freq: FloatParam,
+    /// The Q parameter for the low pass-filter applied to the noise.
+    #[id = "nzlpfq"]
+    noise_lpf_q: FloatParam,
 
     /// Output gain, as voltage gain. Displayed in decibels.
     #[id = "output"]
@@ -122,6 +128,7 @@ impl Default for Crisp {
             prng: INITIAL_PRNG_SEED,
             rm_input_lpf: [filter::Biquad::default(); NUM_CHANNELS as usize],
             noise_hpf: [filter::Biquad::default(); NUM_CHANNELS as usize],
+            noise_lpf: [filter::Biquad::default(); NUM_CHANNELS as usize],
         }
     }
 }
@@ -211,6 +218,42 @@ impl Default for CrispParams {
             )
             .with_smoother(SmoothingStyle::Logarithmic(100.0))
             .with_value_to_string(formatters::f32_rounded(2)),
+            noise_lpf_freq: FloatParam::new(
+                "Noise LP Frequency",
+                22_000.0,
+                FloatRange::Skewed {
+                    min: 5.0,
+                    max: 22_000.0,
+                    factor: FloatRange::skew_factor(-1.0),
+                },
+            )
+            .with_smoother(SmoothingStyle::Logarithmic(100.0))
+            // The unit is baked into the value so we can show the disabled string
+            .with_value_to_string(Arc::new(|value| {
+                if value >= 22_000.0 {
+                    String::from("Disabled")
+                } else {
+                    format!("{:.0} Hz", value)
+                }
+            }))
+            .with_string_to_value(Arc::new(|string| {
+                if string == "Disabled" {
+                    Some(22_000.0)
+                } else {
+                    string.trim().trim_end_matches(" Hz").parse().ok()
+                }
+            })),
+            noise_lpf_q: FloatParam::new(
+                "Noise LP Resonance",
+                2.0f32.sqrt() / 2.0,
+                FloatRange::Skewed {
+                    min: 2.0f32.sqrt() / 2.0,
+                    max: 10.0,
+                    factor: FloatRange::skew_factor(-1.0),
+                },
+            )
+            .with_smoother(SmoothingStyle::Logarithmic(100.0))
+            .with_value_to_string(formatters::f32_rounded(2)),
 
             output_gain: FloatParam::new(
                 "Output",
@@ -284,6 +327,9 @@ impl Plugin for Crisp {
         for filter in &mut self.noise_hpf {
             filter.reset();
         }
+        for filter in &mut self.noise_lpf {
+            filter.reset();
+        }
     }
 
     fn process(
@@ -327,7 +373,8 @@ impl Crisp {
     /// Generate a new noise sample with the high pass filter applied.
     fn gen_noise(&mut self, channel: usize) -> f32 {
         let noise = self.prng.next_f32() * 2.0 - 1.0;
-        self.noise_hpf[channel].process(noise)
+        let high_passed = self.noise_hpf[channel].process(noise);
+        self.noise_lpf[channel].process(high_passed)
     }
 
     /// Perform the RM step depending on the mode. This applies a low pass filter to the input
@@ -355,6 +402,11 @@ impl Crisp {
         {
             self.update_noise_hpf();
         }
+        if self.params.noise_lpf_freq.smoothed.is_smoothing()
+            || self.params.noise_lpf_q.smoothed.is_smoothing()
+        {
+            self.update_noise_lpf();
+        }
     }
 
     /// Update the filter coefficients if needed. Should be called explicitly from `initialize()`.
@@ -373,6 +425,16 @@ impl Crisp {
         let q = self.params.noise_hpf_q.smoothed.next();
         let coefficients = filter::BiquadCoefficients::highpass(self.sample_rate, frequency, q);
         for filter in &mut self.noise_hpf {
+            filter.coefficients = coefficients;
+        }
+    }
+
+    /// Update the filter coefficients if needed. Should be called explicitly from `initialize()`.
+    fn update_noise_lpf(&mut self) {
+        let frequency = self.params.noise_lpf_freq.smoothed.next();
+        let q = self.params.noise_lpf_q.smoothed.next();
+        let coefficients = filter::BiquadCoefficients::lowpass(self.sample_rate, frequency, q);
+        for filter in &mut self.noise_lpf {
             filter.coefficients = coefficients;
         }
     }
