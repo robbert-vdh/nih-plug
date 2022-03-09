@@ -35,6 +35,8 @@ const INITIAL_PRNG_SEED: Pcg32iState = Pcg32iState::new(69, 420);
 
 /// Allow 100% amount to scale the gain to a bit above 100%, to make the effect even less subtle.
 const AMOUNT_GAIN_MULTIPLIER: f32 = 2.0;
+const MIN_FILTER_FREQUENCY: f32 = 5.0;
+const MAX_FILTER_FREQUENCY: f32 = 22_000.0;
 
 /// This plugin essentially layers the sound with another copy of the signal ring modulated with
 /// white (or filtered) noise. That other copy of the sound may have a low-pass filter applied to it
@@ -148,17 +150,17 @@ impl Default for CrispParams {
 
             rm_input_lpf_freq: FloatParam::new(
                 "RM LP Frequency",
-                22_000.0,
+                MAX_FILTER_FREQUENCY,
                 FloatRange::Skewed {
-                    min: 5.0,
-                    max: 22_000.0,
+                    min: MIN_FILTER_FREQUENCY,
+                    max: MAX_FILTER_FREQUENCY,
                     factor: FloatRange::skew_factor(-1.0),
                 },
             )
             .with_smoother(SmoothingStyle::Logarithmic(100.0))
             // The unit is baked into the value so we can show the disabled string
             .with_value_to_string(Arc::new(|value| {
-                if value >= 22_000.0 {
+                if value >= MAX_FILTER_FREQUENCY {
                     String::from("Disabled")
                 } else {
                     format!("{:.0} Hz", value)
@@ -166,7 +168,7 @@ impl Default for CrispParams {
             }))
             .with_string_to_value(Arc::new(|string| {
                 if string == "Disabled" {
-                    Some(22_000.0)
+                    Some(MAX_FILTER_FREQUENCY)
                 } else {
                     string.trim().trim_end_matches(" Hz").parse().ok()
                 }
@@ -184,17 +186,17 @@ impl Default for CrispParams {
             .with_value_to_string(formatters::f32_rounded(2)),
             noise_hpf_freq: FloatParam::new(
                 "Noise HP Frequency",
-                5.0,
+                MIN_FILTER_FREQUENCY,
                 FloatRange::Skewed {
-                    min: 5.0,
-                    max: 22_000.0,
+                    min: MIN_FILTER_FREQUENCY,
+                    max: MAX_FILTER_FREQUENCY,
                     factor: FloatRange::skew_factor(-1.0),
                 },
             )
             .with_smoother(SmoothingStyle::Logarithmic(100.0))
             // The unit is baked into the value so we can show the disabled string
             .with_value_to_string(Arc::new(|value| {
-                if value <= 5.0 {
+                if value <= MIN_FILTER_FREQUENCY {
                     String::from("Disabled")
                 } else {
                     format!("{:.0} Hz", value)
@@ -202,7 +204,7 @@ impl Default for CrispParams {
             }))
             .with_string_to_value(Arc::new(|string| {
                 if string == "Disabled" {
-                    Some(5.0)
+                    Some(MIN_FILTER_FREQUENCY)
                 } else {
                     string.trim().trim_end_matches(" Hz").parse().ok()
                 }
@@ -220,17 +222,17 @@ impl Default for CrispParams {
             .with_value_to_string(formatters::f32_rounded(2)),
             noise_lpf_freq: FloatParam::new(
                 "Noise LP Frequency",
-                22_000.0,
+                MAX_FILTER_FREQUENCY,
                 FloatRange::Skewed {
-                    min: 5.0,
-                    max: 22_000.0,
+                    min: MIN_FILTER_FREQUENCY,
+                    max: MAX_FILTER_FREQUENCY,
                     factor: FloatRange::skew_factor(-1.0),
                 },
             )
             .with_smoother(SmoothingStyle::Logarithmic(100.0))
             // The unit is baked into the value so we can show the disabled string
             .with_value_to_string(Arc::new(|value| {
-                if value >= 22_000.0 {
+                if value >= MAX_FILTER_FREQUENCY {
                     String::from("Disabled")
                 } else {
                     format!("{:.0} Hz", value)
@@ -238,7 +240,7 @@ impl Default for CrispParams {
             }))
             .with_string_to_value(Arc::new(|string| {
                 if string == "Disabled" {
-                    Some(22_000.0)
+                    Some(MAX_FILTER_FREQUENCY)
                 } else {
                     string.trim().trim_end_matches(" Hz").parse().ok()
                 }
