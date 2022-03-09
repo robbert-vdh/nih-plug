@@ -133,7 +133,7 @@ impl Plugin for Sine {
 
     fn process(&mut self, buffer: &mut Buffer, context: &mut impl ProcessContext) -> ProcessStatus {
         let mut next_event = context.next_midi_event();
-        for (sample_id, channel_samples) in buffer.iter_mut().enumerate() {
+        for (sample_id, channel_samples) in buffer.iter_samples().enumerate() {
             // Smoothing is optionally built into the parameters themselves
             let gain = self.params.gain.smoothed.next();
 

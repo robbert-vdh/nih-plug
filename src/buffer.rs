@@ -290,7 +290,7 @@ impl<'a> Buffer<'a> {
 
     /// Iterate over the samples, returning a channel iterator for each sample.
     #[inline]
-    pub fn iter_mut<'slice>(&'slice mut self) -> SamplesIter<'slice, 'a> {
+    pub fn iter_samples<'slice>(&'slice mut self) -> SamplesIter<'slice, 'a> {
         SamplesIter {
             buffers: self.output_slices.as_mut_slice(),
             current_sample: 0,
@@ -511,7 +511,7 @@ impl<'slice, 'sample> Block<'slice, 'sample> {
     }
 
     /// Iterate over this block on a per-sample per-channel basis. This is identical to
-    /// [`Buffer::iter_mut()`] but for a smaller block instead of the entire buffer
+    /// [`Buffer::iter_samples()`] but for a smaller block instead of the entire buffer
     #[inline]
     pub fn iter_samples(&mut self) -> SamplesIter<'slice, 'sample> {
         SamplesIter {
@@ -703,13 +703,13 @@ mod miri {
             })
         };
 
-        for samples in buffer.iter_mut() {
+        for samples in buffer.iter_samples() {
             for sample in samples {
                 *sample += 0.001;
             }
         }
 
-        for mut samples in buffer.iter_mut() {
+        for mut samples in buffer.iter_samples() {
             for _ in 0..2 {
                 for sample in samples.iter_mut() {
                     *sample += 0.001;

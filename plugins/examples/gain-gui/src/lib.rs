@@ -158,7 +158,7 @@ impl Plugin for Gain {
         buffer: &mut Buffer,
         _context: &mut impl ProcessContext,
     ) -> ProcessStatus {
-        for channel_samples in buffer.iter_mut() {
+        for channel_samples in buffer.iter_samples() {
             let mut amplitude = 0.0;
             let num_samples = channel_samples.len();
 

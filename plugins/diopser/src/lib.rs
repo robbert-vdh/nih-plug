@@ -274,7 +274,7 @@ impl Plugin for Diopser {
         let smoothing_interval =
             unnormalize_automation_precision(self.params.automation_precision.value);
 
-        for mut channel_samples in buffer.iter_mut() {
+        for mut channel_samples in buffer.iter_samples() {
             self.maybe_update_filters(smoothing_interval);
 
             // We can compute the filters for both channels at once. The SIMD version thus now only

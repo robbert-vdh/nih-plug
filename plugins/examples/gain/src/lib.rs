@@ -125,7 +125,7 @@ impl Plugin for Gain {
         buffer: &mut Buffer,
         _context: &mut impl ProcessContext,
     ) -> ProcessStatus {
-        for channel_samples in buffer.iter_mut() {
+        for channel_samples in buffer.iter_samples() {
             // Smoothing is optionally built into the parameters themselves
             let gain = self.params.gain.smoothed.next();
 
