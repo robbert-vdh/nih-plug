@@ -5,8 +5,6 @@ use std::marker::PhantomData;
 #[cfg(feature = "simd")]
 use std::simd::{LaneCount, Simd, SupportedLaneCount};
 
-// TODO: Does adding `#[inline]` to the .next() functions make any difference?
-
 /// The audio buffers used during processing. This contains the output audio output buffers with the
 /// inputs already copied to the outputs. You can either use the iterator adapters to conveniently
 /// and efficiently iterate over the samples, or you can do your own thing using the raw audio
@@ -94,6 +92,7 @@ pub struct BlockChannelsIter<'slice, 'sample: 'slice> {
 impl<'slice, 'sample> Iterator for SamplesIter<'slice, 'sample> {
     type Item = Channels<'slice, 'sample>;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         if self.current_sample < unsafe { (*self.buffers)[0].len() } {
             let channels = Channels {
@@ -110,6 +109,7 @@ impl<'slice, 'sample> Iterator for SamplesIter<'slice, 'sample> {
         }
     }
 
+    #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         let remaining = unsafe { (*self.buffers)[0].len() } - self.current_sample;
         (remaining, Some(remaining))
@@ -119,6 +119,7 @@ impl<'slice, 'sample> Iterator for SamplesIter<'slice, 'sample> {
 impl<'slice, 'sample> Iterator for BlockChannelsIter<'slice, 'sample> {
     type Item = &'sample mut [f32];
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         if self.current_channel < unsafe { (*self.buffers).len() } {
             // SAFETY: These bounds have already been checked
@@ -138,6 +139,7 @@ impl<'slice, 'sample> Iterator for BlockChannelsIter<'slice, 'sample> {
         }
     }
 
+    #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         let remaining = unsafe { (*self.buffers).len() } - self.current_channel;
         (remaining, Some(remaining))
@@ -147,6 +149,7 @@ impl<'slice, 'sample> Iterator for BlockChannelsIter<'slice, 'sample> {
 impl<'slice, 'sample> Iterator for BlocksIter<'slice, 'sample> {
     type Item = (usize, Block<'slice, 'sample>);
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         let buffer_len = unsafe { (*self.buffers)[0].len() };
         if self.current_block_start < buffer_len {
@@ -168,6 +171,7 @@ impl<'slice, 'sample> Iterator for BlocksIter<'slice, 'sample> {
         }
     }
 
+    #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         let remaining = ((unsafe { (*self.buffers)[0].len() } - self.current_block_start) as f32
             / self.max_block_size as f32)
@@ -179,6 +183,7 @@ impl<'slice, 'sample> Iterator for BlocksIter<'slice, 'sample> {
 impl<'slice, 'sample> Iterator for ChannelsIter<'slice, 'sample> {
     type Item = &'sample mut f32;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         if self.current_channel < unsafe { (*self.buffers).len() } {
             // SAFETY: These bounds have already been checked
@@ -198,6 +203,7 @@ impl<'slice, 'sample> Iterator for ChannelsIter<'slice, 'sample> {
         }
     }
 
+    #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         let remaining = unsafe { (*self.buffers).len() } - self.current_channel;
         (remaining, Some(remaining))
@@ -208,6 +214,7 @@ impl<'slice, 'sample> IntoIterator for Channels<'slice, 'sample> {
     type Item = &'sample mut f32;
     type IntoIter = ChannelsIter<'slice, 'sample>;
 
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         ChannelsIter {
             buffers: self.buffers,
@@ -250,22 +257,26 @@ impl<'a> Buffer<'a> {
     }
 
     /// Return the numer of channels in this buffer.
+    #[inline]
     pub fn channels(&self) -> usize {
         self.output_slices.len()
     }
 
     /// Returns true if this buffer does not contain any samples.
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.output_slices.is_empty() || self.output_slices[0].is_empty()
     }
 
     /// Obtain the raw audio buffers.
+    #[inline]
     pub fn as_slice(&mut self) -> &mut [&'a mut [f32]] {
         &mut self.output_slices
     }
 
     /// The same as [`as_slice()`][Self::as_slice()], but for a non-mutable reference. This is
     /// usually not needed.
+    #[inline]
     pub fn as_slice_immutable(&self) -> &[&'a mut [f32]] {
         &self.output_slices
     }
