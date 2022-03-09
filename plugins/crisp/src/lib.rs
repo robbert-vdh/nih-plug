@@ -97,6 +97,9 @@ pub struct CrispParams {
     /// Output gain, as voltage gain. Displayed in decibels.
     #[id = "output"]
     output_gain: FloatParam,
+    /// If set, only output the RM'ed signal. Can be useful for further processing.
+    #[id = "wtonly"]
+    wet_only: BoolParam,
 }
 
 /// Controls the type of modulation to apply.
@@ -279,6 +282,7 @@ impl Default for CrispParams {
                     .ok()
                     .map(util::db_to_gain)
             })),
+            wet_only: BoolParam::new("Wet Only", false),
         }
     }
 }
@@ -375,11 +379,19 @@ impl Plugin for Crisp {
                 }
             }
 
-            for (channel_samples, rm_outputs) in block.iter_samples().zip(&mut rm_outputs) {
-                let output_gain = self.params.output_gain.smoothed.next();
-
-                for (sample, rm_output) in channel_samples.into_iter().zip(rm_outputs) {
-                    *sample = (*sample + *rm_output) * output_gain;
+            if self.params.wet_only.value {
+                for (channel_samples, rm_outputs) in block.iter_samples().zip(&mut rm_outputs) {
+                    let output_gain = self.params.output_gain.smoothed.next();
+                    for (sample, rm_output) in channel_samples.into_iter().zip(rm_outputs) {
+                        *sample = *rm_output * output_gain;
+                    }
+                }
+            } else {
+                for (channel_samples, rm_outputs) in block.iter_samples().zip(&mut rm_outputs) {
+                    let output_gain = self.params.output_gain.smoothed.next();
+                    for (sample, rm_output) in channel_samples.into_iter().zip(rm_outputs) {
+                        *sample = (*sample + *rm_output) * output_gain;
+                    }
                 }
             }
         }
