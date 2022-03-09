@@ -67,4 +67,5 @@ features = [
 ]
 
 [profile.release]
+lto = "thin"
 strip = "symbols"
