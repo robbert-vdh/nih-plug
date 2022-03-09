@@ -349,18 +349,17 @@ impl Plugin for Crisp {
             let mut rm_outputs = [[0.0; NUM_CHANNELS as usize]; BLOCK_SIZE];
 
             // Reduce per-sample branching a bit by iterating over smaller blocks and only then
-            // deciding what to dowith the output
-            for (channel_samples, rm_outputs) in block.iter_samples().zip(&mut rm_outputs) {
-                let amount = self.params.amount.smoothed.next() * AMOUNT_GAIN_MULTIPLIER;
+            // deciding what to do with the output. This version branches only once per sample (in
+            // `do_ring_mod()`) which can be trivially optimized to a masked min/max later.
+            // TODO: SIMD-ize this to process both channels at once
+            match self.params.stereo_mode.value() {
+                StereoMode::Mono => {
+                    for (channel_samples, rm_outputs) in block.iter_samples().zip(&mut rm_outputs) {
+                        let amount = self.params.amount.smoothed.next() * AMOUNT_GAIN_MULTIPLIER;
 
-                // Controls the pre-RM LPF and the HPF applied to the noise signal
-                self.maybe_update_filters();
+                        // Controls the pre-RM LPF and the HPF applied to the noise signal
+                        self.maybe_update_filters();
 
-                // TODO: SIMD-ize this to process both channels at once
-                // TODO: Avoid branching twice here. Modern branch predictors are pretty good at this
-                //       though.
-                match self.params.stereo_mode.value() {
-                    StereoMode::Mono => {
                         let noise = self.gen_noise(0);
                         for (channel_idx, (sample, rm_output)) in
                             channel_samples.into_iter().zip(rm_outputs).enumerate()
@@ -368,7 +367,11 @@ impl Plugin for Crisp {
                             *rm_output = self.do_ring_mod(*sample, channel_idx, noise) * amount;
                         }
                     }
-                    StereoMode::Stereo => {
+                }
+                StereoMode::Stereo => {
+                    for (channel_samples, rm_outputs) in block.iter_samples().zip(&mut rm_outputs) {
+                        let amount = self.params.amount.smoothed.next() * AMOUNT_GAIN_MULTIPLIER;
+                        self.maybe_update_filters();
                         for (channel_idx, (sample, rm_output)) in
                             channel_samples.into_iter().zip(rm_outputs).enumerate()
                         {
