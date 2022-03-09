@@ -65,3 +65,6 @@ features = [
   "Win32_System_LibraryLoader",
   "Win32_System_Performance",
 ]
+
+[profile.release]
+strip = "symbols"
