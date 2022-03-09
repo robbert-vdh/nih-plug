@@ -25,6 +25,9 @@ use std::sync::Arc;
 mod filter;
 mod pcg;
 
+/// The number of channels we support. Hardcoded to allow for easier SIMD-ifying in the future.
+const NUM_CHANNELS: u32 = 2;
+
 /// These seeds being fixed makes bouncing deterministic.
 const INITIAL_PRNG_SEED: Pcg32iState = Pcg32iState::new(69, 420);
 
@@ -37,9 +40,15 @@ const AMOUNT_GAIN_MULTIPLIER: f32 = 2.0;
 struct Crisp {
     params: Pin<Box<CrispParams>>,
 
+    /// Needed for computing the filter coefficients.
+    sample_rate: f32,
+
     /// A PRNG for generating noise, after that we'll implement PCG ourselves so we can easily
     /// SIMD-ify this in the future.
     prng: Pcg32iState,
+
+    /// Resonant filters for high passing the noise signal, to make it even brighter.
+    noise_hpf: [filter::Biquad<f32>; NUM_CHANNELS as usize],
 }
 
 // TODO: Add a filter for the RM input
@@ -56,6 +65,13 @@ pub struct CrispParams {
     /// How to handle stereo signals. See [`StereoMode`].
     #[id = "stereo"]
     stereo_mode: EnumParam<StereoMode>,
+
+    /// The cutoff frequency for the high pass filter applied to the noise.
+    #[id = "nzhpff"]
+    noise_hpf_freq: FloatParam,
+    /// The Q parameter for the high pass filter applied to the noise.
+    #[id = "nzhpfq"]
+    noise_hpf_q: FloatParam,
 
     /// Output gain, as voltage gain. Displayed in decibels.
     #[id = "output"]
@@ -89,7 +105,10 @@ impl Default for Crisp {
         Self {
             params: Box::pin(CrispParams::default()),
 
+            sample_rate: 1.0,
+
             prng: INITIAL_PRNG_SEED,
+            noise_hpf: [filter::Biquad::default(); NUM_CHANNELS as usize],
         }
     }
 }
@@ -103,8 +122,47 @@ impl Default for CrispParams {
                 .with_unit("%")
                 .with_value_to_string(formatters::f32_percentage(0))
                 .with_string_to_value(formatters::from_f32_percentage()),
+
             mode: EnumParam::new("Mode", Mode::EvenCrispier),
             stereo_mode: EnumParam::new("Stereo Mode", StereoMode::Stereo),
+
+            noise_hpf_freq: FloatParam::new(
+                "Noise HPF Frequency",
+                1.0,
+                FloatRange::Skewed {
+                    min: 1.0,
+                    max: 22_000.0,
+                    factor: FloatRange::skew_factor(-1.0),
+                },
+            )
+            .with_smoother(SmoothingStyle::Logarithmic(100.0))
+            .with_unit(" Hz")
+            .with_value_to_string(Arc::new(|value| {
+                if value <= 1.0 {
+                    String::from("Disabled")
+                } else {
+                    format!("{:.0}", value)
+                }
+            }))
+            .with_string_to_value(Arc::new(|string| {
+                if string == "Disabled" {
+                    Some(1.0)
+                } else {
+                    string.trim().trim_end_matches(" Hz").parse().ok()
+                }
+            })),
+            noise_hpf_q: FloatParam::new(
+                "Noise HPF Resonance",
+                2.0f32.sqrt() / 2.0,
+                FloatRange::Skewed {
+                    min: 2.0f32.sqrt() / 2.0,
+                    max: 10.0,
+                    factor: FloatRange::skew_factor(-1.0),
+                },
+            )
+            .with_smoother(SmoothingStyle::Logarithmic(100.0))
+            .with_value_to_string(formatters::f32_rounded(2)),
+
             output_gain: FloatParam::new(
                 "Output",
                 1.0,
@@ -137,8 +195,8 @@ impl Plugin for Crisp {
 
     const VERSION: &'static str = "0.1.0";
 
-    const DEFAULT_NUM_INPUTS: u32 = 2;
-    const DEFAULT_NUM_OUTPUTS: u32 = 2;
+    const DEFAULT_NUM_INPUTS: u32 = NUM_CHANNELS;
+    const DEFAULT_NUM_OUTPUTS: u32 = NUM_CHANNELS;
 
     fn params(&self) -> Pin<&dyn Params> {
         self.params.as_ref()
@@ -146,12 +204,30 @@ impl Plugin for Crisp {
 
     fn accepts_bus_config(&self, config: &BusConfig) -> bool {
         // We'll add a SIMD version in a bit which only supports stereo
-        config.num_input_channels == config.num_output_channels && config.num_input_channels == 2
+        config.num_input_channels == config.num_output_channels
+            && config.num_input_channels == NUM_CHANNELS
+    }
+
+    fn initialize(
+        &mut self,
+        bus_config: &BusConfig,
+        buffer_config: &BufferConfig,
+        _context: &mut impl ProcessContext,
+    ) -> bool {
+        nih_debug_assert_eq!(bus_config.num_input_channels, NUM_CHANNELS);
+        nih_debug_assert_eq!(bus_config.num_output_channels, NUM_CHANNELS);
+        self.sample_rate = buffer_config.sample_rate;
+
+        true
     }
 
     fn reset(&mut self) {
         // By using the same seeds each time bouncing can be made deterministic
         self.prng = INITIAL_PRNG_SEED;
+
+        for filter in &mut self.noise_hpf {
+            filter.reset();
+        }
     }
 
     fn process(
@@ -163,20 +239,23 @@ impl Plugin for Crisp {
             let amount = self.params.amount.smoothed.next() * AMOUNT_GAIN_MULTIPLIER;
             let output_gain = self.params.output_gain.smoothed.next();
 
+            // Controls the HPF applied to the noise signal
+            self.maybe_update_filters();
+
             // TODO: SIMD-ize this to process both channels at once
             // TODO: Avoid branching twice here. Modern branch predictors are pretty good at this
             //       though.
             match self.params.stereo_mode.value() {
                 StereoMode::Mono => {
-                    let noise = self.gen_noise();
+                    let noise = self.gen_noise(0);
                     for sample in channel_samples {
                         *sample += self.do_ring_mod(*sample, noise) * amount;
                         *sample *= output_gain;
                     }
                 }
                 StereoMode::Stereo => {
-                    for sample in channel_samples {
-                        let noise = self.gen_noise();
+                    for (channel_idx, sample) in channel_samples.into_iter().enumerate() {
+                        let noise = self.gen_noise(channel_idx);
                         *sample += self.do_ring_mod(*sample, noise) * amount;
                         *sample *= output_gain;
                     }
@@ -189,9 +268,10 @@ impl Plugin for Crisp {
 }
 
 impl Crisp {
-    /// Generate a new uniform noise sample.
-    fn gen_noise(&mut self) -> f32 {
-        self.prng.next_f32() * 2.0 - 1.0
+    /// Generate a new noise sample with the high pass filter applied.
+    fn gen_noise(&mut self, channel: usize) -> f32 {
+        let noise = self.prng.next_f32() * 2.0 - 1.0;
+        self.noise_hpf[channel].process(noise)
     }
 
     /// Perform the RM step depending on the mode.
@@ -201,6 +281,20 @@ impl Crisp {
             Mode::Crispy => sample * noise,
             Mode::EvenCrispier => sample.max(0.0) * noise,
             Mode::EvenCrispierNegated => sample.max(0.0) * noise,
+        }
+    }
+
+    /// Update the filter coefficients if needed. Should be called once per sample.
+    fn maybe_update_filters(&mut self) {
+        if self.params.noise_hpf_freq.smoothed.is_smoothing()
+            || self.params.noise_hpf_q.smoothed.is_smoothing()
+        {
+            let frequency = self.params.noise_hpf_freq.smoothed.next();
+            let q = self.params.noise_hpf_q.smoothed.next();
+            let coefficients = filter::BiquadCoefficients::highpass(self.sample_rate, frequency, q);
+            for filter in &mut self.noise_hpf {
+                filter.coefficients = coefficients;
+            }
         }
     }
 }
