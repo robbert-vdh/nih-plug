@@ -24,7 +24,7 @@ use crate::CrispParams;
 
 // Makes sense to also define this here, makes it a bit easier to keep track of
 pub fn default_state() -> Arc<EguiState> {
-    EguiState::from_size(220, 330)
+    EguiState::from_size(250, 350)
 }
 
 pub fn create(
