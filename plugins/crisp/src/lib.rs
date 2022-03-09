@@ -29,6 +29,8 @@ mod pcg;
 
 /// The number of channels we support. Hardcoded to allow for easier SIMD-ifying in the future.
 const NUM_CHANNELS: u32 = 2;
+/// The number of channels to iterate over at a time.
+const BLOCK_SIZE: usize = 64;
 
 /// These seeds being fixed makes bouncing deterministic.
 const INITIAL_PRNG_SEED: Pcg32iState = Pcg32iState::new(69, 420);
@@ -339,30 +341,45 @@ impl Plugin for Crisp {
         buffer: &mut Buffer,
         _context: &mut impl ProcessContext,
     ) -> ProcessStatus {
-        for channel_samples in buffer.iter_mut() {
-            let amount = self.params.amount.smoothed.next() * AMOUNT_GAIN_MULTIPLIER;
-            let output_gain = self.params.output_gain.smoothed.next();
+        for (_, mut block) in buffer.iter_blocks(BLOCK_SIZE) {
+            let mut rm_outputs = [[0.0; NUM_CHANNELS as usize]; BLOCK_SIZE];
 
-            // Controls the pre-RM LPF and the HPF applied to the noise signal
-            self.maybe_update_filters();
+            // Reduce per-sample branching a bit by iterating over smaller blocks and only then
+            // deciding what to dowith the output
+            for (channel_samples, rm_outputs) in block.iter_samples().zip(&mut rm_outputs) {
+                let amount = self.params.amount.smoothed.next() * AMOUNT_GAIN_MULTIPLIER;
 
-            // TODO: SIMD-ize this to process both channels at once
-            // TODO: Avoid branching twice here. Modern branch predictors are pretty good at this
-            //       though.
-            match self.params.stereo_mode.value() {
-                StereoMode::Mono => {
-                    let noise = self.gen_noise(0);
-                    for (channel_idx, sample) in channel_samples.into_iter().enumerate() {
-                        *sample += self.do_ring_mod(*sample, channel_idx, noise) * amount;
-                        *sample *= output_gain;
+                // Controls the pre-RM LPF and the HPF applied to the noise signal
+                self.maybe_update_filters();
+
+                // TODO: SIMD-ize this to process both channels at once
+                // TODO: Avoid branching twice here. Modern branch predictors are pretty good at this
+                //       though.
+                match self.params.stereo_mode.value() {
+                    StereoMode::Mono => {
+                        let noise = self.gen_noise(0);
+                        for (channel_idx, (sample, rm_output)) in
+                            channel_samples.into_iter().zip(rm_outputs).enumerate()
+                        {
+                            *rm_output = self.do_ring_mod(*sample, channel_idx, noise) * amount;
+                        }
+                    }
+                    StereoMode::Stereo => {
+                        for (channel_idx, (sample, rm_output)) in
+                            channel_samples.into_iter().zip(rm_outputs).enumerate()
+                        {
+                            let noise = self.gen_noise(channel_idx);
+                            *rm_output = self.do_ring_mod(*sample, channel_idx, noise) * amount;
+                        }
                     }
                 }
-                StereoMode::Stereo => {
-                    for (channel_idx, sample) in channel_samples.into_iter().enumerate() {
-                        let noise = self.gen_noise(channel_idx);
-                        *sample += self.do_ring_mod(*sample, channel_idx, noise) * amount;
-                        *sample *= output_gain;
-                    }
+            }
+
+            for (channel_samples, rm_outputs) in block.iter_samples().zip(&mut rm_outputs) {
+                let output_gain = self.params.output_gain.smoothed.next();
+
+                for (sample, rm_output) in channel_samples.into_iter().zip(rm_outputs) {
+                    *sample = (*sample + *rm_output) * output_gain;
                 }
             }
         }
