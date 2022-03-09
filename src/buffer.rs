@@ -26,12 +26,16 @@ pub struct Buffer<'a> {
 
 // Per-sample per-channel iterators
 
-/// An iterator over all samples in the buffer, yielding iterators over each channel for every
-/// sample. This iteration order offers good cache locality for per-sample access.
+/// An iterator over all samples in a buffer or block, yielding iterators over each channel for
+/// every sample. This iteration order offers good cache locality for per-sample access.
 pub struct SamplesIter<'slice, 'sample: 'slice> {
     /// The raw output buffers.
     pub(self) buffers: *mut [&'sample mut [f32]],
     pub(self) current_sample: usize,
+    /// The last sample index to iterate over plus one. Would be equal to `buffers.len()` when
+    /// iterating over an entire buffer, but this can also be used to iterate over smaller blocks in
+    /// a similar fashion.
+    pub(self) samples_end: usize,
     pub(self) _marker: PhantomData<&'slice mut [&'sample mut [f32]]>,
 }
 
@@ -74,6 +78,7 @@ pub struct Block<'slice, 'sample: 'slice> {
     /// The raw output buffers.
     pub(self) buffers: *mut [&'sample mut [f32]],
     pub(self) current_block_start: usize,
+    /// The index of the last sample in the block plus one.
     pub(self) current_block_end: usize,
     pub(self) _marker: PhantomData<&'slice mut [&'sample mut [f32]]>,
 }
@@ -94,7 +99,8 @@ impl<'slice, 'sample> Iterator for SamplesIter<'slice, 'sample> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if self.current_sample < unsafe { (*self.buffers)[0].len() } {
+        // This can iterate over both the entire buffer or over a smaller sample slice of it
+        if self.current_sample < self.samples_end {
             let channels = ChannelSamples {
                 buffers: self.buffers,
                 current_sample: self.current_sample,
@@ -286,6 +292,7 @@ impl<'a> Buffer<'a> {
         SamplesIter {
             buffers: self.output_slices.as_mut_slice(),
             current_sample: 0,
+            samples_end: self.len(),
             _marker: PhantomData,
         }
     }
@@ -494,6 +501,17 @@ impl<'slice, 'sample> Block<'slice, 'sample> {
             current_block_start: self.current_block_start,
             current_block_end: self.current_block_end,
             current_channel: 0,
+            _marker: self._marker,
+        }
+    }
+
+    /// Iterate over this block on a per-sample per-channel basis. This is identical to
+    /// [`Buffer::iter_mut()`] but for a smaller block instead of the entire buffer
+    pub fn iter_samples(&mut self) -> SamplesIter<'slice, 'sample> {
+        SamplesIter {
+            buffers: self.buffers,
+            current_sample: self.current_block_start,
+            samples_end: self.current_block_end,
             _marker: self._marker,
         }
     }
