@@ -18,10 +18,12 @@
 extern crate nih_plug;
 
 use nih_plug::prelude::*;
+use nih_plug_egui::EguiState;
 use pcg::Pcg32iState;
 use std::pin::Pin;
 use std::sync::Arc;
 
+mod editor;
 mod filter;
 mod pcg;
 
@@ -38,7 +40,8 @@ const AMOUNT_GAIN_MULTIPLIER: f32 = 2.0;
 /// white (or filtered) noise. That other copy of the sound may have a low-pass filter applied to it
 /// since this effect just turns into literal noise at high frequencies.
 struct Crisp {
-    params: Pin<Box<CrispParams>>,
+    params: Pin<Arc<CrispParams>>,
+    editor_state: Arc<EguiState>,
 
     /// Needed for computing the filter coefficients.
     sample_rate: f32,
@@ -111,7 +114,8 @@ enum StereoMode {
 impl Default for Crisp {
     fn default() -> Self {
         Self {
-            params: Box::pin(CrispParams::default()),
+            params: Arc::pin(CrispParams::default()),
+            editor_state: editor::default_state(),
 
             sample_rate: 1.0,
 
@@ -245,6 +249,10 @@ impl Plugin for Crisp {
 
     fn params(&self) -> Pin<&dyn Params> {
         self.params.as_ref()
+    }
+
+    fn editor(&self) -> Option<Box<dyn Editor>> {
+        editor::create(self.params.clone(), self.editor_state.clone())
     }
 
     fn accepts_bus_config(&self, config: &BusConfig) -> bool {

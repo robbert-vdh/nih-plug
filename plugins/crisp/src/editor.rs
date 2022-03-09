@@ -1,5 +1,5 @@
-// Diopser: a phase rotation plugin
-// Copyright (C) 2021-2022 Robbert van der Helm
+// Crisp: a distortion plugin but not quite
+// Copyright (C) 2022 Robbert van der Helm
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -20,7 +20,7 @@ use nih_plug_egui::{create_egui_editor, egui, EguiState};
 use std::pin::Pin;
 use std::sync::Arc;
 
-use crate::DiopserParams;
+use crate::CrispParams;
 
 // Makes sense to also define this here, makes it a bit easier to keep track of
 pub fn default_state() -> Arc<EguiState> {
@@ -28,7 +28,7 @@ pub fn default_state() -> Arc<EguiState> {
 }
 
 pub fn create(
-    params: Pin<Arc<DiopserParams>>,
+    params: Pin<Arc<CrispParams>>,
     editor_state: Arc<EguiState>,
 ) -> Option<Box<dyn Editor>> {
     create_egui_editor(editor_state, (), move |egui_ctx, setter, _state| {
