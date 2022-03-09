@@ -235,6 +235,7 @@ impl<'slice, 'sample> IntoIterator for Block<'slice, 'sample> {
     type Item = &'sample mut [f32];
     type IntoIter = BlockChannelsIter<'slice, 'sample>;
 
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         BlockChannelsIter {
             buffers: self.buffers,
@@ -288,6 +289,7 @@ impl<'a> Buffer<'a> {
     }
 
     /// Iterate over the samples, returning a channel iterator for each sample.
+    #[inline]
     pub fn iter_mut<'slice>(&'slice mut self) -> SamplesIter<'slice, 'a> {
         SamplesIter {
             buffers: self.output_slices.as_mut_slice(),
@@ -324,6 +326,7 @@ impl<'a> Buffer<'a> {
     ///     // Do something cool with `stereo_slice`
     /// }
     /// ````
+    #[inline]
     pub fn iter_blocks<'slice>(&'slice mut self, max_block_size: usize) -> BlocksIter<'slice, 'a> {
         BlocksIter {
             buffers: self.output_slices.as_mut_slice(),
@@ -357,6 +360,7 @@ impl<'slice, 'sample> ChannelSamples<'slice, 'sample> {
 
     /// A resetting iterator. This lets you iterate over the same channels multiple times. Otherwise
     /// you don't need to use this function as [`Channels`] already implements [Iterator].
+    #[inline]
     pub fn iter_mut(&mut self) -> ChannelSamplesIter<'slice, 'sample> {
         ChannelSamplesIter {
             buffers: self.buffers,
@@ -495,6 +499,7 @@ impl<'slice, 'sample> Block<'slice, 'sample> {
     /// A resetting iterator. This lets you iterate over the same block multiple times. Otherwise
     /// you don't need to use this function as [`Block`] already implements [`Iterator`]. You can
     /// also use the direct accessor functions on this block instead.
+    #[inline]
     pub fn iter_mut(&mut self) -> BlockChannelsIter<'slice, 'sample> {
         BlockChannelsIter {
             buffers: self.buffers,
@@ -507,6 +512,7 @@ impl<'slice, 'sample> Block<'slice, 'sample> {
 
     /// Iterate over this block on a per-sample per-channel basis. This is identical to
     /// [`Buffer::iter_mut()`] but for a smaller block instead of the entire buffer
+    #[inline]
     pub fn iter_samples(&mut self) -> SamplesIter<'slice, 'sample> {
         SamplesIter {
             buffers: self.buffers,
