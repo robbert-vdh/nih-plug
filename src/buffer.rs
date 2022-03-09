@@ -39,7 +39,7 @@ pub struct SamplesIter<'slice, 'sample: 'slice> {
 /// [`SamplesIter`]. Can be turned into an iterator, or [`Channels::iter_mut()`] can be used to
 /// iterate over the channel data multiple times, or more efficiently you can use
 /// [`Channels::get_unchecked_mut()`] to do the same thing.
-pub struct Channels<'slice, 'sample: 'slice> {
+pub struct ChannelSamples<'slice, 'sample: 'slice> {
     /// The raw output buffers.
     pub(self) buffers: *mut [&'sample mut [f32]],
     pub(self) current_sample: usize,
@@ -47,7 +47,7 @@ pub struct Channels<'slice, 'sample: 'slice> {
 }
 
 /// The actual iterator over the channel data for a sample, yielded by [`Channels`].
-pub struct ChannelsIter<'slice, 'sample: 'slice> {
+pub struct ChannelSamplesIter<'slice, 'sample: 'slice> {
     /// The raw output buffers.
     pub(self) buffers: *mut [&'sample mut [f32]],
     pub(self) current_sample: usize,
@@ -78,8 +78,8 @@ pub struct Block<'slice, 'sample: 'slice> {
     pub(self) _marker: PhantomData<&'slice mut [&'sample mut [f32]]>,
 }
 
-/// An iterator over all channels in a block yielded by [`Block`]. Analogous to [`ChannelsIter`] but
-/// for blocks.
+/// An iterator over all channels in a block yielded by [`Block`], returning an entire channel slice
+/// at a time.
 pub struct BlockChannelsIter<'slice, 'sample: 'slice> {
     /// The raw output buffers.
     pub(self) buffers: *mut [&'sample mut [f32]],
@@ -90,12 +90,12 @@ pub struct BlockChannelsIter<'slice, 'sample: 'slice> {
 }
 
 impl<'slice, 'sample> Iterator for SamplesIter<'slice, 'sample> {
-    type Item = Channels<'slice, 'sample>;
+    type Item = ChannelSamples<'slice, 'sample>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         if self.current_sample < unsafe { (*self.buffers)[0].len() } {
-            let channels = Channels {
+            let channels = ChannelSamples {
                 buffers: self.buffers,
                 current_sample: self.current_sample,
                 _marker: self._marker,
@@ -180,7 +180,7 @@ impl<'slice, 'sample> Iterator for BlocksIter<'slice, 'sample> {
     }
 }
 
-impl<'slice, 'sample> Iterator for ChannelsIter<'slice, 'sample> {
+impl<'slice, 'sample> Iterator for ChannelSamplesIter<'slice, 'sample> {
     type Item = &'sample mut f32;
 
     #[inline]
@@ -210,13 +210,13 @@ impl<'slice, 'sample> Iterator for ChannelsIter<'slice, 'sample> {
     }
 }
 
-impl<'slice, 'sample> IntoIterator for Channels<'slice, 'sample> {
+impl<'slice, 'sample> IntoIterator for ChannelSamples<'slice, 'sample> {
     type Item = &'sample mut f32;
-    type IntoIter = ChannelsIter<'slice, 'sample>;
+    type IntoIter = ChannelSamplesIter<'slice, 'sample>;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
-        ChannelsIter {
+        ChannelSamplesIter {
             buffers: self.buffers,
             current_sample: self.current_sample,
             current_channel: 0,
@@ -241,7 +241,7 @@ impl<'slice, 'sample> IntoIterator for Block<'slice, 'sample> {
 }
 
 impl ExactSizeIterator for SamplesIter<'_, '_> {}
-impl ExactSizeIterator for ChannelsIter<'_, '_> {}
+impl ExactSizeIterator for ChannelSamplesIter<'_, '_> {}
 impl ExactSizeIterator for BlocksIter<'_, '_> {}
 impl ExactSizeIterator for BlockChannelsIter<'_, '_> {}
 
@@ -340,7 +340,7 @@ impl<'a> Buffer<'a> {
     }
 }
 
-impl<'slice, 'sample> Channels<'slice, 'sample> {
+impl<'slice, 'sample> ChannelSamples<'slice, 'sample> {
     /// Get the number of channels.
     #[allow(clippy::len_without_is_empty)]
     #[inline]
@@ -350,8 +350,8 @@ impl<'slice, 'sample> Channels<'slice, 'sample> {
 
     /// A resetting iterator. This lets you iterate over the same channels multiple times. Otherwise
     /// you don't need to use this function as [`Channels`] already implements [Iterator].
-    pub fn iter_mut(&mut self) -> ChannelsIter<'slice, 'sample> {
-        ChannelsIter {
+    pub fn iter_mut(&mut self) -> ChannelSamplesIter<'slice, 'sample> {
+        ChannelSamplesIter {
             buffers: self.buffers,
             current_sample: self.current_sample,
             current_channel: 0,
