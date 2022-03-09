@@ -14,11 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+#[macro_use]
+extern crate nih_plug;
+
 use nih_plug::prelude::*;
 use pcg::Pcg32iState;
 use std::pin::Pin;
 use std::sync::Arc;
 
+mod filter;
 mod pcg;
 
 /// These seeds being fixed makes bouncing deterministic.
@@ -28,7 +32,7 @@ const INITIAL_PRNG_SEED: Pcg32iState = Pcg32iState::new(69, 420);
 const AMOUNT_GAIN_MULTIPLIER: f32 = 2.0;
 
 /// This plugin essentially layers the sound with another copy of the signal ring modulated with
-/// white (or filtered) noise. That other copy of the sound may have a low pass filter applied to it
+/// white (or filtered) noise. That other copy of the sound may have a low-pass filter applied to it
 /// since this effect just turns into literal noise at high frequencies.
 struct Crisp {
     params: Pin<Box<CrispParams>>,

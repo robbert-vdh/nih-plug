@@ -16,7 +16,7 @@ struct Stft {
     /// A Hann window function, passed to the overlap-add helper.
     window_function: Vec<f32>,
 
-    /// The FFT of a simple low pass FIR filter.
+    /// The FFT of a simple low-pass FIR filter.
     lp_filter_kernel: Vec<c32>,
 
     /// The algorithms for the FFT and IFFT operations.
@@ -47,7 +47,7 @@ impl Default for Stft {
         let mut real_fft_scratch_buffer: AlignedVec<f32> = AlignedVec::new(WINDOW_SIZE);
         let mut complex_fft_scratch_buffer: AlignedVec<c32> = AlignedVec::new(WINDOW_SIZE / 2 + 1);
 
-        // Build a super simple low pass filter from one of the built in window function
+        // Build a super simple low-pass filter from one of the built in window function
         const FILTER_WINDOW_SIZE: usize = 33;
         let filter_window = util::window::hann(FILTER_WINDOW_SIZE);
         real_fft_scratch_buffer[0..FILTER_WINDOW_SIZE].copy_from_slice(&filter_window);
