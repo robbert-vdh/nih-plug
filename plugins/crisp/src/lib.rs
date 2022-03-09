@@ -177,7 +177,7 @@ impl Default for CrispParams {
             .with_value_to_string(formatters::f32_rounded(2)),
             noise_hpf_freq: FloatParam::new(
                 "Noise HP Frequency",
-                1.0,
+                5.0,
                 FloatRange::Skewed {
                     min: 5.0,
                     max: 22_000.0,
