@@ -149,12 +149,12 @@ impl Default for CrispParams {
                 },
             )
             .with_smoother(SmoothingStyle::Logarithmic(100.0))
-            .with_unit(" Hz")
+            // The unit is baked into the value so we can show the disabled string
             .with_value_to_string(Arc::new(|value| {
                 if value >= 22_000.0 {
                     String::from("Disabled")
                 } else {
-                    format!("{:.0}", value)
+                    format!("{:.0} Hz", value)
                 }
             }))
             .with_string_to_value(Arc::new(|string| {
@@ -185,12 +185,12 @@ impl Default for CrispParams {
                 },
             )
             .with_smoother(SmoothingStyle::Logarithmic(100.0))
-            .with_unit(" Hz")
+            // The unit is baked into the value so we can show the disabled string
             .with_value_to_string(Arc::new(|value| {
                 if value <= 5.0 {
                     String::from("Disabled")
                 } else {
-                    format!("{:.0}", value)
+                    format!("{:.0} Hz", value)
                 }
             }))
             .with_string_to_value(Arc::new(|string| {
