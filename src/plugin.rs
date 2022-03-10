@@ -18,8 +18,7 @@ use crate::param::internals::Params;
 /// - Sidechain inputs
 /// - Multiple output busses
 /// - Special handling for offline processing
-/// - Sample accurate automation (this would be great, but sadly few hosts even support it so until
-///   they do we'll ignore that it's a thing)
+/// - Sample accurate automation for VST3, this can already be enabled for CLAP
 /// - Parameter hierarchies/groups
 /// - Bypass parameters, right now the plugin wrappers generates one for you but there's no way to
 ///   interact with it yet
