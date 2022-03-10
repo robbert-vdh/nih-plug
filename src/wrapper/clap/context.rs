@@ -8,6 +8,7 @@ use crate::context::{GuiContext, ProcessContext, Transport};
 use crate::event_loop::EventLoop;
 use crate::param::internals::ParamPtr;
 use crate::plugin::{ClapPlugin, NoteEvent};
+use crate::wrapper::clap::wrapper::OutputParamChangeType;
 
 /// A [`GuiContext`] implementation for the wrapper. This is passed to the plugin in
 /// [`Editor::spawn()`][crate::prelude::Editor::spawn()] so it can interact with the rest of the plugin and
@@ -28,10 +29,23 @@ pub(crate) struct WrapperProcessContext<'a, P: ClapPlugin> {
 impl<P: ClapPlugin> GuiContext for WrapperGuiContext<P> {
     // All of these functions are supposed to be called from the main thread, so we'll put some
     // trust in the caller and assume that this is indeed the case
-    unsafe fn raw_begin_set_parameter(&self, _param: ParamPtr) {
-        // TODO: Parameter event gestures are a bit weird in CLAP right now because they're
-        //       implemented as flags on events, and you don't know when a gesture ends before it
-        //       has ended. Implement this once that's a bit clearer.
+    unsafe fn raw_begin_set_parameter(&self, param: ParamPtr) {
+        match self.wrapper.param_ptr_to_hash.get(&param) {
+            Some(hash) => {
+                // Apparently you're supposed to resend old values for the automation begin and end
+                // gestures
+                let clap_plain_value =
+                    param.normalized_value() as f64 * param.step_count().unwrap_or(1) as f64;
+                let success = self.wrapper.queue_parameter_change(OutputParamChange {
+                    param_hash: *hash,
+                    clap_plain_value,
+                    change_type: OutputParamChangeType::BeginGesture,
+                });
+
+                nih_debug_assert!(success, "Parameter output queue was full, parameter change will not be sent to the host");
+            }
+            None => nih_debug_assert_failure!("Unknown parameter: {:?}", param),
+        }
     }
 
     unsafe fn raw_set_parameter_normalized(&self, param: ParamPtr, normalized: f32) {
@@ -46,6 +60,7 @@ impl<P: ClapPlugin> GuiContext for WrapperGuiContext<P> {
                 let success = self.wrapper.queue_parameter_change(OutputParamChange {
                     param_hash: *hash,
                     clap_plain_value,
+                    change_type: OutputParamChangeType::Normal,
                 });
 
                 nih_debug_assert!(success, "Parameter output queue was full, parameter change will not be sent to the host");
@@ -54,10 +69,23 @@ impl<P: ClapPlugin> GuiContext for WrapperGuiContext<P> {
         }
     }
 
-    unsafe fn raw_end_set_parameter(&self, _param: ParamPtr) {
-        // TODO: Parameter event gestures are a bit weird in CLAP right now because they're
-        //       implemented as flags on events, and you don't know when a gesture ends before it
-        //       has ended. Implement this once that's a bit clearer.
+    unsafe fn raw_end_set_parameter(&self, param: ParamPtr) {
+        match self.wrapper.param_ptr_to_hash.get(&param) {
+            Some(hash) => {
+                // Apparently you're supposed to resend old values for the automation begin and end
+                // gestures
+                let clap_plain_value =
+                    param.normalized_value() as f64 * param.step_count().unwrap_or(1) as f64;
+                let success = self.wrapper.queue_parameter_change(OutputParamChange {
+                    param_hash: *hash,
+                    clap_plain_value,
+                    change_type: OutputParamChangeType::EndGesture,
+                });
+
+                nih_debug_assert!(success, "Parameter output queue was full, parameter change will not be sent to the host");
+            }
+            None => nih_debug_assert_failure!("Unknown parameter: {:?}", param),
+        }
     }
 
     unsafe fn raw_default_normalized_param_value(&self, param: ParamPtr) -> f32 {

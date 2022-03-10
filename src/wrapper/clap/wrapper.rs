@@ -6,9 +6,10 @@ use atomic_float::AtomicF32;
 use atomic_refcell::{AtomicRefCell, AtomicRefMut};
 use clap_sys::events::{
     clap_event_header, clap_event_note, clap_event_param_mod, clap_event_param_value,
-    clap_input_events, clap_output_events, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_MIDI,
-    CLAP_EVENT_NOTE_EXPRESSION, CLAP_EVENT_NOTE_OFF, CLAP_EVENT_NOTE_ON, CLAP_EVENT_PARAM_MOD,
-    CLAP_EVENT_PARAM_VALUE, CLAP_EVENT_SHOULD_RECORD, CLAP_TRANSPORT_HAS_BEATS_TIMELINE,
+    clap_input_events, clap_output_events, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_BEGIN_ADJUST,
+    CLAP_EVENT_END_ADJUST, CLAP_EVENT_IS_LIVE, CLAP_EVENT_MIDI, CLAP_EVENT_NOTE_EXPRESSION,
+    CLAP_EVENT_NOTE_OFF, CLAP_EVENT_NOTE_ON, CLAP_EVENT_PARAM_MOD, CLAP_EVENT_PARAM_VALUE,
+    CLAP_EVENT_SHOULD_RECORD, CLAP_TRANSPORT_HAS_BEATS_TIMELINE,
     CLAP_TRANSPORT_HAS_SECONDS_TIMELINE, CLAP_TRANSPORT_HAS_TEMPO,
     CLAP_TRANSPORT_HAS_TIME_SIGNATURE, CLAP_TRANSPORT_IS_LOOP_ACTIVE, CLAP_TRANSPORT_IS_PLAYING,
     CLAP_TRANSPORT_IS_RECORDING, CLAP_TRANSPORT_IS_WITHIN_PRE_ROLL,
@@ -226,6 +227,19 @@ pub struct OutputParamChange {
     /// The 'plain' value as reported to CLAP. This is the normalized value multiplied by
     /// [`Param::step_size()`][crate::Param::step_size()].
     pub clap_plain_value: f64,
+    /// The kind of parameter change event, since CLAP wants you to resend an old value to handle
+    /// automation start and end gestures.
+    pub change_type: OutputParamChangeType,
+}
+
+/// The type of an [`OutputParamChange`].
+pub enum OutputParamChangeType {
+    /// A regular parameter change, sending a new value for a parameter.
+    Normal,
+    /// Tell the host that the automation gesture begins. The event may resend an old value.
+    BeginGesture,
+    /// Tell the host that the automation gesture has ended. This event may resend an old value.
+    EndGesture,
 }
 
 /// Because CLAP has this [`clap_host::request_host_callback()`] function, we don't need to use
@@ -644,7 +658,18 @@ impl<P: ClapPlugin> Wrapper<P> {
                     time: current_sample_idx as u32,
                     space_id: CLAP_CORE_EVENT_SPACE_ID,
                     type_: CLAP_EVENT_PARAM_VALUE,
-                    flags: CLAP_EVENT_SHOULD_RECORD,
+                    flags: match change.change_type {
+                        OutputParamChangeType::Normal => {
+                            CLAP_EVENT_IS_LIVE | CLAP_EVENT_SHOULD_RECORD
+                        }
+                        // TODO: Should this include `CLAP_EVENT_SHOULD_RECORD`?
+                        OutputParamChangeType::BeginGesture => {
+                            CLAP_EVENT_IS_LIVE | CLAP_EVENT_BEGIN_ADJUST
+                        }
+                        OutputParamChangeType::EndGesture => {
+                            CLAP_EVENT_IS_LIVE | CLAP_EVENT_END_ADJUST
+                        }
+                    },
                 },
                 param_id: change.param_hash,
                 cookie: ptr::null_mut(),
