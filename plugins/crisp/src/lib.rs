@@ -298,6 +298,8 @@ impl Plugin for Crisp {
     const DEFAULT_NUM_INPUTS: u32 = NUM_CHANNELS;
     const DEFAULT_NUM_OUTPUTS: u32 = NUM_CHANNELS;
 
+    const SAMPLE_ACCURATE_AUTOMATION: bool = true;
+
     fn params(&self) -> Pin<&dyn Params> {
         self.params.as_ref()
     }

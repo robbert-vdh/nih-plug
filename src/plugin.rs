@@ -48,6 +48,13 @@ pub trait Plugin: Default + Send + Sync + 'static {
     /// Whether the plugin accepts note events. If this is set to `false`, then the plugin won't
     /// receive any note events.
     const ACCEPTS_MIDI: bool = false;
+    /// If enabled, the audio processing cycle may be split up into multiple smaller chunks if
+    /// parameter values change occur in the middle of the buffer. Depending on the host these
+    /// blocks may be as small as a single sample. Bitwig Studio sends at most one parameter change
+    /// every 64 samples.
+    ///
+    /// TODO: Implement this for VST3, this currently is only implemetned for CLAP.
+    const SAMPLE_ACCURATE_AUTOMATION: bool = false;
 
     /// The plugin's parameters. The host will update the parameter values before calling
     /// `process()`. These parameters are identified by strings that should never change when the
