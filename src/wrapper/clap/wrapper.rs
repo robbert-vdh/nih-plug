@@ -516,7 +516,8 @@ impl<P: ClapPlugin> Wrapper<P> {
             Some(host_params) if !self.is_processing.load(Ordering::SeqCst) => {
                 unsafe { (host_params.request_flush)(&*self.host_callback) };
             }
-            _ => nih_debug_assert_failure!("The host does not support parameters? What?"),
+            Some(_) => (),
+            None => nih_debug_assert_failure!("The host does not support parameters? What?"),
         }
 
         result
