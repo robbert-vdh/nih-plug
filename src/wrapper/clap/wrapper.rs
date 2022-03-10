@@ -926,7 +926,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                     }
                 });
 
-                // Most hosts process data in place, in which case we don't need to do any copying
+                // Some hosts process data in place, in which case we don't need to do any copying
                 // ourselves. If the pointers do not alias, then we'll do the copy here and then the
                 // plugin can just do normal in place processing.
                 if !process.audio_inputs.is_null() {

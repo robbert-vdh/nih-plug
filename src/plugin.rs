@@ -18,7 +18,6 @@ use crate::param::internals::Params;
 /// - Sidechain inputs
 /// - Multiple output busses
 /// - Special handling for offline processing
-/// - Sample accurate automation for VST3, this can already be enabled for CLAP
 /// - Parameter hierarchies/groups
 /// - Bypass parameters, right now the plugin wrappers generates one for you but there's no way to
 ///   interact with it yet
@@ -51,8 +50,6 @@ pub trait Plugin: Default + Send + Sync + 'static {
     /// parameter values change occur in the middle of the buffer. Depending on the host these
     /// blocks may be as small as a single sample. Bitwig Studio sends at most one parameter change
     /// every 64 samples.
-    ///
-    /// TODO: Implement this for VST3, this currently is only implemetned for CLAP.
     const SAMPLE_ACCURATE_AUTOMATION: bool = false;
 
     /// The plugin's parameters. The host will update the parameter values before calling

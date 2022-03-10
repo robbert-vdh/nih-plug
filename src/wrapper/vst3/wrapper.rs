@@ -1,4 +1,4 @@
-use std::cmp;
+use std::cmp::{self, Reverse};
 use std::ffi::c_void;
 use std::mem::{self, MaybeUninit};
 use std::ptr;
@@ -21,6 +21,7 @@ use crate::context::Transport;
 use crate::plugin::{BufferConfig, BusConfig, NoteEvent, ProcessStatus, Vst3Plugin};
 use crate::wrapper::state;
 use crate::wrapper::util::{process_wrapper, u16strlcpy};
+use crate::wrapper::vst3::inner::ParameterChange;
 
 // Alias needed for the VST3 attribute macro
 use vst3_sys as vst3_com;
@@ -645,74 +646,17 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                 .load()
                 .expect("Process call without prior setup call")
                 .sample_rate;
-            if let Some(param_changes) = data.input_param_changes.upgrade() {
-                let num_param_queues = param_changes.get_parameter_count();
-                for change_queue_idx in 0..num_param_queues {
-                    if let Some(param_change_queue) =
-                        param_changes.get_parameter_data(change_queue_idx).upgrade()
-                    {
-                        let param_hash = param_change_queue.get_parameter_id();
-                        let num_changes = param_change_queue.get_point_count();
-
-                        // TODO: Handle sample accurate parameter changes, possibly in a similar way
-                        //       to the smoothing
-                        let mut sample_offset = 0i32;
-                        let mut value = 0.0f64;
-                        if num_changes > 0
-                            && param_change_queue.get_point(
-                                num_changes - 1,
-                                &mut sample_offset,
-                                &mut value,
-                            ) == kResultOk
-                        {
-                            self.inner.set_normalized_value_by_hash(
-                                param_hash,
-                                value as f32,
-                                Some(sample_rate),
-                            );
-                        }
-                    }
-                }
-            }
-
-            // And also incoming note events if the plugin accepts MDII
-            if P::ACCEPTS_MIDI {
-                let mut input_events = self.inner.input_events.borrow_mut();
-                if let Some(events) = data.input_events.upgrade() {
-                    let num_events = events.get_event_count();
-
-                    input_events.clear();
-                    let mut event: MaybeUninit<_> = MaybeUninit::uninit();
-                    for i in 0..num_events {
-                        assert_eq!(events.get_event(i, event.as_mut_ptr()), kResultOk);
-                        let event = event.assume_init();
-                        let timing = event.sample_offset as u32;
-                        if event.type_ == vst3_sys::vst::EventTypes::kNoteOnEvent as u16 {
-                            let event = event.event.note_on;
-                            input_events.push_back(NoteEvent::NoteOn {
-                                timing,
-                                channel: event.channel as u8,
-                                note: event.pitch as u8,
-                                velocity: (event.velocity * 127.0).round() as u8,
-                            });
-                        } else if event.type_ == vst3_sys::vst::EventTypes::kNoteOffEvent as u16 {
-                            let event = event.event.note_off;
-                            input_events.push_back(NoteEvent::NoteOff {
-                                timing,
-                                channel: event.channel as u8,
-                                note: event.pitch as u8,
-                                velocity: (event.velocity * 127.0).round() as u8,
-                            });
-                        }
-                    }
-                }
-            }
 
             // It's possible the host only wanted to send new parameter values
-            // TOOD: Send the output events when doing a flush
-            if data.num_outputs == 0 {
+            let is_parameter_flush = data.num_outputs == 0;
+            if is_parameter_flush {
                 nih_log!("VST3 parameter flush");
-                return kResultOk;
+            } else {
+                check_null_ptr_msg!(
+                    "Process output pointer is null",
+                    data.outputs,
+                    (*data.outputs).buffers,
+                );
             }
 
             // The setups we suppport are:
@@ -732,99 +676,245 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
             );
             nih_debug_assert!(data.num_samples >= 0);
 
-            let num_output_channels = (*data.outputs).num_channels as usize;
-            check_null_ptr_msg!(
-                "Process output pointer is null",
-                data.outputs,
-                (*data.outputs).buffers,
-            );
+            // If `P::SAMPLE_ACCURATE_AUTOMATION` is set, then we'll split up the audio buffer into
+            // chunks whenever a parameter change occurs. Otherwise all parameter changes are
+            // handled right here and now.
+            let mut input_param_changes = self.inner.input_param_changes.borrow_mut();
+            input_param_changes.clear();
+            if let Some(param_changes) = data.input_param_changes.upgrade() {
+                let num_param_queues = param_changes.get_parameter_count();
+                for change_queue_idx in 0..num_param_queues {
+                    if let Some(param_change_queue) =
+                        param_changes.get_parameter_data(change_queue_idx).upgrade()
+                    {
+                        let param_hash = param_change_queue.get_parameter_id();
+                        let num_changes = param_change_queue.get_point_count();
 
-            // This vector has been preallocated to contain enough slices as there are output
-            // channels
-            let mut output_buffer = self.inner.output_buffer.borrow_mut();
-            output_buffer.with_raw_vec(|output_slices| {
-                nih_debug_assert_eq!(num_output_channels, output_slices.len());
-                for (output_channel_idx, output_channel_slice) in
-                    output_slices.iter_mut().enumerate()
-                {
-                    // SAFETY: These pointers may not be valid outside of this function even though
-                    // their lifetime is equal to this structs. This is still safe because they are
-                    // only dereferenced here later as part of this process function.
-                    *output_channel_slice = std::slice::from_raw_parts_mut(
-                        *((*data.outputs).buffers as *mut *mut f32).add(output_channel_idx),
-                        data.num_samples as usize,
-                    );
-                }
-            });
-
-            // Most hosts process data in place, in which case we don't need to do any copying
-            // ourselves. If the pointers do not alias, then we'll do the copy here and then the
-            // plugin can just do normal in place processing.
-            if !data.inputs.is_null() {
-                let num_input_channels = (*data.inputs).num_channels as usize;
-                nih_debug_assert!(
-                    num_input_channels <= num_output_channels,
-                    "Stereo to mono and similar configurations are not supported"
-                );
-                for input_channel_idx in 0..cmp::min(num_input_channels, num_output_channels) {
-                    let output_channel_ptr =
-                        *((*data.outputs).buffers as *mut *mut f32).add(input_channel_idx);
-                    let input_channel_ptr =
-                        *((*data.inputs).buffers as *const *const f32).add(input_channel_idx);
-                    if input_channel_ptr != output_channel_ptr {
-                        ptr::copy_nonoverlapping(
-                            input_channel_ptr,
-                            output_channel_ptr,
-                            data.num_samples as usize,
-                        );
+                        let mut sample_offset = 0i32;
+                        let mut value = 0.0f64;
+                        if num_changes > 0
+                            && param_change_queue.get_point(
+                                num_changes - 1,
+                                &mut sample_offset,
+                                &mut value,
+                            ) == kResultOk
+                        {
+                            if P::SAMPLE_ACCURATE_AUTOMATION {
+                                input_param_changes.push(Reverse((
+                                    sample_offset as usize,
+                                    ParameterChange {
+                                        hash: param_hash,
+                                        normalized_value: value as f32,
+                                    },
+                                )));
+                            } else {
+                                self.inner.set_normalized_value_by_hash(
+                                    param_hash,
+                                    value as f32,
+                                    Some(sample_rate),
+                                );
+                            }
+                        }
                     }
                 }
             }
 
-            // Some of the fields are left empty because VST3 does not provide this information, but
-            // the methods on [`Transport`] can reconstruct these values from the other fields
-            let mut transport = Transport::new(sample_rate);
-            if !data.context.is_null() {
-                let context = &*data.context;
+            let mut block_start = 0;
+            let mut block_end = data.num_samples as usize;
+            let mut event_start_idx = 0;
+            loop {
+                // In sample-accurate automation mode we'll handle any parameter changes for the
+                // current sample, and then process the block between the current sample and the
+                // sample containing the next parameter change, if any. All timings also need to be
+                // compensated for this.
+                if P::SAMPLE_ACCURATE_AUTOMATION {
+                    if input_param_changes.is_empty() {
+                        block_end = data.num_samples as usize;
+                    } else {
+                        while let Some(Reverse((sample_idx, _))) = input_param_changes.peek() {
+                            if *sample_idx != block_start {
+                                block_end = *sample_idx;
+                                break;
+                            }
 
-                // These constants are missing from vst3-sys, see:
-                // https://steinbergmedia.github.io/vst3_doc/vstinterfaces/structSteinberg_1_1Vst_1_1ProcessContext.html
-                transport.playing = context.state & (1 << 1) != 0; // kPlaying
-                transport.recording = context.state & (1 << 3) != 0; // kRecording
-                if context.state & (1 << 10) != 0 {
-                    // kTempoValid
-                    transport.tempo = Some(context.tempo);
+                            let Reverse((_, change)) = input_param_changes.pop().unwrap();
+                            self.inner.set_normalized_value_by_hash(
+                                change.hash,
+                                change.normalized_value,
+                                Some(sample_rate),
+                            );
+                        }
+                    }
                 }
-                if context.state & (1 << 13) != 0 {
-                    // kTimeSigValid
-                    transport.time_sig_numerator = Some(context.time_sig_num);
-                    transport.time_sig_denominator = Some(context.time_sig_den);
-                }
-                transport.pos_samples = Some(context.project_time_samples);
-                if context.state & (1 << 9) != 0 {
-                    // kProjectTimeMusicValid
-                    transport.pos_beats = Some(context.project_time_music);
-                }
-                if context.state & (1 << 11) != 0 {
-                    // kBarPositionValid
-                    transport.bar_start_pos_beats = Some(context.bar_position_music);
-                }
-                if context.state & (1 << 2) != 0 && context.state & (1 << 12) != 0 {
-                    // kCycleActive && kCycleValid
-                    transport.loop_range_beats =
-                        Some((context.cycle_start_music, context.cycle_end_music));
-                }
-            }
 
-            let mut plugin = self.inner.plugin.write();
-            let mut context = self.inner.make_process_context(transport);
-            match plugin.process(&mut output_buffer, &mut context) {
-                ProcessStatus::Error(err) => {
-                    nih_debug_assert_failure!("Process error: {}", err);
+                if P::ACCEPTS_MIDI {
+                    let mut input_events = self.inner.input_events.borrow_mut();
+                    if let Some(events) = data.input_events.upgrade() {
+                        let num_events = events.get_event_count();
 
-                    kResultFalse
+                        input_events.clear();
+                        let mut event: MaybeUninit<_> = MaybeUninit::uninit();
+                        for i in event_start_idx..num_events {
+                            assert_eq!(events.get_event(i, event.as_mut_ptr()), kResultOk);
+                            let event = event.assume_init();
+
+                            // Make sure to only process the events for this block if we're
+                            // splitting the buffer
+                            if P::SAMPLE_ACCURATE_AUTOMATION
+                                && event.sample_offset as u32 >= block_end as u32
+                            {
+                                event_start_idx = i;
+                                break;
+                            }
+
+                            let timing = event.sample_offset as u32 - block_start as u32;
+                            if event.type_ == vst3_sys::vst::EventTypes::kNoteOnEvent as u16 {
+                                let event = event.event.note_on;
+                                input_events.push_back(NoteEvent::NoteOn {
+                                    timing,
+                                    channel: event.channel as u8,
+                                    note: event.pitch as u8,
+                                    velocity: (event.velocity * 127.0).round() as u8,
+                                });
+                            } else if event.type_ == vst3_sys::vst::EventTypes::kNoteOffEvent as u16
+                            {
+                                let event = event.event.note_off;
+                                input_events.push_back(NoteEvent::NoteOff {
+                                    timing,
+                                    channel: event.channel as u8,
+                                    note: event.pitch as u8,
+                                    velocity: (event.velocity * 127.0).round() as u8,
+                                });
+                            }
+                        }
+                    }
                 }
-                _ => kResultOk,
+
+                let result = if is_parameter_flush {
+                    kResultOk
+                } else {
+                    let num_output_channels = (*data.outputs).num_channels as usize;
+
+                    // This vector has been preallocated to contain enough slices as there are
+                    // output channels
+                    let mut output_buffer = self.inner.output_buffer.borrow_mut();
+                    output_buffer.with_raw_vec(|output_slices| {
+                        nih_debug_assert_eq!(num_output_channels, output_slices.len());
+                        for (output_channel_idx, output_channel_slice) in
+                            output_slices.iter_mut().enumerate()
+                        {
+                            // If `P::SAMPLE_ACCURATE_AUTOMATION` is set, then we may be iterating over
+                            // the buffer in smaller sections.
+                            // SAFETY: These pointers may not be valid outside of this function even though
+                            // their lifetime is equal to this structs. This is still safe because they are
+                            // only dereferenced here later as part of this process function.
+                            let channel_ptr =
+                                *((*data.outputs).buffers as *mut *mut f32).add(output_channel_idx);
+                            *output_channel_slice = std::slice::from_raw_parts_mut(
+                                channel_ptr.add(block_start),
+                                block_end - block_start,
+                            );
+                        }
+                    });
+
+                    // Some hosts process data in place, in which case we don't need to do any
+                    // copying ourselves. If the pointers do not alias, then we'll do the copy here
+                    // and then the plugin can just do normal in place processing.
+                    if !data.inputs.is_null() {
+                        let num_input_channels = (*data.inputs).num_channels as usize;
+                        nih_debug_assert!(
+                            num_input_channels <= num_output_channels,
+                            "Stereo to mono and similar configurations are not supported"
+                        );
+                        for input_channel_idx in
+                            0..cmp::min(num_input_channels, num_output_channels)
+                        {
+                            let output_channel_ptr =
+                                *((*data.outputs).buffers as *mut *mut f32).add(input_channel_idx);
+                            let input_channel_ptr = *((*data.inputs).buffers as *const *const f32)
+                                .add(input_channel_idx);
+                            if input_channel_ptr != output_channel_ptr {
+                                ptr::copy_nonoverlapping(
+                                    input_channel_ptr.add(block_start),
+                                    output_channel_ptr.add(block_start),
+                                    block_end - block_start,
+                                );
+                            }
+                        }
+                    }
+
+                    // Some of the fields are left empty because VST3 does not provide this
+                    // information, but the methods on [`Transport`] can reconstruct these values
+                    // from the other fields
+                    let mut transport = Transport::new(sample_rate);
+                    if !data.context.is_null() {
+                        let context = &*data.context;
+
+                        // These constants are missing from vst3-sys, see:
+                        // https://steinbergmedia.github.io/vst3_doc/vstinterfaces/structSteinberg_1_1Vst_1_1ProcessContext.html
+                        transport.playing = context.state & (1 << 1) != 0; // kPlaying
+                        transport.recording = context.state & (1 << 3) != 0; // kRecording
+                        if context.state & (1 << 10) != 0 {
+                            // kTempoValid
+                            transport.tempo = Some(context.tempo);
+                        }
+                        if context.state & (1 << 13) != 0 {
+                            // kTimeSigValid
+                            transport.time_sig_numerator = Some(context.time_sig_num);
+                            transport.time_sig_denominator = Some(context.time_sig_den);
+                        }
+
+                        // We need to compensate for the block splitting here
+                        transport.pos_samples =
+                            Some(context.project_time_samples + block_start as i64);
+                        if context.state & (1 << 9) != 0 {
+                            // kProjectTimeMusicValid
+                            if P::SAMPLE_ACCURATE_AUTOMATION && (context.state & (1 << 10) != 0) {
+                                // kTempoValid
+                                transport.pos_beats = Some(
+                                    context.project_time_music
+                                        + (block_start as f64 / sample_rate as f64 / 60.0
+                                            * context.tempo),
+                                );
+                            } else {
+                                transport.pos_beats = Some(context.project_time_music);
+                            }
+                        }
+
+                        if context.state & (1 << 11) != 0 {
+                            // kBarPositionValid
+                            transport.bar_start_pos_beats = Some(context.bar_position_music);
+                        }
+                        if context.state & (1 << 2) != 0 && context.state & (1 << 12) != 0 {
+                            // kCycleActive && kCycleValid
+                            transport.loop_range_beats =
+                                Some((context.cycle_start_music, context.cycle_end_music));
+                        }
+                    }
+
+                    let mut plugin = self.inner.plugin.write();
+                    let mut context = self.inner.make_process_context(transport);
+
+                    let result = plugin.process(&mut output_buffer, &mut context);
+                    self.inner.last_process_status.store(result);
+                    match result {
+                        ProcessStatus::Error(err) => {
+                            nih_debug_assert_failure!("Process error: {}", err);
+
+                            return kResultFalse;
+                        }
+                        _ => kResultOk,
+                    }
+                };
+
+                // If our block ends at the end of the buffer then that means there are no more
+                // unprocessed (parameter) events. If there are more events, we'll just keep going
+                // through this process until we've processed the entire buffer.
+                if block_end as i32 == data.num_samples {
+                    break result;
+                } else {
+                    block_start = block_end;
+                }
             }
         })
     }

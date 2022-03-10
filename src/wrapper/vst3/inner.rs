@@ -1,7 +1,8 @@
 use atomic_refcell::AtomicRefCell;
 use crossbeam::atomic::AtomicCell;
 use parking_lot::RwLock;
-use std::collections::{HashMap, VecDeque};
+use std::cmp::Reverse;
+use std::collections::{BinaryHeap, HashMap, VecDeque};
 use std::mem::MaybeUninit;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
@@ -66,11 +67,16 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// between process calls. This buffer owns the vector, because otherwise it would need to store
     /// a mutable reference to the data contained in this mutex.
     pub output_buffer: AtomicRefCell<Buffer<'static>>,
-    /// The incoming events for the plugin, if `P::ACCEPTS_MIDI` is set.
-    ///
-    /// TODO: Maybe load these lazily at some point instead of needing to spool them all to this
-    ///       queue first
+    /// The incoming events for the plugin, if `P::ACCEPTS_MIDI` is set. If
+    /// `P::SAMPLE_ACCURATE_AUTOMATION`, this is also read in lockstep with the parameter change
+    /// block splitting.
     pub input_events: AtomicRefCell<VecDeque<NoteEvent>>,
+    /// Unprocessed parameter changes sent by the host as pairs of `(sample_idx_in_buffer, change)`.
+    /// Needed because VST3 does not have a single queue containing all parameter changes. If
+    /// `P::SAMPLE_ACCURATE_AUTOMATION` is set, then all parameter changes will be read into this
+    /// priority queue and the buffer will be processed in small chunks whenever there's a parameter
+    /// change at a new sample index.
+    pub input_param_changes: AtomicRefCell<BinaryHeap<Reverse<(usize, ParameterChange)>>>,
 
     /// The keys from `param_map` in a stable order.
     pub param_hashes: Vec<u32>,
@@ -100,6 +106,26 @@ pub enum Task {
     /// Trigger a restart with the given restart flags. This is a bit set of the flags from
     /// [`vst3_sys::vst::RestartFlags`].
     TriggerRestart(i32),
+}
+
+/// An incoming parameter change sent by the host. Kept in a queue to support block-based sample
+/// accurate automation.
+#[derive(Debug, PartialEq, PartialOrd)]
+pub struct ParameterChange {
+    /// The parameter's hash, as used everywhere else.
+    pub hash: u32,
+    /// The normalized values, as provided by the host.
+    pub normalized_value: f32,
+}
+
+// Instances needed for the binary heap, we'll just pray the host doesn't send NaN values
+impl Eq for ParameterChange {}
+
+#[allow(clippy::derive_ord_xor_partial_ord)]
+impl Ord for ParameterChange {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.partial_cmp(other).unwrap_or(std::cmp::Ordering::Equal)
+    }
 }
 
 impl<P: Vst3Plugin> WrapperInner<P> {
@@ -132,7 +158,14 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             last_process_status: AtomicCell::new(ProcessStatus::Normal),
             current_latency: AtomicU32::new(0),
             output_buffer: AtomicRefCell::new(Buffer::default()),
-            input_events: AtomicRefCell::new(VecDeque::with_capacity(512)),
+            input_events: AtomicRefCell::new(VecDeque::with_capacity(1024)),
+            input_param_changes: AtomicRefCell::new(BinaryHeap::with_capacity(
+                if P::SAMPLE_ACCURATE_AUTOMATION {
+                    4096
+                } else {
+                    0
+                },
+            )),
 
             param_hashes: Vec::new(),
             param_by_hash: HashMap::new(),
