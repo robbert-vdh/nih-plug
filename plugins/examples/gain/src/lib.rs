@@ -105,6 +105,11 @@ impl Plugin for Gain {
     const DEFAULT_NUM_OUTPUTS: u32 = 2;
 
     const ACCEPTS_MIDI: bool = false;
+    // Setting this to `true` will tell the wrapper to split the buffer up into smaller blocks
+    // whenever there are inter-buffer parameter changes. This way no changes to the plugin are
+    // required to support sample accurate automation and the wrapper handles all of the boring
+    // stuff like making sure transport and other timing information stays consistent between the
+    // splits.
     const SAMPLE_ACCURATE_AUTOMATION: bool = true;
 
     fn params(&self) -> Pin<&dyn Params> {
