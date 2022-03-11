@@ -120,8 +120,8 @@ impl ScopedFtz {
                 }
             } else {
                 Self {
-                    old_ftz_mode: None,
-                    send_sync_marker: PhantomData,
+                    should_disable_again: false,
+                    _send_sync_marker: PhantomData,
                 }
             }
         }
