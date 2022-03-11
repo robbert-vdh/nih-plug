@@ -663,6 +663,9 @@ impl<P: ClapPlugin> Wrapper<P> {
                         OutputParamChangeType::Normal => {
                             CLAP_EVENT_IS_LIVE | CLAP_EVENT_SHOULD_RECORD
                         }
+                        // XXX: Apparently you should have `CLAP_EVENT_SHOULD_RECORD` here, even if
+                        //      we're repeating old values. This parameter gesture handling in CLAP
+                        //      is currently a bit weird and error prone.
                         OutputParamChangeType::BeginGesture => {
                             CLAP_EVENT_IS_LIVE | CLAP_EVENT_SHOULD_RECORD | CLAP_EVENT_BEGIN_ADJUST
                         }
