@@ -663,12 +663,11 @@ impl<P: ClapPlugin> Wrapper<P> {
                         OutputParamChangeType::Normal => {
                             CLAP_EVENT_IS_LIVE | CLAP_EVENT_SHOULD_RECORD
                         }
-                        // TODO: Should this include `CLAP_EVENT_SHOULD_RECORD`?
                         OutputParamChangeType::BeginGesture => {
-                            CLAP_EVENT_IS_LIVE | CLAP_EVENT_BEGIN_ADJUST
+                            CLAP_EVENT_IS_LIVE | CLAP_EVENT_SHOULD_RECORD | CLAP_EVENT_BEGIN_ADJUST
                         }
                         OutputParamChangeType::EndGesture => {
-                            CLAP_EVENT_IS_LIVE | CLAP_EVENT_END_ADJUST
+                            CLAP_EVENT_IS_LIVE | CLAP_EVENT_SHOULD_RECORD | CLAP_EVENT_END_ADJUST
                         }
                     },
                 },
