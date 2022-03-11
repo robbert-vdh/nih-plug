@@ -74,6 +74,10 @@ impl<P: ClapPlugin> GuiContext for WrapperGuiContext<P> {
             Some(hash) => {
                 // Apparently you're supposed to resend old values for the automation begin and end
                 // gestures
+                // FIXME: This will result in a race condition if the parameter is modified in the
+                //        same cycle! (same for the gesture begin, but it's less likely to cause
+                //        problems there) This will be fixed in a next version of CLAP by splitting
+                //        the gestures up into their own events so it's not a huge deal right now.
                 let clap_plain_value =
                     param.normalized_value() as f64 * param.step_count().unwrap_or(1) as f64;
                 let success = self.wrapper.queue_parameter_change(OutputParamChange {
