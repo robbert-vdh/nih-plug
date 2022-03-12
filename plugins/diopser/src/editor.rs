@@ -15,25 +15,50 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use nih_plug::prelude::Editor;
-use nih_plug_egui::widgets::generic_ui;
-use nih_plug_egui::{create_egui_editor, egui, EguiState};
+use nih_plug_iced::{create_iced_editor, Application, Command, Element, IcedState};
 use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::DiopserParams;
 
 // Makes sense to also define this here, makes it a bit easier to keep track of
-pub fn default_state() -> Arc<EguiState> {
-    EguiState::from_size(220, 330)
+pub fn default_state() -> Arc<IcedState> {
+    IcedState::from_size(600, 400)
 }
 
 pub fn create(
     params: Pin<Arc<DiopserParams>>,
-    editor_state: Arc<EguiState>,
+    editor_state: Arc<IcedState>,
 ) -> Option<Box<dyn Editor>> {
-    create_egui_editor(editor_state, (), move |egui_ctx, setter, _state| {
-        egui::CentralPanel::default().show(egui_ctx, |ui| {
-            generic_ui::create(ui, params.as_ref(), setter, generic_ui::GenericSlider);
-        });
-    })
+    create_iced_editor::<DiopserEditor>(editor_state, params)
+}
+
+struct DiopserEditor {
+    params: Pin<Arc<DiopserParams>>,
+}
+
+impl Application for DiopserEditor {
+    type Executor = nih_plug_iced::executor::Default;
+    // TODO:
+    type Message = ();
+    type Flags = Pin<Arc<DiopserParams>>;
+
+    fn new(flags: Self::Flags) -> (Self, Command<Self::Message>) {
+        let editor = DiopserEditor { params: flags };
+
+        (editor, Command::none())
+    }
+
+    fn update(
+        &mut self,
+        window: &mut nih_plug_iced::WindowQueue,
+        message: Self::Message,
+    ) -> Command<Self::Message> {
+        // TODO:
+        Command::none()
+    }
+
+    fn view(&mut self) -> Element<'_, Self::Message> {
+        nih_plug_iced::Text::new("Hello, world!").into()
+    }
 }
