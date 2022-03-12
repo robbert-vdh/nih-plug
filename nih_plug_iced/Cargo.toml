@@ -7,10 +7,53 @@ license = "ISC"
 
 description = "An adapter to use iced GUIs with NIH-plug"
 
+[features]
+default = ["wgpu"]
+
+# Use wgpu rendering, which translates to Vulkan, Metal, or Direct3D12 depending
+# on the platform.
+wgpu = ["iced_baseview/wgpu"]
+# Use OpenGL instead of wgpu for the rendering. This should increase platform
+# compatibility at the cost of some iced features not being available.
+opengl = ["iced_baseview/glow"]
+
+# Enables a debug view in native platforms (press F12)
+debug = ["iced_baseview/debug"]
+
+# Enables the `Canvas` widget for the wgpu backend
+canvas = ["iced_baseview/canvas"]
+# Enables the `Canvas` widget for the OpenGL backend
+opengl_canvas = ["iced_baseview/glow_canvas"]
+
+# Enables the `Image` widget, only supported by the wgpu backend
+image = ["iced_baseview/image"]
+# Enables the `Svg` widget, only supported by the wgpu backend
+svg = ["iced_baseview/svg"]
+
+# Enables the `QRCode` widget for the wgpu backend
+qr_code = ["iced_baseview/qr_code"]
+# Enables the `QRCode` widget for the OpenGL backend
+opengl_qr_code = ["iced_baseview/glow_qr_code"]
+
+# Enables using system fonts for the wgpu backend
+default_system_font = ["iced_baseview/default_system_font"]
+# Enables using system fonts for the OpenGL backend
+opengl_default_system_font = ["iced_baseview/glow_default_system_font"]
+
+# Enables advanced color conversion via `palette`
+palette = ["iced_baseview/palette"]
+
+# Enables `tokio` as the `executor::Default` on native platforms
+tokio = ["iced_baseview/tokio"]
+# Enables `async-std` as the `executor::Default` on native platforms
+async-std = ["iced_baseview/async-std"]
+# Enables `smol` as the `executor::Default` on native platforms
+smol = ["iced_baseview/smol"]
+
 [dependencies]
 nih_plug = { path = ".." }
 
 baseview = { git = "https://github.com/robbert-vdh/baseview.git", branch = "feature/mouse-event-modifiers" }
 # Upstream doesn't work with the current iced version, this branch also contains
 # additional features
-iced_egui = { git = "https://github.com/robbert-vdh/iced_baseview.git", branch = "feature/update-dependencies" }
+iced_baseview = { git = "https://github.com/robbert-vdh/iced_baseview.git", branch = "feature/update-dependencies", default_features = false }
