@@ -13,6 +13,7 @@ repository = "https://github.com/robbert-vdh/nih-plug"
 members = [
   "nih_plug_derive",
   "nih_plug_egui",
+  "nih_plug_iced",
   "nih_plug_xtask",
 
   "cargo_nih_plug",

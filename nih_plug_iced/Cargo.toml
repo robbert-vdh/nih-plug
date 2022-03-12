@@ -1,0 +1,16 @@
+[package]
+name = "nih_plug_iced"
+version = "0.0.0"
+edition = "2021"
+authors = ["Robbert van der Helm <mail@robbertvanderhelm.nl>"]
+license = "ISC"
+
+description = "An adapter to use iced GUIs with NIH-plug"
+
+[dependencies]
+nih_plug = { path = ".." }
+
+baseview = { git = "https://github.com/robbert-vdh/baseview.git", branch = "feature/mouse-event-modifiers" }
+# Upstream doesn't work with the current iced version, this branch also contains
+# additional features
+iced_egui = { git = "https://github.com/robbert-vdh/iced_baseview.git", branch = "feature/update-dependencies" }
