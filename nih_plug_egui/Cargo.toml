@@ -7,6 +7,10 @@ license = "ISC"
 
 description = "An adapter to use egui GUIs with NIH-plug"
 
+[features]
+default = ["opengl"]
+opengl = []
+
 [dependencies]
 nih_plug = { path = ".." }
 

@@ -12,6 +12,9 @@ use parking_lot::RwLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+#[cfg(not(feature = "opengl"))]
+compile_error!("There's currently no software rendering support for egui");
+
 /// Re-export for convenience.
 pub use egui;
 
@@ -111,6 +114,8 @@ where
                 scale: scaling_factor
                     .map(|factor| WindowScalePolicy::ScaleFactor(factor as f64))
                     .unwrap_or(WindowScalePolicy::SystemScaleFactor),
+
+                #[cfg(feature = "opengl")]
                 gl_config: Some(GlConfig {
                     version: (3, 2),
                     red_bits: 8,

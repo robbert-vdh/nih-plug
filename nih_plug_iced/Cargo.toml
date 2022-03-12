@@ -12,7 +12,9 @@ default = ["wgpu"]
 
 # Use wgpu rendering, which translates to Vulkan, Metal, or Direct3D12 depending
 # on the platform.
-wgpu = ["iced_baseview/wgpu"]
+# NOTE: The OpenGL support in baseview is not used, this is just a workaround
+#       for a rust analyzer bug. See the comment in lib.rs.
+wgpu = ["iced_baseview/wgpu", "baseview/opengl"]
 # Use OpenGL instead of wgpu for the rendering. This should increase platform
 # compatibility at the cost of some iced features not being available.
 opengl = ["iced_baseview/glow"]
@@ -54,6 +56,7 @@ smol = ["iced_baseview/smol"]
 nih_plug = { path = ".." }
 
 baseview = { git = "https://github.com/robbert-vdh/baseview.git", branch = "feature/mouse-event-modifiers" }
+crossbeam = "0.8"
 # Upstream doesn't work with the current iced version, this branch also contains
 # additional features
 iced_baseview = { git = "https://github.com/robbert-vdh/iced_baseview.git", branch = "feature/update-dependencies", default_features = false }

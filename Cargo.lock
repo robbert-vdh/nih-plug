@@ -1938,6 +1938,7 @@ name = "nih_plug_iced"
 version = "0.0.0"
 dependencies = [
  "baseview",
+ "crossbeam",
  "iced_baseview",
  "nih_plug",
 ]
