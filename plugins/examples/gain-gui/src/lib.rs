@@ -1,13 +1,15 @@
 use atomic_float::AtomicF32;
 use nih_plug::prelude::*;
-use nih_plug_egui::{create_egui_editor, egui, widgets, EguiState};
+use nih_plug_iced::IcedState;
 use std::pin::Pin;
 use std::sync::Arc;
+
+mod editor;
 
 /// This is mostly identical to the gain example, minus some fluff, and with a GUI.
 struct Gain {
     params: Pin<Arc<GainParams>>,
-    editor_state: Arc<EguiState>,
+    editor_state: Arc<IcedState>,
 
     /// Needed to normalize the peak meter's response based on the sample rate.
     peak_meter_decay_weight: f32,
@@ -33,7 +35,7 @@ impl Default for Gain {
     fn default() -> Self {
         Self {
             params: Arc::pin(GainParams::default()),
-            editor_state: EguiState::from_size(300, 180),
+            editor_state: editor::default_state(),
 
             peak_meter_decay_weight: 1.0,
             peak_meter: Arc::new(AtomicF32::new(util::MINUS_INFINITY_DB)),
@@ -79,62 +81,7 @@ impl Plugin for Gain {
     }
 
     fn editor(&self) -> Option<Box<dyn Editor>> {
-        let params = self.params.clone();
-        let peak_meter = self.peak_meter.clone();
-        create_egui_editor(
-            self.editor_state.clone(),
-            (),
-            move |egui_ctx, setter, _state| {
-                egui::CentralPanel::default().show(egui_ctx, |ui| {
-                    // NOTE: See `plugins/diopser/src/editor.rs` for an example using the generic UI widget
-
-                    // This is a fancy widget that can get all the information it needs to properly
-                    // display and modify the parameter from the parametr itself
-                    // It's not yet fully implemented, as the text is missing.
-                    ui.label("Some random integer");
-                    ui.add(widgets::ParamSlider::for_param(&params.some_int, setter));
-
-                    ui.label("Gain");
-                    ui.add(widgets::ParamSlider::for_param(&params.gain, setter));
-
-                    ui.label(
-                        "Also gain, but with a lame widget. Can't even render the value correctly!",
-                    );
-                    // This is a simple naieve version of a parameter slider that's not aware of how
-                    // the parmaeters work
-                    ui.add(
-                        egui::widgets::Slider::from_get_set(-30.0..=30.0, |new_value| {
-                            match new_value {
-                                Some(new_value) => {
-                                    setter.begin_set_parameter(&params.gain);
-                                    setter.set_parameter(&params.gain, new_value as f32);
-                                    setter.end_set_parameter(&params.gain);
-                                    new_value
-                                }
-                                None => params.gain.value as f64,
-                            }
-                        })
-                        .suffix(" dB"),
-                    );
-
-                    // TODO: Add a proper custom widget instead of reusing a progress bar
-                    let peak_meter =
-                        util::gain_to_db(peak_meter.load(std::sync::atomic::Ordering::Relaxed));
-                    let peak_meter_text = if peak_meter > util::MINUS_INFINITY_DB {
-                        format!("{:.1} dBFS", peak_meter)
-                    } else {
-                        String::from("-inf dBFS")
-                    };
-
-                    let peak_meter_normalized = (peak_meter + 60.0) / 60.0;
-                    ui.allocate_space(egui::Vec2::splat(2.0));
-                    ui.add(
-                        egui::widgets::ProgressBar::new(peak_meter_normalized)
-                            .text(peak_meter_text),
-                    );
-                });
-            },
-        )
+        editor::create(self.params.clone(), self.editor_state.clone())
     }
 
     fn accepts_bus_config(&self, config: &BusConfig) -> bool {
