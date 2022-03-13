@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use nih_plug::prelude::{Editor, GuiContext};
+use nih_plug::prelude::{Editor, GuiContext, Param};
 use nih_plug_iced::widgets::ParamMessage;
 use nih_plug_iced::{create_iced_editor, Command, Element, IcedEditor, IcedState};
 use std::pin::Pin;
@@ -37,23 +37,31 @@ pub fn create(
 struct DiopserEditor {
     params: Pin<Arc<DiopserParams>>,
     context: Arc<dyn GuiContext>,
+
+    // FIXME: All of this is just to test the reactivity
+    button_state: nih_plug_iced::widget::button::State,
 }
 
 #[derive(Debug, Clone, Copy)]
-enum EditorMessage {
+enum Message {
+    /// Update a parameter's value.
     ParamUpdate(ParamMessage),
 }
 
 impl IcedEditor for DiopserEditor {
     type Executor = nih_plug_iced::executor::Default;
-    type Message = EditorMessage;
+    type Message = Message;
     type InitializationFlags = Pin<Arc<DiopserParams>>;
 
     fn new(
         params: Self::InitializationFlags,
         context: Arc<dyn GuiContext>,
     ) -> (Self, Command<Self::Message>) {
-        let editor = DiopserEditor { params, context };
+        let editor = DiopserEditor {
+            params,
+            context,
+            button_state: Default::default(),
+        };
 
         (editor, Command::none())
     }
@@ -68,13 +76,37 @@ impl IcedEditor for DiopserEditor {
         message: Self::Message,
     ) -> Command<Self::Message> {
         match message {
-            EditorMessage::ParamUpdate(message) => self.handle_param_message(message),
+            Message::ParamUpdate(message) => self.handle_param_message(message),
         }
 
         Command::none()
     }
 
     fn view(&mut self) -> Element<'_, Self::Message> {
-        nih_plug_iced::Text::new("Hello, world!").into()
+        nih_plug_iced::Row::new()
+            .height(nih_plug_iced::Length::Fill)
+            .align_items(nih_plug_iced::Alignment::Center)
+            .push(
+                nih_plug_iced::Column::new()
+                    .width(nih_plug_iced::Length::Fill)
+                    .align_items(nih_plug_iced::Alignment::Center)
+                    .push(nih_plug_iced::Text::new(format!(
+                        "{} filters active",
+                        self.params.filter_stages.value
+                    )))
+                    .push(
+                        nih_plug_iced::Button::new(
+                            &mut self.button_state,
+                            nih_plug_iced::Text::new("MAXIMUM POWAH"),
+                        )
+                        .on_press(Message::ParamUpdate(
+                            ParamMessage::SetParameterNormalized(
+                                self.params.filter_stages.as_ptr(),
+                                1.0,
+                            ),
+                        )),
+                    ),
+            )
+            .into()
     }
 }
