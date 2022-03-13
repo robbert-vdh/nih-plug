@@ -291,7 +291,7 @@ checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 [[package]]
 name = "baseview"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/baseview.git?branch=feature/mouse-event-modifiers#8e7f854c537712a30ba388bdce8764f10b466652"
+source = "git+https://github.com/robbert-vdh/baseview.git?branch=feature/mouse-event-modifiers#5b57af2463ef55c4ac702ef662c3472c328a3c6b"
 dependencies = [
  "cocoa",
  "core-foundation",
