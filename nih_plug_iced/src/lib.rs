@@ -2,7 +2,7 @@
 //!
 //! TODO: Proper usage example, for now check out the gain_gui example
 
-use baseview::{Size, WindowOpenOptions, WindowScalePolicy};
+use baseview::{WindowOpenOptions, WindowScalePolicy};
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel;
 use nih_plug::prelude::{Editor, GuiContext, ParentWindowHandle};
@@ -106,12 +106,12 @@ pub trait IcedEditor: 'static + Send + Sync + Sized {
     }
 
     /// See [`Application::renderer_settings`].
-    fn renderer_settings() -> iced_baseview::renderer::settings::Settings {
-        iced_baseview::renderer::settings::Settings {
+    fn renderer_settings() -> iced_baseview::backend::settings::Settings {
+        iced_baseview::backend::settings::Settings {
             // Enable some anti-aliasing by default. Since GUIs are likely very simple and most of
             // the work will be on the CPU anyways this should not affect performance much.
-            antialiasing: Some(iced_baseview::renderer::settings::Antialiasing::MSAAx4),
-            ..iced_baseview::renderer::settings::Settings::default()
+            antialiasing: Some(iced_baseview::backend::settings::Antialiasing::MSAAx4),
+            ..iced_baseview::backend::settings::Settings::default()
         }
     }
 
@@ -196,7 +196,7 @@ impl<E: IcedEditor> Editor for IcedEditorWrapper<E> {
                 window: WindowOpenOptions {
                     title: String::from("iced window"),
                     // Baseview should be doing the DPI scaling for us
-                    size: Size::new(unscaled_width as f64, unscaled_height as f64),
+                    size: baseview::Size::new(unscaled_width as f64, unscaled_height as f64),
                     // NOTE: For some reason passing 1.0 here causes the UI to be scaled on macOS but
                     //       not the mouse events.
                     scale: scaling_factor

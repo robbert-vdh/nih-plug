@@ -1,6 +1,15 @@
 //! Widgets and utilities for making widgets to integrate iced with NIH-plug.
+//!
+//! # Note
+//!
+//! None of these widgets are finalized, and their sizes or looks can change at any point. Feel free
+//! to copy the widgets and modify them to your personal taste.
 
 use nih_plug::param::internals::ParamPtr;
+
+mod param_slider;
+
+pub use param_slider::ParamSlider;
 
 /// A message to update a parameter value. Since NIH-plug manages the parameters, interacting with
 /// parameter values with iced works a little different from updating any other state. This main

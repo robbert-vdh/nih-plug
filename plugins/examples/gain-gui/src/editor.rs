@@ -1,5 +1,5 @@
 use nih_plug::prelude::{Editor, GuiContext};
-use nih_plug_iced::widgets::ParamMessage;
+use nih_plug_iced::widgets::{ParamMessage, ParamSlider};
 use nih_plug_iced::*;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -22,7 +22,6 @@ struct GainEditor {
     params: Pin<Arc<GainParams>>,
     context: Arc<dyn GuiContext>,
 
-    gain_dummy_state: widget::button::State,
     meter_dummy_state: widget::button::State,
 }
 
@@ -44,7 +43,6 @@ impl IcedEditor for GainEditor {
         let editor = GainEditor {
             params,
             context,
-            gain_dummy_state: widget::button::State::new(),
             meter_dummy_state: widget::button::State::new(),
         };
 
@@ -73,22 +71,23 @@ impl IcedEditor for GainEditor {
             .push(
                 Text::new("Gain GUI")
                     .size(40)
-                    .height(45.into())
+                    .height(50.into())
                     .width(Length::Fill)
                     .horizontal_alignment(alignment::Horizontal::Center)
                     .vertical_alignment(alignment::Vertical::Bottom),
             )
             .push(
                 Text::new("Gain")
-                    .height(25.into())
+                    .height(20.into())
                     .width(Length::Fill)
                     .horizontal_alignment(alignment::Horizontal::Center)
                     .vertical_alignment(alignment::Vertical::Center),
             )
             .push(
-                Button::new(&mut self.gain_dummy_state, Text::new("Gain"))
-                    .height(30.into())
-                    .width(180.into()),
+                ParamSlider::new(&self.params.gain).map(Message::ParamUpdate)
+                // Button::new(&mut self.gain_dummy_state, Text::new("Gain"))
+                //     .height(30.into())
+                //     .width(180.into()),
             )
             .push(Space::with_height(10.into()))
             .push(

@@ -152,7 +152,7 @@ impl<E: IcedEditor> Application for IcedEditorWrapperApplication<E> {
     }
 
     #[inline]
-    fn renderer_settings() -> iced_baseview::renderer::settings::Settings {
+    fn renderer_settings() -> iced_baseview::backend::settings::Settings {
         E::renderer_settings()
     }
 }
