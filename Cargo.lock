@@ -1396,7 +1396,7 @@ checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
 [[package]]
 name = "iced_baseview"
 version = "0.0.3"
-source = "git+https://github.com/robbert-vdh/iced_baseview.git?branch=feature/update-dependencies#61af92e930ce6500ab3a8321ed29a07c26a9e396"
+source = "git+https://github.com/robbert-vdh/iced_baseview.git?branch=feature/update-dependencies#d6356218bc43a4b74e279cdd364de108cb7fa269"
 dependencies = [
  "baseview",
  "copypasta",

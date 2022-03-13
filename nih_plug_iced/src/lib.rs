@@ -4,6 +4,7 @@
 
 use baseview::{Size, WindowOpenOptions, WindowScalePolicy};
 use crossbeam::atomic::AtomicCell;
+use crossbeam::channel;
 use nih_plug::prelude::{Editor, GuiContext, ParentWindowHandle};
 use std::fmt::Debug;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -15,6 +16,7 @@ use crate::widgets::ParamMessage;
 pub use iced_baseview::*;
 
 pub mod widgets;
+mod wrapper;
 
 /// Create an [`Editor`] instance using [iced](https://github.com/iced-rs/iced). The rough idea is
 /// that you implement [`IcedEditor`], which is roughly analogous to iced's regular [`Application`]
@@ -30,11 +32,20 @@ pub fn create_iced_editor<E: IcedEditor>(
     iced_state: Arc<IcedState>,
     initialization_flags: E::InitializationFlags,
 ) -> Option<Box<dyn Editor>> {
+    // We need some way to communicate parameter changes to the `IcedEditor` since parameter updates
+    // come from outside of the editor's reactive model. This contains only capacity to store only
+    // one parameter update, since we're only storing _that_ a parameter update has happened and not
+    // which parameter so we'd need to redraw the entire GUI either way.
+    let (parameter_updates_sender, parameter_updates_receiver) = channel::bounded(1);
+
     Some(Box::new(IcedEditorWrapper::<E> {
         iced_state,
         initialization_flags,
 
         scaling_factor: AtomicCell::new(None),
+
+        parameter_updates_sender,
+        parameter_updates_receiver: Arc::new(parameter_updates_receiver),
     }))
 }
 
@@ -151,6 +162,9 @@ impl IcedState {
     }
 }
 
+/// A marker struct to indicate that a parameter update has happened.
+pub(crate) struct ParameterUpdate;
+
 /// An [`Editor`] implementation that renders an iced [`Application`].
 struct IcedEditorWrapper<E: IcedEditor> {
     iced_state: Arc<IcedState>,
@@ -159,6 +173,10 @@ struct IcedEditorWrapper<E: IcedEditor> {
     /// The scaling factor reported by the host, if any. On macOS this will never be set and we
     /// should use the system scaling factor instead.
     scaling_factor: AtomicCell<Option<f32>>,
+
+    /// A subscription for sending messages about parameter updates to the `IcedEditor`.
+    parameter_updates_sender: channel::Sender<ParameterUpdate>,
+    parameter_updates_receiver: Arc<channel::Receiver<ParameterUpdate>>,
 }
 
 impl<E: IcedEditor> Editor for IcedEditorWrapper<E> {
@@ -167,15 +185,12 @@ impl<E: IcedEditor> Editor for IcedEditorWrapper<E> {
         parent: ParentWindowHandle,
         context: Arc<dyn GuiContext>,
     ) -> Box<dyn std::any::Any + Send + Sync> {
-        // FIXME: Somehow get the context/parametersetter to the GUI. Another trait that adds a
-        //        `set_context()` would be the easiest way but perhaps not the cleanest.
-
         let (unscaled_width, unscaled_height) = self.iced_state.size();
         let scaling_factor = self.scaling_factor.load();
 
         // TODO: iced_baseview does not have gracefuly error handling for context creation failures.
         //       This will panic if the context could not be created.
-        let window = IcedWindow::<IcedEditorWrapperApplication<E>>::open_parented(
+        let window = IcedWindow::<wrapper::IcedEditorWrapperApplication<E>>::open_parented(
             &parent,
             Settings {
                 window: WindowOpenOptions {
@@ -213,7 +228,11 @@ impl<E: IcedEditor> Editor for IcedEditorWrapper<E> {
                     gl_config: None,
                 },
                 // We use this wrapper to be able to pass the GUI context to the editor
-                flags: (context, self.initialization_flags.clone()),
+                flags: (
+                    context,
+                    self.parameter_updates_receiver.clone(),
+                    self.initialization_flags.clone(),
+                ),
             },
         );
 
@@ -232,6 +251,14 @@ impl<E: IcedEditor> Editor for IcedEditorWrapper<E> {
         self.scaling_factor.store(Some(factor));
         true
     }
+
+    fn param_values_changed(&self) {
+        if self.iced_state.is_open() {
+            // If there's already a paramter change notification in the channel then we don't need
+            // to do anything else. This avoids queueing up redundant GUI redraws.
+            let _ = self.parameter_updates_sender.try_send(ParameterUpdate);
+        }
+    }
 }
 
 /// The window handle used for [`IcedEditorWrapper`].
@@ -249,59 +276,5 @@ impl<Message: Send> Drop for IcedEditorHandle<Message> {
     fn drop(&mut self) {
         self.iced_state.open.store(false, Ordering::Release);
         self.window.close_window();
-    }
-}
-
-/// Wraps an `iced_baseview` [`Application`] around [`IcedEditor`]. Needed to allow editors to
-/// always receive a copy of the GUI context.
-struct IcedEditorWrapperApplication<E> {
-    editor: E,
-}
-
-impl<E: IcedEditor> Application for IcedEditorWrapperApplication<E> {
-    type Executor = E::Executor;
-    type Message = E::Message;
-    type Flags = (Arc<dyn GuiContext>, E::InitializationFlags);
-
-    fn new((context, flags): Self::Flags) -> (Self, Command<Self::Message>) {
-        let (editor, command) = E::new(flags, context);
-        (Self { editor }, command)
-    }
-
-    #[inline]
-    fn update(
-        &mut self,
-        window: &mut WindowQueue,
-        message: Self::Message,
-    ) -> Command<Self::Message> {
-        self.editor.update(window, message)
-    }
-
-    #[inline]
-    fn subscription(
-        &self,
-        window_subs: &mut WindowSubs<Self::Message>,
-    ) -> Subscription<Self::Message> {
-        self.editor.subscription(window_subs)
-    }
-
-    #[inline]
-    fn view(&mut self) -> Element<'_, Self::Message> {
-        self.editor.view()
-    }
-
-    #[inline]
-    fn background_color(&self) -> Color {
-        self.editor.background_color()
-    }
-
-    #[inline]
-    fn scale_policy(&self) -> WindowScalePolicy {
-        self.editor.scale_policy()
-    }
-
-    #[inline]
-    fn renderer_settings() -> iced_baseview::renderer::settings::Settings {
-        E::renderer_settings()
     }
 }

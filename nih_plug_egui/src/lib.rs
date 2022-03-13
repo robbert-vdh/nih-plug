@@ -82,6 +82,7 @@ struct EguiEditor<T> {
     egui_state: Arc<EguiState>,
     /// The plugin's state. This is kept in between editor openenings.
     user_state: Arc<RwLock<T>>,
+    /// The user's update function.
     update: Arc<dyn Fn(&Context, &ParamSetter, &mut T) + 'static + Send + Sync>,
 
     /// The scaling factor reported by the host, if any. On macOS this will never be set and we
@@ -161,6 +162,12 @@ where
     fn set_scale_factor(&self, factor: f32) -> bool {
         self.scaling_factor.store(Some(factor));
         true
+    }
+
+    fn param_values_changed(&self) {
+        // As mentioned above, for now we'll always force a redraw to allow meter widgets to work
+        // correctly. In the future we can use an `Arc<AtomicBool>` and only force a redraw when
+        // that boolean is set.
     }
 }
 

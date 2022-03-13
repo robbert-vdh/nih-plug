@@ -243,6 +243,15 @@ pub trait Editor: Send + Sync {
     /// there.
     fn set_scale_factor(&self, factor: f32) -> bool;
 
+    /// A callback that will be called wheneer the parameter values changed while the editor is
+    /// open. You don't need to do anything with this, but this can be used to force a redraw when
+    /// the host sends a new value for a parameter or when a parameter change sent to the host gets
+    /// processed.
+    ///
+    /// This function will be called from the **audio thread**. It must thus be lock-free and may
+    /// not allocate.
+    fn param_values_changed(&self);
+
     // TODO: Reconsider adding a tick function here for the Linux `IRunLoop`. To keep this platform
     //       and API agnostic, add a way to ask the GuiContext if the wrapper already provides a
     //       tick function. If it does not, then the Editor implementation must handle this by
