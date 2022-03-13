@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use nih_plug::prelude::Editor;
-use nih_plug_iced::{create_iced_editor, Application, Command, Element, IcedState};
+use nih_plug::prelude::{Editor, GuiContext};
+use nih_plug_iced::{create_iced_editor, Command, Element, IcedEditor, IcedState};
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -35,16 +35,20 @@ pub fn create(
 
 struct DiopserEditor {
     params: Pin<Arc<DiopserParams>>,
+    context: Arc<dyn GuiContext>,
 }
 
-impl Application for DiopserEditor {
+impl IcedEditor for DiopserEditor {
     type Executor = nih_plug_iced::executor::Default;
     // TODO:
     type Message = ();
-    type Flags = Pin<Arc<DiopserParams>>;
+    type InitializationFlags = Pin<Arc<DiopserParams>>;
 
-    fn new(flags: Self::Flags) -> (Self, Command<Self::Message>) {
-        let editor = DiopserEditor { params: flags };
+    fn new(
+        params: Self::InitializationFlags,
+        context: Arc<dyn GuiContext>,
+    ) -> (Self, Command<Self::Message>) {
+        let editor = DiopserEditor { params, context };
 
         (editor, Command::none())
     }
