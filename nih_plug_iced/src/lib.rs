@@ -110,7 +110,7 @@ pub trait IcedEditor: 'static + Send + Sync + Sized {
         iced_baseview::renderer::settings::Settings {
             // Enable some anti-aliasing by default. Since GUIs are likely very simple and most of
             // the work will be on the CPU anyways this should not affect performance much.
-            antialiasing: Some(iced_baseview::renderer::Antialiasing::MSAAx4),
+            antialiasing: Some(iced_baseview::renderer::settings::Antialiasing::MSAAx4),
             ..iced_baseview::renderer::settings::Settings::default()
         }
     }
