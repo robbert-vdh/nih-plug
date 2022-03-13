@@ -9,8 +9,12 @@ use std::fmt::Debug;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+use crate::widgets::ParamMessage;
+
 /// Re-export for convenience.
 pub use iced_baseview::*;
+
+pub mod widgets;
 
 /// Create an [`Editor`] instance using [iced](https://github.com/iced-rs/iced). The rough idea is
 /// that you implement [`IcedEditor`], which is roughly analogous to iced's regular [`Application`]
@@ -42,7 +46,7 @@ pub fn create_iced_editor<E: IcedEditor>(
 pub trait IcedEditor: 'static + Send + Sync + Sized {
     /// See [`Application::Executor`]. You'll likely want to use [`crate::executor::Default`].
     type Executor: Executor;
-    /// See [`Application::Message`].
+    /// See [`Application::Message`]. You should have one variant containing a [`ParamMessage`].
     type Message: 'static + Clone + Debug + Send;
     /// See [`Application::Flags`].
     type InitializationFlags: 'static + Clone + Send + Sync;
@@ -53,7 +57,14 @@ pub trait IcedEditor: 'static + Send + Sync + Sized {
         context: Arc<dyn GuiContext>,
     ) -> (Self, Command<Self::Message>);
 
-    /// See [`Application::update`].
+    /// Return a reference to the GUI context.
+    /// [`handle_param_message()`][Self::handle_param_message()] uses this to interact with the
+    /// parameters.
+    fn context(&self) -> &dyn GuiContext;
+
+    /// See [`Application::update`]. When receiving the variant that contains a
+    /// [`widgets::ParamMessage`] you can call
+    /// [`handle_param_message()`][Self::handle_param_message()] to handle the parameter update.
     fn update(
         &mut self,
         window: &mut WindowQueue,
@@ -86,6 +97,23 @@ pub trait IcedEditor: 'static + Send + Sync + Sized {
     /// See [`Application::renderer_settings`].
     fn renderer_settings() -> iced_baseview::renderer::settings::Settings {
         iced_baseview::renderer::settings::Settings::default()
+    }
+
+    /// Handle a parameter update using the GUI context.
+    fn handle_param_message(&self, message: ParamMessage) {
+        // We can't use the fancy ParamSetter here because this needs to be type erased
+        let context = self.context();
+        match message {
+            ParamMessage::BeginSetParameter(p) => unsafe { context.raw_begin_set_parameter(p) },
+            ParamMessage::SetParameterNormalized(p, v) => unsafe {
+                context.raw_set_parameter_normalized(p, v)
+            },
+            ParamMessage::ResetParameter(p) => unsafe {
+                let default_value = context.raw_default_normalized_param_value(p);
+                context.raw_set_parameter_normalized(p, default_value);
+            },
+            ParamMessage::EndSetParameter(p) => unsafe { context.raw_end_set_parameter(p) },
+        }
     }
 }
 

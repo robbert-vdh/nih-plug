@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use nih_plug::prelude::{Editor, GuiContext};
+use nih_plug_iced::widgets::ParamMessage;
 use nih_plug_iced::{create_iced_editor, Command, Element, IcedEditor, IcedState};
 use std::pin::Pin;
 use std::sync::Arc;
@@ -38,10 +39,14 @@ struct DiopserEditor {
     context: Arc<dyn GuiContext>,
 }
 
+#[derive(Debug, Clone, Copy)]
+enum EditorMessage {
+    ParamUpdate(ParamMessage),
+}
+
 impl IcedEditor for DiopserEditor {
     type Executor = nih_plug_iced::executor::Default;
-    // TODO:
-    type Message = ();
+    type Message = EditorMessage;
     type InitializationFlags = Pin<Arc<DiopserParams>>;
 
     fn new(
@@ -53,12 +58,19 @@ impl IcedEditor for DiopserEditor {
         (editor, Command::none())
     }
 
+    fn context(&self) -> &dyn GuiContext {
+        self.context.as_ref()
+    }
+
     fn update(
         &mut self,
-        window: &mut nih_plug_iced::WindowQueue,
+        _window: &mut nih_plug_iced::WindowQueue,
         message: Self::Message,
     ) -> Command<Self::Message> {
-        // TODO:
+        match message {
+            EditorMessage::ParamUpdate(message) => self.handle_param_message(message),
+        }
+
         Command::none()
     }
 
