@@ -8,7 +8,7 @@ license = "ISC"
 description = "An adapter to use iced GUIs with NIH-plug"
 
 [features]
-default = ["wgpu"]
+default = ["opengl"]
 
 # Use wgpu rendering, which translates to Vulkan, Metal, or Direct3D12 depending
 # on the platform.
