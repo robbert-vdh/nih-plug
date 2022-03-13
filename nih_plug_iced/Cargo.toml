@@ -22,23 +22,23 @@ opengl = ["iced_baseview/glow"]
 # Enables a debug view in native platforms (press F12)
 debug = ["iced_baseview/debug"]
 
+# Enables the `Image` widget, only supported by the wgpu backend
+wgpu_image = ["iced_baseview/image"]
+# Enables the `Svg` widget, only supported by the wgpu backend
+wgpu_svg = ["iced_baseview/svg"]
+
 # Enables the `Canvas` widget for the wgpu backend
-canvas = ["iced_baseview/canvas"]
+wgpu_canvas = ["iced_baseview/canvas"]
 # Enables the `Canvas` widget for the OpenGL backend
 opengl_canvas = ["iced_baseview/glow_canvas"]
 
-# Enables the `Image` widget, only supported by the wgpu backend
-image = ["iced_baseview/image"]
-# Enables the `Svg` widget, only supported by the wgpu backend
-svg = ["iced_baseview/svg"]
-
 # Enables the `QRCode` widget for the wgpu backend
-qr_code = ["iced_baseview/qr_code"]
+wgpu_qr_code = ["iced_baseview/qr_code"]
 # Enables the `QRCode` widget for the OpenGL backend
 opengl_qr_code = ["iced_baseview/glow_qr_code"]
 
 # Enables using system fonts for the wgpu backend
-default_system_font = ["iced_baseview/default_system_font"]
+wgpu_default_system_font = ["iced_baseview/default_system_font"]
 # Enables using system fonts for the OpenGL backend
 opengl_default_system_font = ["iced_baseview/glow_default_system_font"]
 
