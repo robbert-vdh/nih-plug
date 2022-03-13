@@ -58,6 +58,7 @@ impl<P: Vst3Plugin> GuiContext for WrapperGuiContext<P> {
                                 .load()
                                 .map(|c| c.sample_rate),
                         );
+                        self.inner.notify_param_values_changed();
                     }
 
                     handler.perform_edit(*hash, normalized as f64);

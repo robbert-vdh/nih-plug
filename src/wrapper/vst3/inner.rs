@@ -235,8 +235,22 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         }
     }
 
+    /// If there's an editor open, let it know that parameter values have changed. This should be
+    /// called whenever there's been a call or multiple calls to
+    /// [`set_normalized_value_by_hash()[Self::set_normalized_value_by_hash()`].
+    pub fn notify_param_values_changed(&self) {
+        if let Some(editor) = &self.editor {
+            editor.param_values_changed();
+        }
+    }
+
     /// Convenience function for setting a value for a parameter as triggered by a VST3 parameter
     /// update. The same rate is for updating parameter smoothing.
+    ///
+    /// After calling this function, you should call
+    /// [`notify_param_values_changed()`][Self::notify_param_values_changed()] to allow the editor
+    /// to update itself. This needs to be done seperately so you can process parameter changes in
+    /// batches.
     pub fn set_normalized_value_by_hash(
         &self,
         hash: u32,

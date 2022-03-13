@@ -233,6 +233,8 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
         }
 
         // Reinitialize the plugin after loading state so it can respond to the new parameter values
+        self.inner.notify_param_values_changed();
+
         let bus_config = self.inner.current_bus_config.load();
         if let Some(buffer_config) = self.inner.current_buffer_config.load() {
             let mut plugin = self.inner.plugin.write();
@@ -461,8 +463,12 @@ impl<P: Vst3Plugin> IEditController for Wrapper<P> {
             .current_buffer_config
             .load()
             .map(|c| c.sample_rate);
-        self.inner
-            .set_normalized_value_by_hash(id, value as f32, sample_rate)
+        let result = self
+            .inner
+            .set_normalized_value_by_hash(id, value as f32, sample_rate);
+        self.inner.notify_param_values_changed();
+
+        result
     }
 
     unsafe fn set_component_handler(
@@ -680,6 +686,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
             // chunks whenever a parameter change occurs. Otherwise all parameter changes are
             // handled right here and now.
             let mut input_param_changes = self.inner.input_param_changes.borrow_mut();
+            let mut parameter_values_changed = false;
             input_param_changes.clear();
             if let Some(param_changes) = data.input_param_changes.upgrade() {
                 let num_param_queues = param_changes.get_parameter_count();
@@ -713,6 +720,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                     value as f32,
                                     Some(sample_rate),
                                 );
+                                parameter_values_changed = true;
                             }
                         }
                     }
@@ -743,8 +751,15 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                 change.normalized_value,
                                 Some(sample_rate),
                             );
+                            parameter_values_changed = true;
                         }
                     }
+                }
+
+                // This allows the GUI to react to incoming parameter changes
+                if parameter_values_changed {
+                    self.inner.notify_param_values_changed();
+                    parameter_values_changed = false;
                 }
 
                 if P::ACCEPTS_MIDI {
