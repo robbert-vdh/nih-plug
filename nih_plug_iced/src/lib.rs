@@ -12,17 +12,14 @@ use std::sync::Arc;
 /// Re-export for convenience.
 pub use iced_baseview::*;
 
-/// FIXME: Document how this works once everything actually works. The below comment is from the
-///        egui version.
-///
-/// Create an [`Editor`] instance using an [`iced`][::iced] GUI. Using the user state parameter is
-/// optional, but it can be useful for keeping track of some temporary GUI-only settings. See the
-/// `gui_gain` example for more information on how to use this. The [`IcedState`] passed to this
-/// function contains the GUI's intitial size, and this is kept in sync whenever the GUI gets
-/// resized. You can also use this to know if the GUI is open, so you can avoid performing
-/// potentially expensive calculations while the GUI is not open. If you want this size to be
-/// persisted when restoring a plugin instance, then you can store it in a `#[persist = "key"]`
-/// field on your parameters struct.
+/// Create an [`Editor`] instance using [iced](https://github.com/iced-rs/iced). The rough idea is
+/// that you implement [`IcedEditor`], which is roughly analogous to iced's regular [`Application`]
+/// trait except that it receives the [`GuiContext`] alongside its initialization flags so it can
+/// update the parameter values. The [`IcedState`] passed to this function contains the GUI's
+/// intitial size, and this is kept in sync whenever the GUI gets resized. You can also use this to
+/// know if the GUI is open, so you can avoid performing potentially expensive calculations while
+/// the GUI is not open. If you want this size to be persisted when restoring a plugin instance,
+/// then you can store it in a `#[persist = "key"]` field on your parameters struct.
 ///
 /// See [`IcedState::from_size()`].
 pub fn create_iced_editor<E: IcedEditor>(
