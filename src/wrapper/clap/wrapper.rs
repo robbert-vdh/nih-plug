@@ -523,8 +523,22 @@ impl<P: ClapPlugin> Wrapper<P> {
         result
     }
 
+    /// If there's an editor open, let it know that parameter values have changed. This should be
+    /// called whenever there's been a call or multiple calls to
+    /// [`update_plain_value_by_hash()[Self::update_plain_value_by_hash()`].
+    pub fn notify_param_values_changed(&self) {
+        if let Some(editor) = &self.editor {
+            editor.param_values_changed();
+        }
+    }
+
     /// Convenience function for setting a value for a parameter as triggered by a VST3 parameter
     /// update. The same rate is for updating parameter smoothing.
+    ///
+    /// After calling this function, you should call
+    /// [`notify_param_values_changed()`][Self::notify_param_values_changed()] to allow the editor
+    /// to update itself. This needs to be done seperately so you can process parameter changes in
+    /// batches.
     ///
     /// # Note
     ///
@@ -585,9 +599,16 @@ impl<P: ClapPlugin> Wrapper<P> {
         input_events.clear();
 
         let num_events = ((*in_).size)(&*in_);
+        let mut parameter_values_changed = false;
         for event_idx in 0..num_events {
             let event = ((*in_).get)(&*in_, event_idx);
-            self.handle_event(event, &mut input_events, current_sample_idx);
+            parameter_values_changed |=
+                self.handle_in_event(event, &mut input_events, current_sample_idx);
+        }
+
+        // Allow the GUI to react to any parameter values that might have been changed
+        if parameter_values_changed {
+            self.notify_param_values_changed();
         }
     }
 
@@ -614,8 +635,10 @@ impl<P: ClapPlugin> Wrapper<P> {
 
         let start_idx = resume_from_event_idx as u32;
         let mut event: *const clap_event_header = ((*in_).get)(&*in_, start_idx);
+        let mut parameter_values_changed = false;
         for next_event_idx in (start_idx + 1)..num_events {
-            self.handle_event(event, &mut input_events, current_sample_idx);
+            parameter_values_changed |=
+                self.handle_in_event(event, &mut input_events, current_sample_idx);
 
             // Stop just before the next parameter change event at a sample after the current sample
             let next_event: *const clap_event_header = ((*in_).get)(&*in_, next_event_idx);
@@ -624,7 +647,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_MOD)
                     if (*next_event).time > current_sample_idx as u32 =>
                 {
-                    return Some(((*next_event).time as usize, next_event_idx as usize))
+                    return Some(((*next_event).time as usize, next_event_idx as usize));
                 }
                 _ => (),
             }
@@ -633,7 +656,15 @@ impl<P: ClapPlugin> Wrapper<P> {
         }
 
         // Don't forget about the last event
-        self.handle_event(event, &mut input_events, current_sample_idx);
+        parameter_values_changed |=
+            self.handle_in_event(event, &mut input_events, current_sample_idx);
+
+        // NOTE: We explicitly did not do this on a block split because that seems a bit excessive.
+        //       When we're performing a block split we're guarenteed that there's still at least one more
+        //       parameter event after the split so this function will still be called.
+        if parameter_values_changed {
+            self.notify_param_values_changed();
+        }
 
         None
     }
@@ -646,12 +677,14 @@ impl<P: ClapPlugin> Wrapper<P> {
         // We'll always write these events to the first sample, so even when we add note output we
         // shouldn't have to think about interleaving events here
         let sample_rate = self.current_buffer_config.load().map(|c| c.sample_rate);
+        let mut parameter_values_changed = false;
         while let Some(change) = self.output_parameter_changes.pop() {
             self.update_plain_value_by_hash(
                 change.param_hash,
                 ClapParamUpdate::PlainValueSet(change.clap_plain_value),
                 sample_rate,
             );
+            parameter_values_changed = true;
 
             let event = clap_event_param_value {
                 header: clap_event_header {
@@ -685,6 +718,12 @@ impl<P: ClapPlugin> Wrapper<P> {
             let push_succesful = (out.try_push)(out, &event.header);
             nih_debug_assert!(push_succesful);
         }
+
+        // Allow the editor to react to the new parameter values if the editor uses a reactive data
+        // binding model
+        if parameter_values_changed {
+            self.notify_param_values_changed();
+        }
     }
 
     /// Handle an incoming CLAP event. The sample index is provided to support block splitting for
@@ -693,12 +732,17 @@ impl<P: ClapPlugin> Wrapper<P> {
     ///
     /// To save on mutex operations when handing MIDI events, the lock guard for the input events
     /// need to be passed into this function.
-    pub unsafe fn handle_event(
+    ///
+    /// The return value indicates whether this was a parameter event. If it is a parameter event,
+    /// then [`notify_param_values_changed()`][Self::notify_param_values_changed()] should be called
+    /// once all of these events have been processed.
+    #[must_use]
+    pub unsafe fn handle_in_event(
         &self,
         event: *const clap_event_header,
         input_events: &mut AtomicRefMut<VecDeque<NoteEvent>>,
         current_sample_idx: usize,
-    ) {
+    ) -> bool {
         let raw_event = &*event;
         match (raw_event.space_id, raw_event.type_) {
             // TODO: Implement the event filter
@@ -709,6 +753,8 @@ impl<P: ClapPlugin> Wrapper<P> {
                     ClapParamUpdate::PlainValueSet(event.value),
                     self.current_buffer_config.load().map(|c| c.sample_rate),
                 );
+
+                true
             }
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_MOD) => {
                 let event = &*(event as *const clap_event_param_mod);
@@ -717,6 +763,8 @@ impl<P: ClapPlugin> Wrapper<P> {
                     ClapParamUpdate::PlainValueMod(event.amount),
                     self.current_buffer_config.load().map(|c| c.sample_rate),
                 );
+
+                true
             }
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_ON) => {
                 if P::ACCEPTS_MIDI {
@@ -730,6 +778,8 @@ impl<P: ClapPlugin> Wrapper<P> {
                         velocity: (event.velocity * 127.0).round() as u8,
                     });
                 }
+
+                false
             }
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_OFF) => {
                 if P::ACCEPTS_MIDI {
@@ -741,23 +791,33 @@ impl<P: ClapPlugin> Wrapper<P> {
                         velocity: (event.velocity * 127.0).round() as u8,
                     });
                 }
+
+                false
             }
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_EXPRESSION) => {
                 if P::ACCEPTS_MIDI {
                     // TODO: Implement pressure and other expressions along with MIDI CCs
                 }
+
+                false
             }
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_MIDI) => {
                 if P::ACCEPTS_MIDI {
                     // TODO: Implement raw MIDI handling once we add CCs
                 }
+
+                false
             }
             // TODO: Make sure this only gets logged in debug mode
-            _ => nih_log!(
-                "Unhandled CLAP event type {} for namespace {}",
-                raw_event.type_,
-                raw_event.space_id
-            ),
+            _ => {
+                nih_log!(
+                    "Unhandled CLAP event type {} for namespace {}",
+                    raw_event.type_,
+                    raw_event.space_id
+                );
+
+                false
+            }
         }
     }
 
@@ -1697,14 +1757,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         let wrapper = &*(plugin as *const Self);
 
         if !in_.is_null() {
-            let mut input_events = wrapper.input_events.borrow_mut();
-            input_events.clear();
-
-            let num_events = ((*in_).size)(&*in_);
-            for event_idx in 0..num_events {
-                let event = ((*in_).get)(&*in_, event_idx);
-                wrapper.handle_event(event, &mut input_events, 0);
-            }
+            wrapper.handle_in_events(&*in_, 0);
         }
 
         if !out.is_null() {
@@ -1794,6 +1847,8 @@ impl<P: ClapPlugin> Wrapper<P> {
         }
 
         // Reinitialize the plugin after loading state so it can respond to the new parameter values
+        wrapper.notify_param_values_changed();
+
         let bus_config = wrapper.current_bus_config.load();
         if let Some(buffer_config) = wrapper.current_buffer_config.load() {
             let mut plugin = wrapper.plugin.write();
