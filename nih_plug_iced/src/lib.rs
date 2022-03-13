@@ -96,7 +96,12 @@ pub trait IcedEditor: 'static + Send + Sync + Sized {
 
     /// See [`Application::renderer_settings`].
     fn renderer_settings() -> iced_baseview::renderer::settings::Settings {
-        iced_baseview::renderer::settings::Settings::default()
+        iced_baseview::renderer::settings::Settings {
+            // Enable some anti-aliasing by default. Since GUIs are likely very simple and most of
+            // the work will be on the CPU anyways this should not affect performance much.
+            antialiasing: Some(iced_baseview::renderer::Antialiasing::MSAAx4),
+            ..iced_baseview::renderer::settings::Settings::default()
+        }
     }
 
     /// Handle a parameter update using the GUI context.
