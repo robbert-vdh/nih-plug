@@ -243,7 +243,7 @@ impl<'a, P: Param, Renderer: text::Renderer> Widget<ParamMessage, Renderer>
         let is_mouse_over = bounds.contains(cursor_position);
 
         // The bar itself
-        let background_color = if is_mouse_over {
+        let background_color = if is_mouse_over || self.state.drag_active {
             Color::new(0.5, 0.5, 0.5, 0.1)
         } else {
             Color::TRANSPARENT
