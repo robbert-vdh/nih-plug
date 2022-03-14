@@ -232,7 +232,10 @@ impl<E: IcedEditor> Editor for IcedEditorWrapper<E> {
                     #[cfg(not(feature = "opengl"))]
                     gl_config: None,
                 },
-                ignore_non_modifier_keys: false,
+                iced_baseview: IcedBaseviewSettings {
+                    ignore_non_modifier_keys: false,
+                    always_redraw: true,
+                },
                 // We use this wrapper to be able to pass the GUI context to the editor
                 flags: (
                     context,
