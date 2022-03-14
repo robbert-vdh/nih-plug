@@ -1,8 +1,8 @@
 //! A slider that integrates with NIH-plug's [`Param`] types.
 
 use crate::{
-    alignment, backend, event, layout, mouse, renderer, text, touch, Clipboard, Color, Element,
-    Event, Layout, Length, Point, Rectangle, Shell, Size, Widget,
+    alignment, backend, event, keyboard, layout, mouse, renderer, text, touch, Clipboard, Color,
+    Element, Event, Layout, Length, Point, Rectangle, Shell, Size, Widget,
 };
 use nih_plug::prelude::{GuiContext, Param, ParamSetter};
 
@@ -13,7 +13,6 @@ use super::ParamMessage;
 ///
 /// TODO: There are currently no styling options at all
 /// TODO: Handle Shift+drag for granular drag
-/// TODO: Handle Ctrl+click for reset
 /// TODO: Handle Double click for reset
 /// TODO: Handle Alt+click for text entry
 pub struct ParamSlider<'a, P: Param, Renderer: text::Renderer> {
@@ -34,6 +33,7 @@ pub struct ParamSlider<'a, P: Param, Renderer: text::Renderer> {
 #[derive(Debug, Default)]
 pub struct State {
     drag_active: bool,
+    keyboard_modifiers: keyboard::Modifiers,
 }
 
 impl<'a, P: Param, Renderer: text::Renderer> ParamSlider<'a, P, Renderer> {
@@ -115,11 +115,19 @@ impl<'a, P: Param, Renderer: text::Renderer> Widget<ParamMessage, Renderer>
                     shell.publish(ParamMessage::BeginSetParameter(self.param.as_ptr()));
                     self.state.drag_active = true;
 
-                    // Immediately trigger a parameter update if the value would be different
-                    self.set_normalized_value(
-                        shell,
-                        util::remap_rect_x_coordinate(&bounds, cursor_position.x),
-                    );
+                    // Immediately trigger a parameter update if the value would be different, or
+                    // reset the parameter if Ctrl is held
+                    if self.state.keyboard_modifiers.control() {
+                        self.set_normalized_value(
+                            shell,
+                            self.setter.default_normalized_param_value(self.param),
+                        );
+                    } else {
+                        self.set_normalized_value(
+                            shell,
+                            util::remap_rect_x_coordinate(&bounds, cursor_position.x),
+                        );
+                    }
 
                     return event::Status::Captured;
                 }
@@ -143,6 +151,9 @@ impl<'a, P: Param, Renderer: text::Renderer> Widget<ParamMessage, Renderer>
 
                     return event::Status::Captured;
                 }
+            }
+            Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
+                self.state.keyboard_modifiers = modifiers;
             }
             _ => {}
         }
