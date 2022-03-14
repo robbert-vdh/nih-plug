@@ -13,7 +13,6 @@ use super::ParamMessage;
 ///
 /// TODO: There are currently no styling options at all
 /// TODO: Handle Shift+drag for granular drag
-/// TODO: Handle Double click for reset
 /// TODO: Handle Alt+click for text entry
 pub struct ParamSlider<'a, P: Param, Renderer: text::Renderer> {
     state: &'a mut State,
@@ -34,6 +33,11 @@ pub struct ParamSlider<'a, P: Param, Renderer: text::Renderer> {
 pub struct State {
     drag_active: bool,
     keyboard_modifiers: keyboard::Modifiers,
+    /// Track clicks for double clicks.
+    last_click: Option<mouse::Click>,
+    /// Will be set to `true` if we just reset the parameter since you could otherwise reset the
+    /// parameter and then move your mouse around to still set it a non-default value.
+    ignore_changes: bool,
 }
 
 impl<'a, P: Param, Renderer: text::Renderer> ParamSlider<'a, P, Renderer> {
@@ -116,17 +120,23 @@ impl<'a, P: Param, Renderer: text::Renderer> Widget<ParamMessage, Renderer>
                     self.state.drag_active = true;
 
                     // Immediately trigger a parameter update if the value would be different, or
-                    // reset the parameter if Ctrl is held
-                    if self.state.keyboard_modifiers.control() {
+                    // reset the parameter if Ctrl is held or the parameter is being double clicked
+                    let click = mouse::Click::new(cursor_position, self.state.last_click);
+                    self.state.last_click = Some(click);
+                    if self.state.keyboard_modifiers.control()
+                        || matches!(click.kind(), mouse::click::Kind::Double)
+                    {
                         self.set_normalized_value(
                             shell,
                             self.setter.default_normalized_param_value(self.param),
                         );
+                        self.state.ignore_changes = true;
                     } else {
                         self.set_normalized_value(
                             shell,
                             util::remap_rect_x_coordinate(&bounds, cursor_position.x),
                         );
+                        self.state.ignore_changes = false;
                     }
 
                     return event::Status::Captured;
@@ -143,7 +153,11 @@ impl<'a, P: Param, Renderer: text::Renderer> Widget<ParamMessage, Renderer>
             }
             Event::Mouse(mouse::Event::CursorMoved { .. })
             | Event::Touch(touch::Event::FingerMoved { .. }) => {
-                if self.state.drag_active && bounds.contains(cursor_position) {
+                // Don't do anything when we just reset the parameter because that would be weird
+                if !self.state.ignore_changes
+                    && self.state.drag_active
+                    && bounds.contains(cursor_position)
+                {
                     self.set_normalized_value(
                         shell,
                         util::remap_rect_x_coordinate(&bounds, cursor_position.x),
