@@ -161,7 +161,7 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
             }
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
             | Event::Touch(touch::Event::FingerLifted { .. } | touch::Event::FingerLost { .. }) => {
-                if bounds.contains(cursor_position) {
+                if self.state.drag_active {
                     shell.publish(ParamMessage::EndSetParameter(self.param.as_ptr()));
 
                     self.state.drag_active = false;
