@@ -8,6 +8,7 @@
 use nih_plug::param::internals::ParamPtr;
 
 mod param_slider;
+pub mod util;
 
 pub use param_slider::ParamSlider;
 

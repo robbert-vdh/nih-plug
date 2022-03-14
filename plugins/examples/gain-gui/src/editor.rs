@@ -84,7 +84,7 @@ impl IcedEditor for GainEditor {
                     .vertical_alignment(alignment::Vertical::Center),
             )
             .push(
-                ParamSlider::new(&self.params.gain).map(Message::ParamUpdate)
+                ParamSlider::new(&self.params.gain, self.context.as_ref()).map(Message::ParamUpdate)
                 // Button::new(&mut self.gain_dummy_state, Text::new("Gain"))
                 //     .height(30.into())
                 //     .width(180.into()),

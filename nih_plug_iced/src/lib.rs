@@ -52,8 +52,8 @@ pub fn create_iced_editor<E: IcedEditor>(
 /// A plugin editor using `iced`. This wraps around [`Application`] with the only change being that
 /// the usual `new()` function now additionally takes a `Arc<dyn GuiContext>` that the editor can
 /// store to interact with the parameters. The editor should have a `Pin<Arc<impl Params>>` as part
-/// of their [`Flags`][Self::Flags] so it can read the current parameter values. See [`Application`]
-/// for more information.
+/// of their [`InitializationFlags`][Self::InitializationFlags] so it can read the current parameter
+/// values. See [`Application`] for more information.
 pub trait IcedEditor: 'static + Send + Sync + Sized {
     /// See [`Application::Executor`]. You'll likely want to use [`crate::executor::Default`].
     type Executor: Executor;

@@ -1,14 +1,12 @@
 //! A slider that integrates with NIH-plug's [`Param`] types.
 
-use crate::backend;
-use crate::event::{self, Event};
-use crate::layout;
-use crate::mouse;
-use crate::renderer;
-use crate::text;
-use crate::{Clipboard, Color, Element, Layout, Length, Point, Rectangle, Shell, Size, Widget};
-use nih_plug::prelude::Param;
+use crate::{
+    alignment, backend, event, layout, mouse, renderer, text, Clipboard, Color, Element, Event,
+    Layout, Length, Point, Rectangle, Shell, Size, Widget,
+};
+use nih_plug::prelude::{GuiContext, Param, ParamSetter};
 
+use super::util;
 use super::ParamMessage;
 
 /// A slider that integrates with NIH-plug's [`Param`] types.
@@ -16,6 +14,9 @@ use super::ParamMessage;
 /// TODO: There are currently no styling options at all
 pub struct ParamSlider<'a, P: Param, Renderer: text::Renderer> {
     param: &'a P,
+    /// We'll visualize the parameter's current value by drawing the difference between the current
+    /// normalized value and the default normalized value.
+    setter: ParamSetter<'a>,
 
     height: Length,
     width: Length,
@@ -25,9 +26,13 @@ pub struct ParamSlider<'a, P: Param, Renderer: text::Renderer> {
 
 impl<'a, P: Param, Renderer: text::Renderer> ParamSlider<'a, P, Renderer> {
     /// Creates a new [`ParamSlider`] for the given parameter.
-    pub fn new(param: &'a P) -> Self {
+    pub fn new(param: &'a P, context: &'a dyn GuiContext) -> Self {
+        let setter = ParamSetter::new(context);
+
         Self {
             param,
+            setter,
+
             width: Length::Units(180),
             height: Length::Units(30),
             text_size: None,
@@ -111,17 +116,19 @@ impl<'a, P: Param, Renderer: text::Renderer> Widget<ParamMessage, Renderer>
     fn draw(
         &self,
         renderer: &mut Renderer,
-        _style: &renderer::Style,
+        style: &renderer::Style,
         layout: Layout<'_>,
         cursor_position: Point,
         _viewport: &Rectangle,
     ) {
+        const BORDER_WIDTH: f32 = 1.0;
+
         let bounds = layout.bounds();
         let is_mouse_over = bounds.contains(cursor_position);
 
-        // TODO:
+        // The bar itself
         let background_color = if is_mouse_over {
-            Color::new(0.5, 0.5, 0.5, 0.2)
+            Color::new(0.5, 0.5, 0.5, 0.1)
         } else {
             Color::TRANSPARENT
         };
@@ -130,51 +137,70 @@ impl<'a, P: Param, Renderer: text::Renderer> Widget<ParamMessage, Renderer>
             renderer::Quad {
                 bounds,
                 border_color: Color::BLACK,
-                border_width: 1.0,
+                border_width: BORDER_WIDTH,
                 border_radius: 0.0,
             },
             background_color,
         );
 
-        // TODO:
+        // We'll visualize the difference between the current value and the default value
+        let current_value = self.param.normalized_value();
+        let fill_start_x = util::remap_rect_x(
+            &bounds,
+            self.setter.default_normalized_param_value(self.param),
+        );
+        let fill_end_x = util::remap_rect_x(&bounds, current_value);
 
-        // renderer.fill_text(Text {
-        //     content: &Renderer::ARROW_DOWN_ICON.to_string(),
-        //     font: Renderer::ICON_FONT,
-        //     size: bounds.height * style.icon_size,
-        //     bounds: Rectangle {
-        //         x: bounds.x + bounds.width - f32::from(self.padding.horizontal()),
-        //         y: bounds.center_y(),
-        //         ..bounds
-        //     },
-        //     color: style.text_color,
-        //     horizontal_alignment: alignment::Horizontal::Right,
-        //     vertical_alignment: alignment::Vertical::Center,
-        // });
+        let fill_color = Color::from_rgb8(196, 196, 196);
+        let fill_rect = Rectangle {
+            x: fill_start_x.min(fill_end_x),
+            y: bounds.y + BORDER_WIDTH,
+            width: (fill_end_x - fill_start_x).abs(),
+            height: bounds.height - BORDER_WIDTH * 2.0,
+        };
+        renderer.fill_quad(
+            renderer::Quad {
+                bounds: fill_rect,
+                border_color: Color::TRANSPARENT,
+                border_width: 0.0,
+                border_radius: 0.0,
+            },
+            fill_color,
+        );
 
-        // if let Some(label) = self
-        //     .selected
-        //     .as_ref()
-        //     .map(ToString::to_string)
-        //     .as_ref()
-        //     .or_else(|| self.placeholder.as_ref())
-        // {
-        //     renderer.fill_text(Text {
-        //         content: label,
-        //         size: f32::from(self.text_size.unwrap_or(renderer.default_size())),
-        //         font: self.font.clone(),
-        //         color: is_selected
-        //             .then(|| style.text_color)
-        //             .unwrap_or(style.placeholder_color),
-        //         bounds: Rectangle {
-        //             x: bounds.x + f32::from(self.padding.left),
-        //             y: bounds.center_y(),
-        //             ..bounds
-        //         },
-        //         horizontal_alignment: alignment::Horizontal::Left,
-        //         vertical_alignment: alignment::Vertical::Center,
-        //     })
-        // }
+        // We'll overlay the label on the slider. To make it more readable (and because it looks
+        // cool), the parts that overlap with the fill rect will be rendered in white while the rest
+        // will be rendered in black.
+        let display_value = self.param.to_string();
+        let text_size = self.text_size.unwrap_or_else(|| renderer.default_size()) as f32;
+        let text_bounds = Rectangle {
+            x: bounds.center_x(),
+            y: bounds.center_y(),
+            ..bounds
+        };
+        renderer.fill_text(text::Text {
+            content: &display_value,
+            font: self.font.clone(),
+            size: text_size,
+            bounds: text_bounds,
+            color: style.text_color,
+            horizontal_alignment: alignment::Horizontal::Center,
+            vertical_alignment: alignment::Vertical::Center,
+        });
+
+        // This will clip to the filled area
+        renderer.with_layer(fill_rect, |renderer| {
+            let filled_text_color = Color::from_rgb8(80, 80, 80);
+            renderer.fill_text(text::Text {
+                content: &display_value,
+                font: self.font.clone(),
+                size: text_size,
+                bounds: text_bounds,
+                color: filled_text_color,
+                horizontal_alignment: alignment::Horizontal::Center,
+                vertical_alignment: alignment::Vertical::Center,
+            });
+        });
     }
 }
 

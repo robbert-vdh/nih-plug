@@ -1,4 +1,4 @@
-//! Utilities for creating these widgets
+//! Utilities for creating these widgets.
 
 use egui::Color32;
 
