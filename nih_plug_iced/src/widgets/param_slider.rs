@@ -20,6 +20,7 @@ const GRANULAR_DRAG_MULTIPLIER: f32 = 0.1;
 ///
 /// TODO: There are currently no styling options at all
 /// TODO: Handle Alt+click for text entry
+/// TODO: Handle scrolling for steps (and shift+scroll for smaller steps?)
 pub struct ParamSlider<'a, P: Param> {
     state: &'a mut State,
 
