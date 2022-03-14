@@ -14,8 +14,8 @@ use crate::widgets::ParamMessage;
 
 /// Re-export for convenience.
 pub use iced_baseview::*;
-pub use nih_plug_assets as assets;
 
+pub mod assets;
 pub mod widgets;
 mod wrapper;
 
