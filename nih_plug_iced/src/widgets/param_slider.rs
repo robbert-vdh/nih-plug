@@ -1,9 +1,12 @@
 //! A slider that integrates with NIH-plug's [`Param`] types.
 
 use crate::{
-    alignment, backend, event, keyboard, layout, mouse, renderer, text, touch, Clipboard, Color,
-    Element, Event, Layout, Length, Point, Rectangle, Shell, Size, Widget,
+    alignment, event, keyboard, layout, mouse, renderer, text, touch, Clipboard, Color, Element,
+    Event, Font, Layout, Length, Point, Rectangle, Shell, Size, Widget,
 };
+use iced_baseview::backend::Renderer;
+use iced_baseview::renderer::Renderer as GraphicsRenderer;
+use iced_baseview::text::Renderer as TextRenderer;
 use nih_plug::prelude::{GuiContext, Param, ParamSetter};
 
 use super::util;
@@ -17,7 +20,7 @@ const GRANULAR_DRAG_MULTIPLIER: f32 = 0.1;
 ///
 /// TODO: There are currently no styling options at all
 /// TODO: Handle Alt+click for text entry
-pub struct ParamSlider<'a, P: Param, Renderer: text::Renderer> {
+pub struct ParamSlider<'a, P: Param> {
     state: &'a mut State,
 
     param: &'a P,
@@ -28,7 +31,7 @@ pub struct ParamSlider<'a, P: Param, Renderer: text::Renderer> {
     height: Length,
     width: Length,
     text_size: Option<u16>,
-    font: Renderer::Font,
+    font: Font,
 }
 
 /// State for a [`ParamSlider`].
@@ -46,7 +49,7 @@ pub struct State {
     ignore_changes: bool,
 }
 
-impl<'a, P: Param, Renderer: text::Renderer> ParamSlider<'a, P, Renderer> {
+impl<'a, P: Param> ParamSlider<'a, P> {
     /// Creates a new [`ParamSlider`] for the given parameter.
     pub fn new(state: &'a mut State, param: &'a P, context: &'a dyn GuiContext) -> Self {
         let setter = ParamSetter::new(context);
@@ -60,7 +63,7 @@ impl<'a, P: Param, Renderer: text::Renderer> ParamSlider<'a, P, Renderer> {
             width: Length::Units(180),
             height: Length::Units(30),
             text_size: None,
-            font: Renderer::Font::default(),
+            font: <Renderer as TextRenderer>::Font::default(),
         }
     }
 
@@ -83,15 +86,13 @@ impl<'a, P: Param, Renderer: text::Renderer> ParamSlider<'a, P, Renderer> {
     }
 
     /// Sets the font of the [`ParamSlider`].
-    pub fn font(mut self, font: Renderer::Font) -> Self {
+    pub fn font(mut self, font: Font) -> Self {
         self.font = font;
         self
     }
 }
 
-impl<'a, P: Param, Renderer: text::Renderer> Widget<ParamMessage, Renderer>
-    for ParamSlider<'a, P, Renderer>
-{
+impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
     fn width(&self) -> Length {
         self.width
     }
@@ -296,7 +297,7 @@ impl<'a, P: Param, Renderer: text::Renderer> Widget<ParamMessage, Renderer>
         };
         renderer.fill_text(text::Text {
             content: &display_value,
-            font: self.font.clone(),
+            font: self.font,
             size: text_size,
             bounds: text_bounds,
             color: style.text_color,
@@ -309,7 +310,7 @@ impl<'a, P: Param, Renderer: text::Renderer> Widget<ParamMessage, Renderer>
             let filled_text_color = Color::from_rgb8(80, 80, 80);
             renderer.fill_text(text::Text {
                 content: &display_value,
-                font: self.font.clone(),
+                font: self.font,
                 size: text_size,
                 bounds: text_bounds,
                 color: filled_text_color,
@@ -320,7 +321,19 @@ impl<'a, P: Param, Renderer: text::Renderer> Widget<ParamMessage, Renderer>
     }
 }
 
-impl<'a, P: Param, Renderer: text::Renderer> ParamSlider<'a, P, Renderer> {
+impl<'a, P: Param> ParamSlider<'a, P> {
+    /// Convert this [`ParamSlider`] into an [`Element`] with the correct message. You should have a
+    /// variant on your own message type that wraps around [`ParamMessage`] so you can forward those
+    /// messages to
+    /// [`IcedEditor::handle_param_message()`][crate::IcedEditor::handle_param_message()].
+    pub fn map<Message, F>(self, f: F) -> Element<'a, Message>
+    where
+        Message: 'static,
+        F: Fn(ParamMessage) -> Message + 'static,
+    {
+        Element::from(self).map(f)
+    }
+
     /// Set the normalized value for a parameter if that would change the parameter's plain value
     /// (to avoid unnecessary duplicate parameter changes). The begin- and end set parameter
     /// messages need to be sent before calling this function.
@@ -340,22 +353,8 @@ impl<'a, P: Param, Renderer: text::Renderer> ParamSlider<'a, P, Renderer> {
     }
 }
 
-impl<'a, P: Param> ParamSlider<'a, P, backend::Renderer> {
-    /// Convert this [`ParamSlider`] into an [`Element`] with the correct message. You should have a
-    /// variant on your own message type that wraps around [`ParamMessage`] so you can forward those
-    /// messages to
-    /// [`IcedEditor::handle_param_message()`][crate::IcedEditor::handle_param_message()].
-    pub fn map<Message, F>(self, f: F) -> Element<'a, Message>
-    where
-        Message: 'static,
-        F: Fn(ParamMessage) -> Message + 'static,
-    {
-        Element::from(self).map(f)
-    }
-}
-
-impl<'a, P: Param> From<ParamSlider<'a, P, backend::Renderer>> for Element<'a, ParamMessage> {
-    fn from(widget: ParamSlider<'a, P, backend::Renderer>) -> Self {
+impl<'a, P: Param> From<ParamSlider<'a, P>> for Element<'a, ParamMessage> {
+    fn from(widget: ParamSlider<'a, P>) -> Self {
         Element::new(widget)
     }
 }
