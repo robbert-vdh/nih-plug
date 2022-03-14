@@ -204,6 +204,23 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
             }
             Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
                 self.state.keyboard_modifiers = modifiers;
+
+                // If this happens while dragging, snap back to reality uh I mean the current screen
+                // position
+                if !self.state.ignore_changes
+                    && self.state.drag_active
+                    && self.state.granular_drag_start_x.is_some()
+                    && !modifiers.shift()
+                {
+                    self.state.granular_drag_start_x = None;
+
+                    self.set_normalized_value(
+                        shell,
+                        util::remap_rect_x_coordinate(&bounds, cursor_position.x),
+                    );
+                }
+
+                return event::Status::Captured;
             }
             _ => {}
         }
