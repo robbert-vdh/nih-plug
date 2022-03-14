@@ -1913,6 +1913,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "nih_plug_assets"
+version = "0.1.0"
+source = "git+https://github.com/robbert-vdh/nih_plug_assets.git#e921bf583ce13f518f3b9e9ce533cd55246d7fce"
+
+[[package]]
 name = "nih_plug_derive"
 version = "0.1.0"
 dependencies = [
@@ -1941,6 +1946,7 @@ dependencies = [
  "crossbeam",
  "iced_baseview",
  "nih_plug",
+ "nih_plug_assets",
 ]
 
 [[package]]

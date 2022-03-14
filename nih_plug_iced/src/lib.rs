@@ -14,6 +14,7 @@ use crate::widgets::ParamMessage;
 
 /// Re-export for convenience.
 pub use iced_baseview::*;
+pub use nih_plug_assets as assets;
 
 pub mod widgets;
 mod wrapper;
@@ -111,6 +112,10 @@ pub trait IcedEditor: 'static + Send + Sync + Sized {
             // Enable some anti-aliasing by default. Since GUIs are likely very simple and most of
             // the work will be on the CPU anyways this should not affect performance much.
             antialiasing: Some(iced_baseview::backend::settings::Antialiasing::MSAAx4),
+            // Use Noto Sans as the default font as that renders a bit more cleanly than the default
+            // Lato font. This crate also contains other weights and versions of this font you can
+            // use for individual widgets.
+            default_font: Some(crate::assets::fonts::NOTO_SANS_REGULAR),
             ..iced_baseview::backend::settings::Settings::default()
         }
     }

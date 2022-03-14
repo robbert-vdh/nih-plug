@@ -54,6 +54,7 @@ smol = ["iced_baseview/smol"]
 
 [dependencies]
 nih_plug = { path = ".." }
+nih_plug_assets = { git = "https://github.com/robbert-vdh/nih_plug_assets.git" }
 
 baseview = { git = "https://github.com/robbert-vdh/baseview.git", branch = "feature/mouse-event-modifiers" }
 crossbeam = "0.8"
