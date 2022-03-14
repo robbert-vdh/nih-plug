@@ -1396,7 +1396,7 @@ checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
 [[package]]
 name = "iced_baseview"
 version = "0.0.3"
-source = "git+https://github.com/robbert-vdh/iced_baseview.git?branch=feature/update-dependencies#d2ab5282141790fabdeb7ad028d23848f9641ac0"
+source = "git+https://github.com/robbert-vdh/iced_baseview.git?branch=feature/update-baseview#b32cc3f2a4dafee4e67b3e482b3794bb16f98752"
 dependencies = [
  "baseview",
  "copypasta",
@@ -2940,9 +2940,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "1.0.86"
+version = "1.0.87"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a65b3f4ffa0092e9887669db0eae07941f023991ab58ea44da8fe8e2d511c6b"
+checksum = "1e59d925cf59d8151f25a3bedf97c9c157597c9df7324d32d68991cc399ed08b"
 dependencies = [
  "proc-macro2",
  "quote",

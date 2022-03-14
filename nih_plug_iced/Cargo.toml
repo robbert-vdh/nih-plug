@@ -59,4 +59,4 @@ baseview = { git = "https://github.com/robbert-vdh/baseview.git", branch = "feat
 crossbeam = "0.8"
 # Upstream doesn't work with the current iced version, this branch also contains
 # additional features
-iced_baseview = { git = "https://github.com/robbert-vdh/iced_baseview.git", branch = "feature/update-dependencies", default_features = false }
+iced_baseview = { git = "https://github.com/robbert-vdh/iced_baseview.git", branch = "feature/update-baseview", default_features = false }
