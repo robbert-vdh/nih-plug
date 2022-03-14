@@ -190,7 +190,7 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
                                     + (cursor_position.x - drag_start_x) * GRANULAR_DRAG_MULTIPLIER,
                             ),
                         );
-                    } else if bounds.contains(cursor_position) {
+                    } else {
                         self.state.granular_drag_start_x = None;
 
                         self.set_normalized_value(
