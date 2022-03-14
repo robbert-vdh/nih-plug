@@ -1,8 +1,8 @@
 //! A slider that integrates with NIH-plug's [`Param`] types.
 
 use crate::{
-    alignment, backend, event, layout, mouse, renderer, text, Clipboard, Color, Element, Event,
-    Layout, Length, Point, Rectangle, Shell, Size, Widget,
+    alignment, backend, event, layout, mouse, renderer, text, touch, Clipboard, Color, Element,
+    Event, Layout, Length, Point, Rectangle, Shell, Size, Widget,
 };
 use nih_plug::prelude::{GuiContext, Param, ParamSetter};
 
@@ -12,7 +12,13 @@ use super::ParamMessage;
 /// A slider that integrates with NIH-plug's [`Param`] types.
 ///
 /// TODO: There are currently no styling options at all
+/// TODO: Handle Shift+drag for granular drag
+/// TODO: Handle Ctrl+click for reset
+/// TODO: Handle Double click for reset
+/// TODO: Handle Alt+click for text entry
 pub struct ParamSlider<'a, P: Param, Renderer: text::Renderer> {
+    state: &'a mut State,
+
     param: &'a P,
     /// We'll visualize the parameter's current value by drawing the difference between the current
     /// normalized value and the default normalized value.
@@ -24,12 +30,20 @@ pub struct ParamSlider<'a, P: Param, Renderer: text::Renderer> {
     font: Renderer::Font,
 }
 
+/// State for a [`ParamSlider`].
+#[derive(Debug, Default)]
+pub struct State {
+    drag_active: bool,
+}
+
 impl<'a, P: Param, Renderer: text::Renderer> ParamSlider<'a, P, Renderer> {
     /// Creates a new [`ParamSlider`] for the given parameter.
-    pub fn new(param: &'a P, context: &'a dyn GuiContext) -> Self {
+    pub fn new(state: &'a mut State, param: &'a P, context: &'a dyn GuiContext) -> Self {
         let setter = ParamSetter::new(context);
 
         Self {
+            state,
+
             param,
             setter,
 
@@ -85,14 +99,54 @@ impl<'a, P: Param, Renderer: text::Renderer> Widget<ParamMessage, Renderer>
 
     fn on_event(
         &mut self,
-        _event: Event,
-        _layout: Layout<'_>,
-        _cursor_position: Point,
+        event: Event,
+        layout: Layout<'_>,
+        cursor_position: Point,
         _renderer: &Renderer,
         _clipboard: &mut dyn Clipboard,
-        _shell: &mut Shell<'_, ParamMessage>,
+        shell: &mut Shell<'_, ParamMessage>,
     ) -> event::Status {
-        // TODO: Handle interaction
+        let bounds = layout.bounds();
+
+        match event {
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
+            | Event::Touch(touch::Event::FingerPressed { .. }) => {
+                if bounds.contains(cursor_position) {
+                    shell.publish(ParamMessage::BeginSetParameter(self.param.as_ptr()));
+                    self.state.drag_active = true;
+
+                    // Immediately trigger a parameter update if the value would be different
+                    self.set_normalized_value(
+                        shell,
+                        util::remap_rect_x_coordinate(&bounds, cursor_position.x),
+                    );
+
+                    return event::Status::Captured;
+                }
+            }
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
+            | Event::Touch(touch::Event::FingerLifted { .. } | touch::Event::FingerLost { .. }) => {
+                if bounds.contains(cursor_position) {
+                    shell.publish(ParamMessage::EndSetParameter(self.param.as_ptr()));
+                    self.state.drag_active = false;
+
+                    return event::Status::Captured;
+                }
+            }
+            Event::Mouse(mouse::Event::CursorMoved { .. })
+            | Event::Touch(touch::Event::FingerMoved { .. }) => {
+                if self.state.drag_active && bounds.contains(cursor_position) {
+                    self.set_normalized_value(
+                        shell,
+                        util::remap_rect_x_coordinate(&bounds, cursor_position.x),
+                    );
+
+                    return event::Status::Captured;
+                }
+            }
+            _ => {}
+        }
+
         event::Status::Ignored
     }
 
@@ -145,11 +199,11 @@ impl<'a, P: Param, Renderer: text::Renderer> Widget<ParamMessage, Renderer>
 
         // We'll visualize the difference between the current value and the default value
         let current_value = self.param.normalized_value();
-        let fill_start_x = util::remap_rect_x(
+        let fill_start_x = util::remap_rect_x_t(
             &bounds,
             self.setter.default_normalized_param_value(self.param),
         );
-        let fill_end_x = util::remap_rect_x(&bounds, current_value);
+        let fill_end_x = util::remap_rect_x_t(&bounds, current_value);
 
         let fill_color = Color::from_rgb8(196, 196, 196);
         let fill_rect = Rectangle {
@@ -201,6 +255,26 @@ impl<'a, P: Param, Renderer: text::Renderer> Widget<ParamMessage, Renderer>
                 vertical_alignment: alignment::Vertical::Center,
             });
         });
+    }
+}
+
+impl<'a, P: Param, Renderer: text::Renderer> ParamSlider<'a, P, Renderer> {
+    /// Set the normalized value for a parameter if that would change the parameter's plain value
+    /// (to avoid unnecessary duplicate parameter changes). The begin- and end set parameter
+    /// messages need to be sent before calling this function.
+    fn set_normalized_value(&self, shell: &mut Shell<'_, ParamMessage>, normalized_value: f32) {
+        // This snaps to the nearest plain value if the parameter is stepped in some way.
+        // TODO: As an optimization, we could add a `const CONTINUOUS: bool` to the parameter to
+        //       avoid this normalized->plain->normalized conversion for parameters that don't need
+        //       it
+        let plain_value = self.param.preview_plain(normalized_value);
+        let current_plain_value = self.param.plain_value();
+        if plain_value != current_plain_value {
+            shell.publish(ParamMessage::SetParameterNormalized(
+                self.param.as_ptr(),
+                normalized_value,
+            ));
+        }
     }
 }
 
