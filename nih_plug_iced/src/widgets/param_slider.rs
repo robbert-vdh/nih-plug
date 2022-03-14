@@ -172,10 +172,7 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
             Event::Mouse(mouse::Event::CursorMoved { .. })
             | Event::Touch(touch::Event::FingerMoved { .. }) => {
                 // Don't do anything when we just reset the parameter because that would be weird
-                if !self.state.ignore_changes
-                    && self.state.drag_active
-                    && bounds.contains(cursor_position)
-                {
+                if !self.state.ignore_changes && self.state.drag_active {
                     // If shift is being held then the drag should be more granular instead of
                     // absolute
                     if self.state.keyboard_modifiers.shift() {
@@ -192,7 +189,7 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
                                     + (cursor_position.x - drag_start_x) * GRANULAR_DRAG_MULTIPLIER,
                             ),
                         );
-                    } else {
+                    } else if bounds.contains(cursor_position) {
                         self.state.granular_drag_start_x = None;
 
                         self.set_normalized_value(
