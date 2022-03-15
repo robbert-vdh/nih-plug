@@ -45,15 +45,14 @@ pub struct ParamSlider<'a, P: Param> {
 #[derive(Debug, Default)]
 pub struct State {
     keyboard_modifiers: keyboard::Modifiers,
+    /// Will be set to `true` if we're dragging the parameter. Resetting the parameter or entering a
+    /// text value should not initiate a drag.
     drag_active: bool,
     /// We keep track of the start coordinate holding down Shift while dragging for higher precision
     /// dragging. This is a `None` value when granular dragging is not active.
     granular_drag_start_x: Option<f32>,
     /// Track clicks for double clicks.
     last_click: Option<mouse::Click>,
-    /// Will be set to `true` if we just reset the parameter since you could otherwise reset the
-    /// parameter and then move your mouse around to still set it a non-default value.
-    ignore_changes: bool,
 
     /// State for the text input overlay that will be shown when this widget is alt+clicked.
     text_input_state: AtomicRefCell<widget::text_input::State>,
@@ -180,7 +179,7 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
         let text_input_status = if let Some(current_value) = &self.state.text_input_value {
             let event = event.clone();
             let mut messages = Vec::new();
-            let mut shell = Shell::new(&mut messages);
+            let mut text_input_shell = Shell::new(&mut messages);
             let status = self.with_text_input(
                 layout,
                 renderer,
@@ -192,7 +191,7 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
                         cursor_position,
                         renderer,
                         clipboard,
-                        &mut shell,
+                        &mut text_input_shell,
                     )
                 },
             );
@@ -210,10 +209,9 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
                                 .as_ref()
                                 .and_then(|s| self.param.string_to_normalized_value(s))
                             {
-                                self.setter.begin_set_parameter(self.param);
-                                self.setter
-                                    .set_parameter_normalized(self.param, normalized_value);
-                                self.setter.end_set_parameter(self.param);
+                                shell.publish(ParamMessage::BeginSetParameter(self.param.as_ptr()));
+                                self.set_normalized_value(shell, normalized_value);
+                                shell.publish(ParamMessage::EndSetParameter(self.param.as_ptr()));
                             }
 
                             // And defocus the text input widget again
@@ -237,10 +235,6 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
             | Event::Touch(touch::Event::FingerPressed { .. }) => {
                 if bounds.contains(cursor_position) {
-                    shell.publish(ParamMessage::BeginSetParameter(self.param.as_ptr()));
-
-                    self.state.drag_active = true;
-
                     let click = mouse::Click::new(cursor_position, self.state.last_click);
                     self.state.last_click = Some(click);
                     if self.state.keyboard_modifiers.alt() {
@@ -248,6 +242,7 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
                         // widget
                         self.state.drag_active = false;
 
+                        // Changing the parameter happens in the TextInput event handler above
                         let mut text_input_state = self.state.text_input_state.borrow_mut();
                         self.state.text_input_value = Some(self.param.to_string());
                         text_input_state.move_cursor_to_end();
@@ -255,28 +250,32 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
                     } else if self.state.keyboard_modifiers.command()
                         || matches!(click.kind(), mouse::click::Kind::Double)
                     {
-                        // Immediately trigger a parameter update if the value would be different, or
-                        // reset the parameter if Ctrl is held or the parameter is being double clicked
+                        // Likewise resetting a parameter should not let you immediately drag it to a new value
+                        self.state.drag_active = false;
+
+                        shell.publish(ParamMessage::BeginSetParameter(self.param.as_ptr()));
                         self.set_normalized_value(
                             shell,
                             self.setter.default_normalized_param_value(self.param),
                         );
-                        self.state.ignore_changes = true;
+                        shell.publish(ParamMessage::EndSetParameter(self.param.as_ptr()));
                     } else if self.state.keyboard_modifiers.shift() {
+                        shell.publish(ParamMessage::BeginSetParameter(self.param.as_ptr()));
+                        self.state.drag_active = true;
+
                         // When holding down shift while clicking on a parameter we want to
                         // granuarly edit the parameter without jumping to a new value
                         self.state.granular_drag_start_x =
                             Some(util::remap_rect_x_t(&bounds, self.param.normalized_value()));
-
-                        self.state.ignore_changes = false;
                     } else {
+                        shell.publish(ParamMessage::BeginSetParameter(self.param.as_ptr()));
+                        self.state.drag_active = true;
+
                         self.set_normalized_value(
                             shell,
                             util::remap_rect_x_coordinate(&bounds, cursor_position.x),
                         );
                         self.state.granular_drag_start_x = None;
-
-                        self.state.ignore_changes = false;
                     }
 
                     return event::Status::Captured;
@@ -295,7 +294,7 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
             Event::Mouse(mouse::Event::CursorMoved { .. })
             | Event::Touch(touch::Event::FingerMoved { .. }) => {
                 // Don't do anything when we just reset the parameter because that would be weird
-                if !self.state.ignore_changes && self.state.drag_active {
+                if self.state.drag_active {
                     // If shift is being held then the drag should be more granular instead of
                     // absolute
                     if self.state.keyboard_modifiers.shift() {
@@ -329,8 +328,7 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
 
                 // If this happens while dragging, snap back to reality uh I mean the current screen
                 // position
-                if !self.state.ignore_changes
-                    && self.state.drag_active
+                if self.state.drag_active
                     && self.state.granular_drag_start_x.is_some()
                     && !modifiers.shift()
                 {
