@@ -2,14 +2,15 @@
 
 use atomic_refcell::AtomicRefCell;
 use nih_plug::prelude::{GuiContext, Param, ParamSetter};
+use std::borrow::Borrow;
 
 use crate::backend::widget;
 use crate::backend::Renderer;
 use crate::renderer::Renderer as GraphicsRenderer;
 use crate::text::Renderer as TextRenderer;
 use crate::{
-    alignment, event, keyboard, layout, mouse, renderer, text, touch, Clipboard, Color, Element,
-    Event, Font, Layout, Length, Point, Rectangle, Shell, Size, TextInput, Vector, Widget,
+    alignment, event, keyboard, layout, mouse, renderer, text, touch, Background, Clipboard, Color,
+    Element, Event, Font, Layout, Length, Point, Rectangle, Shell, Size, TextInput, Vector, Widget,
 };
 
 use super::util;
@@ -75,11 +76,16 @@ struct TextInputStyle;
 
 impl widget::text_input::StyleSheet for TextInputStyle {
     fn active(&self) -> widget::text_input::Style {
-        widget::text_input::Style::default()
+        widget::text_input::Style {
+            background: Background::Color(Color::TRANSPARENT),
+            border_radius: 0.0,
+            border_width: 0.0,
+            border_color: Color::TRANSPARENT,
+        }
     }
 
     fn focused(&self) -> widget::text_input::Style {
-        widget::text_input::Style::default()
+        self.active()
     }
 
     fn placeholder_color(&self) -> Color {
@@ -175,16 +181,21 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
             let event = event.clone();
             let mut messages = Vec::new();
             let mut shell = Shell::new(&mut messages);
-            let status = self.with_text_input(layout, current_value, |mut text_input, layout| {
-                text_input.on_event(
-                    event,
-                    layout,
-                    cursor_position,
-                    renderer,
-                    clipboard,
-                    &mut shell,
-                )
-            });
+            let status = self.with_text_input(
+                layout,
+                renderer,
+                current_value,
+                |mut text_input, layout, renderer| {
+                    text_input.on_event(
+                        event,
+                        layout,
+                        cursor_position,
+                        renderer,
+                        clipboard,
+                        &mut shell,
+                    )
+                },
+            );
 
             // Pressing escape will unfocus the text field, so we should propagate that change in
             // our own model
@@ -384,39 +395,45 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
             background_color,
         );
 
-        // We'll visualize the difference between the current value and the default value
-        let current_value = self.param.normalized_value();
-        let fill_start_x = util::remap_rect_x_t(
-            &bounds,
-            self.setter.default_normalized_param_value(self.param),
-        );
-        let fill_end_x = util::remap_rect_x_t(&bounds, current_value);
-
-        let fill_color = Color::from_rgb8(196, 196, 196);
-        let fill_rect = Rectangle {
-            x: fill_start_x.min(fill_end_x),
-            y: bounds.y + BORDER_WIDTH,
-            width: (fill_end_x - fill_start_x).abs(),
-            height: bounds.height - BORDER_WIDTH * 2.0,
-        };
-        renderer.fill_quad(
-            renderer::Quad {
-                bounds: fill_rect,
-                border_color: Color::TRANSPARENT,
-                border_width: 0.0,
-                border_radius: 0.0,
-            },
-            fill_color,
-        );
-
         // Only draw the text input widget when it gets focussed. Otherwise, overlay the label with
-        // the slider. To make it more readable (and because it looks cool), the parts that overlap
-        // with the fill rect will be rendered in white while the rest will be rendered in black.
+        // the slider.
         if let Some(current_value) = &self.state.text_input_value {
-            self.with_text_input(layout, current_value, |text_input, layout| {
-                text_input.draw(renderer, layout, cursor_position, None)
-            })
+            self.with_text_input(
+                layout,
+                renderer,
+                current_value,
+                |text_input, layout, renderer| {
+                    text_input.draw(renderer, layout, cursor_position, None)
+                },
+            )
         } else {
+            // We'll visualize the difference between the current value and the default value
+            let current_value = self.param.normalized_value();
+            let fill_start_x = util::remap_rect_x_t(
+                &bounds,
+                self.setter.default_normalized_param_value(self.param),
+            );
+            let fill_end_x = util::remap_rect_x_t(&bounds, current_value);
+
+            let fill_color = Color::from_rgb8(196, 196, 196);
+            let fill_rect = Rectangle {
+                x: fill_start_x.min(fill_end_x),
+                y: bounds.y + BORDER_WIDTH,
+                width: (fill_end_x - fill_start_x).abs(),
+                height: bounds.height - BORDER_WIDTH * 2.0,
+            };
+            renderer.fill_quad(
+                renderer::Quad {
+                    bounds: fill_rect,
+                    border_color: Color::TRANSPARENT,
+                    border_width: 0.0,
+                    border_radius: 0.0,
+                },
+                fill_color,
+            );
+
+            // To make it more readable (and because it looks cool), the parts that overlap with the
+            // fill rect will be rendered in white while the rest will be rendered in black.
             let display_value = self.param.to_string();
             let text_size = self.text_size.unwrap_or_else(|| renderer.default_size()) as f32;
             let text_bounds = Rectangle {
@@ -466,42 +483,49 @@ impl<'a, P: Param> ParamSlider<'a, P> {
 
     /// Create a temporary [`TextInput`] hooked up to [`State::text_input_value`] and outputting
     /// [`TextInputMessage`] messages and do something with it. This can be used to
-    fn with_text_input<R, F: FnOnce(TextInput<'_, TextInputMessage>, Layout) -> R>(
-        &self,
-        layout: Layout,
-        current_value: &str,
-        f: F,
-    ) -> R {
+    fn with_text_input<T, R, F>(&self, layout: Layout, renderer: R, current_value: &str, f: F) -> T
+    where
+        F: FnOnce(TextInput<'_, TextInputMessage>, Layout, R) -> T,
+        R: Borrow<Renderer>,
+    {
         let mut text_input_state = self.state.text_input_state.borrow_mut();
         text_input_state.focus();
 
+        let text_size = self
+            .text_size
+            .unwrap_or_else(|| renderer.borrow().default_size());
+        let text_width = renderer
+            .borrow()
+            .measure_width(current_value, text_size, self.font);
         let text_input = TextInput::new(
             &mut text_input_state,
             "",
             current_value,
             TextInputMessage::Value,
         )
-        .width(self.width)
+        .font(self.font)
+        .size(text_size)
+        .width(Length::Units(text_width.ceil() as u16))
         .style(TextInputStyle)
         .on_submit(TextInputMessage::Submit);
 
-        // Make sure to not draw over the borders
+        // Make sure to not draw over the borders, and center the text
         let offset_node = layout::Node::with_children(
             Size {
-                width: layout.bounds().size().width - (BORDER_WIDTH * 2.0),
+                width: text_width,
                 height: layout.bounds().size().height - (BORDER_WIDTH * 2.0),
             },
             vec![layout::Node::new(layout.bounds().size())],
         );
         let offset_layout = Layout::with_offset(
             Vector {
-                x: layout.position().x + BORDER_WIDTH,
+                x: layout.bounds().center_x() - (text_width / 2.0),
                 y: layout.position().y + BORDER_WIDTH,
             },
             &offset_node,
         );
 
-        f(text_input, offset_layout)
+        f(text_input, offset_layout, renderer)
     }
 
     /// Set the normalized value for a parameter if that would change the parameter's plain value
