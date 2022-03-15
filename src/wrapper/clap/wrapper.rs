@@ -5,14 +5,13 @@
 use atomic_float::AtomicF32;
 use atomic_refcell::{AtomicRefCell, AtomicRefMut};
 use clap_sys::events::{
-    clap_event_header, clap_event_note, clap_event_param_gesture, clap_event_param_mod,
-    clap_event_param_value, clap_input_events, clap_output_events, CLAP_CORE_EVENT_SPACE_ID,
-    CLAP_EVENT_IS_LIVE, CLAP_EVENT_MIDI, CLAP_EVENT_NOTE_EXPRESSION, CLAP_EVENT_NOTE_OFF,
-    CLAP_EVENT_NOTE_ON, CLAP_EVENT_PARAM_GESTURE_BEGIN, CLAP_EVENT_PARAM_GESTURE_END,
-    CLAP_EVENT_PARAM_MOD, CLAP_EVENT_PARAM_VALUE, CLAP_TRANSPORT_HAS_BEATS_TIMELINE,
-    CLAP_TRANSPORT_HAS_SECONDS_TIMELINE, CLAP_TRANSPORT_HAS_TEMPO,
-    CLAP_TRANSPORT_HAS_TIME_SIGNATURE, CLAP_TRANSPORT_IS_LOOP_ACTIVE, CLAP_TRANSPORT_IS_PLAYING,
-    CLAP_TRANSPORT_IS_RECORDING, CLAP_TRANSPORT_IS_WITHIN_PRE_ROLL,
+    clap_event_header, clap_event_note, clap_event_param_gesture, clap_event_param_value,
+    clap_input_events, clap_output_events, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_IS_LIVE,
+    CLAP_EVENT_MIDI, CLAP_EVENT_NOTE_EXPRESSION, CLAP_EVENT_NOTE_OFF, CLAP_EVENT_NOTE_ON,
+    CLAP_EVENT_PARAM_GESTURE_BEGIN, CLAP_EVENT_PARAM_GESTURE_END, CLAP_EVENT_PARAM_VALUE,
+    CLAP_TRANSPORT_HAS_BEATS_TIMELINE, CLAP_TRANSPORT_HAS_SECONDS_TIMELINE,
+    CLAP_TRANSPORT_HAS_TEMPO, CLAP_TRANSPORT_HAS_TIME_SIGNATURE, CLAP_TRANSPORT_IS_LOOP_ACTIVE,
+    CLAP_TRANSPORT_IS_PLAYING, CLAP_TRANSPORT_IS_RECORDING, CLAP_TRANSPORT_IS_WITHIN_PRE_ROLL,
 };
 use clap_sys::ext::audio_ports::{
     clap_audio_port_info, clap_plugin_audio_ports, CLAP_AUDIO_PORT_IS_MAIN, CLAP_EXT_AUDIO_PORTS,
@@ -215,8 +214,10 @@ pub enum ClapParamUpdate {
     /// Set the parameter to this plain value. In our wrapper the plain values are the normalized
     /// values multiplied by the step count for discrete parameters.
     PlainValueSet(f64),
-    /// Add a delta to the parameter's current plain value (so again, multiplied by the step size).
-    PlainValueMod(f64),
+    // TODO: Modulation would need special handling as it's an absolute offset for the current
+    //       value.
+    // /// Add a delta to the parameter's current plain value (so again, multiplied by the step size).
+    // PlainValueMod(f64),
 }
 
 /// A parameter event that should be output by the plugin, stored in a queue on the wrapper and
@@ -552,13 +553,6 @@ impl<P: ClapPlugin> Wrapper<P> {
                 ClapParamUpdate::PlainValueSet(clap_plain_value) => self
                     .bypass_state
                     .store(clap_plain_value >= 0.5, Ordering::SeqCst),
-                ClapParamUpdate::PlainValueMod(clap_plain_mod) => {
-                    if clap_plain_mod > 0.0 {
-                        self.bypass_state.store(true, Ordering::SeqCst)
-                    } else if clap_plain_mod < 0.0 {
-                        self.bypass_state.store(false, Ordering::SeqCst)
-                    }
-                }
             }
 
             true
@@ -566,12 +560,6 @@ impl<P: ClapPlugin> Wrapper<P> {
             let normalized_value = match update {
                 ClapParamUpdate::PlainValueSet(clap_plain_value) => {
                     clap_plain_value as f32 / unsafe { param_ptr.step_count() }.unwrap_or(1) as f32
-                }
-                ClapParamUpdate::PlainValueMod(clap_plain_mod) => {
-                    let current_normalized_value = unsafe { param_ptr.normalized_value() };
-                    current_normalized_value
-                        + (clap_plain_mod as f32
-                            / unsafe { param_ptr.step_count() }.unwrap_or(1) as f32)
                 }
             };
 
@@ -641,7 +629,8 @@ impl<P: ClapPlugin> Wrapper<P> {
             let next_event: *const clap_event_header = ((*in_).get)(&*in_, next_event_idx);
             match ((*next_event).space_id, (*next_event).type_) {
                 (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_VALUE)
-                | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_MOD)
+                // TODO: Once we add modulation support, don't forget this here
+                // | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_MOD)
                     if (*next_event).time > current_sample_idx as u32 =>
                 {
                     return Some(((*next_event).time as usize, next_event_idx as usize));
@@ -776,16 +765,18 @@ impl<P: ClapPlugin> Wrapper<P> {
 
                 true
             }
-            (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_MOD) => {
-                let event = &*(event as *const clap_event_param_mod);
-                self.update_plain_value_by_hash(
-                    event.param_id,
-                    ClapParamUpdate::PlainValueMod(event.amount),
-                    self.current_buffer_config.load().map(|c| c.sample_rate),
-                );
+            // TODO: At some point we might be able to handle modulation, but that acts as an
+            //       absolute offset for the current value and not just a random relative adjustment
+            // (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_MOD) => {
+            //     let event = &*(event as *const clap_event_param_mod);
+            //     self.update_plain_value_by_hash(
+            //         event.param_id,
+            //         ClapParamUpdate::PlainValueMod(event.amount),
+            //         self.current_buffer_config.load().map(|c| c.sample_rate),
+            //     );
 
-                true
-            }
+            //     true
+            // }
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_ON) => {
                 if P::ACCEPTS_MIDI {
                     let event = &*(event as *const clap_event_note);
