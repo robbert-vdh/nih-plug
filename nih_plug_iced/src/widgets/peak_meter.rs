@@ -143,10 +143,10 @@ where
             .text_size
             .unwrap_or_else(|| (renderer.default_size() as f32 * 0.7).round() as u16);
 
-        // We'll draw a simple horizontal for [-200, 20] dB where we'll treat -80 as -infinity, with
+        // We'll draw a simple horizontal for [-90, 20] dB where we'll treat -80 as -infinity, with
         // a label containing the tick markers below it. If `.hold_time()` was called then we'll
         // also display the last held value
-        const MIN_TICK: f32 = -100.0;
+        const MIN_TICK: f32 = -90.0;
         const MAX_TICK: f32 = 20.0;
         let text_ticks = [-80i32, -60, -40, -20, 0];
         // Draw a tick with one pixel in between, otherwise the bilinear interpolation makes
