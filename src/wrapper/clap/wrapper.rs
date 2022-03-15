@@ -221,6 +221,7 @@ pub enum ClapParamUpdate {
 
 /// A parameter event that should be output by the plugin, stored in a queue on the wrapper and
 /// written to the host either at the end of the process function or during a flush.
+#[derive(Debug, Clone)]
 pub enum OutputParamEvent {
     /// Begin an automation gesture. This must always be sent before sending [`SetValue`].
     BeginGesture { param_hash: u32 },
