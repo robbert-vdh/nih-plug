@@ -6,10 +6,10 @@ use atomic_float::AtomicF32;
 use atomic_refcell::{AtomicRefCell, AtomicRefMut};
 use clap_sys::events::{
     clap_event_header, clap_event_note, clap_event_param_gesture, clap_event_param_value,
-    clap_input_events, clap_output_events, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_IS_LIVE,
-    CLAP_EVENT_MIDI, CLAP_EVENT_NOTE_EXPRESSION, CLAP_EVENT_NOTE_OFF, CLAP_EVENT_NOTE_ON,
-    CLAP_EVENT_PARAM_GESTURE_BEGIN, CLAP_EVENT_PARAM_GESTURE_END, CLAP_EVENT_PARAM_VALUE,
-    CLAP_TRANSPORT_HAS_BEATS_TIMELINE, CLAP_TRANSPORT_HAS_SECONDS_TIMELINE,
+    clap_event_type, clap_input_events, clap_output_events, CLAP_CORE_EVENT_SPACE_ID,
+    CLAP_EVENT_IS_LIVE, CLAP_EVENT_MIDI, CLAP_EVENT_NOTE_EXPRESSION, CLAP_EVENT_NOTE_OFF,
+    CLAP_EVENT_NOTE_ON, CLAP_EVENT_PARAM_GESTURE_BEGIN, CLAP_EVENT_PARAM_GESTURE_END,
+    CLAP_EVENT_PARAM_VALUE, CLAP_TRANSPORT_HAS_BEATS_TIMELINE, CLAP_TRANSPORT_HAS_SECONDS_TIMELINE,
     CLAP_TRANSPORT_HAS_TEMPO, CLAP_TRANSPORT_HAS_TIME_SIGNATURE, CLAP_TRANSPORT_IS_LOOP_ACTIVE,
     CLAP_TRANSPORT_IS_PLAYING, CLAP_TRANSPORT_IS_RECORDING, CLAP_TRANSPORT_IS_WITHIN_PRE_ROLL,
 };
@@ -20,6 +20,7 @@ use clap_sys::ext::audio_ports::{
 use clap_sys::ext::audio_ports_config::{
     clap_audio_ports_config, clap_plugin_audio_ports_config, CLAP_EXT_AUDIO_PORTS_CONFIG,
 };
+use clap_sys::ext::event_filter::{clap_plugin_event_filter, CLAP_EXT_EVENT_FILTER};
 use clap_sys::ext::gui::{
     clap_plugin_gui, clap_window, CLAP_EXT_GUI, CLAP_WINDOW_API_COCOA, CLAP_WINDOW_API_WIN32,
     CLAP_WINDOW_API_X11,
@@ -147,6 +148,8 @@ pub struct Wrapper<P: ClapPlugin> {
     supported_bus_configs: Vec<BusConfig>,
 
     clap_plugin_audio_ports: clap_plugin_audio_ports,
+
+    clap_plugin_event_filter: clap_plugin_event_filter,
 
     clap_plugin_gui: clap_plugin_gui,
 
@@ -363,6 +366,10 @@ impl<P: ClapPlugin> Wrapper<P> {
             clap_plugin_audio_ports: clap_plugin_audio_ports {
                 count: Self::ext_audio_ports_count,
                 get: Self::ext_audio_ports_get,
+            },
+
+            clap_plugin_event_filter: clap_plugin_event_filter {
+                accepts: Self::ext_event_filter_accepts,
             },
 
             clap_plugin_gui: clap_plugin_gui {
@@ -754,7 +761,6 @@ impl<P: ClapPlugin> Wrapper<P> {
     ) -> bool {
         let raw_event = &*event;
         match (raw_event.space_id, raw_event.type_) {
-            // TODO: Implement the event filter
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_VALUE) => {
                 let event = &*(event as *const clap_event_param_value);
                 self.update_plain_value_by_hash(
@@ -1166,12 +1172,14 @@ impl<P: ClapPlugin> Wrapper<P> {
         let id = CStr::from_ptr(id);
 
         // TODO: Implement:
-        //       - event_filter
+        //       - note ports
         //       - tail
         if id == CStr::from_ptr(CLAP_EXT_AUDIO_PORTS_CONFIG) {
             &wrapper.clap_plugin_audio_ports_config as *const _ as *const c_void
         } else if id == CStr::from_ptr(CLAP_EXT_AUDIO_PORTS) {
             &wrapper.clap_plugin_audio_ports as *const _ as *const c_void
+        } else if id == CStr::from_ptr(CLAP_EXT_EVENT_FILTER) {
+            &wrapper.clap_plugin_event_filter as *const _ as *const c_void
         } else if id == CStr::from_ptr(CLAP_EXT_GUI) && wrapper.editor.is_some() {
             // Only report that we support this extension if the plugin has an editor
             &wrapper.clap_plugin_gui as *const _ as *const c_void
@@ -1371,6 +1379,25 @@ impl<P: ClapPlugin> Wrapper<P> {
 
                 false
             }
+        }
+    }
+
+    unsafe extern "C" fn ext_event_filter_accepts(
+        _plugin: *const clap_plugin,
+        space_id: u16,
+        event_type: clap_event_type,
+    ) -> bool {
+        match (space_id, event_type) {
+            (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_VALUE) => true,
+            (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_ON)
+            | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_OFF)
+            | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_EXPRESSION)
+            | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_MIDI)
+                if P::ACCEPTS_MIDI =>
+            {
+                true
+            }
+            _ => false,
         }
     }
 
