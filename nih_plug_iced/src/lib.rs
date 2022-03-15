@@ -1,6 +1,93 @@
 //! [iced](https://github.com/iced-rs/iced) editor support for NIH plug.
 //!
-//! TODO: Proper usage example, for now check out the gain_gui example
+//! This integration requires you to pass your parameters to your editor object through the
+//! [`IcedEditor::InitializationFlags`], and to add a message type for your editor to handle
+//! parmater updates. This is a minimal example:
+//!
+//! ```ignore
+//! use nih_plug_iced::*;
+//!
+//! pub(crate) fn default_state() -> Arc<IcedState> {
+//!     IcedState::from_size(200, 150)
+//! }
+//!
+//! pub(crate) fn create(
+//!     params: Pin<Arc<FooParams>>,
+//!     editor_state: Arc<IcedState>,
+//! ) -> Option<Box<dyn Editor>> {
+//!     create_iced_editor::<Foo>(editor_state, params)
+//! }
+//!
+//! struct FooEditor {
+//!     params: Pin<Arc<FooParams>>,
+//!     context: Arc<dyn GuiContext>,
+//!
+//!     foo_slider_state: nih_widgets::param_slider::State,
+//! }
+//!
+//! #[derive(Debug, Clone, Copy)]
+//! enum Message {
+//!     /// Update a parameter's value.
+//!     ParamUpdate(nih_widgets::ParamMessage),
+//! }
+//!
+//! impl IcedEditor for FooEditor {
+//!     type Executor = executor::Default;
+//!     type Message = Message;
+//!     type InitializationFlags = Pin<Arc<FooParams>>;
+//!
+//!     fn new(
+//!         params: Self::InitializationFlags,
+//!         context: Arc<dyn GuiContext>,
+//!     ) -> (Self, Command<Self::Message>) {
+//!         let editor = FooEditor {
+//!             params,
+//!             context,
+//!
+//!             foo_slider_state: Default::default(),
+//!         };
+//!
+//!         (editor, Command::none())
+//!     }
+//!
+//!     fn context(&self) -> &dyn GuiContext {
+//!         self.context.as_ref()
+//!     }
+//!
+//!     fn update(
+//!         &mut self,
+//!         _window: &mut WindowQueue,
+//!         message: Self::Message,
+//!     ) -> Command<Self::Message> {
+//!         match message {
+//!             Message::ParamUpdate(message) => self.handle_param_message(message),
+//!         }
+//!
+//!         Command::none()
+//!     }
+//!
+//!     fn view(&mut self) -> Element<'_, Self::Message> {
+//!         Column::new()
+//!             .align_items(Alignment::Center)
+//!             .push(
+//!                 Text::new("Foo")
+//!                     .height(20.into())
+//!                     .width(Length::Fill)
+//!                     .horizontal_alignment(alignment::Horizontal::Center)
+//!                     .vertical_alignment(alignment::Vertical::Center),
+//!             )
+//!             .push(
+//!                 nih_widgets::ParamSlider::new(
+//!                     &mut self.foo_slider_state,
+//!                     &self.params.foo,
+//!                     self.context.as_ref(),
+//!                 )
+//!                 .map(Message::ParamUpdate),
+//!             )
+//!             .into()
+//!     }
+//! }
+//! ```
 
 use baseview::{WindowOpenOptions, WindowScalePolicy};
 use crossbeam::atomic::AtomicCell;
@@ -28,7 +115,7 @@ mod wrapper;
 /// the GUI is not open. If you want this size to be persisted when restoring a plugin instance,
 /// then you can store it in a `#[persist = "key"]` field on your parameters struct.
 ///
-/// See [`IcedState::from_size()`].
+/// See the [module's documentation][self] for an example on how to use this.
 pub fn create_iced_editor<E: IcedEditor>(
     iced_state: Arc<IcedState>,
     initialization_flags: E::InitializationFlags,
