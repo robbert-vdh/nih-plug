@@ -1,13 +1,16 @@
 //! A slider that integrates with NIH-plug's [`Param`] types.
 
+use atomic_refcell::AtomicRefCell;
+use nih_plug::prelude::{GuiContext, Param, ParamSetter};
+
+use crate::backend::widget;
+use crate::backend::Renderer;
+use crate::renderer::Renderer as GraphicsRenderer;
+use crate::text::Renderer as TextRenderer;
 use crate::{
     alignment, event, keyboard, layout, mouse, renderer, text, touch, Clipboard, Color, Element,
-    Event, Font, Layout, Length, Point, Rectangle, Shell, Size, Widget,
+    Event, Font, Layout, Length, Point, Rectangle, Shell, Size, TextInput, Vector, Widget,
 };
-use iced_baseview::backend::Renderer;
-use iced_baseview::renderer::Renderer as GraphicsRenderer;
-use iced_baseview::text::Renderer as TextRenderer;
-use nih_plug::prelude::{GuiContext, Param, ParamSetter};
 
 use super::util;
 use super::ParamMessage;
@@ -16,10 +19,12 @@ use super::ParamMessage;
 /// noramlized parameter.
 const GRANULAR_DRAG_MULTIPLIER: f32 = 0.1;
 
+/// The thickness of this widget's borders.
+const BORDER_WIDTH: f32 = 1.0;
+
 /// A slider that integrates with NIH-plug's [`Param`] types.
 ///
 /// TODO: There are currently no styling options at all
-/// TODO: Handle Alt+click for text entry
 /// TODO: Handle scrolling for steps (and shift+scroll for smaller steps?)
 pub struct ParamSlider<'a, P: Param> {
     state: &'a mut State,
@@ -48,6 +53,46 @@ pub struct State {
     /// Will be set to `true` if we just reset the parameter since you could otherwise reset the
     /// parameter and then move your mouse around to still set it a non-default value.
     ignore_changes: bool,
+
+    /// State for the text input overlay that will be shown when this widget is alt+clicked.
+    text_input_state: AtomicRefCell<widget::text_input::State>,
+    /// The text that's currently in the text input. If this is set to `None`, then the text input
+    /// is not visible.
+    text_input_value: Option<String>,
+}
+
+/// An internal message for intercep- I mean handling output from the embedded [`TextInpu`] widget.
+#[derive(Debug, Clone)]
+enum TextInputMessage {
+    /// A new value was entered in the text input dialog.
+    Value(String),
+    /// Enter was pressed.
+    Submit,
+}
+
+/// The default text input style with the border removed.
+struct TextInputStyle;
+
+impl widget::text_input::StyleSheet for TextInputStyle {
+    fn active(&self) -> widget::text_input::Style {
+        widget::text_input::Style::default()
+    }
+
+    fn focused(&self) -> widget::text_input::Style {
+        widget::text_input::Style::default()
+    }
+
+    fn placeholder_color(&self) -> Color {
+        Color::from_rgb(0.7, 0.7, 0.7)
+    }
+
+    fn value_color(&self) -> Color {
+        Color::from_rgb(0.3, 0.3, 0.3)
+    }
+
+    fn selection_color(&self) -> Color {
+        Color::from_rgb(0.8, 0.8, 1.0)
+    }
 }
 
 impl<'a, P: Param> ParamSlider<'a, P> {
@@ -114,11 +159,68 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
         event: Event,
         layout: Layout<'_>,
         cursor_position: Point,
-        _renderer: &Renderer,
-        _clipboard: &mut dyn Clipboard,
+        renderer: &Renderer,
+        clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, ParamMessage>,
     ) -> event::Status {
         let bounds = layout.bounds();
+
+        // The pressence of a value in `self.state.text_input_value` indicates that the field should
+        // be focussed. The field handles defocussing by itself
+        // FIMXE: This is super hacky, I have no idea how you can reuse the text input widget
+        //        otherwise. Widgets are not supposed to handle messages from other widgets, but
+        //        we'll do so anyways by using a special `TextInputMessage` type and our own
+        //        `Shell`.
+        let text_input_status = if let Some(current_value) = &self.state.text_input_value {
+            let event = event.clone();
+            let mut messages = Vec::new();
+            let mut shell = Shell::new(&mut messages);
+            let status = self.with_text_input(layout, current_value, |mut text_input, layout| {
+                text_input.on_event(
+                    event,
+                    layout,
+                    cursor_position,
+                    renderer,
+                    clipboard,
+                    &mut shell,
+                )
+            });
+
+            // Pressing escape will unfocus the text field, so we should propagate that change in
+            // our own model
+            if self.state.text_input_state.borrow().is_focused() {
+                for message in messages {
+                    match message {
+                        TextInputMessage::Value(s) => self.state.text_input_value = Some(s),
+                        TextInputMessage::Submit => {
+                            if let Some(normalized_value) = self
+                                .state
+                                .text_input_value
+                                .as_ref()
+                                .and_then(|s| self.param.string_to_normalized_value(s))
+                            {
+                                self.setter.begin_set_parameter(self.param);
+                                self.setter
+                                    .set_parameter_normalized(self.param, normalized_value);
+                                self.setter.end_set_parameter(self.param);
+                            }
+
+                            // And defocus the text input widget again
+                            self.state.text_input_value = None;
+                        }
+                    }
+                }
+            } else {
+                self.state.text_input_value = None;
+            }
+
+            status
+        } else {
+            event::Status::Ignored
+        };
+        if text_input_status == event::Status::Captured {
+            return event::Status::Captured;
+        }
 
         match event {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
@@ -130,7 +232,17 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
 
                     let click = mouse::Click::new(cursor_position, self.state.last_click);
                     self.state.last_click = Some(click);
-                    if self.state.keyboard_modifiers.command()
+                    if self.state.keyboard_modifiers.alt() {
+                        // Alt+click should not start a drag, instead it should show the text entry
+                        // widget
+                        self.state.drag_active = false;
+
+                        self.state.text_input_value = Some(self.param.to_string());
+                        self.state
+                            .text_input_state
+                            .borrow_mut()
+                            .move_cursor_to_end();
+                    } else if self.state.keyboard_modifiers.command()
                         || matches!(click.kind(), mouse::click::Kind::Double)
                     {
                         // Immediately trigger a parameter update if the value would be different, or
@@ -253,8 +365,6 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
         cursor_position: Point,
         _viewport: &Rectangle,
     ) {
-        const BORDER_WIDTH: f32 = 1.0;
-
         let bounds = layout.bounds();
         let is_mouse_over = bounds.contains(cursor_position);
 
@@ -300,39 +410,45 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
             fill_color,
         );
 
-        // We'll overlay the label on the slider. To make it more readable (and because it looks
-        // cool), the parts that overlap with the fill rect will be rendered in white while the rest
-        // will be rendered in black.
-        let display_value = self.param.to_string();
-        let text_size = self.text_size.unwrap_or_else(|| renderer.default_size()) as f32;
-        let text_bounds = Rectangle {
-            x: bounds.center_x(),
-            y: bounds.center_y(),
-            ..bounds
-        };
-        renderer.fill_text(text::Text {
-            content: &display_value,
-            font: self.font,
-            size: text_size,
-            bounds: text_bounds,
-            color: style.text_color,
-            horizontal_alignment: alignment::Horizontal::Center,
-            vertical_alignment: alignment::Vertical::Center,
-        });
-
-        // This will clip to the filled area
-        renderer.with_layer(fill_rect, |renderer| {
-            let filled_text_color = Color::from_rgb8(80, 80, 80);
+        // Only draw the text input widget when it gets focussed. Otherwise, overlay the label with
+        // the slider. To make it more readable (and because it looks cool), the parts that overlap
+        // with the fill rect will be rendered in white while the rest will be rendered in black.
+        if let Some(current_value) = &self.state.text_input_value {
+            self.with_text_input(layout, current_value, |text_input, layout| {
+                text_input.draw(renderer, layout, cursor_position, None)
+            })
+        } else {
+            let display_value = self.param.to_string();
+            let text_size = self.text_size.unwrap_or_else(|| renderer.default_size()) as f32;
+            let text_bounds = Rectangle {
+                x: bounds.center_x(),
+                y: bounds.center_y(),
+                ..bounds
+            };
             renderer.fill_text(text::Text {
                 content: &display_value,
                 font: self.font,
                 size: text_size,
                 bounds: text_bounds,
-                color: filled_text_color,
+                color: style.text_color,
                 horizontal_alignment: alignment::Horizontal::Center,
                 vertical_alignment: alignment::Vertical::Center,
             });
-        });
+
+            // This will clip to the filled area
+            renderer.with_layer(fill_rect, |renderer| {
+                let filled_text_color = Color::from_rgb8(80, 80, 80);
+                renderer.fill_text(text::Text {
+                    content: &display_value,
+                    font: self.font,
+                    size: text_size,
+                    bounds: text_bounds,
+                    color: filled_text_color,
+                    horizontal_alignment: alignment::Horizontal::Center,
+                    vertical_alignment: alignment::Vertical::Center,
+                });
+            });
+        }
     }
 }
 
@@ -347,6 +463,46 @@ impl<'a, P: Param> ParamSlider<'a, P> {
         F: Fn(ParamMessage) -> Message + 'static,
     {
         Element::from(self).map(f)
+    }
+
+    /// Create a temporary [`TextInput`] hooked up to [`State::text_input_value`] and outputting
+    /// [`TextInputMessage`] messages and do something with it. This can be used to
+    fn with_text_input<R, F: FnOnce(TextInput<'_, TextInputMessage>, Layout) -> R>(
+        &self,
+        layout: Layout,
+        current_value: &str,
+        f: F,
+    ) -> R {
+        let mut text_input_state = self.state.text_input_state.borrow_mut();
+        text_input_state.focus();
+
+        let text_input = TextInput::new(
+            &mut text_input_state,
+            "",
+            current_value,
+            TextInputMessage::Value,
+        )
+        .width(self.width)
+        .style(TextInputStyle)
+        .on_submit(TextInputMessage::Submit);
+
+        // Make sure to not draw over the borders
+        let offset_node = layout::Node::with_children(
+            Size {
+                width: layout.bounds().size().width - (BORDER_WIDTH * 2.0),
+                height: layout.bounds().size().height - (BORDER_WIDTH * 2.0),
+            },
+            vec![layout::Node::new(layout.bounds().size())],
+        );
+        let offset_layout = Layout::with_offset(
+            Vector {
+                x: layout.position().x + BORDER_WIDTH,
+                y: layout.position().y + BORDER_WIDTH,
+            },
+            &offset_node,
+        );
+
+        f(text_input, offset_layout)
     }
 
     /// Set the normalized value for a parameter if that would change the parameter's plain value

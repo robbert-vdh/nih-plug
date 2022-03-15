@@ -1942,6 +1942,7 @@ dependencies = [
 name = "nih_plug_iced"
 version = "0.0.0"
 dependencies = [
+ "atomic_refcell",
  "baseview",
  "crossbeam",
  "iced_baseview",
