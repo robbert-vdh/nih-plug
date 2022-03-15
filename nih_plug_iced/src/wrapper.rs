@@ -5,6 +5,7 @@ use crossbeam::channel;
 use nih_plug::prelude::GuiContext;
 use std::sync::Arc;
 
+use crate::futures::FutureExt;
 use crate::{
     futures, subscription, Application, Color, Command, Element, IcedEditor, Subscription,
     WindowQueue, WindowScalePolicy, WindowSubs,
@@ -111,14 +112,13 @@ impl<E: IcedEditor> Application for IcedEditorWrapperApplication<E> {
             subscription::unfold(
                 "parameter updates",
                 self.parameter_updates_receiver.clone(),
-                |parameter_updates_receiver| {
-                    futures::future::ready((
-                        parameter_updates_receiver
-                            .try_recv()
-                            .ok()
-                            .map(|_| Message::ParameterUpdate),
+                |parameter_updates_receiver| match parameter_updates_receiver.try_recv() {
+                    Ok(_) => futures::future::ready((
+                        Some(Message::ParameterUpdate),
                         parameter_updates_receiver,
                     ))
+                    .boxed(),
+                    Err(_) => futures::future::pending().boxed(),
                 },
             ),
             self.editor
