@@ -823,6 +823,8 @@ impl<P: ClapPlugin> Wrapper<P> {
             }
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_EXPRESSION) => {
                 if P::ACCEPTS_MIDI {
+                    // We currently don't report supporting this at all in the event filter, add that once
+                    // we support MIDI CCs
                     // TODO: Implement pressure and other expressions along with MIDI CCs
                 }
 
@@ -830,6 +832,8 @@ impl<P: ClapPlugin> Wrapper<P> {
             }
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_MIDI) => {
                 if P::ACCEPTS_MIDI {
+                    // We currently don't report supporting this at all in the event filter, add that once
+                    // we support MIDI CCs
                     // TODO: Implement raw MIDI handling once we add CCs
                 }
 
@@ -1402,8 +1406,9 @@ impl<P: ClapPlugin> Wrapper<P> {
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_VALUE) => true,
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_ON)
             | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_OFF)
-            | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_EXPRESSION)
-            | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_MIDI)
+            // TODO: Implement midi CC handling
+            // | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_EXPRESSION)
+            // | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_MIDI)
                 if P::ACCEPTS_MIDI =>
             {
                 true
