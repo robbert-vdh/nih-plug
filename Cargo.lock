@@ -449,8 +449,8 @@ dependencies = [
 
 [[package]]
 name = "clap-sys"
-version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/clap-sys?branch=update/clap-0.20#0c68b124fc9aa723b5c3aa61f132ddcc0d9f06ab"
+version = "0.23.0"
+source = "git+https://github.com/robbert-vdh/clap-sys?branch=update/clap-0.20#d15507000cb0ddd64606362fe1aec0e638e54748"
 
 [[package]]
 name = "clipboard-win"

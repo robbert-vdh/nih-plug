@@ -5,11 +5,11 @@
 use atomic_float::AtomicF32;
 use atomic_refcell::{AtomicRefCell, AtomicRefMut};
 use clap_sys::events::{
-    clap_event_header, clap_event_note, clap_event_param_mod, clap_event_param_value,
-    clap_input_events, clap_output_events, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_BEGIN_ADJUST,
-    CLAP_EVENT_END_ADJUST, CLAP_EVENT_IS_LIVE, CLAP_EVENT_MIDI, CLAP_EVENT_NOTE_EXPRESSION,
-    CLAP_EVENT_NOTE_OFF, CLAP_EVENT_NOTE_ON, CLAP_EVENT_PARAM_MOD, CLAP_EVENT_PARAM_VALUE,
-    CLAP_EVENT_SHOULD_RECORD, CLAP_TRANSPORT_HAS_BEATS_TIMELINE,
+    clap_event_header, clap_event_note, clap_event_param_gesture, clap_event_param_mod,
+    clap_event_param_value, clap_input_events, clap_output_events, CLAP_CORE_EVENT_SPACE_ID,
+    CLAP_EVENT_IS_LIVE, CLAP_EVENT_MIDI, CLAP_EVENT_NOTE_EXPRESSION, CLAP_EVENT_NOTE_OFF,
+    CLAP_EVENT_NOTE_ON, CLAP_EVENT_PARAM_GESTURE_BEGIN, CLAP_EVENT_PARAM_GESTURE_END,
+    CLAP_EVENT_PARAM_MOD, CLAP_EVENT_PARAM_VALUE, CLAP_TRANSPORT_HAS_BEATS_TIMELINE,
     CLAP_TRANSPORT_HAS_SECONDS_TIMELINE, CLAP_TRANSPORT_HAS_TEMPO,
     CLAP_TRANSPORT_HAS_TIME_SIGNATURE, CLAP_TRANSPORT_IS_LOOP_ACTIVE, CLAP_TRANSPORT_IS_PLAYING,
     CLAP_TRANSPORT_IS_RECORDING, CLAP_TRANSPORT_IS_WITHIN_PRE_ROLL,
@@ -176,13 +176,13 @@ pub struct Wrapper<P: ClapPlugin> {
     /// having to add a setter function to the parameter (or even worse, have it be completely
     /// untyped).
     pub param_ptr_to_hash: HashMap<ParamPtr, u32>,
-    /// A queue of parameter changes that should be output in either the next process call or in the
-    /// next parameter flush.
+    /// A queue of parameter changes and gestures that should be output in either the next process
+    /// call or in the next parameter flush.
     ///
     /// XXX: There's no guarentee that a single parmaeter doesn't occur twice in this queue, but
     ///      even if it does then that should still not be a problem because the host also reads it
     ///      in the same order, right?
-    output_parameter_changes: ArrayQueue<OutputParamChange>,
+    output_parameter_events: ArrayQueue<OutputParamEvent>,
 
     host_thread_check: AtomicRefCell<Option<ClapPtr<clap_host_thread_check>>>,
 
@@ -219,27 +219,23 @@ pub enum ClapParamUpdate {
     PlainValueMod(f64),
 }
 
-/// A parameter change that should be output by the plugin, stored in a queue on the wrapper and
+/// A parameter event that should be output by the plugin, stored in a queue on the wrapper and
 /// written to the host either at the end of the process function or during a flush.
-pub struct OutputParamChange {
-    /// The internal hash for the parameter.
-    pub param_hash: u32,
-    /// The 'plain' value as reported to CLAP. This is the normalized value multiplied by
-    /// [`Param::step_size()`][crate::Param::step_size()].
-    pub clap_plain_value: f64,
-    /// The kind of parameter change event, since CLAP wants you to resend an old value to handle
-    /// automation start and end gestures.
-    pub change_type: OutputParamChangeType,
-}
-
-/// The type of an [`OutputParamChange`].
-pub enum OutputParamChangeType {
-    /// A regular parameter change, sending a new value for a parameter.
-    Normal,
-    /// Tell the host that the automation gesture begins. The event may resend an old value.
-    BeginGesture,
-    /// Tell the host that the automation gesture has ended. This event may resend an old value.
-    EndGesture,
+pub enum OutputParamEvent {
+    /// Begin an automation gesture. This must always be sent before sending [`SetValue`].
+    BeginGesture { param_hash: u32 },
+    /// Change the value of a parmaeter using a plain CLAP value, aka the normalized value
+    /// multiplied by the number of steps.
+    SetValue {
+        /// The internal hash for the parameter.
+        param_hash: u32,
+        /// The 'plain' value as reported to CLAP. This is the normalized value multiplied by
+        /// [`Param::step_size()`][crate::Param::step_size()].
+        clap_plain_value: f64,
+    },
+    /// Begin an automation gesture. This must always be sent after sending one or more [`SetValue`]
+    /// events.
+    EndGesture { param_hash: u32 },
 }
 
 /// Because CLAP has this [`clap_host::request_host_callback()`] function, we don't need to use
@@ -402,7 +398,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             param_defaults_normalized: HashMap::new(),
             param_id_to_hash: HashMap::new(),
             param_ptr_to_hash: HashMap::new(),
-            output_parameter_changes: ArrayQueue::new(OUTPUT_EVENT_QUEUE_CAPACITY),
+            output_parameter_events: ArrayQueue::new(OUTPUT_EVENT_QUEUE_CAPACITY),
 
             host_thread_check: AtomicRefCell::new(None),
 
@@ -503,15 +499,15 @@ impl<P: ClapPlugin> Wrapper<P> {
         }
     }
 
-    /// Queue a parmeter change to be sent to the host at the end of the audio processing cycle, and
-    /// request a parameter flush from the host if the plugin is not currently processing audio. The
-    /// parameter's actual value will only be updated at that point so the value won't change in the
-    /// middle of a processing call.
+    /// Queue a parmeter output event to be sent to the host at the end of the audio processing
+    /// cycle, and request a parameter flush from the host if the plugin is not currently processing
+    /// audio. The parameter's actual value will only be updated at that point so the value won't
+    /// change in the middle of a processing call.
     ///
     /// Returns `false` if the parameter value queue was full and the update will not be sent to the
     /// host (it will still be set on the plugin either way).
-    pub fn queue_parameter_change(&self, change: OutputParamChange) -> bool {
-        let result = self.output_parameter_changes.push(change).is_ok();
+    pub fn queue_parameter_event(&self, event: OutputParamEvent) -> bool {
+        let result = self.output_parameter_events.push(event).is_ok();
         match &*self.host_params.borrow() {
             Some(host_params) if !self.is_processing.load(Ordering::SeqCst) => {
                 unsafe { (host_params.request_flush)(&*self.host_callback) };
@@ -678,44 +674,67 @@ impl<P: ClapPlugin> Wrapper<P> {
         // shouldn't have to think about interleaving events here
         let sample_rate = self.current_buffer_config.load().map(|c| c.sample_rate);
         let mut parameter_values_changed = false;
-        while let Some(change) = self.output_parameter_changes.pop() {
-            self.update_plain_value_by_hash(
-                change.param_hash,
-                ClapParamUpdate::PlainValueSet(change.clap_plain_value),
-                sample_rate,
-            );
-            parameter_values_changed = true;
+        while let Some(change) = self.output_parameter_events.pop() {
+            let push_succesful = match change {
+                OutputParamEvent::BeginGesture { param_hash } => {
+                    let event = clap_event_param_gesture {
+                        header: clap_event_header {
+                            size: mem::size_of::<clap_event_param_gesture>() as u32,
+                            time: current_sample_idx as u32,
+                            space_id: CLAP_CORE_EVENT_SPACE_ID,
+                            type_: CLAP_EVENT_PARAM_GESTURE_BEGIN,
+                            flags: CLAP_EVENT_IS_LIVE,
+                        },
+                        param_id: param_hash,
+                    };
 
-            let event = clap_event_param_value {
-                header: clap_event_header {
-                    size: mem::size_of::<clap_event_param_value>() as u32,
-                    time: current_sample_idx as u32,
-                    space_id: CLAP_CORE_EVENT_SPACE_ID,
-                    type_: CLAP_EVENT_PARAM_VALUE,
-                    flags: match change.change_type {
-                        OutputParamChangeType::Normal => {
-                            CLAP_EVENT_IS_LIVE | CLAP_EVENT_SHOULD_RECORD
-                        }
-                        // XXX: Apparently you should have `CLAP_EVENT_SHOULD_RECORD` here, even if
-                        //      we're repeating old values. This parameter gesture handling in CLAP
-                        //      is currently a bit weird and error prone.
-                        OutputParamChangeType::BeginGesture => {
-                            CLAP_EVENT_IS_LIVE | CLAP_EVENT_SHOULD_RECORD | CLAP_EVENT_BEGIN_ADJUST
-                        }
-                        OutputParamChangeType::EndGesture => {
-                            CLAP_EVENT_IS_LIVE | CLAP_EVENT_SHOULD_RECORD | CLAP_EVENT_END_ADJUST
-                        }
-                    },
-                },
-                param_id: change.param_hash,
-                cookie: ptr::null_mut(),
-                port_index: -1,
-                key: -1,
-                channel: -1,
-                value: change.clap_plain_value,
+                    (out.try_push)(out, &event.header)
+                }
+                OutputParamEvent::SetValue {
+                    param_hash,
+                    clap_plain_value,
+                } => {
+                    self.update_plain_value_by_hash(
+                        param_hash,
+                        ClapParamUpdate::PlainValueSet(clap_plain_value),
+                        sample_rate,
+                    );
+                    parameter_values_changed = true;
+
+                    let event = clap_event_param_value {
+                        header: clap_event_header {
+                            size: mem::size_of::<clap_event_param_value>() as u32,
+                            time: current_sample_idx as u32,
+                            space_id: CLAP_CORE_EVENT_SPACE_ID,
+                            type_: CLAP_EVENT_PARAM_VALUE,
+                            flags: CLAP_EVENT_IS_LIVE,
+                        },
+                        param_id: param_hash,
+                        cookie: ptr::null_mut(),
+                        port_index: -1,
+                        key: -1,
+                        channel: -1,
+                        value: clap_plain_value,
+                    };
+
+                    (out.try_push)(out, &event.header)
+                }
+                OutputParamEvent::EndGesture { param_hash } => {
+                    let event = clap_event_param_gesture {
+                        header: clap_event_header {
+                            size: mem::size_of::<clap_event_param_gesture>() as u32,
+                            time: current_sample_idx as u32,
+                            space_id: CLAP_CORE_EVENT_SPACE_ID,
+                            type_: CLAP_EVENT_PARAM_GESTURE_END,
+                            flags: CLAP_EVENT_IS_LIVE,
+                        },
+                        param_id: param_hash,
+                    };
+
+                    (out.try_push)(out, &event.header)
+                }
             };
 
-            let push_succesful = (out.try_push)(out, &event.header);
             nih_debug_assert!(push_succesful);
         }
 
@@ -1767,7 +1786,7 @@ impl<P: ClapPlugin> Wrapper<P> {
 
     unsafe extern "C" fn ext_state_save(
         plugin: *const clap_plugin,
-        stream: *mut clap_ostream,
+        stream: *const clap_ostream,
     ) -> bool {
         check_null_ptr!(false, plugin, stream);
         let wrapper = &*(plugin as *const Self);
@@ -1808,7 +1827,7 @@ impl<P: ClapPlugin> Wrapper<P> {
 
     unsafe extern "C" fn ext_state_load(
         plugin: *const clap_plugin,
-        stream: *mut clap_istream,
+        stream: *const clap_istream,
     ) -> bool {
         check_null_ptr!(false, plugin, stream);
         let wrapper = &*(plugin as *const Self);

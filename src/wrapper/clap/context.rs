@@ -3,12 +3,11 @@ use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use super::wrapper::{OutputParamChange, Task, Wrapper};
+use super::wrapper::{OutputParamEvent, Task, Wrapper};
 use crate::context::{GuiContext, ProcessContext, Transport};
 use crate::event_loop::EventLoop;
 use crate::param::internals::ParamPtr;
 use crate::plugin::{ClapPlugin, NoteEvent};
-use crate::wrapper::clap::wrapper::OutputParamChangeType;
 
 /// A [`GuiContext`] implementation for the wrapper. This is passed to the plugin in
 /// [`Editor::spawn()`][crate::prelude::Editor::spawn()] so it can interact with the rest of the plugin and
@@ -32,17 +31,11 @@ impl<P: ClapPlugin> GuiContext for WrapperGuiContext<P> {
     unsafe fn raw_begin_set_parameter(&self, param: ParamPtr) {
         match self.wrapper.param_ptr_to_hash.get(&param) {
             Some(hash) => {
-                // Apparently you're supposed to resend old values for the automation begin and end
-                // gestures
-                let clap_plain_value =
-                    param.normalized_value() as f64 * param.step_count().unwrap_or(1) as f64;
-                let success = self.wrapper.queue_parameter_change(OutputParamChange {
-                    param_hash: *hash,
-                    clap_plain_value,
-                    change_type: OutputParamChangeType::BeginGesture,
-                });
+                let success = self
+                    .wrapper
+                    .queue_parameter_event(OutputParamEvent::BeginGesture { param_hash: *hash });
 
-                nih_debug_assert!(success, "Parameter output queue was full, parameter change will not be sent to the host");
+                nih_debug_assert!(success, "Parameter output event queue was full, parameter change will not be sent to the host");
             }
             None => nih_debug_assert_failure!("Unknown parameter: {:?}", param),
         }
@@ -57,13 +50,14 @@ impl<P: ClapPlugin> GuiContext for WrapperGuiContext<P> {
                 // be changed when the output event is written to prevent changing parameter values
                 // in the middle of processing audio.
                 let clap_plain_value = normalized as f64 * param.step_count().unwrap_or(1) as f64;
-                let success = self.wrapper.queue_parameter_change(OutputParamChange {
-                    param_hash: *hash,
-                    clap_plain_value,
-                    change_type: OutputParamChangeType::Normal,
-                });
+                let success = self
+                    .wrapper
+                    .queue_parameter_event(OutputParamEvent::SetValue {
+                        param_hash: *hash,
+                        clap_plain_value,
+                    });
 
-                nih_debug_assert!(success, "Parameter output queue was full, parameter change will not be sent to the host");
+                nih_debug_assert!(success, "Parameter output event queue was full, parameter change will not be sent to the host");
             }
             None => nih_debug_assert_failure!("Unknown parameter: {:?}", param),
         }
@@ -72,21 +66,11 @@ impl<P: ClapPlugin> GuiContext for WrapperGuiContext<P> {
     unsafe fn raw_end_set_parameter(&self, param: ParamPtr) {
         match self.wrapper.param_ptr_to_hash.get(&param) {
             Some(hash) => {
-                // Apparently you're supposed to resend old values for the automation begin and end
-                // gestures
-                // FIXME: This will result in a race condition if the parameter is modified in the
-                //        same cycle! (same for the gesture begin, but it's less likely to cause
-                //        problems there) This will be fixed in a next version of CLAP by splitting
-                //        the gestures up into their own events so it's not a huge deal right now.
-                let clap_plain_value =
-                    param.normalized_value() as f64 * param.step_count().unwrap_or(1) as f64;
-                let success = self.wrapper.queue_parameter_change(OutputParamChange {
-                    param_hash: *hash,
-                    clap_plain_value,
-                    change_type: OutputParamChangeType::EndGesture,
-                });
+                let success = self
+                    .wrapper
+                    .queue_parameter_event(OutputParamEvent::EndGesture { param_hash: *hash });
 
-                nih_debug_assert!(success, "Parameter output queue was full, parameter change will not be sent to the host");
+                nih_debug_assert!(success, "Parameter output event queue was full, parameter change will not be sent to the host");
             }
             None => nih_debug_assert_failure!("Unknown parameter: {:?}", param),
         }
