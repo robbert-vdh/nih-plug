@@ -34,6 +34,7 @@ use clap_sys::ext::params::{
     CLAP_PARAM_IS_AUTOMATABLE, CLAP_PARAM_IS_BYPASS, CLAP_PARAM_IS_STEPPED,
 };
 use clap_sys::ext::state::{clap_plugin_state, CLAP_EXT_STATE};
+use clap_sys::ext::tail::{clap_plugin_tail, CLAP_EXT_TAIL};
 use clap_sys::ext::thread_check::{clap_host_thread_check, CLAP_EXT_THREAD_CHECK};
 use clap_sys::fixedpoint::{CLAP_BEATTIME_FACTOR, CLAP_SECTIME_FACTOR};
 use clap_sys::host::clap_host;
@@ -124,6 +125,8 @@ pub struct Wrapper<P: ClapPlugin> {
     /// TODO: Maybe load these lazily at some point instead of needing to spool them all to this
     ///       queue first
     input_events: AtomicRefCell<VecDeque<NoteEvent>>,
+    /// The last process status returned by the plugin. This is used for tail handling.
+    last_process_status: AtomicCell<ProcessStatus>,
     /// The current latency in samples, as set by the plugin through the [`ProcessContext`]. uses
     /// the latency extnesion
     pub current_latency: AtomicU32,
@@ -194,6 +197,8 @@ pub struct Wrapper<P: ClapPlugin> {
     host_thread_check: AtomicRefCell<Option<ClapPtr<clap_host_thread_check>>>,
 
     clap_plugin_state: clap_plugin_state,
+
+    clap_plugin_tail: clap_plugin_tail,
 
     /// A queue of tasks that still need to be performed. Because CLAP lets the plugin request a
     /// host callback directly, we don't need to use the OsEventLoop we use in our other plugin
@@ -354,6 +359,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             current_buffer_config: AtomicCell::new(None),
             bypass_state: AtomicBool::new(false),
             input_events: AtomicRefCell::new(VecDeque::with_capacity(512)),
+            last_process_status: AtomicCell::new(ProcessStatus::Normal),
             current_latency: AtomicU32::new(0),
             output_buffer: AtomicRefCell::new(Buffer::default()),
 
@@ -424,6 +430,10 @@ impl<P: ClapPlugin> Wrapper<P> {
             clap_plugin_state: clap_plugin_state {
                 save: Self::ext_state_save,
                 load: Self::ext_state_load,
+            },
+
+            clap_plugin_tail: clap_plugin_tail {
+                get: Self::ext_tail_get,
             },
 
             tasks: ArrayQueue::new(TASK_QUEUE_CAPACITY),
@@ -1148,7 +1158,10 @@ impl<P: ClapPlugin> Wrapper<P> {
 
                 let mut plugin = wrapper.plugin.write();
                 let mut context = wrapper.make_process_context(transport);
-                let result = match plugin.process(&mut output_buffer, &mut context) {
+                let result = plugin.process(&mut output_buffer, &mut context);
+                wrapper.last_process_status.store(result);
+
+                let clap_result = match result {
                     ProcessStatus::Error(err) => {
                         nih_debug_assert_failure!("Process error: {}", err);
 
@@ -1168,7 +1181,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 // unprocessed (parameter) events. If there are more events, we'll just keep going
                 // through this process until we've processed the entire buffer.
                 if block_end as u32 == process.frames_count {
-                    break result;
+                    break clap_result;
                 } else {
                     block_start = block_end;
                 }
@@ -1185,8 +1198,6 @@ impl<P: ClapPlugin> Wrapper<P> {
 
         let id = CStr::from_ptr(id);
 
-        // TODO: Implement:
-        //       - tail
         if id == CStr::from_ptr(CLAP_EXT_AUDIO_PORTS_CONFIG) {
             &wrapper.clap_plugin_audio_ports_config as *const _ as *const c_void
         } else if id == CStr::from_ptr(CLAP_EXT_AUDIO_PORTS) {
@@ -1204,6 +1215,8 @@ impl<P: ClapPlugin> Wrapper<P> {
             &wrapper.clap_plugin_params as *const _ as *const c_void
         } else if id == CStr::from_ptr(CLAP_EXT_STATE) {
             &wrapper.clap_plugin_state as *const _ as *const c_void
+        } else if id == CStr::from_ptr(CLAP_EXT_TAIL) {
+            &wrapper.clap_plugin_tail as *const _ as *const c_void
         } else {
             nih_log!("Host tried to query unknown extension {:?}", id);
             ptr::null()
@@ -1947,6 +1960,17 @@ impl<P: ClapPlugin> Wrapper<P> {
         }
 
         true
+    }
+
+    unsafe extern "C" fn ext_tail_get(plugin: *const clap_plugin) -> u32 {
+        check_null_ptr!(0, plugin);
+        let wrapper = &*(plugin as *const Self);
+
+        match wrapper.last_process_status.load() {
+            ProcessStatus::Tail(samples) => samples,
+            ProcessStatus::KeepAlive => u32::MAX,
+            _ => 0,
+        }
     }
 }
 
