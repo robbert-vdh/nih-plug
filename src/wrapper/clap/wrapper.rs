@@ -26,6 +26,9 @@ use clap_sys::ext::gui::{
     CLAP_WINDOW_API_X11,
 };
 use clap_sys::ext::latency::{clap_host_latency, clap_plugin_latency, CLAP_EXT_LATENCY};
+use clap_sys::ext::note_ports::{
+    clap_note_port_info, clap_plugin_note_ports, CLAP_EXT_NOTE_PORTS, CLAP_NOTE_DIALECT_CLAP,
+};
 use clap_sys::ext::params::{
     clap_host_params, clap_param_info, clap_plugin_params, CLAP_EXT_PARAMS,
     CLAP_PARAM_IS_AUTOMATABLE, CLAP_PARAM_IS_BYPASS, CLAP_PARAM_IS_STEPPED,
@@ -155,6 +158,8 @@ pub struct Wrapper<P: ClapPlugin> {
 
     clap_plugin_latency: clap_plugin_latency,
     host_latency: AtomicRefCell<Option<ClapPtr<clap_host_latency>>>,
+
+    clap_plugin_note_ports: clap_plugin_note_ports,
 
     clap_plugin_params: clap_plugin_params,
     host_params: AtomicRefCell<Option<ClapPtr<clap_host_params>>>,
@@ -392,6 +397,11 @@ impl<P: ClapPlugin> Wrapper<P> {
                 get: Self::ext_latency_get,
             },
             host_latency: AtomicRefCell::new(None),
+
+            clap_plugin_note_ports: clap_plugin_note_ports {
+                count: Self::ext_note_ports_count,
+                get: Self::ext_note_ports_get,
+            },
 
             clap_plugin_params: clap_plugin_params {
                 count: Self::ext_params_count,
@@ -1172,7 +1182,6 @@ impl<P: ClapPlugin> Wrapper<P> {
         let id = CStr::from_ptr(id);
 
         // TODO: Implement:
-        //       - note ports
         //       - tail
         if id == CStr::from_ptr(CLAP_EXT_AUDIO_PORTS_CONFIG) {
             &wrapper.clap_plugin_audio_ports_config as *const _ as *const c_void
@@ -1185,6 +1194,8 @@ impl<P: ClapPlugin> Wrapper<P> {
             &wrapper.clap_plugin_gui as *const _ as *const c_void
         } else if id == CStr::from_ptr(CLAP_EXT_LATENCY) {
             &wrapper.clap_plugin_latency as *const _ as *const c_void
+        } else if id == CStr::from_ptr(CLAP_EXT_NOTE_PORTS) && P::ACCEPTS_MIDI {
+            &wrapper.clap_plugin_note_ports as *const _ as *const c_void
         } else if id == CStr::from_ptr(CLAP_EXT_PARAMS) {
             &wrapper.clap_plugin_params as *const _ as *const c_void
         } else if id == CStr::from_ptr(CLAP_EXT_STATE) {
@@ -1622,6 +1633,38 @@ impl<P: ClapPlugin> Wrapper<P> {
         let wrapper = &*(plugin as *const Self);
 
         wrapper.current_latency.load(Ordering::SeqCst)
+    }
+
+    unsafe extern "C" fn ext_note_ports_count(_plugin: *const clap_plugin, is_input: bool) -> u32 {
+        // TODO: Outputting notes
+        match is_input {
+            true if P::ACCEPTS_MIDI => 1,
+            _ => 0,
+        }
+    }
+
+    unsafe extern "C" fn ext_note_ports_get(
+        _plugin: *const clap_plugin,
+        index: u32,
+        is_input: bool,
+        info: *mut clap_note_port_info,
+    ) -> bool {
+        match (index, is_input) {
+            (0, true) if P::ACCEPTS_MIDI => {
+                *info = std::mem::zeroed();
+
+                let info = &mut *info;
+                info.id = 0;
+                // TODO: Implement MIDI CC handling
+                // TODO: Implement MPE and MIDI2
+                info.supported_dialects = CLAP_NOTE_DIALECT_CLAP;
+                info.preferred_dialect = CLAP_NOTE_DIALECT_CLAP;
+                strlcpy(&mut info.name, "Note Input");
+
+                true
+            }
+            _ => false,
+        }
     }
 
     unsafe extern "C" fn ext_params_count(plugin: *const clap_plugin) -> u32 {
