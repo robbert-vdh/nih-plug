@@ -237,11 +237,10 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
                         // widget
                         self.state.drag_active = false;
 
+                        let mut text_input_state = self.state.text_input_state.borrow_mut();
                         self.state.text_input_value = Some(self.param.to_string());
-                        self.state
-                            .text_input_state
-                            .borrow_mut()
-                            .move_cursor_to_end();
+                        text_input_state.move_cursor_to_end();
+                        text_input_state.select_all();
                     } else if self.state.keyboard_modifiers.command()
                         || matches!(click.kind(), mouse::click::Kind::Double)
                     {
