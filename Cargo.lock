@@ -746,7 +746,7 @@ version = "0.1.0"
 dependencies = [
  "fftw",
  "nih_plug",
- "nih_plug_iced",
+ "nih_plug_egui",
  "triple_buffer",
 ]
 
