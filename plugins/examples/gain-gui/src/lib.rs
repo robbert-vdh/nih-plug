@@ -25,10 +25,6 @@ struct Gain {
 struct GainParams {
     #[id = "gain"]
     pub gain: FloatParam,
-
-    // TODO: Remove this parameter when we're done implementing the widgets
-    #[id = "foobar"]
-    pub some_int: IntParam,
 }
 
 impl Default for Gain {
@@ -57,7 +53,6 @@ impl Default for GainParams {
             .with_smoother(SmoothingStyle::Linear(50.0))
             .with_step_size(0.01)
             .with_unit(" dB"),
-            some_int: IntParam::new("Something", 3, IntRange::Linear { min: 0, max: 3 }),
         }
     }
 }
@@ -81,7 +76,11 @@ impl Plugin for Gain {
     }
 
     fn editor(&self) -> Option<Box<dyn Editor>> {
-        editor::create(self.params.clone(), self.editor_state.clone())
+        editor::create(
+            self.params.clone(),
+            self.peak_meter.clone(),
+            self.editor_state.clone(),
+        )
     }
 
     fn accepts_bus_config(&self, config: &BusConfig) -> bool {
