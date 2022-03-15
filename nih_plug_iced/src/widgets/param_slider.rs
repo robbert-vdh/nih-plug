@@ -378,12 +378,14 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
         let bounds = layout.bounds();
         let is_mouse_over = bounds.contains(cursor_position);
 
-        // The bar itself
-        let background_color = if is_mouse_over || self.state.drag_active {
-            Color::new(0.5, 0.5, 0.5, 0.1)
-        } else {
-            Color::TRANSPARENT
-        };
+        // The bar itself, show a different background color when the value is being edited or when
+        // the mouse is hovering over it to indicate that it's interactive
+        let background_color =
+            if is_mouse_over || self.state.drag_active || self.state.text_input_value.is_some() {
+                Color::new(0.5, 0.5, 0.5, 0.1)
+            } else {
+                Color::TRANSPARENT
+            };
 
         renderer.fill_quad(
             renderer::Quad {
