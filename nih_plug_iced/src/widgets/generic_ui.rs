@@ -2,7 +2,6 @@
 //! list of sliders and labels.
 
 use atomic_refcell::AtomicRefCell;
-use iced_baseview::Row;
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::marker::PhantomData;
@@ -16,7 +15,7 @@ use crate::backend::Renderer;
 use crate::text::Renderer as TextRenderer;
 use crate::{
     alignment, event, layout, renderer, widget, Alignment, Clipboard, Element, Event, Layout,
-    Length, Point, Rectangle, Scrollable, Shell, Text, Widget,
+    Length, Point, Rectangle, Row, Scrollable, Shell, Space, Text, Widget,
 };
 
 /// A widget that can be used to create a generic UI with. This is used in conjuction with empty
@@ -69,6 +68,7 @@ pub struct GenericUi<'a, W: ParamWidget> {
     height: Length,
     max_width: u32,
     max_height: u32,
+    pad_scrollbar: bool,
 
     /// We don't emit any messages or store the actual widgets, but iced requires us to define some
     /// message type anyways.
@@ -104,6 +104,7 @@ where
             height: Length::Fill,
             max_width: u32::MAX,
             max_height: u32::MAX,
+            pad_scrollbar: false,
 
             _phantom: PhantomData,
         }
@@ -130,6 +131,12 @@ where
     /// Sets the maximum height of the [`GenericUi`].
     pub fn max_height(mut self, height: u32) -> Self {
         self.max_height = height;
+        self
+    }
+
+    /// Include additional room on the right for the scroll bar.
+    pub fn pad_scrollbar(mut self) -> Self {
+        self.pad_scrollbar = true;
         self
     }
 
@@ -178,22 +185,27 @@ where
                 unsafe { &mut *(widget_state.get_mut(&param_ptr).unwrap() as *mut _) };
 
             // Show the label next to the parameter for better use of the space
-            scrollable = scrollable.push(
-                Row::new()
-                    .width(Length::Fill)
-                    .align_items(Alignment::Center)
-                    .spacing(spacing * 2)
-                    .push(
-                        Text::new(unsafe { param_ptr.name() })
-                            .height(20.into())
-                            .width(Length::Fill)
-                            .horizontal_alignment(alignment::Horizontal::Right)
-                            .vertical_alignment(alignment::Vertical::Center),
-                    )
-                    .push(unsafe {
-                        W::into_widget_element_raw(&param_ptr, self.context, widget_state)
-                    }),
-            );
+            let mut row = Row::new()
+                .width(Length::Fill)
+                .align_items(Alignment::Center)
+                .spacing(spacing * 2)
+                .push(
+                    Text::new(unsafe { param_ptr.name() })
+                        .height(20.into())
+                        .width(Length::Fill)
+                        .horizontal_alignment(alignment::Horizontal::Right)
+                        .vertical_alignment(alignment::Vertical::Center),
+                )
+                .push(unsafe {
+                    W::into_widget_element_raw(&param_ptr, self.context, widget_state)
+                });
+            if self.pad_scrollbar {
+                // There's already spacing applied, so this element doesn't actually need to hae any
+                // size of its own
+                row = row.push(Space::with_width(Length::Units(0)));
+            }
+
+            scrollable = scrollable.push(row);
         }
 
         f(scrollable, renderer)
