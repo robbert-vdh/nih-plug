@@ -344,6 +344,8 @@ impl<P: Vst3Plugin> IEditController for Wrapper<P> {
             u16strlcpy(&mut info.units, param_ptr.unit());
             info.step_count = param_ptr.step_count().unwrap_or(0) as i32;
             info.default_normalized_value = *default_value as f64;
+            // TODO: Support parameter groups for VST3, having to define all of these units is going
+            //       to be a pain
             info.unit_id = vst3_sys::vst::kRootUnitId;
             info.flags = vst3_sys::vst::ParameterFlags::kCanAutomate as i32;
         }
