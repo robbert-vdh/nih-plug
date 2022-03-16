@@ -17,6 +17,7 @@ use vst3_sys::vst::kRootUnitId;
 /// units accordingly.
 ///
 /// <https://steinbergmedia.github.io/vst3_doc/vstinterfaces/classSteinberg_1_1Vst_1_1IUnitInfo.html>
+#[derive(Debug)]
 pub struct ParamUnits {
     /// The unique units, with flat indices.
     units: Vec<ParamUnit>,
@@ -30,6 +31,7 @@ pub struct ParamUnits {
 /// A VST3 'unit'. Repurposed for a bunch of things, but we only care about parameter hierarchies.
 ///
 /// <https://steinbergmedia.github.io/vst3_doc/vstinterfaces/structSteinberg_1_1Vst_1_1UnitInfo.html>
+#[derive(Debug)]
 pub struct ParamUnit {
     /// The name of the unit, without any of the proceeding components.
     pub name: String,
