@@ -1,7 +1,4 @@
-// Re-export the proc macro
-pub use nih_plug_derive::Params;
-
-// And the other macros
+// Re-export the macros, derive macros are already re-exported ferom their respectivem odules
 pub use super::nih_debug_assert;
 pub use super::nih_debug_assert_eq;
 pub use super::nih_debug_assert_failure;

@@ -5,6 +5,7 @@ use std::pin::Pin;
 
 use super::Param;
 
+pub use nih_plug_derive::Params;
 /// Re-export for use in the [`Params`] proc-macro.
 pub use serde_json::from_str as deserialize_field;
 /// Re-export for use in the [`Params`] proc-macro.
