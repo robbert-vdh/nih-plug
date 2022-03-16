@@ -439,6 +439,13 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
         _viewport: &Rectangle,
     ) {
         let bounds = layout.bounds();
+        // I'm sure there's some philosophical meaning behind this
+        let bounds_without_borders = Rectangle {
+            x: bounds.x + BORDER_WIDTH,
+            y: bounds.y + BORDER_WIDTH,
+            width: bounds.width - (BORDER_WIDTH * 2.0),
+            height: bounds.height - (BORDER_WIDTH * 2.0),
+        };
         let is_mouse_over = bounds.contains(cursor_position);
 
         // The bar itself, show a different background color when the value is being edited or when
@@ -477,21 +484,20 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
             // For discrete alawys fill the bar from the left because it otherwise looks a bit
             // jarring when any any value after the first one is the defautl
             let fill_start_x = util::remap_rect_x_t(
-                &bounds,
+                &bounds_without_borders,
                 if self.param.step_count().is_some() {
                     0.0
                 } else {
                     self.setter.default_normalized_param_value(self.param)
                 },
             );
-            let fill_end_x = util::remap_rect_x_t(&bounds, current_value);
+            let fill_end_x = util::remap_rect_x_t(&bounds_without_borders, current_value);
 
             let fill_color = Color::from_rgb8(196, 196, 196);
             let fill_rect = Rectangle {
                 x: fill_start_x.min(fill_end_x),
-                y: bounds.y + BORDER_WIDTH,
                 width: (fill_end_x - fill_start_x).abs(),
-                height: bounds.height - BORDER_WIDTH * 2.0,
+                ..bounds_without_borders
             };
             renderer.fill_quad(
                 renderer::Quad {
