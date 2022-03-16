@@ -450,7 +450,7 @@ dependencies = [
 [[package]]
 name = "clap-sys"
 version = "0.23.0"
-source = "git+https://github.com/robbert-vdh/clap-sys?branch=update/clap-0.20#d15507000cb0ddd64606362fe1aec0e638e54748"
+source = "git+https://github.com/glowcoil/clap-sys#adab81c98f5212b672b052a2fc76148c7efc6e74"
 
 [[package]]
 name = "clipboard-win"
@@ -2947,9 +2947,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "1.0.88"
+version = "1.0.89"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ebd69e719f31e88618baa1eaa6ee2de5c9a1c004f1e9ecdb58e8352a13f20a01"
+checksum = "ea297be220d52398dcc07ce15a209fce436d361735ac1db700cab3b6cdfb9f54"
 dependencies = [
  "proc-macro2",
  "quote",
