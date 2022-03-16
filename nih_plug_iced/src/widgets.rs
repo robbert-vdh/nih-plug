@@ -7,6 +7,7 @@
 
 use nih_plug::param::internals::ParamPtr;
 
+pub mod generic_ui;
 pub mod param_slider;
 pub mod peak_meter;
 pub mod util;

@@ -141,6 +141,71 @@ impl<'a, P: Param> ParamSlider<'a, P> {
         self.font = font;
         self
     }
+
+    /// Create a temporary [`TextInput`] hooked up to [`State::text_input_value`] and outputting
+    /// [`TextInputMessage`] messages and do something with it. This can be used to
+    fn with_text_input<T, R, F>(&self, layout: Layout, renderer: R, current_value: &str, f: F) -> T
+    where
+        F: FnOnce(TextInput<'_, TextInputMessage>, Layout, R) -> T,
+        R: Borrow<Renderer>,
+    {
+        let mut text_input_state = self.state.text_input_state.borrow_mut();
+        text_input_state.focus();
+
+        let text_size = self
+            .text_size
+            .unwrap_or_else(|| renderer.borrow().default_size());
+        let text_width = renderer
+            .borrow()
+            .measure_width(current_value, text_size, self.font);
+        let text_input = TextInput::new(
+            &mut text_input_state,
+            "",
+            current_value,
+            TextInputMessage::Value,
+        )
+        .font(self.font)
+        .size(text_size)
+        .width(Length::Units(text_width.ceil() as u16))
+        .style(TextInputStyle)
+        .on_submit(TextInputMessage::Submit);
+
+        // Make sure to not draw over the borders, and center the text
+        let offset_node = layout::Node::with_children(
+            Size {
+                width: text_width,
+                height: layout.bounds().size().height - (BORDER_WIDTH * 2.0),
+            },
+            vec![layout::Node::new(layout.bounds().size())],
+        );
+        let offset_layout = Layout::with_offset(
+            Vector {
+                x: layout.bounds().center_x() - (text_width / 2.0),
+                y: layout.position().y + BORDER_WIDTH,
+            },
+            &offset_node,
+        );
+
+        f(text_input, offset_layout, renderer)
+    }
+
+    /// Set the normalized value for a parameter if that would change the parameter's plain value
+    /// (to avoid unnecessary duplicate parameter changes). The begin- and end set parameter
+    /// messages need to be sent before calling this function.
+    fn set_normalized_value(&self, shell: &mut Shell<'_, ParamMessage>, normalized_value: f32) {
+        // This snaps to the nearest plain value if the parameter is stepped in some way.
+        // TODO: As an optimization, we could add a `const CONTINUOUS: bool` to the parameter to
+        //       avoid this normalized->plain->normalized conversion for parameters that don't need
+        //       it
+        let plain_value = self.param.preview_plain(normalized_value);
+        let current_plain_value = self.param.plain_value();
+        if plain_value != current_plain_value {
+            shell.publish(ParamMessage::SetParameterNormalized(
+                self.param.as_ptr(),
+                normalized_value,
+            ));
+        }
+    }
 }
 
 impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
@@ -479,71 +544,6 @@ impl<'a, P: Param> ParamSlider<'a, P> {
         F: Fn(ParamMessage) -> Message + 'static,
     {
         Element::from(self).map(f)
-    }
-
-    /// Create a temporary [`TextInput`] hooked up to [`State::text_input_value`] and outputting
-    /// [`TextInputMessage`] messages and do something with it. This can be used to
-    fn with_text_input<T, R, F>(&self, layout: Layout, renderer: R, current_value: &str, f: F) -> T
-    where
-        F: FnOnce(TextInput<'_, TextInputMessage>, Layout, R) -> T,
-        R: Borrow<Renderer>,
-    {
-        let mut text_input_state = self.state.text_input_state.borrow_mut();
-        text_input_state.focus();
-
-        let text_size = self
-            .text_size
-            .unwrap_or_else(|| renderer.borrow().default_size());
-        let text_width = renderer
-            .borrow()
-            .measure_width(current_value, text_size, self.font);
-        let text_input = TextInput::new(
-            &mut text_input_state,
-            "",
-            current_value,
-            TextInputMessage::Value,
-        )
-        .font(self.font)
-        .size(text_size)
-        .width(Length::Units(text_width.ceil() as u16))
-        .style(TextInputStyle)
-        .on_submit(TextInputMessage::Submit);
-
-        // Make sure to not draw over the borders, and center the text
-        let offset_node = layout::Node::with_children(
-            Size {
-                width: text_width,
-                height: layout.bounds().size().height - (BORDER_WIDTH * 2.0),
-            },
-            vec![layout::Node::new(layout.bounds().size())],
-        );
-        let offset_layout = Layout::with_offset(
-            Vector {
-                x: layout.bounds().center_x() - (text_width / 2.0),
-                y: layout.position().y + BORDER_WIDTH,
-            },
-            &offset_node,
-        );
-
-        f(text_input, offset_layout, renderer)
-    }
-
-    /// Set the normalized value for a parameter if that would change the parameter's plain value
-    /// (to avoid unnecessary duplicate parameter changes). The begin- and end set parameter
-    /// messages need to be sent before calling this function.
-    fn set_normalized_value(&self, shell: &mut Shell<'_, ParamMessage>, normalized_value: f32) {
-        // This snaps to the nearest plain value if the parameter is stepped in some way.
-        // TODO: As an optimization, we could add a `const CONTINUOUS: bool` to the parameter to
-        //       avoid this normalized->plain->normalized conversion for parameters that don't need
-        //       it
-        let plain_value = self.param.preview_plain(normalized_value);
-        let current_plain_value = self.param.plain_value();
-        if plain_value != current_plain_value {
-            shell.publish(ParamMessage::SetParameterNormalized(
-                self.param.as_ptr(),
-                normalized_value,
-            ));
-        }
     }
 }
 

@@ -290,9 +290,9 @@ where
     }
 }
 
-impl<'a, Message: 'a> From<PeakMeter<'a, Message>> for Element<'a, Message>
+impl<'a, Message> From<PeakMeter<'a, Message>> for Element<'a, Message>
 where
-    Message: Clone,
+    Message: 'a + Clone,
 {
     fn from(widget: PeakMeter<'a, Message>) -> Self {
         Element::new(widget)
