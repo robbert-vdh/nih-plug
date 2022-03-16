@@ -174,6 +174,10 @@ pub struct Wrapper<P: ClapPlugin> {
     /// parameters belonging to the plugin. As long as `plugin` does not get recreated, these
     /// addresses will remain stable, as they are obtained from a pinned object.
     param_by_hash: HashMap<u32, ParamPtr>,
+    /// The group name of a parameter, indexed by the parameter's hash. Nested groups are delimited
+    /// by slashes, and they're only used to allow the DAW to display parameters in a tree
+    /// structure.
+    param_group_by_hash: HashMap<u32, String>,
     /// The default normalized parameter value for every parameter in `param_ids`. We need to store
     /// this in case the host requeries the parmaeter later. This is also indexed by the hash so we
     /// can retrieve them later for the UI if needed.
@@ -420,6 +424,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             host_params: AtomicRefCell::new(None),
             param_hashes: Vec::new(),
             param_by_hash: HashMap::new(),
+            param_group_by_hash: HashMap::new(),
             param_defaults_normalized: HashMap::new(),
             param_id_to_hash: HashMap::new(),
             param_ptr_to_hash: HashMap::new(),
@@ -474,38 +479,45 @@ impl<P: ClapPlugin> Wrapper<P> {
         // dereference as long as `wrapper.plugin` is alive
         let param_map = wrapper.plugin.read().params().param_map();
         let param_ids = wrapper.plugin.read().params().param_ids();
+        let param_groups = wrapper.plugin.read().params().param_groups();
         nih_debug_assert!(
             !param_map.contains_key(BYPASS_PARAM_ID),
             "The wrapper already adds its own bypass parameter"
         );
 
         // Only calculate these hashes once, and in the stable order defined by the plugin
-        let param_id_hashes_ptrs: Vec<_> = param_ids
+        let param_id_hashes_ptrs_groups: Vec<_> = param_ids
             .iter()
-            .filter_map(|id| {
-                let param_ptr = param_map.get(id)?;
-                Some((id, hash_param_id(id), param_ptr))
+            .map(|id| {
+                // If any of these keys are missing then that's a bug in the Params implementation
+                let param_ptr = param_map[id];
+                let param_group = &param_groups[id];
+                (id, hash_param_id(id), param_ptr, param_group)
             })
             .collect();
-        wrapper.param_hashes = param_id_hashes_ptrs
+        wrapper.param_hashes = param_id_hashes_ptrs_groups
             .iter()
-            .map(|&(_, hash, _)| hash)
+            .map(|&(_, hash, _, _)| hash)
             .collect();
-        wrapper.param_by_hash = param_id_hashes_ptrs
+        wrapper.param_by_hash = param_id_hashes_ptrs_groups
             .iter()
-            .map(|&(_, hash, ptr)| (hash, *ptr))
+            .map(|&(_, hash, ptr, _)| (hash, ptr))
             .collect();
-        wrapper.param_defaults_normalized = param_id_hashes_ptrs
+        wrapper.param_group_by_hash = param_id_hashes_ptrs_groups
             .iter()
-            .map(|&(_, hash, ptr)| (hash, unsafe { ptr.normalized_value() }))
+            .map(|&(_, hash, _, group)| (hash, group.to_string()))
             .collect();
-        wrapper.param_id_to_hash = param_id_hashes_ptrs
+        wrapper.param_defaults_normalized = param_id_hashes_ptrs_groups
             .iter()
-            .map(|&(id, hash, _)| (*id, hash))
+            .map(|&(_, hash, ptr, _)| (hash, unsafe { ptr.normalized_value() }))
             .collect();
-        wrapper.param_ptr_to_hash = param_id_hashes_ptrs
+        wrapper.param_id_to_hash = param_id_hashes_ptrs_groups
+            .iter()
+            .map(|&(id, hash, _, _)| (*id, hash))
+            .collect();
+        wrapper.param_ptr_to_hash = param_id_hashes_ptrs_groups
             .into_iter()
-            .map(|(_, hash, ptr)| (*ptr, hash))
+            .map(|(_, hash, ptr, _)| (ptr, hash))
             .collect();
 
         // Finally, the wrapper needs to contain a reference to itself so we can create GuiContexts
@@ -1724,6 +1736,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             param_info.default_value = 0.0;
         } else {
             let param_hash = &wrapper.param_hashes[param_index as usize];
+            let param_group = &wrapper.param_group_by_hash[param_hash];
             let default_value = &wrapper.param_defaults_normalized[param_hash];
             let param_ptr = &wrapper.param_by_hash[param_hash];
             let step_count = param_ptr.step_count();
@@ -1736,7 +1749,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             };
             param_info.cookie = ptr::null_mut();
             strlcpy(&mut param_info.name, param_ptr.name());
-            strlcpy(&mut param_info.module, "");
+            strlcpy(&mut param_info.module, param_group);
             // We don't use the actual minimum and maximum values here because that would not scale
             // with skewed integer ranges. Instead, just treat all parameters as `[0, 1]` normalized
             // paramters multiplied by the step size.
