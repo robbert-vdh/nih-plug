@@ -326,7 +326,80 @@ impl<P: ClapPlugin> Wrapper<P> {
         assert!(!host_callback.is_null());
         let host_callback = unsafe { ClapPtr::new(host_callback) };
 
-        let mut wrapper = Self {
+        // This is a mapping from the parameter IDs specified by the plugin to pointers to thsoe
+        // parameters. Since the object returned by `params()` is pinned, these pointers are safe to
+        // dereference as long as `wrapper.plugin` is alive
+        let param_map = plugin.read().params().param_map();
+        let param_ids = plugin.read().params().param_ids();
+        let param_groups = plugin.read().params().param_groups();
+        nih_debug_assert!(
+            !param_map.contains_key(BYPASS_PARAM_ID),
+            "The wrapper already adds its own bypass parameter"
+        );
+
+        // Only calculate these hashes once, and in the stable order defined by the plugin
+        let param_id_hashes_ptrs_groups: Vec<_> = param_ids
+            .iter()
+            .map(|id| {
+                // If any of these keys are missing then that's a bug in the Params implementation
+                let param_ptr = param_map[id];
+                let param_group = &param_groups[id];
+                (id, hash_param_id(id), param_ptr, param_group)
+            })
+            .collect();
+        let param_hashes = param_id_hashes_ptrs_groups
+            .iter()
+            .map(|&(_, hash, _, _)| hash)
+            .collect();
+        let param_by_hash = param_id_hashes_ptrs_groups
+            .iter()
+            .map(|&(_, hash, ptr, _)| (hash, ptr))
+            .collect();
+        let param_group_by_hash = param_id_hashes_ptrs_groups
+            .iter()
+            .map(|&(_, hash, _, group)| (hash, group.to_string()))
+            .collect();
+        let param_defaults_normalized = param_id_hashes_ptrs_groups
+            .iter()
+            .map(|&(_, hash, ptr, _)| (hash, unsafe { ptr.normalized_value() }))
+            .collect();
+        let param_id_to_hash = param_id_hashes_ptrs_groups
+            .iter()
+            .map(|&(id, hash, _, _)| (*id, hash))
+            .collect();
+        let param_ptr_to_hash = param_id_hashes_ptrs_groups
+            .into_iter()
+            .map(|(_, hash, ptr, _)| (ptr, hash))
+            .collect();
+
+        // Query all sensible bus configurations supported by the plugin. We don't do surround or
+        // anything beyond stereo right now.
+        let mut supported_bus_configs = Vec::new();
+        for num_output_channels in [1, 2] {
+            for num_input_channels in [0, num_output_channels] {
+                let bus_config = BusConfig {
+                    num_input_channels,
+                    num_output_channels,
+                };
+                if plugin.read().accepts_bus_config(&bus_config) {
+                    supported_bus_configs.push(bus_config);
+                }
+            }
+        }
+
+        // In the off chance that the default config specified by the plugin is not in the above
+        // list, we'll try that as well.
+        let default_bus_config = BusConfig {
+            num_input_channels: P::DEFAULT_NUM_INPUTS,
+            num_output_channels: P::DEFAULT_NUM_OUTPUTS,
+        };
+        if !supported_bus_configs.contains(&default_bus_config)
+            && plugin.read().accepts_bus_config(&default_bus_config)
+        {
+            supported_bus_configs.push(default_bus_config);
+        }
+
+        let wrapper = Self {
             clap_plugin: clap_plugin {
                 // This needs to live on the heap because the plugin object contains a direct
                 // reference to the manifest as a value. We could share this between instances of
@@ -376,7 +449,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 get: Self::ext_audio_ports_config_get,
                 select: Self::ext_audio_ports_config_select,
             },
-            supported_bus_configs: Vec::new(),
+            supported_bus_configs,
 
             clap_plugin_audio_ports: clap_plugin_audio_ports {
                 count: Self::ext_audio_ports_count,
@@ -422,12 +495,12 @@ impl<P: ClapPlugin> Wrapper<P> {
                 flush: Self::ext_params_flush,
             },
             host_params: AtomicRefCell::new(None),
-            param_hashes: Vec::new(),
-            param_by_hash: HashMap::new(),
-            param_group_by_hash: HashMap::new(),
-            param_defaults_normalized: HashMap::new(),
-            param_id_to_hash: HashMap::new(),
-            param_ptr_to_hash: HashMap::new(),
+            param_hashes,
+            param_by_hash,
+            param_group_by_hash,
+            param_defaults_normalized,
+            param_id_to_hash,
+            param_ptr_to_hash,
             output_parameter_events: ArrayQueue::new(OUTPUT_EVENT_QUEUE_CAPACITY),
 
             host_thread_check: AtomicRefCell::new(None),
@@ -444,81 +517,6 @@ impl<P: ClapPlugin> Wrapper<P> {
             tasks: ArrayQueue::new(TASK_QUEUE_CAPACITY),
             main_thread_id: thread::current().id(),
         };
-
-        // Query all sensible bus configurations supported by the plugin. We don't do surround or
-        // anything beyond stereo right now.
-        for num_output_channels in [1, 2] {
-            for num_input_channels in [0, num_output_channels] {
-                let bus_config = BusConfig {
-                    num_input_channels,
-                    num_output_channels,
-                };
-                if wrapper.plugin.read().accepts_bus_config(&bus_config) {
-                    wrapper.supported_bus_configs.push(bus_config);
-                }
-            }
-        }
-
-        // In the off chance that the default config specified by the plugin is not in the above
-        // list, we'll try that as well.
-        let default_bus_config = BusConfig {
-            num_input_channels: P::DEFAULT_NUM_INPUTS,
-            num_output_channels: P::DEFAULT_NUM_OUTPUTS,
-        };
-        if !wrapper.supported_bus_configs.contains(&default_bus_config)
-            && wrapper
-                .plugin
-                .read()
-                .accepts_bus_config(&default_bus_config)
-        {
-            wrapper.supported_bus_configs.push(default_bus_config);
-        }
-
-        // This is a mapping from the parameter IDs specified by the plugin to pointers to thsoe
-        // parameters. Since the object returned by `params()` is pinned, these pointers are safe to
-        // dereference as long as `wrapper.plugin` is alive
-        let param_map = wrapper.plugin.read().params().param_map();
-        let param_ids = wrapper.plugin.read().params().param_ids();
-        let param_groups = wrapper.plugin.read().params().param_groups();
-        nih_debug_assert!(
-            !param_map.contains_key(BYPASS_PARAM_ID),
-            "The wrapper already adds its own bypass parameter"
-        );
-
-        // Only calculate these hashes once, and in the stable order defined by the plugin
-        let param_id_hashes_ptrs_groups: Vec<_> = param_ids
-            .iter()
-            .map(|id| {
-                // If any of these keys are missing then that's a bug in the Params implementation
-                let param_ptr = param_map[id];
-                let param_group = &param_groups[id];
-                (id, hash_param_id(id), param_ptr, param_group)
-            })
-            .collect();
-        wrapper.param_hashes = param_id_hashes_ptrs_groups
-            .iter()
-            .map(|&(_, hash, _, _)| hash)
-            .collect();
-        wrapper.param_by_hash = param_id_hashes_ptrs_groups
-            .iter()
-            .map(|&(_, hash, ptr, _)| (hash, ptr))
-            .collect();
-        wrapper.param_group_by_hash = param_id_hashes_ptrs_groups
-            .iter()
-            .map(|&(_, hash, _, group)| (hash, group.to_string()))
-            .collect();
-        wrapper.param_defaults_normalized = param_id_hashes_ptrs_groups
-            .iter()
-            .map(|&(_, hash, ptr, _)| (hash, unsafe { ptr.normalized_value() }))
-            .collect();
-        wrapper.param_id_to_hash = param_id_hashes_ptrs_groups
-            .iter()
-            .map(|&(id, hash, _, _)| (*id, hash))
-            .collect();
-        wrapper.param_ptr_to_hash = param_id_hashes_ptrs_groups
-            .into_iter()
-            .map(|(_, hash, ptr, _)| (ptr, hash))
-            .collect();
 
         // Finally, the wrapper needs to contain a reference to itself so we can create GuiContexts
         // when opening plugin editors

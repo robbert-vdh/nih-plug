@@ -134,7 +134,47 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         let plugin = RwLock::new(P::default());
         let editor = plugin.read().editor().map(Arc::from);
 
-        let mut wrapper = Self {
+        // This is a mapping from the parameter IDs specified by the plugin to pointers to thsoe
+        // parameters. Since the object returned by `params()` is pinned, these pointers are safe to
+        // dereference as long as `wrapper.plugin` is alive
+        let param_map = plugin.read().params().param_map();
+        let param_ids = plugin.read().params().param_ids();
+        nih_debug_assert!(
+            !param_map.contains_key(BYPASS_PARAM_ID),
+            "The wrapper already adds its own bypass parameter"
+        );
+
+        // Only calculate these hashes once, and in the stable order defined by the plugin
+        let param_id_hashes_ptrs: Vec<_> = param_ids
+            .iter()
+            .filter_map(|id| {
+                let param_ptr = param_map.get(id)?;
+                Some((id, hash_param_id(id), param_ptr))
+            })
+            .collect();
+
+        let param_hashes = param_id_hashes_ptrs
+            .iter()
+            .map(|&(_, hash, _)| hash)
+            .collect();
+        let param_by_hash = param_id_hashes_ptrs
+            .iter()
+            .map(|&(_, hash, ptr)| (hash, *ptr))
+            .collect();
+        let param_defaults_normalized = param_id_hashes_ptrs
+            .iter()
+            .map(|&(_, hash, ptr)| (hash, unsafe { ptr.normalized_value() }))
+            .collect();
+        let param_id_to_hash = param_id_hashes_ptrs
+            .iter()
+            .map(|&(id, hash, _)| (*id, hash))
+            .collect();
+        let param_ptr_to_hash = param_id_hashes_ptrs
+            .into_iter()
+            .map(|(_, hash, ptr)| (*ptr, hash))
+            .collect();
+
+        let wrapper = Self {
             plugin,
             editor,
 
@@ -167,51 +207,12 @@ impl<P: Vst3Plugin> WrapperInner<P> {
                 },
             )),
 
-            param_hashes: Vec::new(),
-            param_by_hash: HashMap::new(),
-            param_defaults_normalized: HashMap::new(),
-            param_id_to_hash: HashMap::new(),
-            param_ptr_to_hash: HashMap::new(),
+            param_hashes,
+            param_by_hash,
+            param_defaults_normalized,
+            param_id_to_hash,
+            param_ptr_to_hash,
         };
-
-        // This is a mapping from the parameter IDs specified by the plugin to pointers to thsoe
-        // parameters. Since the object returned by `params()` is pinned, these pointers are safe to
-        // dereference as long as `wrapper.plugin` is alive
-        let param_map = wrapper.plugin.read().params().param_map();
-        let param_ids = wrapper.plugin.read().params().param_ids();
-        nih_debug_assert!(
-            !param_map.contains_key(BYPASS_PARAM_ID),
-            "The wrapper already adds its own bypass parameter"
-        );
-
-        // Only calculate these hashes once, and in the stable order defined by the plugin
-        let param_id_hashes_ptrs: Vec<_> = param_ids
-            .iter()
-            .filter_map(|id| {
-                let param_ptr = param_map.get(id)?;
-                Some((id, hash_param_id(id), param_ptr))
-            })
-            .collect();
-        wrapper.param_hashes = param_id_hashes_ptrs
-            .iter()
-            .map(|&(_, hash, _)| hash)
-            .collect();
-        wrapper.param_by_hash = param_id_hashes_ptrs
-            .iter()
-            .map(|&(_, hash, ptr)| (hash, *ptr))
-            .collect();
-        wrapper.param_defaults_normalized = param_id_hashes_ptrs
-            .iter()
-            .map(|&(_, hash, ptr)| (hash, unsafe { ptr.normalized_value() }))
-            .collect();
-        wrapper.param_id_to_hash = param_id_hashes_ptrs
-            .iter()
-            .map(|&(id, hash, _)| (*id, hash))
-            .collect();
-        wrapper.param_ptr_to_hash = param_id_hashes_ptrs
-            .into_iter()
-            .map(|(_, hash, ptr)| (*ptr, hash))
-            .collect();
 
         // FIXME: Right now this is safe, but if we are going to have a singleton main thread queue
         //        serving multiple plugin instances, Arc can't be used because its reference count
