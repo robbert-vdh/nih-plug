@@ -23,7 +23,7 @@ compile_error!("Compiling without SIMD support is currently not supported");
 extern crate nih_plug;
 
 use nih_plug::prelude::*;
-use nih_plug_egui::EguiState;
+use nih_plug_iced::IcedState;
 use std::pin::Pin;
 use std::simd::f32x2;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -50,7 +50,7 @@ const MAX_AUTOMATION_STEP_SIZE: u32 = 512;
 // - A proper GUI
 struct Diopser {
     params: Pin<Arc<DiopserParams>>,
-    editor_state: Arc<EguiState>,
+    editor_state: Arc<IcedState>,
 
     /// Needed for computing the filter coefficients.
     sample_rate: f32,

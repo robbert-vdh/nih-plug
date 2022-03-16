@@ -2,7 +2,7 @@
 //! list of sliders and labels.
 
 use atomic_refcell::AtomicRefCell;
-use iced_baseview::{Column, Row};
+use iced_baseview::Row;
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::marker::PhantomData;
