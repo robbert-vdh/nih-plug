@@ -474,9 +474,15 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
         } else {
             // We'll visualize the difference between the current value and the default value
             let current_value = self.param.normalized_value();
+            // For boolean values alawys have filled be true and not filled be false, otherwise it
+            // looks super confusing
             let fill_start_x = util::remap_rect_x_t(
                 &bounds,
-                self.setter.default_normalized_param_value(self.param),
+                if self.param.step_count() == Some(1) {
+                    0.0
+                } else {
+                    self.setter.default_normalized_param_value(self.param)
+                },
             );
             let fill_end_x = util::remap_rect_x_t(&bounds, current_value);
 
