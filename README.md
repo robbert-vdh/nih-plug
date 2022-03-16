@@ -62,7 +62,7 @@ for download links.
     options. That way you can use regular Rust pattern matching when working
     with these values without having to do any conversions yourself.
   - Store additional non-parameter state for your plugin by adding any field
-    that can be serialized with [serde](https://serde.rs/) to your plugin's
+    that can be serialized with [Serde](https://serde.rs/) to your plugin's
     `Params` object and annotating them with `#[persist = "key"]`.
   - Group your parameters into logical groups by nesting `Params` objects using
     the `#[nested = "Group Name"]`attribute.

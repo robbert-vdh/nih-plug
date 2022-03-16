@@ -11,21 +11,22 @@ pub use serde_json::from_str as deserialize_field;
 /// Re-export for use in the [`Params`] proc-macro.
 pub use serde_json::to_string as serialize_field;
 
-/// Describes a struct containing parameters and other persistent fields. The idea is that we can
-/// have a normal struct containing [`FloatParam`][super::FloatParam] and other parameter types with
-/// attributes assigning a unique identifier to each parameter. We can then build a mapping from
-/// those parameter IDs to the parameters using the [`Params::param_map()`] function. That way we
-/// can have easy to work with JUCE-style parameter objects in the plugin without needing to
-/// manually register each parameter, like you would in JUCE. When deriving this trait, any of those
-/// parameters should have the `#[id = "stable"]` attribute, where `stable` is an up to 6 character
-/// (to avoid collisions) string that will be used for the parameter's internal identifier.
+/// Describes a struct containing parameters and other persistent fields.
 ///
-/// The other persistent parameters should be [`PersistentField`]s containing types that can be
-/// serialized and deserialized with Serde. When deriving this trait, any of those fields should be
-/// marked with `#[persist = "key"]`.
+/// This trait can be derived on a struct containing [`FloatParam`][super::FloatParam] and other
+/// parameter fields. When deriving this trait, any of those parameter fields should have the `#[id
+/// = "stable"]` attribute, where `stable` is an up to 6 character long string (to avoid collisions)
+/// that will be used to identify the parameter internall so you can safely move it around and
+/// rename the field without breaking compatibility with old presets.
+///
+/// The struct can also contain other fields that should be persisted along with the rest of the
+/// preset data. These fields should be [`PersistentField`]s annotated with the `#[persist = "key"]`
+/// attribute containing types that can be serialized and deserialized with
+/// [Serde](https://serde.rs/).
 ///
 /// And finally when deriving this trait, it is also possible to inherit the parameters from other
-/// `Params` objects by adding the `#[nested]` attribute to those fields. Parameter IDs and
+/// `Params` objects by adding the `#[nested = "Group Name"]` attribute to those fields. These
+/// groups will be displayed as a tree-like structure if your DAW supports it. Parameter IDs and
 /// persisting keys still need to be **unique** when usting nested parameter structs. This currently
 /// has the following caveats:
 ///
@@ -44,8 +45,13 @@ pub trait Params {
     /// is only valid as long as this pinned object is valid.
     fn param_map(self: Pin<&Self>) -> HashMap<&'static str, ParamPtr>;
 
-    /// All parameter IDs from `param_map`, in a stable order. This order will be used to display
-    /// the parameters.
+    /// Contains group names for each parameter in [`param_map()`][Self::param_map()]. This is
+    /// either an empty string for top level parameters, or a slash/delimited `"Group Name 1/Group
+    /// Name 2"` string for parameters that belong to `#[nested = "Name"]` parameter objects.
+    fn param_groups(self: Pin<&Self>) -> HashMap<&'static str, String>;
+
+    /// All parameter IDs from [`param_map()`][Self::param_map()], in a stable order. This order
+    /// will be used to display the parameters.
     ///
     /// TODO: This used to be a static slice, but now that we supported nested parameter objects
     ///       that's become a bit more difficult since Rust does not have a convenient way to

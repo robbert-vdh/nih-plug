@@ -12,13 +12,15 @@ use crate::param::internals::Params;
 /// Basic functionality that needs to be implemented by a plugin. The wrappers will use this to
 /// expose the plugin in a particular plugin format.
 ///
+/// The main thing you need to do is define a `[Params]` struct containing all of your parmaeters.
+/// See the trait's documentation for more information on how to do that, or check out the examples.
+///
 /// This is super basic, and lots of things I didn't need or want to use yet haven't been
 /// implemented. Notable missing features include:
 ///
 /// - Sidechain inputs
 /// - Multiple output busses
 /// - Special handling for offline processing
-/// - Parameter hierarchies/groups
 /// - Bypass parameters, right now the plugin wrappers generates one for you but there's no way to
 ///   interact with it yet
 /// - Outputting parameter changes from the plugin

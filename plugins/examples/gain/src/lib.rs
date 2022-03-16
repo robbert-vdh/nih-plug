@@ -21,9 +21,9 @@ struct GainParams {
     #[persist = "industry_secrets"]
     pub random_data: RwLock<Vec<f32>>,
 
-    /// You can also nest parameter structs. This is only for your own organization: they will still
-    /// appear as a flat list to the host.
-    #[nested]
+    /// You can also nest parameter structs. These will appear as a separate nested group if your
+    /// DAW displays parameters in a tree structure.
+    #[nested = "Subparameters"]
     pub sub_params: SubParams,
 }
 
@@ -31,6 +31,15 @@ struct GainParams {
 struct SubParams {
     #[id = "thing"]
     pub nested_parameter: FloatParam,
+
+    #[nested = "Sub-Subparameters"]
+    pub sub_sub_params: SubSubParams,
+}
+
+#[derive(Params)]
+struct SubSubParams {
+    #[id = "noope"]
+    pub nope: FloatParam,
 }
 
 impl Default for Gain {
@@ -88,6 +97,9 @@ impl Default for GainParams {
                     },
                 )
                 .with_value_to_string(formatters::f32_rounded(2)),
+                sub_sub_params: SubSubParams {
+                    nope: FloatParam::new("Nope", 0.5, FloatRange::Linear { min: 1.0, max: 2.0 }),
+                },
             },
         }
     }
