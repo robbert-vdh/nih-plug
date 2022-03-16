@@ -8,8 +8,8 @@ use vst3_sys::base::{kInvalidArgument, kNoInterface, kResultFalse, kResultOk, tr
 use vst3_sys::base::{IBStream, IPluginBase};
 use vst3_sys::utils::SharedVstPtr;
 use vst3_sys::vst::{
-    IAudioProcessor, IComponent, IEditController, IEventList, IParamValueQueue, IParameterChanges,
-    TChar,
+    kNoProgramListId, kRootUnitId, IAudioProcessor, IComponent, IEditController, IEventList,
+    IParamValueQueue, IParameterChanges, IUnitInfo, ProgramListInfo, TChar, UnitInfo,
 };
 use vst3_sys::VST3;
 use widestring::U16CStr;
@@ -26,7 +26,7 @@ use crate::wrapper::vst3::inner::ParameterChange;
 // Alias needed for the VST3 attribute macro
 use vst3_sys as vst3_com;
 
-#[VST3(implements(IComponent, IEditController, IAudioProcessor))]
+#[VST3(implements(IComponent, IEditController, IAudioProcessor, IUnitInfo))]
 pub(crate) struct Wrapper<P: Vst3Plugin> {
     inner: Arc<WrapperInner<P>>,
 }
@@ -335,6 +335,11 @@ impl<P: Vst3Plugin> IEditController for Wrapper<P> {
                 | vst3_sys::vst::ParameterFlags::kIsBypass as i32;
         } else {
             let param_hash = &self.inner.param_hashes[param_index as usize];
+            let param_unit = &self
+                .inner
+                .param_units
+                .get_vst3_unit_id(*param_hash)
+                .expect("Inconsistent parameter data");
             let default_value = &self.inner.param_defaults_normalized[param_hash];
             let param_ptr = &self.inner.param_by_hash[param_hash];
 
@@ -344,9 +349,7 @@ impl<P: Vst3Plugin> IEditController for Wrapper<P> {
             u16strlcpy(&mut info.units, param_ptr.unit());
             info.step_count = param_ptr.step_count().unwrap_or(0) as i32;
             info.default_normalized_value = *default_value as f64;
-            // TODO: Support parameter groups for VST3, having to define all of these units is going
-            //       to be a pain
-            info.unit_id = vst3_sys::vst::kRootUnitId;
+            info.unit_id = *param_unit;
             info.flags = vst3_sys::vst::ParameterFlags::kCanAutomate as i32;
         }
 
@@ -943,5 +946,107 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
             ProcessStatus::KeepAlive => u32::MAX, // kInfiniteTail
             _ => 0,                               // kNoTail
         }
+    }
+}
+
+impl<P: Vst3Plugin> IUnitInfo for Wrapper<P> {
+    unsafe fn get_unit_count(&self) -> i32 {
+        self.inner.param_units.len() as i32
+    }
+
+    unsafe fn get_unit_info(&self, unit_index: i32, info: *mut UnitInfo) -> tresult {
+        check_null_ptr!(info);
+
+        match self.inner.param_units.info(unit_index as usize) {
+            Some((unit_id, unit_info)) => {
+                *info = mem::zeroed();
+
+                let info = &mut *info;
+                info.id = unit_id;
+                info.parent_unit_id = unit_info.parent_id;
+                u16strlcpy(&mut info.name, &unit_info.name);
+                info.program_list_id = kNoProgramListId;
+
+                kResultOk
+            }
+            None => kInvalidArgument,
+        }
+    }
+
+    unsafe fn get_program_list_count(&self) -> i32 {
+        // TODO: Do we want program lists? Probably not, CLAP doesn't even support them.
+        0
+    }
+
+    unsafe fn get_program_list_info(
+        &self,
+        _list_index: i32,
+        _info: *mut ProgramListInfo,
+    ) -> tresult {
+        kInvalidArgument
+    }
+
+    unsafe fn get_program_name(
+        &self,
+        _list_id: i32,
+        _program_index: i32,
+        _name: *mut u16,
+    ) -> tresult {
+        kInvalidArgument
+    }
+
+    unsafe fn get_program_info(
+        &self,
+        _list_id: i32,
+        _program_index: i32,
+        _attribute_id: *const u8,
+        _attribute_value: *mut u16,
+    ) -> tresult {
+        kInvalidArgument
+    }
+
+    unsafe fn has_program_pitch_names(&self, _id: i32, _index: i32) -> tresult {
+        // TODO: Support note names once someone requests it
+        kInvalidArgument
+    }
+
+    unsafe fn get_program_pitch_name(
+        &self,
+        _id: i32,
+        _index: i32,
+        _pitch: i16,
+        _name: *mut u16,
+    ) -> tresult {
+        kInvalidArgument
+    }
+
+    unsafe fn get_selected_unit(&self) -> i32 {
+        // No! Steinberg! I don't want any of this! I just want to group parameters!
+        kRootUnitId
+    }
+
+    unsafe fn select_unit(&self, _id: i32) -> tresult {
+        kResultFalse
+    }
+
+    unsafe fn get_unit_by_bus(
+        &self,
+        _type_: i32,
+        _dir: i32,
+        _bus_index: i32,
+        _channel: i32,
+        _unit_id: *mut i32,
+    ) -> tresult {
+        // Stahp it!
+        kResultFalse
+    }
+
+    unsafe fn set_unit_program_data(
+        &self,
+        _list_or_unit: i32,
+        _program_idx: i32,
+        _data: SharedVstPtr<dyn IBStream>,
+    ) -> tresult {
+        kInvalidArgument
     }
 }
