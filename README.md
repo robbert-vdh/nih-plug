@@ -2,14 +2,15 @@
 
 [![Tests](https://github.com/robbert-vdh/nih-plug/actions/workflows/test.yml/badge.svg?branch=master)](https://github.com/robbert-vdh/nih-plug/actions/workflows/test.yml?query=branch%3Amaster)
 
-This is a work in progress JUCE-lite-lite written in Rust to do some experiments
-with, as well as a small collection of plugins. The idea is to have a statefull
-but simple plugin API that gets rid of as much unnecessary ceremony wherever
-possible, while also keeping the amount of magic to minimum. Since this is not
-quite meant for general use just yet, the plugin API is limited to the
-functionality I needed and I'll expose more functionality as I need it. See the
-documentation comment in the `Plugin` trait for an incomplete list of missing
-functionality.
+This is a work in progress API-agnostic audio plugin framework written in Rust
+to do some experiments with, as well as a small collection of plugins. The idea
+is to have a statefull but simple plugin API that gets rid of as much
+unnecessary ceremony wherever possible, while also keeping the amount of magic
+to minimum. Since this is not quite meant for general use just yet, the plugin
+API surface is currently limited to the functionality that I either needed
+myself or that was requested by others. See the [current
+features](#current-features) section for more information on the project's
+current status.
 
 Come join us on the [Rust Audio Discord](https://discord.gg/ykxU3rt4Cb).
 
@@ -17,7 +18,7 @@ Come join us on the [Rust Audio Discord](https://discord.gg/ykxU3rt4Cb).
 
 - [Plugins](#plugins)
 - [Framework](#framework)
-  - [Current status](#current-status)
+  - [Current features](#current-features)
   - [Building](#building)
   - [Plugin formats](#plugin-formats)
   - [Example plugins](#example-plugins)
@@ -44,13 +45,60 @@ for download links.
 
 ## Framework
 
-### Current status
+### Current features
 
-It actually works! There's still lots of small things to implement, but the core
-functionality and basic GUI support are there, with export targets and plugin
-bundling for both VST3 and CLAP. Currently the Windows support has only been
-tested under Wine with [yabridge](https://github.com/robbert-vdh/yabridge), and
-the macOS version hasn't been tested at all. Feel free to be the first one!
+- Supports both VST3 and [CLAP](https://github.com/free-audio/clap) by simply
+  adding the corresponding `nih_export_<api>!(Foo)` macro to your plugin's
+  library.
+- Declarative parameter handling without any boilerplate.
+  - Define parameters for your plugin by adding `FloatParam`, `IntParam`,
+    `BoolParam`, and `EnumParam<T>` fields to your parameter struct, assign
+    stable IDs to them with the `#[id = "foobar"]`, and a `#[derive(Params)]`
+    does all of the boring work for you.
+  - Parameters can have complex value distributions and the parameter objects
+    come with built-in smoothers and callbacks.
+  - Use simple enums deriving the `Enum` trait with the `EnumParam<T>` parameter
+    type for parameters that allow the user to choose between multiple discrete
+    options. That way you can use regular Rust pattern matching when working
+    with these values without having to do any conversions yourself.
+  - Store additional non-parameter state for your plugin by adding any field
+    that can be serialized with [serde](https://serde.rs/) to your plugin's
+    `Params` object and annotating them with `#[persist = "key"]`.
+  - Group your parameters into logical groups by nesting `Params` objects using
+    the `#[nested = "Group Name"]`attribute.
+- Stateful. Behaves mostly like JUCE, just without all of the boilerplate.
+- Does not make any assumptions on how you want to process audio, but does come
+  with utilities and adapters to help with common access patterns.
+  - Efficiently iterate over an audio buffer either per-sample per-channel,
+    per-block per-channel, or even per-block per-sample-per-channel with the
+    option to manually index the buffer or get access to a channel slice at any
+    time.
+  - Easily leverage per-channel SIMD using the SIMD adapters on the buffer and
+    block iterators.
+  - Comes with bring-your-own-FFT adapters for common (inverse) short-time
+    Fourier Transform operations. More to come.
+- Optional sample accurate automation support for VST3 and CLAP that can be
+  enabled by setting the `Plugin::SAMPLE_ACCURATE_AUTOMATION` constant to
+  `true`.
+- Comes with adapters for popular Rust GUI frameworks as well as some basic
+  widgets for them that integrate with NIH-plug's parameter system. Currently
+  there's support for [egui](nih_plug_egui) and [iced](nih_plug_iced).
+- Basic note/MIDI support. MIDI CC handling and note output is currently not
+  implemented. Let me know if you need this.
+- A plugin bundler accessible through the
+  `cargo xtask bundle <package> <build_arguments>` command that detects
+  automatically detects which plugin targets your plugin exposes and creates the
+  correct plugin bundles for your target platform, with cross-compilation
+  support. The cargo subcommand can easily be added to [your own
+  project](https://github.com/robbert-vdh/nih-plug/tree/master/nih_plug_xtask)
+  as an alias or
+  [globally](https://github.com/robbert-vdh/nih-plug/tree/master/cargo_nih_plug)
+  as a regular cargo subcommand.
+- Tested on Linux, Windows, with limited testing on macOS. Windows support has
+  mostly been tested through Wine with
+  [yabridge](https://github.com/robbert-vdh/yabridge).
+- See the [`Plugin`](src/plugin.rs) trait's documentation for an incomplete list
+  of the functionlaity that has currently not yet been implemented.
 
 ### Building
 
