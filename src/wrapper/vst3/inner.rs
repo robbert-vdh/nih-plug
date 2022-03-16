@@ -10,6 +10,7 @@ use vst3_sys::base::{kInvalidArgument, kResultOk, tresult};
 use vst3_sys::vst::IComponentHandler;
 
 use super::context::{WrapperGuiContext, WrapperProcessContext};
+use super::param_units::ParamUnits;
 use super::util::{ObjectPtr, VstPtr, BYPASS_PARAM_HASH, BYPASS_PARAM_ID};
 use super::view::WrapperView;
 use crate::buffer::Buffer;
@@ -84,6 +85,7 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// parameters belonging to the plugin. As long as `plugin` does not get recreated, these
     /// addresses will remain stable, as they are obtained from a pinned object.
     pub param_by_hash: HashMap<u32, ParamPtr>,
+    pub param_units: ParamUnits,
     /// The default normalized parameter value for every parameter in `param_ids`. We need to store
     /// this in case the host requeries the parmaeter later. This is also indexed by the hash so we
     /// can retrieve them later for the UI if needed.
@@ -138,6 +140,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         // parameters. Since the object returned by `params()` is pinned, these pointers are safe to
         // dereference as long as `wrapper.plugin` is alive
         let param_map = plugin.read().params().param_map();
+        let param_groups = plugin.read().params().param_groups();
         let param_ids = plugin.read().params().param_ids();
         nih_debug_assert!(
             !param_map.contains_key(BYPASS_PARAM_ID),
@@ -145,33 +148,40 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         );
 
         // Only calculate these hashes once, and in the stable order defined by the plugin
-        let param_id_hashes_ptrs: Vec<_> = param_ids
+        let param_id_hashes_ptrs_groups: Vec<_> = param_ids
             .iter()
             .filter_map(|id| {
                 let param_ptr = param_map.get(id)?;
-                Some((id, hash_param_id(id), param_ptr))
+                let param_group = param_groups.get(id)?;
+                Some((id, hash_param_id(id), param_ptr, param_group))
             })
             .collect();
 
-        let param_hashes = param_id_hashes_ptrs
+        let param_hashes = param_id_hashes_ptrs_groups
             .iter()
-            .map(|&(_, hash, _)| hash)
+            .map(|&(_, hash, _, _)| hash)
             .collect();
-        let param_by_hash = param_id_hashes_ptrs
+        let param_by_hash = param_id_hashes_ptrs_groups
             .iter()
-            .map(|&(_, hash, ptr)| (hash, *ptr))
+            .map(|&(_, hash, ptr, _)| (hash, *ptr))
             .collect();
-        let param_defaults_normalized = param_id_hashes_ptrs
+        let param_units = ParamUnits::from_param_groups(
+            param_id_hashes_ptrs_groups
+                .iter()
+                .map(|&(_, hash, _, group_name)| (hash, group_name.as_str())),
+        )
+        .expect("Inconsistent parameter groups");
+        let param_defaults_normalized = param_id_hashes_ptrs_groups
             .iter()
-            .map(|&(_, hash, ptr)| (hash, unsafe { ptr.normalized_value() }))
+            .map(|&(_, hash, ptr, _)| (hash, unsafe { ptr.normalized_value() }))
             .collect();
-        let param_id_to_hash = param_id_hashes_ptrs
+        let param_id_to_hash = param_id_hashes_ptrs_groups
             .iter()
-            .map(|&(id, hash, _)| (*id, hash))
+            .map(|&(id, hash, _, _)| (*id, hash))
             .collect();
-        let param_ptr_to_hash = param_id_hashes_ptrs
+        let param_ptr_to_hash = param_id_hashes_ptrs_groups
             .into_iter()
-            .map(|(_, hash, ptr)| (*ptr, hash))
+            .map(|(_, hash, ptr, _)| (*ptr, hash))
             .collect();
 
         let wrapper = Self {
@@ -209,6 +219,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
 
             param_hashes,
             param_by_hash,
+            param_units,
             param_defaults_normalized,
             param_id_to_hash,
             param_ptr_to_hash,
