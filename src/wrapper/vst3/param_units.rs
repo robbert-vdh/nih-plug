@@ -54,7 +54,14 @@ impl ParamUnits {
         let unique_group_names: HashSet<&str> = groups
             .clone()
             .into_iter()
-            .map(|(_, group_name)| group_name)
+            .filter_map(|(_, group_name)| {
+                // The root should not be included here since that's a special case in VST3
+                if !group_name.is_empty() {
+                    Some(group_name)
+                } else {
+                    None
+                }
+            })
             .collect();
         let mut groups_units: Vec<(&str, ParamUnit)> = unique_group_names
             .into_iter()
