@@ -474,11 +474,11 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
         } else {
             // We'll visualize the difference between the current value and the default value
             let current_value = self.param.normalized_value();
-            // For boolean values alawys have filled be true and not filled be false, otherwise it
-            // looks super confusing
+            // For discrete alawys fill the bar from the left because it otherwise looks a bit
+            // jarring when any any value after the first one is the defautl
             let fill_start_x = util::remap_rect_x_t(
                 &bounds,
-                if self.param.step_count() == Some(1) {
+                if self.param.step_count().is_some() {
                     0.0
                 } else {
                     self.setter.default_normalized_param_value(self.param)
