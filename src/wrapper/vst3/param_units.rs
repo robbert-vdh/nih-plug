@@ -97,7 +97,7 @@ impl ParamUnits {
             // We'll do an index-based loop with some clones because here it doesn't matter much for
             // performance anyways and otherwise it's a bit difficult to keep the borrow checker
             // happy ehre
-            let group_name = groups_units[0].0;
+            let group_name = groups_units[unit_id].0;
 
             // If the group name does not contain any slashes then the unit's parent should stay at
             // the root unit
