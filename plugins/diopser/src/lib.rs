@@ -87,6 +87,7 @@ pub struct DiopserParams {
 
     /// The filter's center frequqency. When this is applied, the filters are spread around this
     /// frequency.
+    /// FIXME: Entering -3 or another invalid value will set the parameter to NaN
     #[id = "cutoff"]
     filter_frequency: FloatParam,
     /// The Q parameter for the filters.
