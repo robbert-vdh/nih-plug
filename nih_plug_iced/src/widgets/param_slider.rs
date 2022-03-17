@@ -479,16 +479,17 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
                 },
             )
         } else {
-            // We'll visualize the difference between the current value and the default value
+            // We'll visualize the difference between the current value and the default value if the
+            // default value lies somewhere in the middle and the parameter is continuous. Otherwise
+            // this appraoch looks a bit jarring.
             let current_value = self.param.normalized_value();
-            // For discrete alawys fill the bar from the left because it otherwise looks a bit
-            // jarring when any any value after the first one is the defautl
+            let default_value = self.setter.default_normalized_param_value(self.param);
             let fill_start_x = util::remap_rect_x_t(
                 &bounds_without_borders,
-                if self.param.step_count().is_some() {
-                    0.0
+                if self.param.step_count().is_none() && (0.45..=0.55).contains(&default_value) {
+                    default_value
                 } else {
-                    self.setter.default_normalized_param_value(self.param)
+                    0.0
                 },
             );
             let fill_end_x = util::remap_rect_x_t(&bounds_without_borders, current_value);
