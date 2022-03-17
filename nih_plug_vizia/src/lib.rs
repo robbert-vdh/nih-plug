@@ -10,7 +10,7 @@ use vizia::{Application, Context, WindowDescription};
 // Re-export for convenience
 pub use vizia;
 
-// TODO: Add exports for the nih_plug_assets fonts
+pub mod assets;
 
 /// Create an [`Editor`] instance using a [`vizia`][::vizia] GUI. The [`ViziaState`] passed to this
 /// function contains the GUI's intitial size, and this is kept in sync whenever the GUI gets

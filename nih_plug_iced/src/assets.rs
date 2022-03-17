@@ -2,7 +2,7 @@
 
 use crate::Font;
 
-// This module provides a re-export and simple font wrapeprs aroudn the re-exported fonts.
+// This module provides a re-export and simple font wrappers around the re-exported fonts.
 pub use nih_plug_assets::*;
 
 pub const NOTO_SANS_REGULAR: Font = Font::External {
