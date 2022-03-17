@@ -93,12 +93,7 @@ impl ParamUnits {
             .map(|(unit_id, (group_name, _))| (*group_name, unit_id as i32 + 1))
             .collect();
 
-        for unit_id in 0..groups_units.len() {
-            // We'll do an index-based loop with some clones because here it doesn't matter much for
-            // performance anyways and otherwise it's a bit difficult to keep the borrow checker
-            // happy ehre
-            let group_name = groups_units[unit_id].0;
-
+        for (group_name, unit) in &mut groups_units {
             // If the group name does not contain any slashes then the unit's parent should stay at
             // the root unit
             if let Some(sep_pos) = group_name.rfind('/') {
@@ -106,7 +101,7 @@ impl ParamUnits {
                 let parent_unit_id = *vst3_unit_id_by_group_name
                     .get(parent_group_name)
                     .ok_or("Missing parent group")?;
-                groups_units[unit_id].1.parent_id = parent_unit_id;
+                unit.parent_id = parent_unit_id;
             }
         }
 
