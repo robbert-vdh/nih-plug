@@ -1,0 +1,17 @@
+[package]
+name = "gain_gui_egui"
+version = "0.1.0"
+edition = "2021"
+authors = ["Robbert van der Helm <mail@robbertvanderhelm.nl>"]
+license = "ISC"
+
+description = "A simple gain plugin with an egui GUI"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+nih_plug = { path = "../../../", features = ["assert_process_allocs"] }
+nih_plug_egui = { path = "../../../nih_plug_egui" }
+
+atomic_float = "0.1"

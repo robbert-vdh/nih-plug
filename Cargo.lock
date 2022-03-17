@@ -1298,6 +1298,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "gain_gui_egui"
+version = "0.1.0"
+dependencies = [
+ "atomic_float",
+ "nih_plug",
+ "nih_plug_egui",
+]
+
+[[package]]
 name = "gain_gui_iced"
 version = "0.1.0"
 dependencies = [
