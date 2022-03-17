@@ -200,9 +200,11 @@ impl<'a, P: Param> ParamSlider<'a, P> {
         let plain_value = self.param.preview_plain(normalized_value);
         let current_plain_value = self.param.plain_value();
         if plain_value != current_plain_value {
+            // For the aforementioned snapping
+            let normalized_plain_value = self.param.preview_normalized(plain_value);
             shell.publish(ParamMessage::SetParameterNormalized(
                 self.param.as_ptr(),
-                normalized_value,
+                normalized_plain_value,
             ));
         }
     }
