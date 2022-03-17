@@ -58,7 +58,7 @@ impl Default for GainParams {
 }
 
 impl Plugin for Gain {
-    const NAME: &'static str = "Gain GUI";
+    const NAME: &'static str = "Gain GUI (iced)";
     const VENDOR: &'static str = "Moist Plugins GmbH";
     const URL: &'static str = "https://youtu.be/dQw4w9WgXcQ";
     const EMAIL: &'static str = "info@example.com";
@@ -137,7 +137,7 @@ impl Plugin for Gain {
 }
 
 impl ClapPlugin for Gain {
-    const CLAP_ID: &'static str = "com.moist-plugins-gmbh.gain-gui";
+    const CLAP_ID: &'static str = "com.moist-plugins-gmbh.gain-gui-iced";
     const CLAP_DESCRIPTION: &'static str = "A smoothed gain parameter example plugin";
     const CLAP_FEATURES: &'static [&'static str] = &["audio_effect", "mono", "stereo", "tool"];
     const CLAP_MANUAL_URL: &'static str = Self::URL;
@@ -145,7 +145,7 @@ impl ClapPlugin for Gain {
 }
 
 impl Vst3Plugin for Gain {
-    const VST3_CLASS_ID: [u8; 16] = *b"GainGuiYeahBoyyy";
+    const VST3_CLASS_ID: [u8; 16] = *b"GainGuiIcedAaAAa";
     const VST3_CATEGORIES: &'static str = "Fx|Dynamics";
 }
 

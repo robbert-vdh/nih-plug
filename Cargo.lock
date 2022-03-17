@@ -1298,7 +1298,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "gain_gui"
+name = "gain_gui_iced"
 version = "0.1.0"
 dependencies = [
  "atomic_float",
