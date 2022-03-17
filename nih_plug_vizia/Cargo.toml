@@ -1,0 +1,18 @@
+[package]
+name = "nih_plug_vizia"
+version = "0.0.0"
+edition = "2021"
+authors = ["Robbert van der Helm <mail@robbertvanderhelm.nl>"]
+license = "ISC"
+
+description = "An adapter to use VIZIA GUIs with NIH-plug"
+
+[dependencies]
+nih_plug = { path = ".." }
+nih_plug_assets = { git = "https://github.com/robbert-vdh/nih_plug_assets.git" }
+
+baseview = { git = "https://github.com/robbert-vdh/baseview.git", branch = "feature/mouse-event-modifiers" }
+crossbeam = "0.8"
+# This fork contains changed for better keyboard modifier handling and DPI
+# scaling
+vizia = { git = "https://github.com/robbert-vdh/vizia.git", branch = "feature/baseview-modifiers", default_features = false, features = ["baseview", "clipboard"] }
