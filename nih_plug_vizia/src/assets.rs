@@ -10,6 +10,8 @@ pub use nih_plug_assets::*;
 pub fn register_fonts(cx: &mut Context) {
     cx.add_font_mem(NOTO_SANS_REGULAR, fonts::NOTO_SANS_REGULAR);
     cx.add_font_mem(NOTO_SANS_REGULAR_ITALIC, fonts::NOTO_SANS_REGULAR_ITALIC);
+    cx.add_font_mem(NOTO_SANS_THIN, fonts::NOTO_SANS_THIN);
+    cx.add_font_mem(NOTO_SANS_THIN_ITALIC, fonts::NOTO_SANS_THIN_ITALIC);
     cx.add_font_mem(NOTO_SANS_LIGHT, fonts::NOTO_SANS_LIGHT);
     cx.add_font_mem(NOTO_SANS_LIGHT_ITALIC, fonts::NOTO_SANS_LIGHT_ITALIC);
     cx.add_font_mem(NOTO_SANS_BOLD, fonts::NOTO_SANS_BOLD);
@@ -18,6 +20,8 @@ pub fn register_fonts(cx: &mut Context) {
 
 pub const NOTO_SANS_REGULAR: &str = "Noto Sans Regular";
 pub const NOTO_SANS_REGULAR_ITALIC: &str = "Noto Sans Regular Italic";
+pub const NOTO_SANS_THIN: &str = "Noto Sans Thin";
+pub const NOTO_SANS_THIN_ITALIC: &str = "Noto Sans Thin Italic";
 pub const NOTO_SANS_LIGHT: &str = "Noto Sans Light";
 pub const NOTO_SANS_LIGHT_ITALIC: &str = "Noto Sans Light Italic";
 pub const NOTO_SANS_BOLD: &str = "Noto Sans Bold";

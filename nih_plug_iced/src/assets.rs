@@ -15,6 +15,16 @@ pub const NOTO_SANS_REGULAR_ITALIC: Font = Font::External {
     bytes: fonts::NOTO_SANS_REGULAR_ITALIC,
 };
 
+pub const NOTO_SANS_THIN: Font = Font::External {
+    name: "Noto Sans Thin",
+    bytes: fonts::NOTO_SANS_THIN,
+};
+
+pub const NOTO_SANS_THIN_ITALIC: Font = Font::External {
+    name: "Noto Sans Thin Italic",
+    bytes: fonts::NOTO_SANS_THIN_ITALIC,
+};
+
 pub const NOTO_SANS_LIGHT: Font = Font::External {
     name: "Noto Sans Light",
     bytes: fonts::NOTO_SANS_LIGHT,
