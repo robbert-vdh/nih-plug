@@ -11,6 +11,8 @@ use std::sync::Arc;
 
 use vizia::{Context, Model};
 
+pub mod util;
+
 /// Register the default theme for the widgets exported by this module. This is automatically called
 /// for you when using [`create_vizia_editor()`][super::create_vizia_editor()].
 pub fn register_theme(cx: &mut Context) {
