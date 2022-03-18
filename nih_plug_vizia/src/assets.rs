@@ -1,7 +1,7 @@
 //! Binary assets for use with `nih_plug_iced. These fonts first need to be registered by calling
 //! [`nih_plug_iced::assets::register_fonts()`][register_fonts()`].
 
-use crate::vizia::Context;
+use vizia::Context;
 
 // This module provides a re-export and simple font wrappers around the re-exported fonts.
 pub use nih_plug_assets::*;

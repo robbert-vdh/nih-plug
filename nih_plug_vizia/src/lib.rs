@@ -5,12 +5,13 @@ use crossbeam::atomic::AtomicCell;
 use nih_plug::prelude::{Editor, GuiContext, ParamSetter, ParentWindowHandle};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use vizia::{Application, Context, WindowDescription};
+use vizia::{Application, Context, Model, WindowDescription};
 
 // Re-export for convenience
 pub use vizia;
 
 pub mod assets;
+pub mod widgets;
 
 /// Create an [`Editor`] instance using a [`vizia`][::vizia] GUI. The [`ViziaState`] passed to this
 /// function contains the GUI's intitial size, and this is kept in sync whenever the GUI gets
@@ -87,6 +88,13 @@ impl Editor for ViziaEditor {
 
         let window = Application::new(window_description, move |cx| {
             let setter = ParamSetter::new(context.as_ref());
+
+            // Any widget can change the parameters by emitting `ParamEvent` events. This model will
+            // handle them automatically.
+            widgets::ParamModel {
+                context: context.clone(),
+            }
+            .build(cx);
 
             app(cx, &setter)
         })
