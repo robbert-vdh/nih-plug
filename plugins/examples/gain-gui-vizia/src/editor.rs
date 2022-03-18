@@ -34,12 +34,14 @@ pub(crate) fn create(
             .insert(Entity::root(), 20.0 * POINT_SCALE);
         cx.add_theme(STYLE);
 
+        // NOTE: vizia's font rendering looks way too dark and thick. Going one font weight lower
+        //       seems to compensate for this.
         assets::register_fonts(cx);
-        cx.set_default_font(assets::NOTO_SANS_REGULAR);
+        cx.set_default_font(assets::NOTO_SANS_LIGHT);
 
         VStack::new(cx, |cx| {
             Label::new(cx, "Gain GUI")
-                .font(assets::NOTO_SANS_LIGHT)
+                .font(assets::NOTO_SANS_THIN)
                 .font_size(40.0 * POINT_SCALE)
                 .height(Pixels(50.0))
                 .child_top(Stretch(1.0))
