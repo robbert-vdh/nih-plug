@@ -166,22 +166,6 @@ impl Param for FloatParam {
         }
     }
 
-    fn set_from_string(&mut self, string: &str) -> bool {
-        let value = match &self.string_to_value {
-            Some(f) => f(string.trim()),
-            // In the CLAP wrapper the unit will be included, so make sure to handle that
-            None => string.trim().trim_end_matches(self.unit).parse().ok(),
-        };
-
-        match value {
-            Some(plain) => {
-                self.set_plain_value(plain);
-                true
-            }
-            None => false,
-        }
-    }
-
     fn update_smoother(&mut self, sample_rate: f32, reset: bool) {
         if reset {
             self.smoothed.reset(self.value);

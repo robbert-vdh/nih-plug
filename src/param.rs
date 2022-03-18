@@ -67,12 +67,6 @@ pub trait Param: Display {
     /// wrappers. This **does** snap to step sizes for continuous parameters (i.e. [`FloatParam`]).
     fn preview_plain(&self, normalized: f32) -> Self::Plain;
 
-    /// Set this parameter based on a string. Returns whether the updating succeeded. That can fail
-    /// if the string cannot be parsed.
-    ///
-    /// TODO: After implementing VST3, check if we handle parsing failures correctly
-    fn set_from_string(&mut self, string: &str) -> bool;
-
     /// Update the smoother state to point to the current value. Also used when initializing and
     /// restoring a plugin so everything is in sync. In that case the smoother should completely
     /// reset to the current value.

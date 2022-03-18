@@ -116,22 +116,6 @@ impl Param for BoolParam {
         normalized > 0.5
     }
 
-    fn set_from_string(&mut self, string: &str) -> bool {
-        let string = string.trim();
-        let value = match &self.string_to_value {
-            Some(f) => f(string),
-            None => Some(string.eq_ignore_ascii_case("true") || string.eq_ignore_ascii_case("on")),
-        };
-
-        match value {
-            Some(plain) => {
-                self.set_plain_value(plain);
-                true
-            }
-            None => false,
-        }
-    }
-
     fn update_smoother(&mut self, _sample_rate: f32, _init: bool) {
         // Can't really smooth a binary parameter now can you
     }

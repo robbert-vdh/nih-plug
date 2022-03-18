@@ -150,7 +150,6 @@ impl ParamPtr {
     param_ptr_forward!(pub unsafe fn unit(&self) -> &'static str);
     param_ptr_forward!(pub unsafe fn update_smoother(&self, sample_rate: f32, reset: bool));
     param_ptr_forward!(pub unsafe fn initialize_block_smoother(&mut self, max_block_size: usize));
-    param_ptr_forward!(pub unsafe fn set_from_string(&mut self, string: &str) -> bool);
     param_ptr_forward!(pub unsafe fn normalized_value(&self) -> f32);
     param_ptr_forward!(pub unsafe fn set_normalized_value(&self, normalized: f32));
     param_ptr_forward!(pub unsafe fn normalized_value_to_string(&self, normalized: f32, include_unit: bool) -> String);
