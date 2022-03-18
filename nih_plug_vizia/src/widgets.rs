@@ -36,7 +36,7 @@ pub enum ParamEvent<'a, P: Param> {
 
 /// The same as [`ParamEvent`], but type erased.
 #[derive(Debug, Clone, Copy)]
-pub enum NormalizedParamEvent {
+pub enum RawParamEvent {
     /// Begin an automation gesture for a parameter.
     BeginSetParameter(ParamPtr),
     /// Set a parameter to a new normalized value. This needs to be surrounded by a matching
@@ -61,17 +61,17 @@ impl Model for ParamModel {
             // `ParamEvent` gets downcast into `NormalizedParamEvent` by the `Message`
             // implementation below
             match *param_event {
-                NormalizedParamEvent::BeginSetParameter(p) => unsafe {
+                RawParamEvent::BeginSetParameter(p) => unsafe {
                     self.context.raw_begin_set_parameter(p)
                 },
-                NormalizedParamEvent::SetParameterNormalized(p, v) => unsafe {
+                RawParamEvent::SetParameterNormalized(p, v) => unsafe {
                     self.context.raw_set_parameter_normalized(p, v)
                 },
-                NormalizedParamEvent::ResetParameter(p) => unsafe {
+                RawParamEvent::ResetParameter(p) => unsafe {
                     let default_value = self.context.raw_default_normalized_param_value(p);
                     self.context.raw_set_parameter_normalized(p, default_value);
                 },
-                NormalizedParamEvent::EndSetParameter(p) => unsafe {
+                RawParamEvent::EndSetParameter(p) => unsafe {
                     self.context.raw_end_set_parameter(p)
                 },
             }
@@ -79,18 +79,18 @@ impl Model for ParamModel {
     }
 }
 
-impl<P: Param> From<ParamEvent<'_, P>> for NormalizedParamEvent {
+impl<P: Param> From<ParamEvent<'_, P>> for RawParamEvent {
     fn from(event: ParamEvent<'_, P>) -> Self {
         match event {
-            ParamEvent::BeginSetParameter(p) => NormalizedParamEvent::BeginSetParameter(p.as_ptr()),
+            ParamEvent::BeginSetParameter(p) => RawParamEvent::BeginSetParameter(p.as_ptr()),
             ParamEvent::SetParameter(p, v) => {
-                NormalizedParamEvent::SetParameterNormalized(p.as_ptr(), p.preview_normalized(v))
+                RawParamEvent::SetParameterNormalized(p.as_ptr(), p.preview_normalized(v))
             }
             ParamEvent::SetParameterNormalized(p, v) => {
-                NormalizedParamEvent::SetParameterNormalized(p.as_ptr(), v)
+                RawParamEvent::SetParameterNormalized(p.as_ptr(), v)
             }
-            ParamEvent::ResetParameter(p) => NormalizedParamEvent::ResetParameter(p.as_ptr()),
-            ParamEvent::EndSetParameter(p) => NormalizedParamEvent::EndSetParameter(p.as_ptr()),
+            ParamEvent::ResetParameter(p) => RawParamEvent::ResetParameter(p.as_ptr()),
+            ParamEvent::EndSetParameter(p) => RawParamEvent::EndSetParameter(p.as_ptr()),
         }
     }
 }
@@ -100,7 +100,7 @@ impl<P: Param> ParamEvent<'_, P> {
     /// [`Context::emit()`][vizia::Context::emit()].
     ///
     /// TODO: Think of a better, clearer term for this
-    pub fn upcast(self) -> NormalizedParamEvent {
+    pub fn upcast(self) -> RawParamEvent {
         self.into()
     }
 }
