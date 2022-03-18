@@ -158,6 +158,24 @@ impl ParamPtr {
     // These functions involve casts since the plugin formats only do floating point types, so we
     // can't generate them with the macro:
 
+    /// Get the plain value for a plain, unnormalized value, as a float. Useful in conjunction with
+    /// [`preview_plain()`][Self::preview_plain()] to compare a snapped discrete value to a
+    /// parameter's current snapped value without having to do a back and forth conversion using
+    /// normalized values.
+    ///
+    /// # Safety
+    ///
+    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
+    /// still alive.
+    pub unsafe fn plain_value(&self) -> f32 {
+        match &self {
+            ParamPtr::FloatParam(p) => (**p).plain_value(),
+            ParamPtr::IntParam(p) => (**p).plain_value() as f32,
+            ParamPtr::BoolParam(p) => (**p).normalized_value(),
+            ParamPtr::EnumParam(p) => (**p).plain_value() as f32,
+        }
+    }
+
     /// Get the normalized value for a plain, unnormalized value, as a float. Used as part of the
     /// wrappers.
     ///
