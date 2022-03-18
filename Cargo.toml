@@ -23,6 +23,7 @@ members = [
   "plugins/examples/gain",
   "plugins/examples/gain-gui-egui",
   "plugins/examples/gain-gui-iced",
+  "plugins/examples/gain-gui-vizia",
   "plugins/examples/sine",
   "plugins/examples/stft",
 

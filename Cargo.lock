@@ -1316,6 +1316,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "gain_gui_vizia"
+version = "0.1.0"
+dependencies = [
+ "atomic_float",
+ "nih_plug",
+ "nih_plug_vizia",
+]
+
+[[package]]
 name = "generational-arena"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
