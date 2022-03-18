@@ -11,6 +11,10 @@ use crate::GainParams;
 const POINT_SCALE: f32 = 0.75;
 
 const STYLE: &str = r#"
+* {
+    /* VIZIA uses points instead of pixels */
+    font-size: 15; /* 20px */
+}
 "#;
 
 // Makes sense to also define this here, makes it a bit easier to keep track of
@@ -25,13 +29,7 @@ pub(crate) fn create(
 ) -> Option<Box<dyn Editor>> {
     create_vizia_editor(editor_state, |cx, setter| {
         // TOOD: `:root { background-color: #fafafa; }` in a stylesheet doesn't work
-        cx.style
-            .background_color
-            .insert(Entity::root(), Color::rgb(250, 250, 250));
-        // VIZIA uses points instead of pixels
-        cx.style
-            .font_size
-            .insert(Entity::root(), 20.0 * POINT_SCALE);
+        Entity::root().set_background_color(cx, Color::rgb(250, 250, 250));
         cx.add_theme(STYLE);
 
         // NOTE: vizia's font rendering looks way too dark and thick. Going one font weight lower
