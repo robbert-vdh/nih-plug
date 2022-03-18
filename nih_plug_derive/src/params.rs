@@ -7,6 +7,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
     let ast = syn::parse_macro_input!(input as syn::DeriveInput);
 
     let struct_name = &ast.ident;
+    let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
     let fields = match ast.data {
         syn::Data::Struct(syn::DataStruct {
             fields: syn::Fields::Named(named_fields),
@@ -220,7 +221,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
     }
 
     quote! {
-        impl Params for #struct_name {
+        impl #impl_generics Params for #struct_name #ty_generics #where_clause {
             fn param_map(
                 self: std::pin::Pin<&Self>,
             ) -> std::collections::HashMap<&'static str, nih_plug::param::internals::ParamPtr> {
