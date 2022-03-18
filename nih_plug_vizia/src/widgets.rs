@@ -9,7 +9,13 @@ use nih_plug::param::internals::ParamPtr;
 use nih_plug::prelude::{GuiContext, Param};
 use std::sync::Arc;
 
-use vizia::{Message, Model};
+use vizia::{Context, Model};
+
+/// Register the default theme for the widgets exported by this module. This is automatically called
+/// for you when using [`create_vizia_editor()`][super::create_vizia_editor()].
+pub fn register_theme(cx: &mut Context) {
+    cx.add_theme(include_str!("../assets/theme.css"));
+}
 
 /// An event that updates a parameter's value. Since NIH-plug manages the parameters, interacting
 /// with parameter values with VIZIA works a little different from updating any other state. These

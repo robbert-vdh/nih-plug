@@ -6,7 +6,8 @@ use vizia::Context;
 // This module provides a re-export and simple font wrappers around the re-exported fonts.
 pub use nih_plug_assets::*;
 
-/// Register the fonts from this module so they can be used with VIZIA.
+/// Register the fonts from this module so they can be used with VIZIA. This is automatically called
+/// for you when using [`create_vizia_editor()`][super::create_vizia_editor()].
 pub fn register_fonts(cx: &mut Context) {
     cx.add_font_mem(NOTO_SANS_REGULAR, fonts::NOTO_SANS_REGULAR);
     cx.add_font_mem(NOTO_SANS_REGULAR_ITALIC, fonts::NOTO_SANS_REGULAR_ITALIC);
