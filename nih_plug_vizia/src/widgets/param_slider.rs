@@ -28,9 +28,10 @@ pub struct ParamSlider {
     /// Whether the next click is a double click. Vizia will send a double click event followed by a
     /// regular mouse down event when double clicking.
     is_double_click: bool,
-    /// We keep track of the start coordinate holding down Shift while dragging for higher precision
-    /// dragging. This is a `None` value when granular dragging is not active.
-    granular_drag_start_x: Option<f32>,
+    /// We keep track of the start coordinate and normalized value when holding down Shift while
+    /// dragging for higher precision dragging. This is a `None` value when granular dragging is not
+    /// active.
+    granular_drag_start_x_value: Option<(f32, f32)>,
 }
 
 impl ParamSlider {
@@ -82,7 +83,7 @@ impl ParamSlider {
 
             drag_active: false,
             is_double_click: false,
-            granular_drag_start_x: None,
+            granular_drag_start_x_value: None,
         }
         .build2(cx, |cx| {
             ZStack::new(cx, move |cx| {
@@ -165,9 +166,11 @@ impl View for ParamSlider {
                         // granuarly edit the parameter without jumping to a new value
                         cx.emit(RawParamEvent::BeginSetParameter(self.param_ptr));
                         if cx.modifiers.shift() {
-                            self.granular_drag_start_x = Some(cx.mouse.cursorx);
+                            self.granular_drag_start_x_value = Some((cx.mouse.cursorx, unsafe {
+                                self.param_ptr.normalized_value()
+                            }));
                         } else {
-                            self.granular_drag_start_x = None;
+                            self.granular_drag_start_x_value = None;
                             self.set_normalized_value(
                                 cx,
                                 util::remap_current_entity_x_coordinate(cx, cx.mouse.cursorx),
@@ -194,18 +197,24 @@ impl View for ParamSlider {
                         // If shift is being held then the drag should be more granular instead of
                         // absolute
                         if cx.modifiers.shift() {
-                            let drag_start_x =
-                                *self.granular_drag_start_x.get_or_insert(cx.mouse.cursorx);
+                            let (drag_start_x, drag_start_value) =
+                                *self.granular_drag_start_x_value.get_or_insert_with(|| {
+                                    (cx.mouse.cursorx, unsafe {
+                                        self.param_ptr.normalized_value()
+                                    })
+                                });
 
                             self.set_normalized_value(
                                 cx,
                                 util::remap_current_entity_x_coordinate(
                                     cx,
-                                    drag_start_x + (*x - drag_start_x) * GRANULAR_DRAG_MULTIPLIER,
+                                    // This can be optimized a bit
+                                    util::remap_current_entity_x_t(cx, drag_start_value)
+                                        + (*x - drag_start_x) * GRANULAR_DRAG_MULTIPLIER,
                                 ),
                             );
                         } else {
-                            self.granular_drag_start_x = None;
+                            self.granular_drag_start_x_value = None;
 
                             self.set_normalized_value(
                                 cx,
@@ -217,8 +226,8 @@ impl View for ParamSlider {
                 WindowEvent::KeyUp(_, Some(Key::Shift)) => {
                     // If this happens while dragging, snap back to reality uh I mean the current screen
                     // position
-                    if self.drag_active && self.granular_drag_start_x.is_some() {
-                        self.granular_drag_start_x = None;
+                    if self.drag_active && self.granular_drag_start_x_value.is_some() {
+                        self.granular_drag_start_x_value = None;
                         self.set_normalized_value(
                             cx,
                             util::remap_current_entity_x_coordinate(cx, cx.mouse.cursorx),

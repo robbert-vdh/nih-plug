@@ -48,9 +48,9 @@ pub struct State {
     /// Will be set to `true` if we're dragging the parameter. Resetting the parameter or entering a
     /// text value should not initiate a drag.
     drag_active: bool,
-    /// We keep track of the start coordinate holding down Shift while dragging for higher precision
-    /// dragging. This is a `None` value when granular dragging is not active.
-    granular_drag_start_x: Option<f32>,
+    /// We keep track of the start coordinate and normalized value holding down Shift while dragging
+    /// for higher precision dragging. This is a `None` value when granular dragging is not active.
+    granular_drag_start_x_value: Option<(f32, f32)>,
     /// Track clicks for double clicks.
     last_click: Option<mouse::Click>,
 
@@ -332,8 +332,8 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
 
                         // When holding down shift while clicking on a parameter we want to
                         // granuarly edit the parameter without jumping to a new value
-                        self.state.granular_drag_start_x =
-                            Some(util::remap_rect_x_t(&bounds, self.param.normalized_value()));
+                        self.state.granular_drag_start_x_value =
+                            Some((cursor_position.x, self.param.normalized_value()));
                     } else {
                         shell.publish(ParamMessage::BeginSetParameter(self.param.as_ptr()));
                         self.state.drag_active = true;
@@ -342,7 +342,7 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
                             shell,
                             util::remap_rect_x_coordinate(&bounds, cursor_position.x),
                         );
-                        self.state.granular_drag_start_x = None;
+                        self.state.granular_drag_start_x_value = None;
                     }
 
                     return event::Status::Captured;
@@ -365,21 +365,23 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
                     // If shift is being held then the drag should be more granular instead of
                     // absolute
                     if self.state.keyboard_modifiers.shift() {
-                        let drag_start_x = *self
+                        let (drag_start_x, drag_start_value) = *self
                             .state
-                            .granular_drag_start_x
-                            .get_or_insert(cursor_position.x);
+                            .granular_drag_start_x_value
+                            .get_or_insert_with(|| {
+                                (cursor_position.x, self.param.normalized_value())
+                            });
 
                         self.set_normalized_value(
                             shell,
                             util::remap_rect_x_coordinate(
                                 &bounds,
-                                drag_start_x
+                                util::remap_rect_x_t(&bounds, drag_start_value)
                                     + (cursor_position.x - drag_start_x) * GRANULAR_DRAG_MULTIPLIER,
                             ),
                         );
                     } else {
-                        self.state.granular_drag_start_x = None;
+                        self.state.granular_drag_start_x_value = None;
 
                         self.set_normalized_value(
                             shell,
@@ -396,10 +398,10 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
                 // If this happens while dragging, snap back to reality uh I mean the current screen
                 // position
                 if self.state.drag_active
-                    && self.state.granular_drag_start_x.is_some()
+                    && self.state.granular_drag_start_x_value.is_some()
                     && !modifiers.shift()
                 {
-                    self.state.granular_drag_start_x = None;
+                    self.state.granular_drag_start_x_value = None;
 
                     self.set_normalized_value(
                         shell,
