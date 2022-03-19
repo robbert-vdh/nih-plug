@@ -110,6 +110,7 @@ impl ParamSlider {
                 // the slider.
                 // TODO: Text entry stuff
                 Label::new(cx, param_display_value_lens)
+                    .class("value")
                     .height(Stretch(1.0))
                     .width(Stretch(1.0));
             });
