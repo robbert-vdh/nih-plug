@@ -235,8 +235,6 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
         clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, ParamMessage>,
     ) -> event::Status {
-        let bounds = layout.bounds();
-
         // The pressence of a value in `self.state.text_input_value` indicates that the field should
         // be focussed. The field handles defocussing by itself
         // FIMXE: This is super hacky, I have no idea how you can reuse the text input widget
@@ -297,6 +295,15 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
         if text_input_status == event::Status::Captured {
             return event::Status::Captured;
         }
+
+        // Compensate for the border when handling these events
+        let bounds = layout.bounds();
+        let bounds = Rectangle {
+            x: bounds.x + BORDER_WIDTH,
+            y: bounds.y + BORDER_WIDTH,
+            width: bounds.width - (BORDER_WIDTH * 2.0),
+            height: bounds.height - (BORDER_WIDTH * 2.0),
+        };
 
         match event {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
