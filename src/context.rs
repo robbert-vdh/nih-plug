@@ -142,7 +142,7 @@ pub struct Transport {
 /// the host and reflected in the plugin's [`Params`][crate::param::internals::Params] object. These
 /// functions should only be called from the main thread.
 pub struct ParamSetter<'a> {
-    context: &'a dyn GuiContext,
+    pub raw_context: &'a dyn GuiContext,
 }
 
 // TODO: These conversions have not really been tested yet, there might be an error in there somewhere
@@ -335,13 +335,15 @@ impl Transport {
 
 impl<'a> ParamSetter<'a> {
     pub fn new(context: &'a dyn GuiContext) -> Self {
-        Self { context }
+        Self {
+            raw_context: context,
+        }
     }
 
     /// Inform the host that you will start automating a parmater. This needs to be called before
     /// calling [`set_parameter()`][Self::set_parameter()] for the specified parameter.
     pub fn begin_set_parameter<P: Param>(&self, param: &P) {
-        unsafe { self.context.raw_begin_set_parameter(param.as_ptr()) };
+        unsafe { self.raw_context.raw_begin_set_parameter(param.as_ptr()) };
     }
 
     /// Set a parameter to the specified parameter value. You will need to call
@@ -356,7 +358,10 @@ impl<'a> ParamSetter<'a> {
     pub fn set_parameter<P: Param>(&self, param: &P, value: P::Plain) {
         let ptr = param.as_ptr();
         let normalized = param.preview_normalized(value);
-        unsafe { self.context.raw_set_parameter_normalized(ptr, normalized) };
+        unsafe {
+            self.raw_context
+                .raw_set_parameter_normalized(ptr, normalized)
+        };
     }
 
     /// Set a parameter to an already normalized value. Works exactly the same as
@@ -368,21 +373,24 @@ impl<'a> ParamSetter<'a> {
     /// normalized value known to the host matches `param.normalized_value()`.
     pub fn set_parameter_normalized<P: Param>(&self, param: &P, normalized: f32) {
         let ptr = param.as_ptr();
-        unsafe { self.context.raw_set_parameter_normalized(ptr, normalized) };
+        unsafe {
+            self.raw_context
+                .raw_set_parameter_normalized(ptr, normalized)
+        };
     }
 
     /// Inform the host that you are done automating a parameter. This needs to be called after one
     /// or more [`set_parameter()`][Self::set_parameter()] calls for a parameter so the host knows
     /// the automation gesture has finished.
     pub fn end_set_parameter<P: Param>(&self, param: &P) {
-        unsafe { self.context.raw_end_set_parameter(param.as_ptr()) };
+        unsafe { self.raw_context.raw_end_set_parameter(param.as_ptr()) };
     }
 
     /// Retrieve the default value for a parameter, in case you forgot. The value is already
     /// normalized to `[0, 1]`. This is useful when implementing GUIs, and it does not perform a callback.
     pub fn default_normalized_param_value<P: Param>(&self, param: &P) -> f32 {
         unsafe {
-            self.context
+            self.raw_context
                 .raw_default_normalized_param_value(param.as_ptr())
         }
     }

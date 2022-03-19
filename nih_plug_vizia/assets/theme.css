@@ -1,1 +1,24 @@
 /* Default styling for the widgets included in nih_plug_vizia */
+
+param-slider {
+  height: 30px;
+  width: 180px;
+  border-color: #0a0a0a;
+  border-width: 1px;
+  background-color: transparent;
+  transition: background-color 0.1 0;
+}
+
+/* WTB Sass */
+param-slider:active {
+  background-color: #8080801a;
+  transition: background-color 0.1 0;
+}
+param-slider:hover {
+  background-color: #8080801a;
+  transition: background-color 0.1 0;
+}
+
+param-slider .fill {
+  background-color: #c4c4c4;
+}

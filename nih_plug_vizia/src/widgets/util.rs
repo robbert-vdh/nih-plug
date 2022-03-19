@@ -1,6 +1,6 @@
 //! Utilities for writing VIZIA widgets.
 
-use vizia::Modifiers;
+use vizia::{Context, Modifiers};
 
 /// An extension trait for [`Modifiers`] that adds platform-independent getters.
 pub trait ModifiersExt {
@@ -32,4 +32,22 @@ impl ModifiersExt for Modifiers {
     fn shift(&self) -> bool {
         self.contains(Modifiers::SHIFT)
     }
+}
+
+/// Remap an x-coordinate to a `[0, 1]` value within the current entity's bounding box. The value
+/// will be clamped to `[0, 1]` if it isn't already in that range.
+///
+/// FIXME: These functions probably include borders, we dont' want that
+pub fn remap_current_entity_x_coordinate(cx: &Context, x_coord: f32) -> f32 {
+    let x_pos = cx.cache.get_posx(cx.current);
+    let width = cx.cache.get_width(cx.current);
+    ((x_coord - x_pos) / width).clamp(0.0, 1.0)
+}
+
+/// Remap an y-coordinate to a `[0, 1]` value within the current entity's bounding box. The value
+/// will be clamped to `[0, 1]` if it isn't already in that range.
+pub fn remap_current_entity_y_coordinate(cx: &Context, y_coord: f32) -> f32 {
+    let y_pos = cx.cache.get_posy(cx.current);
+    let height = cx.cache.get_height(cx.current);
+    ((y_coord - y_pos) / height).clamp(0.0, 1.0)
 }

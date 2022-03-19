@@ -660,9 +660,9 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-channel"
-version = "0.5.3"
+version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fdbfe11fe19ff083c48923cf179540e8cd0535903dc35e178a1fdeeb59aef51f"
+checksum = "5aaa7bd5fb665c6864b5f963dd9097905c54125909c7aa94c9e18507cdbe6c53"
 dependencies = [
  "cfg-if 1.0.0",
  "crossbeam-utils",
@@ -3605,7 +3605,7 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 [[package]]
 name = "vizia"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#d8c36fcc91516492d5d43e43b77f2a64738d4d28"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#e65871171bbc0ef589a228497cf8a32624d979c8"
 dependencies = [
  "vizia_baseview",
  "vizia_core",
@@ -3614,7 +3614,7 @@ dependencies = [
 [[package]]
 name = "vizia_baseview"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#d8c36fcc91516492d5d43e43b77f2a64738d4d28"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#e65871171bbc0ef589a228497cf8a32624d979c8"
 dependencies = [
  "baseview",
  "femtovg",
@@ -3626,7 +3626,7 @@ dependencies = [
 [[package]]
 name = "vizia_core"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#d8c36fcc91516492d5d43e43b77f2a64738d4d28"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#e65871171bbc0ef589a228497cf8a32624d979c8"
 dependencies = [
  "bitflags",
  "copypasta",
@@ -3649,7 +3649,7 @@ dependencies = [
 [[package]]
 name = "vizia_derive"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#d8c36fcc91516492d5d43e43b77f2a64738d4d28"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#e65871171bbc0ef589a228497cf8a32624d979c8"
 dependencies = [
  "proc-macro2",
  "quote",
