@@ -14,7 +14,7 @@ use vizia::{Context, Model};
 mod param_slider;
 pub mod util;
 
-pub use param_slider::ParamSlider;
+pub use param_slider::{ParamSlider, ParamSliderExt, ParamSliderStyle};
 
 /// Register the default theme for the widgets exported by this module. This is automatically called
 /// for you when using [`create_vizia_editor()`][super::create_vizia_editor()].

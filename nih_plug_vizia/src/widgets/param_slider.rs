@@ -34,6 +34,18 @@ pub struct ParamSlider {
     granular_drag_start_x_value: Option<(f32, f32)>,
 }
 
+/// How the [`ParamSlider`] should display its values. Set this using
+/// [`ParamSliderExt::slider_style()`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Data)]
+pub enum ParamSliderStyle {
+    /// Visualize the offset from the default value for continuous parameters with a default value
+    /// at around half of its range, fill the bar from the left for discrete parameters and
+    /// continous parameters without centered default values.
+    Centered,
+    /// Always fill the bar starting from the left.
+    FromLeft,
+}
+
 enum ParamSliderEvent {
     /// Text input has been cancelled without submitting a new value.
     CancelTextInput,
@@ -45,21 +57,28 @@ enum ParamSliderEvent {
 #[derive(Lens)]
 // TODO: Lens requires everything to be marked as `pub`
 pub struct ParamSliderInternal {
+    /// What style to use for the slider.
+    style: ParamSliderStyle,
     /// Will be set to `true` when the field gets Alt+Click'ed which will replae the label with a
     /// text box.
     text_input_active: bool,
 }
 
 enum ParamSliderInternalEvent {
+    SetStyle(ParamSliderStyle),
     SetTextInputActive(bool),
 }
 
 impl Model for ParamSliderInternal {
     fn event(&mut self, cx: &mut Context, event: &mut Event) {
-        if let Some(ParamSliderInternalEvent::SetTextInputActive(value)) = event.message.downcast()
-        {
-            cx.current.set_active(cx, *value);
-            self.text_input_active = *value;
+        if let Some(param_slider_internal_event) = event.message.downcast() {
+            match param_slider_internal_event {
+                ParamSliderInternalEvent::SetStyle(style) => self.style = *style,
+                ParamSliderInternalEvent::SetTextInputActive(value) => {
+                    cx.current.set_active(cx, *value);
+                    self.text_input_active = *value;
+                }
+            }
         }
     }
 }
@@ -70,12 +89,14 @@ impl ParamSlider {
     /// the `Data` struct is used in `gain_gui_vizia`), the `ParamSetter` for retrieving the
     /// parameter's default value, and a projection function that maps the `Params` object to the
     /// parameter you want to display a widget for.
+    ///
+    /// See [`ParamSliderExt`] for additonal options.
     pub fn new<'a, L, Params, P, F>(
         cx: &'a mut Context,
         params: L,
         setter: &ParamSetter,
         params_to_param: F,
-    ) -> Handle<'a, Self>
+    ) -> Handle<'a, ParamSlider>
     where
         L: Lens<Target = Params> + Copy,
         F: 'static + Fn(&Params) -> &P + Copy,
@@ -98,7 +119,6 @@ impl ParamSlider {
         let step_count = *params
             .map(move |params| params_to_param(params).step_count())
             .get(cx);
-        let draw_fill_from_default = step_count.is_none() && (0.45..=0.55).contains(&default_value);
 
         Self {
             param_ptr,
@@ -109,70 +129,82 @@ impl ParamSlider {
         }
         .build2(cx, move |cx| {
             ParamSliderInternal {
+                style: ParamSliderStyle::Centered,
                 text_input_active: false,
             }
             .build(cx);
 
-            Binding::new(
-                cx,
-                ParamSliderInternal::text_input_active,
-                move |cx, text_input_active| {
-                    let param_display_value_lens =
-                        params.map(move |params| params_to_param(params).to_string());
-                    let normalized_param_value_lens =
-                        params.map(move |params| params_to_param(params).normalized_value());
+            Binding::new(cx, ParamSliderInternal::style, move |cx, style| {
+                let style = *style.get(cx);
+                let draw_fill_from_default = matches!(style, ParamSliderStyle::Centered)
+                    && step_count.is_none()
+                    && (0.45..=0.55).contains(&default_value);
 
-                    // Only draw the text input widget when it gets focussed. Otherwise, overlay the
-                    // label with the slider.
-                    if *text_input_active.get(cx) {
-                        Textbox::new(cx, param_display_value_lens)
-                            .class("value-entry")
-                            .on_submit(|cx, string| cx.emit(ParamSliderEvent::TextInput(string)))
-                            .on_focus_out(|cx| cx.emit(ParamSliderEvent::CancelTextInput))
-                            .child_space(Stretch(1.0))
-                            .height(Stretch(1.0))
-                            .width(Stretch(1.0));
-                    } else {
-                        ZStack::new(cx, move |cx| {
-                            // The filled bar portion
-                            Element::new(cx)
-                                .class("fill")
-                                .height(Stretch(1.0))
-                                .bind(normalized_param_value_lens, move |handle, value| {
-                                    let current_value = *value.get(handle.cx);
-                                    let (start_t, mut delta) = if draw_fill_from_default {
-                                        (
-                                            default_value.min(current_value),
-                                            (default_value - current_value).abs(),
-                                        )
-                                    } else {
-                                        (0.0, current_value)
-                                    };
+                Binding::new(
+                    cx,
+                    ParamSliderInternal::text_input_active,
+                    move |cx, text_input_active| {
+                        let param_display_value_lens =
+                            params.map(move |params| params_to_param(params).to_string());
+                        let normalized_param_value_lens =
+                            params.map(move |params| params_to_param(params).normalized_value());
 
-                                    // Don't draw the filled portion at all if it could have been a
-                                    // rounding error since those slivers just look weird
-                                    if delta < 1e-3 {
-                                        delta = 0.0;
-                                    }
-
-                                    handle
-                                        .left(Percentage(start_t * 100.0))
-                                        .width(Percentage(delta * 100.0));
+                        // Only draw the text input widget when it gets focussed. Otherwise, overlay the
+                        // label with the slider.
+                        if *text_input_active.get(cx) {
+                            Textbox::new(cx, param_display_value_lens)
+                                .class("value-entry")
+                                .on_submit(|cx, string| {
+                                    cx.emit(ParamSliderEvent::TextInput(string))
                                 })
-                                // Hovering is handled on the param slider as a whole, this should
-                                // not affect that
-                                .hoverable(false);
-
-                            Label::new(cx, param_display_value_lens)
-                                .class("value")
+                                .on_focus_out(|cx| cx.emit(ParamSliderEvent::CancelTextInput))
+                                .child_space(Stretch(1.0))
                                 .height(Stretch(1.0))
-                                .width(Stretch(1.0))
-                                .hoverable(false);
-                        })
-                        .hoverable(false);
-                    }
-                },
-            );
+                                .width(Stretch(1.0));
+                        } else {
+                            ZStack::new(cx, move |cx| {
+                                // The filled bar portion. This can be visualized in a couple different
+                                // ways depending on the current style property. See
+                                // [`ParamSliderStyle`].
+                                Element::new(cx)
+                                    .class("fill")
+                                    .height(Stretch(1.0))
+                                    .bind(normalized_param_value_lens, move |handle, value| {
+                                        let current_value = *value.get(handle.cx);
+                                        let (start_t, mut delta) = if draw_fill_from_default {
+                                            (
+                                                default_value.min(current_value),
+                                                (default_value - current_value).abs(),
+                                            )
+                                        } else {
+                                            (0.0, current_value)
+                                        };
+
+                                        // Don't draw the filled portion at all if it could have been a
+                                        // rounding error since those slivers just look weird
+                                        if delta < 1e-3 {
+                                            delta = 0.0;
+                                        }
+
+                                        handle
+                                            .left(Percentage(start_t * 100.0))
+                                            .width(Percentage(delta * 100.0));
+                                    })
+                                    // Hovering is handled on the param slider as a whole, this should
+                                    // not affect that
+                                    .hoverable(false);
+
+                                Label::new(cx, param_display_value_lens)
+                                    .class("value")
+                                    .height(Stretch(1.0))
+                                    .width(Stretch(1.0))
+                                    .hoverable(false);
+                            })
+                            .hoverable(false);
+                        }
+                    },
+                );
+            });
         })
     }
 
@@ -324,5 +356,24 @@ impl View for ParamSlider {
                 _ => {}
             }
         }
+    }
+}
+
+/// Extension methods for [`ParamSlider`] handles.
+pub trait ParamSliderExt {
+    /// Change how the [`ParamSlider`] visualizes the current value.
+    fn set_style(self, style: ParamSliderStyle) -> Self;
+}
+
+impl ParamSliderExt for Handle<'_, ParamSlider> {
+    fn set_style(self, style: ParamSliderStyle) -> Self {
+        self.cx.event_queue.push_back(
+            Event::new(ParamSliderInternalEvent::SetStyle(style))
+                .target(self.entity)
+                .origin(self.entity)
+                .propagate(Propagation::Subtree),
+        );
+
+        self
     }
 }
