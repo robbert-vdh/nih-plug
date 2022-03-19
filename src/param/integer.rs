@@ -95,7 +95,15 @@ impl Param for IntParam {
     }
 
     fn step_count(&self) -> Option<usize> {
-        self.range.step_count()
+        Some(self.range.step_count())
+    }
+
+    fn previous_step(&self, from: Self::Plain) -> Self::Plain {
+        (from - 1).clamp(self.range.min(), self.range.max())
+    }
+
+    fn next_step(&self, from: Self::Plain) -> Self::Plain {
+        (from + 1).clamp(self.range.min(), self.range.max())
     }
 
     fn plain_value(&self) -> Self::Plain {

@@ -30,8 +30,21 @@ pub trait Param: Display {
     /// Get the unit label for this parameter, if any.
     fn unit(&self) -> &'static str;
 
-    /// Get the number of steps for this paramter, if it is stepped. Used for the host's generic UI.
+    /// Get the number of steps for this paramter, if it is discrete. Used for the host's generic
+    /// UI.
     fn step_count(&self) -> Option<usize>;
+
+    /// Return the previous step from a specific value for this parameter. This can be the same as
+    /// `from` if the value is at the start of its range. This is mainly used for scroll wheel
+    /// interaction in plugin GUIs. When the parameter is not discrete then a step should cover one
+    /// hundredth of the normalized range instead.
+    fn previous_step(&self, from: Self::Plain) -> Self::Plain;
+
+    /// Return the next step from a specific value for this parameter. This can be the same as
+    /// `from` if the value is at the end of its range. This is mainly used for scroll wheel
+    /// interaction in plugin GUIs. When the parameter is not discrete then a step should cover one
+    /// hundredth of the normalized range instead.
+    fn next_step(&self, from: Self::Plain) -> Self::Plain;
 
     /// Get the unnormalized value for this parameter.
     fn plain_value(&self) -> Self::Plain;

@@ -118,6 +118,24 @@ impl FloatRange {
         }
     }
 
+    /// The minimum value in this range.
+    pub fn min(&self) -> f32 {
+        match self {
+            FloatRange::Linear { min, .. }
+            | FloatRange::Skewed { min, .. }
+            | FloatRange::SymmetricalSkewed { min, .. } => *min,
+        }
+    }
+
+    /// The maximum value in this range.
+    pub fn max(&self) -> f32 {
+        match self {
+            FloatRange::Linear { max, .. }
+            | FloatRange::Skewed { max, .. }
+            | FloatRange::SymmetricalSkewed { max, .. } => *max,
+        }
+    }
+
     /// Snap a vlue to a step size, clamping to the minimum and maximum value of the range.
     pub fn snap_to_step(&self, value: f32, step_size: f32) -> f32 {
         let (min, max) = match &self {
@@ -149,10 +167,24 @@ impl IntRange {
         }
     }
 
-    /// The number of steps in this range, if it is stepped. Used for the host's generic UI.
-    pub fn step_count(&self) -> Option<usize> {
+    /// The minimum value in this range.
+    pub fn min(&self) -> i32 {
         match self {
-            IntRange::Linear { min, max } => Some((max - min) as usize),
+            IntRange::Linear { min, .. } => *min,
+        }
+    }
+
+    /// The maximum value in this range.
+    pub fn max(&self) -> i32 {
+        match self {
+            IntRange::Linear { max, .. } => *max,
+        }
+    }
+
+    /// The number of steps in this range. Used for the host's generic UI.
+    pub fn step_count(&self) -> usize {
+        match self {
+            IntRange::Linear { min, max } => (max - min) as usize,
         }
     }
 }

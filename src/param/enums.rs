@@ -113,6 +113,14 @@ impl<T: Enum + PartialEq> Param for EnumParam<T> {
         self.inner.step_count()
     }
 
+    fn previous_step(&self, from: Self::Plain) -> Self::Plain {
+        T::from_index(self.inner.previous_step(T::to_index(from) as i32) as usize)
+    }
+
+    fn next_step(&self, from: Self::Plain) -> Self::Plain {
+        T::from_index(self.inner.next_step(T::to_index(from) as i32) as usize)
+    }
+
     fn plain_value(&self) -> Self::Plain {
         T::from_index(self.inner.plain_value() as usize)
     }
@@ -172,6 +180,14 @@ impl Param for EnumParamInner {
 
     fn step_count(&self) -> Option<usize> {
         Some(self.len() - 1)
+    }
+
+    fn previous_step(&self, from: Self::Plain) -> Self::Plain {
+        self.inner.previous_step(from)
+    }
+
+    fn next_step(&self, from: Self::Plain) -> Self::Plain {
+        self.inner.next_step(from)
     }
 
     fn plain_value(&self) -> Self::Plain {

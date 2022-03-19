@@ -107,6 +107,29 @@ impl Param for FloatParam {
         None
     }
 
+    fn previous_step(&self, from: Self::Plain) -> Self::Plain {
+        // This one's slightly more involved. We'll split the normalized range up into 100 segments,
+        // but if `self.step_size` is set then we'll use that. Ideally we might want to split the
+        // range up into at most 100 segments, falling back to the step size if the total number of
+        // steps would be smaller than that, but since ranges can be nonlienar that's a bit
+        // difficult to pull off.
+        // TODO: At some point, implement the above mentioned step size quantization
+        match self.step_size {
+            Some(step_size) => from - step_size,
+            None => self.preview_plain(self.preview_normalized(from) - 0.01),
+        }
+        .clamp(self.range.min(), self.range.max())
+    }
+
+    fn next_step(&self, from: Self::Plain) -> Self::Plain {
+        // See above
+        match self.step_size {
+            Some(step_size) => from + step_size,
+            None => self.preview_plain(self.preview_normalized(from) + 0.01),
+        }
+        .clamp(self.range.min(), self.range.max())
+    }
+
     fn plain_value(&self) -> Self::Plain {
         self.value
     }

@@ -66,6 +66,14 @@ impl Param for BoolParam {
         Some(1)
     }
 
+    fn previous_step(&self, _from: Self::Plain) -> Self::Plain {
+        false
+    }
+
+    fn next_step(&self, _from: Self::Plain) -> Self::Plain {
+        true
+    }
+
     fn plain_value(&self) -> Self::Plain {
         self.value
     }
