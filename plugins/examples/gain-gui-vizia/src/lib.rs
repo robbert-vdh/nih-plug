@@ -22,7 +22,7 @@ struct Gain {
 }
 
 #[derive(Params)]
-struct GainParams {
+pub struct GainParams {
     #[id = "gain"]
     pub gain: FloatParam,
 }

@@ -1,6 +1,7 @@
 use atomic_float::AtomicF32;
 use nih_plug::prelude::Editor;
 use nih_plug_vizia::vizia::*;
+use nih_plug_vizia::widgets::*;
 use nih_plug_vizia::{assets, create_vizia_editor, ViziaState};
 use std::pin::Pin;
 use std::sync::Arc;
@@ -12,6 +13,14 @@ const POINT_SCALE: f32 = 0.75;
 
 const STYLE: &str = r#""#;
 
+#[derive(Lens)]
+pub struct Data {
+    params: Pin<Arc<GainParams>>,
+    peak_meter: Arc<AtomicF32>,
+}
+
+impl Model for Data {}
+
 // Makes sense to also define this here, makes it a bit easier to keep track of
 pub(crate) fn default_state() -> Arc<ViziaState> {
     ViziaState::from_size(200, 150)
@@ -22,23 +31,29 @@ pub(crate) fn create(
     peak_meter: Arc<AtomicF32>,
     editor_state: Arc<ViziaState>,
 ) -> Option<Box<dyn Editor>> {
-    create_vizia_editor(editor_state, |cx, setter| {
+    create_vizia_editor(editor_state, move |cx, setter| {
         cx.add_theme(STYLE);
 
-        // NOTE: vizia's font rendering looks way too dark and thick. Going one font weight lower
-        //       seems to compensate for this.
-        assets::register_fonts(cx);
-        cx.set_default_font(assets::NOTO_SANS_LIGHT);
+        Data {
+            params: params.clone(),
+            peak_meter: peak_meter.clone(),
+        }
+        .build(cx);
 
-        VStack::new(cx, |cx| {
+        VStack::new(cx, move |cx| {
             Label::new(cx, "Gain GUI")
                 .font(assets::NOTO_SANS_THIN)
                 .font_size(40.0 * POINT_SCALE)
                 .height(Pixels(50.0))
                 .child_top(Stretch(1.0))
                 .child_bottom(Pixels(0.0));
-            Label::new(cx, "Gain");
+            Label::new(cx, "Gain").bottom(Pixels(-1.0));
+
+            ParamSlider::new(cx, Data::params, setter, |params| &params.gain);
+
+            // TODO: Add a peak meter
         })
+        .row_between(Pixels(0.0))
         .child_left(Stretch(1.0))
         .child_right(Stretch(1.0));
     })
