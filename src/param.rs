@@ -52,6 +52,18 @@ pub trait Param: Display {
     /// hundredth of the normalized range instead.
     fn next_step(&self, from: Self::Plain) -> Self::Plain;
 
+    /// The same as [`previous_step()`][Self::previous_step()], but for normalized values. This is
+    /// mostly useful for GUI widgets.
+    fn previous_normaliezd_step(&self, from: f32) -> f32 {
+        self.preview_normalized(self.previous_step(self.preview_plain(from)))
+    }
+
+    /// The same as [`next_step()`][Self::next_step()], but for normalized values. This is mostly
+    /// useful for GUI widgets.
+    fn next_normaliezd_step(&self, from: f32) -> f32 {
+        self.preview_normalized(self.next_step(self.preview_plain(from)))
+    }
+
     /// Set this parameter based on a plain, unnormalized value. This does **not** snap to step
     /// sizes for continuous parameters (i.e. [`FloatParam`]).
     ///
