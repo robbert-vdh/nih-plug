@@ -55,9 +55,10 @@ enum ParamSliderInternalEvent {
 }
 
 impl Model for ParamSliderInternal {
-    fn event(&mut self, _cx: &mut Context, event: &mut Event) {
+    fn event(&mut self, cx: &mut Context, event: &mut Event) {
         if let Some(ParamSliderInternalEvent::SetTextInputActive(value)) = event.message.downcast()
         {
+            cx.current.set_active(cx, *value);
             self.text_input_active = *value;
         }
     }

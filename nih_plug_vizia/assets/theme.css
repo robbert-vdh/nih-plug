@@ -23,3 +23,10 @@ param-slider:hover {
 param-slider .fill {
   background-color: #c4c4c4;
 }
+
+/* This is a textbox, but we want it to appear just like the label */
+param-slider .value-entry {
+  /* Vizia doesn't support the unset value */
+  background-color: transparent;
+  border-width: 0px;
+}
