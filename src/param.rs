@@ -30,6 +30,12 @@ pub trait Param: Display {
     /// Get the unit label for this parameter, if any.
     fn unit(&self) -> &'static str;
 
+    /// Get the unnormalized value for this parameter.
+    fn plain_value(&self) -> Self::Plain;
+
+    /// Get the normalized `[0, 1]` value for this parameter.
+    fn normalized_value(&self) -> f32;
+
     /// Get the number of steps for this paramter, if it is discrete. Used for the host's generic
     /// UI.
     fn step_count(&self) -> Option<usize>;
@@ -46,17 +52,11 @@ pub trait Param: Display {
     /// hundredth of the normalized range instead.
     fn next_step(&self, from: Self::Plain) -> Self::Plain;
 
-    /// Get the unnormalized value for this parameter.
-    fn plain_value(&self) -> Self::Plain;
-
     /// Set this parameter based on a plain, unnormalized value. This does **not** snap to step
     /// sizes for continuous parameters (i.e. [`FloatParam`]).
     ///
     /// This does **not** update the smoother.
     fn set_plain_value(&mut self, plain: Self::Plain);
-
-    /// Get the normalized `[0, 1]` value for this parameter.
-    fn normalized_value(&self) -> f32;
 
     /// Set this parameter based on a normalized value. This **does** snap to step sizes for
     /// continuous parameters (i.e. [`FloatParam`]).

@@ -109,6 +109,14 @@ impl<T: Enum + PartialEq> Param for EnumParam<T> {
         self.inner.unit()
     }
 
+    fn plain_value(&self) -> Self::Plain {
+        T::from_index(self.inner.plain_value() as usize)
+    }
+
+    fn normalized_value(&self) -> f32 {
+        self.inner.normalized_value()
+    }
+
     fn step_count(&self) -> Option<usize> {
         self.inner.step_count()
     }
@@ -121,16 +129,8 @@ impl<T: Enum + PartialEq> Param for EnumParam<T> {
         T::from_index(self.inner.next_step(T::to_index(from) as i32) as usize)
     }
 
-    fn plain_value(&self) -> Self::Plain {
-        T::from_index(self.inner.plain_value() as usize)
-    }
-
     fn set_plain_value(&mut self, plain: Self::Plain) {
         self.inner.set_plain_value(T::to_index(plain) as i32)
-    }
-
-    fn normalized_value(&self) -> f32 {
-        self.inner.normalized_value()
     }
 
     fn set_normalized_value(&mut self, normalized: f32) {
@@ -178,6 +178,14 @@ impl Param for EnumParamInner {
         ""
     }
 
+    fn plain_value(&self) -> Self::Plain {
+        self.inner.plain_value()
+    }
+
+    fn normalized_value(&self) -> f32 {
+        self.inner.normalized_value()
+    }
+
     fn step_count(&self) -> Option<usize> {
         Some(self.len() - 1)
     }
@@ -190,16 +198,8 @@ impl Param for EnumParamInner {
         self.inner.next_step(from)
     }
 
-    fn plain_value(&self) -> Self::Plain {
-        self.inner.plain_value()
-    }
-
     fn set_plain_value(&mut self, plain: Self::Plain) {
         self.inner.set_plain_value(plain)
-    }
-
-    fn normalized_value(&self) -> f32 {
-        self.inner.normalized_value()
     }
 
     fn set_normalized_value(&mut self, normalized: f32) {

@@ -103,6 +103,14 @@ impl Param for FloatParam {
         self.unit
     }
 
+    fn plain_value(&self) -> Self::Plain {
+        self.value
+    }
+
+    fn normalized_value(&self) -> f32 {
+        self.preview_normalized(self.value)
+    }
+
     fn step_count(&self) -> Option<usize> {
         None
     }
@@ -130,19 +138,11 @@ impl Param for FloatParam {
         .clamp(self.range.min(), self.range.max())
     }
 
-    fn plain_value(&self) -> Self::Plain {
-        self.value
-    }
-
     fn set_plain_value(&mut self, plain: Self::Plain) {
         self.value = plain;
         if let Some(f) = &self.value_changed {
             f(plain);
         }
-    }
-
-    fn normalized_value(&self) -> f32 {
-        self.preview_normalized(self.value)
     }
 
     fn set_normalized_value(&mut self, normalized: f32) {
