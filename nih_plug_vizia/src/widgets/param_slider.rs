@@ -47,6 +47,7 @@ pub enum ParamSliderStyle {
     /// Show the current step instead of filling a portion fothe bar, useful for discrete
     /// parameters.
     CurrentStep,
+    // TODO: A CurrentStepWithLabel that overlays the label over the step
 }
 
 enum ParamSliderEvent {
