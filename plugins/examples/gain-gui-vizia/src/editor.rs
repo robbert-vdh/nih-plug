@@ -47,6 +47,8 @@ pub(crate) fn create(
                 .height(Pixels(50.0))
                 .child_top(Stretch(1.0))
                 .child_bottom(Pixels(0.0));
+            // NOTE: VIZIA adds 1 pixel of additional height to these labels, so we'll need to
+            //       compensate for that
             Label::new(cx, "Gain").bottom(Pixels(-1.0));
 
             ParamSlider::new(cx, Data::params, setter, |params| &params.gain);
