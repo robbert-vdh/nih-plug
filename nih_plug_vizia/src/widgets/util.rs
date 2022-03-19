@@ -1,6 +1,6 @@
 //! Utilities for writing VIZIA widgets.
 
-use vizia::{Context, Modifiers};
+use vizia::{Context, Modifiers, PropGet};
 
 /// An extension trait for [`Modifiers`] that adds platform-independent getters.
 pub trait ModifiersExt {
@@ -35,19 +35,25 @@ impl ModifiersExt for Modifiers {
 }
 
 /// Remap an x-coordinate to a `[0, 1]` value within the current entity's bounding box. The value
-/// will be clamped to `[0, 1]` if it isn't already in that range.
-///
-/// FIXME: These functions probably include borders, we dont' want that
+/// will be clamped to `[0, 1]` if it isn't already in that range. This ignores the border width.
 pub fn remap_current_entity_x_coordinate(cx: &Context, x_coord: f32) -> f32 {
-    let x_pos = cx.cache.get_posx(cx.current);
-    let width = cx.cache.get_width(cx.current);
+    let border_width = match cx.current.get_border_width(cx) {
+        vizia::Units::Pixels(x) => x,
+        _ => 0.0,
+    };
+    let x_pos = cx.cache.get_posx(cx.current) + border_width;
+    let width = cx.cache.get_width(cx.current) - (border_width * 2.0);
     ((x_coord - x_pos) / width).clamp(0.0, 1.0)
 }
 
 /// Remap an y-coordinate to a `[0, 1]` value within the current entity's bounding box. The value
-/// will be clamped to `[0, 1]` if it isn't already in that range.
+/// will be clamped to `[0, 1]` if it isn't already in that range. This ignores the border width.
 pub fn remap_current_entity_y_coordinate(cx: &Context, y_coord: f32) -> f32 {
-    let y_pos = cx.cache.get_posy(cx.current);
-    let height = cx.cache.get_height(cx.current);
+    let border_width = match cx.current.get_border_width(cx) {
+        vizia::Units::Pixels(x) => x,
+        _ => 0.0,
+    };
+    let y_pos = cx.cache.get_posy(cx.current) + border_width;
+    let height = cx.cache.get_height(cx.current) - (border_width * 2.0);
     ((y_coord - y_pos) / height).clamp(0.0, 1.0)
 }
