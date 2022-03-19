@@ -9,7 +9,8 @@ param-slider {
   transition: background-color 0.1 0;
 }
 
-/* WTB Sass */
+/* Vizia doesn't support commas in selectors */
+/* Also, WTB Sass */
 param-slider:active {
   background-color: #8080801a;
   transition: background-color 0.1 0;

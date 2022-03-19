@@ -14,6 +14,7 @@ const POINT_SCALE: f32 = 0.75;
 const STYLE: &str = r#""#;
 
 #[derive(Lens)]
+// TODO: Lens requires everything to be marked as `pub`
 pub struct Data {
     params: Pin<Arc<GainParams>>,
     peak_meter: Arc<AtomicF32>,

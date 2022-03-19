@@ -16,7 +16,7 @@ const GRANULAR_DRAG_MULTIPLIER: f32 = 0.1;
 /// TODO: Handle scrolling for steps (and shift+scroll for smaller steps?)
 /// TODO: We may want to add a couple dedicated event handlers if it seems like those would be
 ///       useful, having a completely self contained widget is perfectly fine for now though
-/// TODO: Implement ALt+Click text input in this version
+/// TODO: Text entry doesn't work correctly yet because vizia's still missing some functionality
 pub struct ParamSlider {
     // We're not allowed to store a reference to the parameter internally, at least not in the
     // struct that implements [`View`]
@@ -34,6 +34,35 @@ pub struct ParamSlider {
     granular_drag_start_x_value: Option<(f32, f32)>,
 }
 
+enum ParamSliderEvent {
+    /// Text input has been cancelled without submitting a new value.
+    CancelTextInput,
+    /// A new value has been sent by the text input dialog after pressint Enter.
+    TextInput(String),
+}
+
+/// Internal param slider state the view needs to react to.
+#[derive(Lens)]
+// TODO: Lens requires everything to be marked as `pub`
+pub struct ParamSliderInternal {
+    /// Will be set to `true` when the field gets Alt+Click'ed which will replae the label with a
+    /// text box.
+    text_input_active: bool,
+}
+
+enum ParamSliderInternalEvent {
+    SetTextInputActive(bool),
+}
+
+impl Model for ParamSliderInternal {
+    fn event(&mut self, _cx: &mut Context, event: &mut Event) {
+        if let Some(ParamSliderInternalEvent::SetTextInputActive(value)) = event.message.downcast()
+        {
+            self.text_input_active = *value;
+        }
+    }
+}
+
 impl ParamSlider {
     /// Creates a new [`ParamSlider`] for the given parameter. To accomdate VIZIA's mapping system,
     /// you'll need to provide a lens containing your `Params` implementation object (check out how
@@ -47,25 +76,17 @@ impl ParamSlider {
         params_to_param: F,
     ) -> Handle<'a, Self>
     where
-        L: Lens<Target = Params>,
+        L: Lens<Target = Params> + Copy,
         F: 'static + Fn(&Params) -> &P + Copy,
         Params: 'static,
         P: Param,
     {
-        let param_display_value_lens = params
-            .clone()
-            .map(move |params| params_to_param(params).to_string());
-        let normalized_param_value_lens = params
-            .clone()
-            .map(move |params| params_to_param(params).normalized_value());
-
         // We'll visualize the difference between the current value and the default value if the
         // default value lies somewhere in the middle and the parameter is continuous. Otherwise
         // this appraoch looks a bit jarring.
         // We need to do a bit of a nasty and erase the lifetime bound by going through the raw
         // GuiContext and a ParamPtr.
         let param_ptr = *params
-            .clone()
             .map(move |params| params_to_param(params).as_ptr())
             .get(cx);
         let default_value = unsafe {
@@ -85,35 +106,72 @@ impl ParamSlider {
             is_double_click: false,
             granular_drag_start_x_value: None,
         }
-        .build2(cx, |cx| {
-            ZStack::new(cx, move |cx| {
-                // The filled bar portion
-                Element::new(cx).class("fill").height(Stretch(1.0)).bind(
-                    normalized_param_value_lens,
-                    move |handle, value| {
-                        let current_value = *value.get(handle.cx);
-                        if draw_fill_from_default {
-                            handle
-                                .left(Percentage(default_value.min(current_value) * 100.0))
-                                .right(Percentage(
-                                    100.0 - (default_value.max(current_value) * 100.0),
-                                ));
-                        } else {
-                            handle
-                                .left(Percentage(0.0))
-                                .right(Percentage(100.0 - (current_value * 100.0)));
-                        }
-                    },
-                );
+        .build2(cx, move |cx| {
+            ParamSliderInternal {
+                text_input_active: false,
+            }
+            .build(cx);
 
-                // Only draw the text input widget when it gets focussed. Otherwise, overlay the label with
-                // the slider.
-                // TODO: Text entry stuff
-                Label::new(cx, param_display_value_lens)
-                    .class("value")
-                    .height(Stretch(1.0))
-                    .width(Stretch(1.0));
-            });
+            Binding::new(
+                cx,
+                ParamSliderInternal::text_input_active,
+                move |cx, text_input_active| {
+                    let param_display_value_lens =
+                        params.map(move |params| params_to_param(params).to_string());
+                    let normalized_param_value_lens =
+                        params.map(move |params| params_to_param(params).normalized_value());
+
+                    // Only draw the text input widget when it gets focussed. Otherwise, overlay the
+                    // label with the slider.
+                    if *text_input_active.get(cx) {
+                        Textbox::new(cx, param_display_value_lens)
+                            .class("value-entry")
+                            .on_submit(|cx, string| cx.emit(ParamSliderEvent::TextInput(string)))
+                            .on_focus_out(|cx| cx.emit(ParamSliderEvent::CancelTextInput))
+                            .child_space(Stretch(1.0))
+                            .height(Stretch(1.0))
+                            .width(Stretch(1.0));
+                    } else {
+                        ZStack::new(cx, move |cx| {
+                            // The filled bar portion
+                            Element::new(cx)
+                                .class("fill")
+                                .height(Stretch(1.0))
+                                .bind(normalized_param_value_lens, move |handle, value| {
+                                    let current_value = *value.get(handle.cx);
+                                    let (start_t, mut delta) = if draw_fill_from_default {
+                                        (
+                                            default_value.min(current_value),
+                                            (default_value - current_value).abs(),
+                                        )
+                                    } else {
+                                        (0.0, current_value)
+                                    };
+
+                                    // Don't draw the filled portion at all if it could have been a
+                                    // rounding error since those slivers just look weird
+                                    if delta < 1e-3 {
+                                        delta = 0.0;
+                                    }
+
+                                    handle
+                                        .left(Percentage(start_t * 100.0))
+                                        .width(Percentage(delta * 100.0));
+                                })
+                                // Hovering is handled on the param slider as a whole, this should
+                                // not affect that
+                                .hoverable(false);
+
+                            Label::new(cx, param_display_value_lens)
+                                .class("value")
+                                .height(Stretch(1.0))
+                                .width(Stretch(1.0))
+                                .hoverable(false);
+                        })
+                        .hoverable(false);
+                    }
+                },
+            );
         })
     }
 
@@ -144,15 +202,38 @@ impl View for ParamSlider {
     }
 
     fn event(&mut self, cx: &mut Context, event: &mut Event) {
+        if let Some(param_slider_event) = event.message.downcast() {
+            match param_slider_event {
+                ParamSliderEvent::CancelTextInput => {
+                    cx.emit(ParamSliderInternalEvent::SetTextInputActive(false))
+                }
+                ParamSliderEvent::TextInput(string) => {
+                    if let Some(normalized_value) =
+                        unsafe { self.param_ptr.string_to_normalized_value(string) }
+                    {
+                        cx.emit(RawParamEvent::BeginSetParameter(self.param_ptr));
+                        self.set_normalized_value(cx, normalized_value);
+                        cx.emit(RawParamEvent::EndSetParameter(self.param_ptr));
+                    }
+
+                    cx.emit(ParamSliderInternalEvent::SetTextInputActive(false))
+                }
+            }
+        }
+
         if let Some(window_event) = event.message.downcast() {
             match window_event {
                 WindowEvent::MouseDown(MouseButton::Left) => {
-                    // Ctrl+Click and double click should reset the parameter instead of initiating
-                    // a drag operation
-                    // TODO: Handle Alt+Click for text entry
-                    if cx.modifiers.command() || self.is_double_click {
-                        self.is_double_click = false;
-
+                    if cx.modifiers.alt() {
+                        cx.emit(ParamSliderInternalEvent::SetTextInputActive(true));
+                        // TODO: Once vizia implements it: (and probably do this from
+                        //       `SetTextInputActive`)
+                        //       - Focus the text box
+                        //       - Select all text
+                        //       - Move the caret to the end
+                    } else if cx.modifiers.command() || self.is_double_click {
+                        // Ctrl+Click and double click should reset the parameter instead of initiating
+                        // a drag operation
                         cx.emit(RawParamEvent::BeginSetParameter(self.param_ptr));
                         cx.emit(RawParamEvent::ResetParameter(self.param_ptr));
                         cx.emit(RawParamEvent::EndSetParameter(self.param_ptr));
@@ -178,6 +259,10 @@ impl View for ParamSlider {
                             );
                         }
                     }
+
+                    // We'll set this here because weird things like Alt+double click should not
+                    // cause the next click to become a reset
+                    self.is_double_click = false;
                 }
                 WindowEvent::MouseDoubleClick(MouseButton::Left) => {
                     // Vizia will send a regular mouse down after this, so we'll handle the reset
