@@ -54,13 +54,13 @@ pub trait Param: Display {
 
     /// The same as [`previous_step()`][Self::previous_step()], but for normalized values. This is
     /// mostly useful for GUI widgets.
-    fn previous_normaliezd_step(&self, from: f32) -> f32 {
+    fn previous_normalized_step(&self, from: f32) -> f32 {
         self.preview_normalized(self.previous_step(self.preview_plain(from)))
     }
 
     /// The same as [`next_step()`][Self::next_step()], but for normalized values. This is mostly
     /// useful for GUI widgets.
-    fn next_normaliezd_step(&self, from: f32) -> f32 {
+    fn next_normalized_step(&self, from: f32) -> f32 {
         self.preview_normalized(self.next_step(self.preview_plain(from)))
     }
 

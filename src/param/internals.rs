@@ -149,8 +149,8 @@ impl ParamPtr {
     param_ptr_forward!(pub unsafe fn unit(&self) -> &'static str);
     param_ptr_forward!(pub unsafe fn normalized_value(&self) -> f32);
     param_ptr_forward!(pub unsafe fn step_count(&self) -> Option<usize>);
-    param_ptr_forward!(pub unsafe fn previous_normaliezd_step(&self, from: f32) -> f32);
-    param_ptr_forward!(pub unsafe fn next_normaliezd_step(&self, from: f32) -> f32);
+    param_ptr_forward!(pub unsafe fn previous_normalized_step(&self, from: f32) -> f32);
+    param_ptr_forward!(pub unsafe fn next_normalized_step(&self, from: f32) -> f32);
     param_ptr_forward!(pub unsafe fn set_normalized_value(&self, normalized: f32));
     param_ptr_forward!(pub unsafe fn update_smoother(&self, sample_rate: f32, reset: bool));
     param_ptr_forward!(pub unsafe fn initialize_block_smoother(&mut self, max_block_size: usize));
