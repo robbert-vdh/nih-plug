@@ -47,7 +47,9 @@ pub enum ParamSliderStyle {
     /// Show the current step instead of filling a portion fothe bar, useful for discrete
     /// parameters.
     CurrentStep,
-    // TODO: A CurrentStepWithLabel that overlays the label over the step
+    /// The same as `CurrentStep`, but overlay the labels over the steps instead of showing the
+    /// active value. Only useful for discrete parameters with two, maybe three possible values.
+    CurrentStepLabeled,
 }
 
 enum ParamSliderEvent {
@@ -150,6 +152,12 @@ impl ParamSlider {
                     move |cx, text_input_active| {
                         let param_display_value_lens =
                             params.map(move |params| params_to_param(params).to_string());
+                        let param_preview_display_value_lens = |normalized_value| {
+                            params.map(move |params| {
+                                params_to_param(params)
+                                    .normalized_value_to_string(normalized_value, true)
+                            })
+                        };
                         let normalized_param_value_lens =
                             params.map(move |params| params_to_param(params).normalized_value());
 
@@ -189,7 +197,8 @@ impl ParamSlider {
                                             }
                                             ParamSliderStyle::Centered
                                             | ParamSliderStyle::FromLeft => (0.0, current_value),
-                                            ParamSliderStyle::CurrentStep => {
+                                            ParamSliderStyle::CurrentStep
+                                            | ParamSliderStyle::CurrentStepLabeled => {
                                                 let previous_step = unsafe {
                                                     param_ptr
                                                         .previous_normalized_step(current_value)
@@ -212,11 +221,42 @@ impl ParamSlider {
                                     // not affect that
                                     .hoverable(false);
 
-                                Label::new(cx, param_display_value_lens)
-                                    .class("value")
-                                    .height(Stretch(1.0))
-                                    .width(Stretch(1.0))
-                                    .hoverable(false);
+                                // Either display the current value, or display all values over the
+                                // parameter's steps
+                                match (style, step_count) {
+                                    (ParamSliderStyle::CurrentStepLabeled, Some(step_count)) => {
+                                        HStack::new(cx, |cx| {
+                                            // There are step_count + 1 possible values for a
+                                            // discrete parameter
+                                            for value in 0..step_count + 1 {
+                                                let normalized_value =
+                                                    value as f32 / step_count as f32;
+                                                Label::new(
+                                                    cx,
+                                                    param_preview_display_value_lens(
+                                                        normalized_value,
+                                                    ),
+                                                )
+                                                .class("value")
+                                                .class("value--multiple")
+                                                .height(Stretch(1.0))
+                                                .width(Stretch(1.0))
+                                                .hoverable(false);
+                                            }
+                                        })
+                                        .height(Stretch(1.0))
+                                        .width(Stretch(1.0))
+                                        .hoverable(false);
+                                    }
+                                    _ => {
+                                        Label::new(cx, param_display_value_lens)
+                                            .class("value")
+                                            .class("value--single")
+                                            .height(Stretch(1.0))
+                                            .width(Stretch(1.0))
+                                            .hoverable(false);
+                                    }
+                                };
                             })
                             .hoverable(false);
                         }
