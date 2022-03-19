@@ -44,6 +44,9 @@ pub enum ParamSliderStyle {
     Centered,
     /// Always fill the bar starting from the left.
     FromLeft,
+    /// Show the current step instead of filling a portion fothe bar, useful for discrete
+    /// parameters.
+    CurrentStep,
 }
 
 enum ParamSliderEvent {
@@ -171,20 +174,34 @@ impl ParamSlider {
                                     .height(Stretch(1.0))
                                     .bind(normalized_param_value_lens, move |handle, value| {
                                         let current_value = *value.get(handle.cx);
-                                        let (start_t, mut delta) = if draw_fill_from_default {
-                                            (
-                                                default_value.min(current_value),
-                                                (default_value - current_value).abs(),
-                                            )
-                                        } else {
-                                            (0.0, current_value)
+                                        let (start_t, delta) = match style {
+                                            ParamSliderStyle::Centered
+                                                if draw_fill_from_default =>
+                                            {
+                                                let delta = (default_value - current_value).abs();
+                                                (
+                                                    default_value.min(current_value),
+                                                    // Don't draw the filled portion at all if it could have been a
+                                                    // rounding error since those slivers just look weird
+                                                    if delta >= 1e-3 { delta } else { 0.0 },
+                                                )
+                                            }
+                                            ParamSliderStyle::Centered
+                                            | ParamSliderStyle::FromLeft => (0.0, current_value),
+                                            ParamSliderStyle::CurrentStep => {
+                                                let previous_step = unsafe {
+                                                    param_ptr
+                                                        .previous_normalized_step(current_value)
+                                                };
+                                                let next_step = unsafe {
+                                                    param_ptr.next_normalized_step(current_value)
+                                                };
+                                                (
+                                                    (previous_step + current_value) / 2.0,
+                                                    (next_step + current_value) / 2.0,
+                                                )
+                                            }
                                         };
-
-                                        // Don't draw the filled portion at all if it could have been a
-                                        // rounding error since those slivers just look weird
-                                        if delta < 1e-3 {
-                                            delta = 0.0;
-                                        }
 
                                         handle
                                             .left(Percentage(start_t * 100.0))
