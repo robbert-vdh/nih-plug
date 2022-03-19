@@ -143,7 +143,6 @@ impl View for ParamSlider {
 
     fn event(&mut self, cx: &mut Context, event: &mut Event) {
         if let Some(window_event) = event.message.downcast() {
-            // FIXME: Handle shift releasing, I don't see an event for that here
             match window_event {
                 WindowEvent::MouseDown(MouseButton::Left) => {
                     // Ctrl+Click and double click should reset the parameter instead of initiating
@@ -158,6 +157,8 @@ impl View for ParamSlider {
                     } else {
                         self.drag_active = true;
                         cx.capture();
+                        // NOTE: Otherwise we don't get key up events
+                        cx.focused = cx.current;
                         cx.current.set_active(cx, true);
 
                         // When holding down shift while clicking on a parameter we want to
@@ -211,6 +212,17 @@ impl View for ParamSlider {
                                 util::remap_current_entity_x_coordinate(cx, *x),
                             );
                         }
+                    }
+                }
+                WindowEvent::KeyUp(_, Some(Key::Shift)) => {
+                    // If this happens while dragging, snap back to reality uh I mean the current screen
+                    // position
+                    if self.drag_active && self.granular_drag_start_x.is_some() {
+                        self.granular_drag_start_x = None;
+                        self.set_normalized_value(
+                            cx,
+                            util::remap_current_entity_x_coordinate(cx, cx.mouse.cursorx),
+                        );
                     }
                 }
                 _ => {}
