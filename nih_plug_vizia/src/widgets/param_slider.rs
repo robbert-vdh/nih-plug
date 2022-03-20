@@ -307,7 +307,10 @@ impl View for ParamSlider {
             match window_event {
                 WindowEvent::MouseDown(MouseButton::Left) => {
                     if cx.modifiers.alt() {
+                        // ALt+Click brings up a text entry dialog
                         cx.emit(ParamSliderInternalEvent::SetTextInputActive(true));
+                        cx.current.set_active(cx, true);
+
                         // TODO: Once vizia implements it: (and probably do this from
                         //       `SetTextInputActive`)
                         //       - Focus the text box

@@ -24,7 +24,7 @@ impl Model for Data {}
 
 // Makes sense to also define this here, makes it a bit easier to keep track of
 pub(crate) fn default_state() -> Arc<ViziaState> {
-    ViziaState::from_size(200, 150)
+    ViziaState::from_size(200, 250)
 }
 
 pub(crate) fn create(
@@ -41,7 +41,7 @@ pub(crate) fn create(
         }
         .build(cx);
 
-        VStack::new(cx, move |cx| {
+        VStack::new(cx, |cx| {
             Label::new(cx, "Gain GUI")
                 .font(assets::NOTO_SANS_THIN)
                 .font_size(40.0 * POINT_SCALE)
@@ -52,7 +52,17 @@ pub(crate) fn create(
             //       compensate for that
             Label::new(cx, "Gain").bottom(Pixels(-1.0));
 
-            ParamSlider::new(cx, Data::params, setter, |params| &params.gain);
+            VStack::new(cx, |cx| {
+                ParamSlider::new(cx, Data::params, setter, |params| &params.gain);
+                ParamSlider::new(cx, Data::params, setter, |params| &params.gain)
+                    .set_style(ParamSliderStyle::FromLeft);
+                ParamSlider::new(cx, Data::params, setter, |params| &params.foo);
+                ParamSlider::new(cx, Data::params, setter, |params| &params.foo)
+                    .set_style(ParamSliderStyle::CurrentStep);
+                ParamSlider::new(cx, Data::params, setter, |params| &params.foo)
+                    .set_style(ParamSliderStyle::CurrentStepLabeled);
+            })
+            .row_between(Pixels(5.0));
 
             // TODO: Add a peak meter
         })
