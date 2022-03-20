@@ -146,122 +146,113 @@ impl ParamSlider {
                     && step_count.is_none()
                     && (0.45..=0.55).contains(&default_value);
 
-                Binding::new(
-                    cx,
-                    ParamSliderInternal::text_input_active,
-                    move |cx, text_input_active| {
-                        let param_display_value_lens =
-                            params.map(move |params| params_to_param(params).to_string());
-                        let param_preview_display_value_lens = |normalized_value| {
-                            params.map(move |params| {
-                                params_to_param(params)
-                                    .normalized_value_to_string(normalized_value, true)
-                            })
-                        };
-                        let normalized_param_value_lens =
-                            params.map(move |params| params_to_param(params).normalized_value());
+                let param_display_value_lens =
+                    params.map(move |params| params_to_param(params).to_string());
+                let param_preview_display_value_lens = |normalized_value| {
+                    params.map(move |params| {
+                        params_to_param(params).normalized_value_to_string(normalized_value, true)
+                    })
+                };
+                let normalized_param_value_lens =
+                    params.map(move |params| params_to_param(params).normalized_value());
 
-                        // Only draw the text input widget when it gets focussed. Otherwise, overlay the
-                        // label with the slider.
-                        if *text_input_active.get(cx) {
-                            Textbox::new(cx, param_display_value_lens)
-                                .class("value-entry")
-                                .on_submit(|cx, string| {
-                                    cx.emit(ParamSliderEvent::TextInput(string))
-                                })
-                                .on_focus_out(|cx| cx.emit(ParamSliderEvent::CancelTextInput))
-                                .child_space(Stretch(1.0))
-                                .height(Stretch(1.0))
-                                .width(Stretch(1.0));
-                        } else {
-                            ZStack::new(cx, move |cx| {
-                                // The filled bar portion. This can be visualized in a couple different
-                                // ways depending on the current style property. See
-                                // [`ParamSliderStyle`].
-                                Element::new(cx)
-                                    .class("fill")
+                // Only draw the text input widget when it gets focussed. Otherwise, overlay the
+                // label with the slider. We need to always include the text input widget in the
+                // tree because using a `Binding` here would cause the text box to get recreated
+                // whenever `ParamSliderInternal::text_input_active` changes.
+                Textbox::new(cx, param_display_value_lens.clone())
+                    .class("value-entry")
+                    .on_submit(|cx, string| cx.emit(ParamSliderEvent::TextInput(string)))
+                    .on_focus_out(|cx| cx.emit(ParamSliderEvent::CancelTextInput))
+                    .display(ParamSliderInternal::text_input_active)
+                    .child_space(Stretch(1.0))
+                    .height(Stretch(1.0))
+                    .width(Stretch(1.0));
+
+                // This only gets shown when the text box isn't active
+                ZStack::new(cx, move |cx| {
+                    // The filled bar portion. This can be visualized in a couple different
+                    // ways depending on the current style property. See
+                    // [`ParamSliderStyle`].
+                    Element::new(cx)
+                        .class("fill")
+                        .height(Stretch(1.0))
+                        .bind(normalized_param_value_lens, move |handle, value| {
+                            let current_value = *value.get(handle.cx);
+                            let (start_t, delta) = match style {
+                                ParamSliderStyle::Centered if draw_fill_from_default => {
+                                    let delta = (default_value - current_value).abs();
+                                    (
+                                        default_value.min(current_value),
+                                        // Don't draw the filled portion at all if it could have been a
+                                        // rounding error since those slivers just look weird
+                                        if delta >= 1e-3 { delta } else { 0.0 },
+                                    )
+                                }
+                                ParamSliderStyle::Centered | ParamSliderStyle::FromLeft => {
+                                    (0.0, current_value)
+                                }
+                                ParamSliderStyle::CurrentStep
+                                | ParamSliderStyle::CurrentStepLabeled => {
+                                    let previous_step = unsafe {
+                                        param_ptr.previous_normalized_step(current_value)
+                                    };
+                                    let next_step =
+                                        unsafe { param_ptr.next_normalized_step(current_value) };
+                                    (
+                                        (previous_step + current_value) / 2.0,
+                                        (next_step + current_value) / 2.0,
+                                    )
+                                }
+                            };
+
+                            handle
+                                .left(Percentage(start_t * 100.0))
+                                .width(Percentage(delta * 100.0));
+                        })
+                        // Hovering is handled on the param slider as a whole, this should
+                        // not affect that
+                        .hoverable(false);
+
+                    // Either display the current value, or display all values over the
+                    // parameter's steps
+                    // TODO: Do the same thing as in the iced widget where we draw the
+                    //       text overlapping the fill area slightly differently. We can
+                    //       set the cip region directly in vizia.
+                    match (style, step_count) {
+                        (ParamSliderStyle::CurrentStepLabeled, Some(step_count)) => {
+                            HStack::new(cx, |cx| {
+                                // There are step_count + 1 possible values for a
+                                // discrete parameter
+                                for value in 0..step_count + 1 {
+                                    let normalized_value = value as f32 / step_count as f32;
+                                    Label::new(
+                                        cx,
+                                        param_preview_display_value_lens(normalized_value),
+                                    )
+                                    .class("value")
+                                    .class("value--multiple")
                                     .height(Stretch(1.0))
-                                    .bind(normalized_param_value_lens, move |handle, value| {
-                                        let current_value = *value.get(handle.cx);
-                                        let (start_t, delta) = match style {
-                                            ParamSliderStyle::Centered
-                                                if draw_fill_from_default =>
-                                            {
-                                                let delta = (default_value - current_value).abs();
-                                                (
-                                                    default_value.min(current_value),
-                                                    // Don't draw the filled portion at all if it could have been a
-                                                    // rounding error since those slivers just look weird
-                                                    if delta >= 1e-3 { delta } else { 0.0 },
-                                                )
-                                            }
-                                            ParamSliderStyle::Centered
-                                            | ParamSliderStyle::FromLeft => (0.0, current_value),
-                                            ParamSliderStyle::CurrentStep
-                                            | ParamSliderStyle::CurrentStepLabeled => {
-                                                let previous_step = unsafe {
-                                                    param_ptr
-                                                        .previous_normalized_step(current_value)
-                                                };
-                                                let next_step = unsafe {
-                                                    param_ptr.next_normalized_step(current_value)
-                                                };
-                                                (
-                                                    (previous_step + current_value) / 2.0,
-                                                    (next_step + current_value) / 2.0,
-                                                )
-                                            }
-                                        };
-
-                                        handle
-                                            .left(Percentage(start_t * 100.0))
-                                            .width(Percentage(delta * 100.0));
-                                    })
-                                    // Hovering is handled on the param slider as a whole, this should
-                                    // not affect that
+                                    .width(Stretch(1.0))
                                     .hoverable(false);
-
-                                // Either display the current value, or display all values over the
-                                // parameter's steps
-                                match (style, step_count) {
-                                    (ParamSliderStyle::CurrentStepLabeled, Some(step_count)) => {
-                                        HStack::new(cx, |cx| {
-                                            // There are step_count + 1 possible values for a
-                                            // discrete parameter
-                                            for value in 0..step_count + 1 {
-                                                let normalized_value =
-                                                    value as f32 / step_count as f32;
-                                                Label::new(
-                                                    cx,
-                                                    param_preview_display_value_lens(
-                                                        normalized_value,
-                                                    ),
-                                                )
-                                                .class("value")
-                                                .class("value--multiple")
-                                                .height(Stretch(1.0))
-                                                .width(Stretch(1.0))
-                                                .hoverable(false);
-                                            }
-                                        })
-                                        .height(Stretch(1.0))
-                                        .width(Stretch(1.0))
-                                        .hoverable(false);
-                                    }
-                                    _ => {
-                                        Label::new(cx, param_display_value_lens)
-                                            .class("value")
-                                            .class("value--single")
-                                            .height(Stretch(1.0))
-                                            .width(Stretch(1.0))
-                                            .hoverable(false);
-                                    }
-                                };
+                                }
                             })
+                            .height(Stretch(1.0))
+                            .width(Stretch(1.0))
                             .hoverable(false);
                         }
-                    },
-                );
+                        _ => {
+                            Label::new(cx, param_display_value_lens)
+                                .class("value")
+                                .class("value--single")
+                                .height(Stretch(1.0))
+                                .width(Stretch(1.0))
+                                .hoverable(false);
+                        }
+                    };
+                })
+                .display(ParamSliderInternal::text_input_active.map(|active| !active))
+                .hoverable(false);
             });
         })
     }
