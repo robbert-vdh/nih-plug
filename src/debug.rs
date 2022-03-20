@@ -54,7 +54,7 @@ macro_rules! nih_debug_assert_eq {
             nih_log!(concat!("Debug assertion failed: ", stringify!($left), " != ", stringify!($right)));
         }
     );
-    (left:expr, $right:expr, $format:expr $(, $($args:tt)*)?) => (
+    ($left:expr, $right:expr, $format:expr $(, $($args:tt)*)?) => (
         if cfg!(debug_assertions) && $left != $right  {
             nih_log!(concat!("Debug assertion failed: ", stringify!($left), " != ", stringify!($right), ", ", $format), $($($args)*)?);
         }
@@ -70,7 +70,7 @@ macro_rules! nih_debug_assert_ne {
             nih_log!(concat!("Debug assertion failed: ", stringify!($left), " == ", stringify!($right)));
         }
     );
-    (left:expr, $right:expr, $format:expr $(, $($args:tt)*)?) => (
+    ($left:expr, $right:expr, $format:expr $(, $($args:tt)*)?) => (
         if cfg!(debug_assertions) && $left == $right  {
             nih_log!(concat!("Debug assertion failed: ", stringify!($left), " == ", stringify!($right), ", ", $format), $($($args)*)?);
         }
