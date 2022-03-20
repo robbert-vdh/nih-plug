@@ -135,7 +135,7 @@ pub trait Plugin: Default + Send + Sync + 'static {
     /// this function with the same maximum block size first before calling
     /// [`Smoother::next_block()`][crate::prelude::Smoother::next_block()].
     fn initialize_block_smoothers(&mut self, max_block_size: usize) {
-        for param in self.params().param_map().values_mut() {
+        for (_, mut param, _) in self.params().param_map() {
             unsafe { param.initialize_block_smoother(max_block_size) };
         }
     }

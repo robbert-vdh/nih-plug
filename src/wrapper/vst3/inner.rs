@@ -2,7 +2,7 @@ use atomic_refcell::AtomicRefCell;
 use crossbeam::atomic::AtomicCell;
 use parking_lot::RwLock;
 use std::cmp::Reverse;
-use std::collections::{BinaryHeap, HashMap, VecDeque};
+use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::mem::MaybeUninit;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
@@ -137,25 +137,36 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         let editor = plugin.read().editor().map(Arc::from);
 
         // This is a mapping from the parameter IDs specified by the plugin to pointers to thsoe
-        // parameters. Since the object returned by `params()` is pinned, these pointers are safe to
-        // dereference as long as `wrapper.plugin` is alive
-        let param_map = plugin.read().params().param_map();
-        let param_groups = plugin.read().params().param_groups();
-        let param_ids = plugin.read().params().param_ids();
-        nih_debug_assert!(
-            !param_map.contains_key(BYPASS_PARAM_ID),
-            "The wrapper already adds its own bypass parameter"
-        );
-
-        // Only calculate these hashes once, and in the stable order defined by the plugin
-        let param_id_hashes_ptrs_groups: Vec<_> = param_ids
-            .iter()
-            .filter_map(|id| {
-                let param_ptr = param_map.get(id)?;
-                let param_group = param_groups.get(id)?;
-                Some((id, hash_param_id(id), param_ptr, param_group))
+        // parameters. These pointers are assumed to be safe to dereference as long as
+        // `wrapper.plugin` is alive. The plugin API identifiers these parameters by hashes, which
+        // we'll calculate from the string ID specified by the plugin. These parameters should also
+        // remain in the same order as the one returned by the plugin.
+        let param_id_hashes_ptrs_groups: Vec<_> = plugin
+            .read()
+            .params()
+            .param_map()
+            .into_iter()
+            .map(|(id, ptr, group)| {
+                let hash = hash_param_id(&id);
+                (id, hash, ptr, group)
             })
             .collect();
+        if cfg!(debug_assertions) {
+            let param_map = plugin.read().params().param_map();
+            let param_ids: HashSet<_> = param_id_hashes_ptrs_groups
+                .iter()
+                .map(|(id, _, _, _)| id.clone())
+                .collect();
+            nih_debug_assert!(
+                !param_ids.contains(BYPASS_PARAM_ID),
+                "The wrapper already adds its own bypass parameter"
+            );
+            nih_debug_assert_eq!(
+                param_map.len(),
+                param_ids.len(),
+                "The plugin has duplicate parameter IDs, weird things may happen"
+            );
+        }
 
         let param_hashes = param_id_hashes_ptrs_groups
             .iter()
@@ -163,25 +174,25 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             .collect();
         let param_by_hash = param_id_hashes_ptrs_groups
             .iter()
-            .map(|&(_, hash, ptr, _)| (hash, *ptr))
+            .map(|&(_, hash, ptr, _)| (hash, ptr))
             .collect();
         let param_units = ParamUnits::from_param_groups(
             param_id_hashes_ptrs_groups
                 .iter()
-                .map(|&(_, hash, _, group_name)| (hash, group_name.as_str())),
+                .map(|(_, hash, _, group_name)| (*hash, group_name.as_str())),
         )
         .expect("Inconsistent parameter groups");
         let param_defaults_normalized = param_id_hashes_ptrs_groups
             .iter()
-            .map(|&(_, hash, ptr, _)| (hash, unsafe { ptr.normalized_value() }))
+            .map(|(_, hash, ptr, _)| (*hash, unsafe { ptr.normalized_value() }))
             .collect();
         let param_id_to_hash = param_id_hashes_ptrs_groups
             .iter()
-            .map(|&(id, hash, _, _)| (id.clone(), hash))
+            .map(|(id, hash, _, _)| (id.clone(), *hash))
             .collect();
         let param_ptr_to_hash = param_id_hashes_ptrs_groups
             .into_iter()
-            .map(|(_, hash, ptr, _)| (*ptr, hash))
+            .map(|(_, hash, ptr, _)| (ptr, hash))
             .collect();
 
         let wrapper = Self {

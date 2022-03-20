@@ -52,7 +52,7 @@ use parking_lot::RwLock;
 use raw_window_handle::RawWindowHandle;
 use std::any::Any;
 use std::cmp;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::ffi::{c_void, CStr};
 use std::mem;
 use std::os::raw::c_char;
@@ -327,45 +327,56 @@ impl<P: ClapPlugin> Wrapper<P> {
         let host_callback = unsafe { ClapPtr::new(host_callback) };
 
         // This is a mapping from the parameter IDs specified by the plugin to pointers to thsoe
-        // parameters. Since the object returned by `params()` is pinned, these pointers are safe to
-        // dereference as long as `wrapper.plugin` is alive
-        let param_map = plugin.read().params().param_map();
-        let param_ids = plugin.read().params().param_ids();
-        let param_groups = plugin.read().params().param_groups();
-        nih_debug_assert!(
-            !param_map.contains_key(BYPASS_PARAM_ID),
-            "The wrapper already adds its own bypass parameter"
-        );
-
-        // Only calculate these hashes once, and in the stable order defined by the plugin
-        let param_id_hashes_ptrs_groups: Vec<_> = param_ids
-            .iter()
-            .map(|id| {
-                // If any of these keys are missing then that's a bug in the Params implementation
-                let param_ptr = param_map[id];
-                let param_group = &param_groups[id];
-                (id, hash_param_id(id), param_ptr, param_group)
+        // parameters. These pointers are assumed to be safe to dereference as long as
+        // `wrapper.plugin` is alive. The plugin API identifiers these parameters by hashes, which
+        // we'll calculate from the string ID specified by the plugin. These parameters should also
+        // remain in the same order as the one returned by the plugin.
+        let param_id_hashes_ptrs_groups: Vec<_> = plugin
+            .read()
+            .params()
+            .param_map()
+            .into_iter()
+            .map(|(id, ptr, group)| {
+                let hash = hash_param_id(&id);
+                (id, hash, ptr, group)
             })
             .collect();
+        if cfg!(debug_assertions) {
+            let param_map = plugin.read().params().param_map();
+            let param_ids: HashSet<_> = param_id_hashes_ptrs_groups
+                .iter()
+                .map(|(id, _, _, _)| id.clone())
+                .collect();
+            nih_debug_assert!(
+                !param_ids.contains(BYPASS_PARAM_ID),
+                "The wrapper already adds its own bypass parameter"
+            );
+            nih_debug_assert_eq!(
+                param_map.len(),
+                param_ids.len(),
+                "The plugin has duplicate parameter IDs, weird things may happen"
+            );
+        }
+
         let param_hashes = param_id_hashes_ptrs_groups
             .iter()
-            .map(|&(_, hash, _, _)| hash)
+            .map(|(_, hash, _, _)| *hash)
             .collect();
         let param_by_hash = param_id_hashes_ptrs_groups
             .iter()
-            .map(|&(_, hash, ptr, _)| (hash, ptr))
+            .map(|(_, hash, ptr, _)| (*hash, *ptr))
             .collect();
         let param_group_by_hash = param_id_hashes_ptrs_groups
             .iter()
-            .map(|&(_, hash, _, group)| (hash, group.to_string()))
+            .map(|(_, hash, _, group)| (*hash, group.clone()))
             .collect();
         let param_defaults_normalized = param_id_hashes_ptrs_groups
             .iter()
-            .map(|&(_, hash, ptr, _)| (hash, unsafe { ptr.normalized_value() }))
+            .map(|(_, hash, ptr, _)| (*hash, unsafe { ptr.normalized_value() }))
             .collect();
         let param_id_to_hash = param_id_hashes_ptrs_groups
             .iter()
-            .map(|&(id, hash, _, _)| (id.clone(), hash))
+            .map(|(id, hash, _, _)| (id.clone(), *hash))
             .collect();
         let param_ptr_to_hash = param_id_hashes_ptrs_groups
             .into_iter()

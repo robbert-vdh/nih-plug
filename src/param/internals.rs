@@ -39,43 +39,37 @@ pub use serde_json::to_string as serialize_field;
 ///
 /// This implementation is safe when using from the wrapper because the plugin object needs to be
 /// pinned, and it can never outlive the wrapper.
-pub trait Params {
-    // NOTE: These types use `String` even though for the `Params` derive macro `&'static str` would
-    //       have been fine to be able to support custom reusable Params implemnetations.
-
-    // TODO: Combine `param_map`, `param_groups`, and `param_ids` into a single function that
-    //       returns a vector of tuples
-
-    /// Create a mapping from unique parameter IDs to parameters. This is done for every parameter
-    /// field marked with `#[id = "stable_name"]`. Dereferencing the pointers stored in the values
-    /// is only valid as long as this pinned object is valid.
-    fn param_map(self: Pin<&Self>) -> HashMap<String, ParamPtr>;
-
-    /// Contains group names for each parameter in [`param_map()`][Self::param_map()]. This is
-    /// either an empty string for top level parameters, or a slash/delimited `"Group Name 1/Group
-    /// Name 2"` string for parameters that belong to `#[nested = "Name"]` parameter objects.
-    fn param_groups(self: Pin<&Self>) -> HashMap<String, String>;
-
-    /// All parameter IDs from [`param_map()`][Self::param_map()], in a stable order. This order
-    /// will be used to display the parameters.
+pub unsafe trait Params {
+    /// Create a mapping from unique parameter IDs to parameters along with the name of the
+    /// group/unit/module they are in. The order of the `Vec` determines the display order in the
+    /// (host's) generic UI. The group name is either an empty string for top level parameters, or a
+    /// slash/delimited `"Group Name 1/Group Name 2"` path for parameters in nested groups. All
+    /// components of a group path must exist or may encounter panics. The derive macro does this
+    /// for every parameter field marked with `#[id = "stable"]`, and it also inlines all fields
+    /// from child `Params` structs marked with `#[nested = "Group Name"]`, prefixing that group
+    /// name before the parameter's originanl group name. Dereferencing the pointers stored in the
+    /// values is only valid as long as this pinned object is valid.
     ///
-    /// TODO: This used to be a static slice, but now that we supported nested parameter objects
-    ///       that's become a bit more difficult since Rust does not have a convenient way to
-    ///       concatenate an arbitrary number of static slices. There's probably a better way to do
-    ///       this.
-    fn param_ids(self: Pin<&Self>) -> Vec<String>;
+    /// # Note
+    ///
+    /// This uses `String` even though for the `Params` derive macro `&'static str` would have been
+    /// fine to be able to support custom reusable Params implemnetations.
+    fn param_map(self: Pin<&Self>) -> Vec<(String, ParamPtr, String)>;
 
     /// Serialize all fields marked with `#[persist = "stable_name"]` into a hash map containing
     /// JSON-representations of those fields so they can be written to the plugin's state and
     /// recalled later. This uses [`serialize_field()`] under the hood.
-    fn serialize_fields(&self) -> HashMap<String, String>;
+    fn serialize_fields(&self) -> HashMap<String, String> {
+        HashMap::new()
+    }
 
     /// Restore all fields marked with `#[persist = "stable_name"]` from a hashmap created by
     /// [`serialize_fields()`][Self::serialize_fields()]. All of thse fields should be wrapped in a
     /// [`PersistentField`] with thread safe interior mutability, like an `RwLock` or a `Mutex`.
     /// This gets called when the plugin's state is being restored. This uses [deserialize_field()]
     /// under the hood.
-    fn deserialize_fields(&self, serialized: &HashMap<String, String>);
+    #[allow(unused_variables)]
+    fn deserialize_fields(&self, serialized: &HashMap<String, String>) {}
 }
 
 /// Internal pointers to parameters. This is an implementation detail used by the wrappers for type

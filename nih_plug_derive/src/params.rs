@@ -29,9 +29,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
     // those fields individually (so they can be added and removed independently of eachother) using
     // JSON. The `nested` fields should also implement the `Params` trait and their fields will be
     // inherited and added to this field's lists.
-    let mut param_mapping_insert_tokens = Vec::new();
-    let mut param_groups_insert_tokens = Vec::new();
-    let mut param_id_string_tokens = Vec::new();
+    let mut param_mapping_self_tokens = Vec::new();
     let mut field_serialize_tokens = Vec::new();
     let mut field_deserialize_tokens = Vec::new();
     let mut nested_params_field_idents: Vec<syn::Ident> = Vec::new();
@@ -146,18 +144,16 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                     .into();
                 }
 
-                // The specific parameter types know how to convert themselves into the correct ParamPtr
-                // variant
-                param_mapping_insert_tokens
-                    .push(quote! { param_map.insert(String::from(#param_id), self.#field_name.as_ptr()); });
+                // These are pairs of `(parameter_id, param_ptr, param_group)`. The specific
+                // parameter types know how to convert themselves into the correct ParamPtr variant.
                 // Top-level parameters have no group, and we'll prefix the group name specified in
                 // the `#[nested = "..."]` attribute to fields coming from nested groups
-                param_groups_insert_tokens
-                    .push(quote! { param_groups.insert(String::from(#param_id), String::new()); });
-                param_id_string_tokens.push(quote! { String::from(#param_id), });
+                param_mapping_self_tokens.push(
+                    quote! { (String::from(#param_id), self.#field_name.as_ptr(), String::new()) },
+                );
             }
-            (None, Some(stable_name)) => {
-                if !persist_ids.insert(stable_name.clone()) {
+            (None, Some(persist_key)) => {
+                if !persist_ids.insert(persist_key.clone()) {
                     return syn::Error::new(
                         field.span(),
                         "Multiple persisted fields with the same ID found",
@@ -175,15 +171,15 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                         ::nih_plug::param::internals::serialize_field,
                     ) {
                         Ok(data) => {
-                            serialized.insert(String::from(#stable_name), data);
+                            serialized.insert(String::from(#persist_key), data);
                         }
                         Err(err) => {
-                            ::nih_plug::nih_log!("Could not serialize '{}': {}", #stable_name, err)
+                            ::nih_plug::nih_log!("Could not serialize '{}': {}", #persist_key, err)
                         }
                     };
                 });
                 field_deserialize_tokens.push(quote! {
-                    #stable_name => {
+                    #persist_key => {
                         match ::nih_plug::param::internals::deserialize_field(&data) {
                             Ok(deserialized) => {
                                 ::nih_plug::param::internals::PersistentField::set(
@@ -194,7 +190,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                             Err(err) => {
                                 ::nih_plug::nih_log!(
                                     "Could not deserialize '{}': {}",
-                                    #stable_name,
+                                    #persist_key,
                                     err
                                 )
                             }
@@ -221,43 +217,29 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
     }
 
     quote! {
-        impl #impl_generics Params for #struct_name #ty_generics #where_clause {
+        unsafe impl #impl_generics Params for #struct_name #ty_generics #where_clause {
             fn param_map(
                 self: std::pin::Pin<&Self>,
-            ) -> std::collections::HashMap<String, nih_plug::param::internals::ParamPtr> {
+            ) -> Vec<(String, nih_plug::param::internals::ParamPtr, String)> {
                 // This may not be in scope otherwise, used to call .as_ptr()
                 use ::nih_plug::param::Param;
 
-                let mut param_map = std::collections::HashMap::new();
-                #(#param_mapping_insert_tokens)*
-
-                let nested_params_fields: &[&dyn Params] = &[#(&self.#nested_params_field_idents),*];
-                for nested_params in nested_params_fields {
-                    unsafe { param_map.extend(Pin::new_unchecked(*nested_params).param_map()) };
-                }
-
-                param_map
-            }
-
-            fn param_groups(
-                self: std::pin::Pin<&Self>,
-            ) -> std::collections::HashMap<String, String> {
-                let mut param_groups = std::collections::HashMap::new();
-                #(#param_groups_insert_tokens)*
+                let mut param_map = vec![#(#param_mapping_self_tokens),*];
 
                 let nested_params_fields: &[&dyn Params] = &[#(&self.#nested_params_field_idents),*];
                 let nested_params_groups: &[String] = &[#(String::from(#nested_params_group_names)),*];
                 for (nested_params, group_name) in
                     nested_params_fields.into_iter().zip(nested_params_groups)
                 {
-                    let nested_param_groups =
-                        unsafe { std::pin::Pin::new_unchecked(*nested_params).param_groups() };
-                    let prefixed_nested_param_groups =
-                        nested_param_groups
+                    let nested_param_map =
+                        unsafe { std::pin::Pin::new_unchecked(*nested_params).param_map() };
+                    let prefixed_nested_param_map =
+                        nested_param_map
                             .into_iter()
-                            .map(|(param_id, nested_group_name)| {
+                            .map(|(param_id, param_ptr, nested_group_name)| {
                                 (
                                     param_id,
+                                    param_ptr,
                                     if nested_group_name.is_empty() {
                                         group_name.to_string()
                                     } else {
@@ -266,21 +248,10 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                                 )
                             });
 
-                    param_groups.extend(prefixed_nested_param_groups);
+                    param_map.extend(prefixed_nested_param_map);
                 }
 
-                param_groups
-            }
-
-            fn param_ids(self: std::pin::Pin<&Self>) -> Vec<String> {
-                let mut ids = vec![#(#param_id_string_tokens)*];
-
-                let nested_params_fields: &[&dyn Params] = &[#(&self.#nested_params_field_idents),*];
-                for nested_params in nested_params_fields {
-                    unsafe { ids.append(&mut Pin::new_unchecked(*nested_params).param_ids()) };
-                }
-
-                ids
+                param_map
             }
 
             fn serialize_fields(&self) -> ::std::collections::HashMap<String, String> {
