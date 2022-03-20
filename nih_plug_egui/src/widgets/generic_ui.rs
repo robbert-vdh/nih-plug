@@ -41,24 +41,19 @@ pub fn create(
     setter: &ParamSetter,
     widget: impl ParamWidget,
 ) {
-    let param_map = params.param_map();
-    let param_ids = params.param_ids();
-
     let padding = Vec2::splat(ui.text_style_height(&TextStyle::Body) * 0.2);
     egui::containers::ScrollArea::vertical()
         // Take up all remaining space, use a wrapper container to adjust how much space that is
         .auto_shrink([false, false])
         .show(ui, |ui| {
-            for (widget_idx, id) in param_ids.into_iter().enumerate() {
-                let param = param_map[&id];
-
+            for (widget_idx, (_, param_ptr, _)) in params.param_map().into_iter().enumerate() {
                 // This list looks weird without a little padding
                 if widget_idx > 0 {
                     ui.allocate_space(padding);
                 }
 
-                ui.label(unsafe { param.name() });
-                unsafe { widget.add_widget_raw(ui, &param, setter) };
+                ui.label(unsafe { param_ptr.name() });
+                unsafe { widget.add_widget_raw(ui, &param_ptr, setter) };
             }
         });
 }

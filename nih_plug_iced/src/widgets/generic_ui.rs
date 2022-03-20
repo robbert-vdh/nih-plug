@@ -166,18 +166,15 @@ where
             .padding(padding)
             .align_items(Alignment::Center);
 
-        let param_map = self.params.param_map();
-        let param_ids = self.params.param_ids();
-
         // Make sure we already have widget state for each widget
-        for param_ptr in param_map.values() {
+        let param_map = self.params.param_map();
+        for (_, param_ptr, _) in &param_map {
             if !widget_state.contains_key(param_ptr) {
                 widget_state.insert(*param_ptr, Default::default());
             }
         }
 
-        for param_id in param_ids {
-            let param_ptr = param_map[&param_id];
+        for (_, param_ptr, _) in param_map {
             // SAFETY: We only borrow each item once, and the plugin framework statically asserted
             //         that parameter indices are unique and this widget state cannot outlive this
             //         function
