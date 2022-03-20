@@ -39,7 +39,7 @@ pub(crate) struct State {
 pub(crate) unsafe fn serialize(
     plugin_params: Pin<&dyn Params>,
     param_by_hash: &HashMap<u32, ParamPtr>,
-    param_id_to_hash: &HashMap<&'static str, u32>,
+    param_id_to_hash: &HashMap<String, u32>,
     bypass_param_id: &str,
     bypass_state: &AtomicBool,
 ) -> serde_json::Result<Vec<u8>> {
@@ -50,7 +50,7 @@ pub(crate) unsafe fn serialize(
             let param_ptr = param_by_hash.get(hash)?;
             Some((param_id_str, param_ptr))
         })
-        .map(|(&param_id_str, &param_ptr)| match param_ptr {
+        .map(|(param_id_str, &param_ptr)| match param_ptr {
             ParamPtr::FloatParam(p) => (
                 param_id_str.to_string(),
                 ParamValue::F32((*p).plain_value()),
@@ -95,7 +95,7 @@ pub(crate) unsafe fn deserialize(
     state: &[u8],
     plugin_params: Pin<&dyn Params>,
     param_by_hash: &HashMap<u32, ParamPtr>,
-    param_id_to_hash: &HashMap<&'static str, u32>,
+    param_id_to_hash: &HashMap<String, u32>,
     current_buffer_config: Option<&BufferConfig>,
     bypass_param_id: &str,
     bypass_state: &AtomicBool,

@@ -50,7 +50,7 @@ pub fn create(
         .auto_shrink([false, false])
         .show(ui, |ui| {
             for (widget_idx, id) in param_ids.into_iter().enumerate() {
-                let param = param_map[id];
+                let param = param_map[&id];
 
                 // This list looks weird without a little padding
                 if widget_idx > 0 {

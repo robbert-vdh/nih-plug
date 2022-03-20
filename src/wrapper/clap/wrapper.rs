@@ -184,7 +184,7 @@ pub struct Wrapper<P: ClapPlugin> {
     pub param_defaults_normalized: HashMap<u32, f32>,
     /// Mappings from string parameter indentifiers to parameter hashes. Useful for debug logging
     /// and when storing and restoring plugin state.
-    param_id_to_hash: HashMap<&'static str, u32>,
+    param_id_to_hash: HashMap<String, u32>,
     /// The inverse mapping from [`param_by_hash`][Self::param_by_hash]. This is needed to be able
     /// to have an ergonomic parameter setting API that uses references to the parameters instead of
     /// having to add a setter function to the parameter (or even worse, have it be completely
@@ -365,7 +365,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             .collect();
         let param_id_to_hash = param_id_hashes_ptrs_groups
             .iter()
-            .map(|&(id, hash, _, _)| (*id, hash))
+            .map(|&(id, hash, _, _)| (id.clone(), hash))
             .collect();
         let param_ptr_to_hash = param_id_hashes_ptrs_groups
             .into_iter()

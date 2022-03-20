@@ -40,15 +40,18 @@ pub use serde_json::to_string as serialize_field;
 /// This implementation is safe when using from the wrapper because the plugin object needs to be
 /// pinned, and it can never outlive the wrapper.
 pub trait Params {
+    // NOTE: These types use `String` even though for the `Params` derive macro `&'static str` would
+    //       have been fine to be able to support custom reusable Params implemnetations.
+
     /// Create a mapping from unique parameter IDs to parameters. This is done for every parameter
     /// field marked with `#[id = "stable_name"]`. Dereferencing the pointers stored in the values
     /// is only valid as long as this pinned object is valid.
-    fn param_map(self: Pin<&Self>) -> HashMap<&'static str, ParamPtr>;
+    fn param_map(self: Pin<&Self>) -> HashMap<String, ParamPtr>;
 
     /// Contains group names for each parameter in [`param_map()`][Self::param_map()]. This is
     /// either an empty string for top level parameters, or a slash/delimited `"Group Name 1/Group
     /// Name 2"` string for parameters that belong to `#[nested = "Name"]` parameter objects.
-    fn param_groups(self: Pin<&Self>) -> HashMap<&'static str, String>;
+    fn param_groups(self: Pin<&Self>) -> HashMap<String, String>;
 
     /// All parameter IDs from [`param_map()`][Self::param_map()], in a stable order. This order
     /// will be used to display the parameters.
@@ -57,7 +60,7 @@ pub trait Params {
     ///       that's become a bit more difficult since Rust does not have a convenient way to
     ///       concatenate an arbitrary number of static slices. There's probably a better way to do
     ///       this.
-    fn param_ids(self: Pin<&Self>) -> Vec<&'static str>;
+    fn param_ids(self: Pin<&Self>) -> Vec<String>;
 
     /// Serialize all fields marked with `#[persist = "stable_name"]` into a hash map containing
     /// JSON-representations of those fields so they can be written to the plugin's state and

@@ -177,7 +177,7 @@ where
         }
 
         for param_id in param_ids {
-            let param_ptr = param_map[param_id];
+            let param_ptr = param_map[&param_id];
             // SAFETY: We only borrow each item once, and the plugin framework statically asserted
             //         that parameter indices are unique and this widget state cannot outlive this
             //         function

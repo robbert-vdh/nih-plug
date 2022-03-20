@@ -149,12 +149,12 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                 // The specific parameter types know how to convert themselves into the correct ParamPtr
                 // variant
                 param_mapping_insert_tokens
-                    .push(quote! { param_map.insert(#param_id, self.#field_name.as_ptr()); });
+                    .push(quote! { param_map.insert(String::from(#param_id), self.#field_name.as_ptr()); });
                 // Top-level parameters have no group, and we'll prefix the group name specified in
                 // the `#[nested = "..."]` attribute to fields coming from nested groups
                 param_groups_insert_tokens
-                    .push(quote! { param_groups.insert(#param_id, String::new()); });
-                param_id_string_tokens.push(quote! { #param_id, });
+                    .push(quote! { param_groups.insert(String::from(#param_id), String::new()); });
+                param_id_string_tokens.push(quote! { String::from(#param_id), });
             }
             (None, Some(stable_name)) => {
                 if !persist_ids.insert(stable_name.clone()) {
@@ -224,7 +224,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
         impl #impl_generics Params for #struct_name #ty_generics #where_clause {
             fn param_map(
                 self: std::pin::Pin<&Self>,
-            ) -> std::collections::HashMap<&'static str, nih_plug::param::internals::ParamPtr> {
+            ) -> std::collections::HashMap<String, nih_plug::param::internals::ParamPtr> {
                 // This may not be in scope otherwise, used to call .as_ptr()
                 use ::nih_plug::param::Param;
 
@@ -241,12 +241,12 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
 
             fn param_groups(
                 self: std::pin::Pin<&Self>,
-            ) -> std::collections::HashMap<&'static str, String> {
+            ) -> std::collections::HashMap<String, String> {
                 let mut param_groups = std::collections::HashMap::new();
                 #(#param_groups_insert_tokens)*
 
                 let nested_params_fields: &[&dyn Params] = &[#(&self.#nested_params_field_idents),*];
-                let nested_params_groups: &[&'static str] = &[#(#nested_params_group_names),*];
+                let nested_params_groups: &[String] = &[#(String::from(#nested_params_group_names)),*];
                 for (nested_params, group_name) in
                     nested_params_fields.into_iter().zip(nested_params_groups)
                 {
@@ -272,8 +272,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                 param_groups
             }
 
-
-            fn param_ids(self: std::pin::Pin<&Self>) -> Vec<&'static str> {
+            fn param_ids(self: std::pin::Pin<&Self>) -> Vec<String> {
                 let mut ids = vec![#(#param_id_string_tokens)*];
 
                 let nested_params_fields: &[&dyn Params] = &[#(&self.#nested_params_field_idents),*];
