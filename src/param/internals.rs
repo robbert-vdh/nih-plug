@@ -43,6 +43,9 @@ pub trait Params {
     // NOTE: These types use `String` even though for the `Params` derive macro `&'static str` would
     //       have been fine to be able to support custom reusable Params implemnetations.
 
+    // TODO: Combine `param_map`, `param_groups`, and `param_ids` into a single function that
+    //       returns a vector of tuples
+
     /// Create a mapping from unique parameter IDs to parameters. This is done for every parameter
     /// field marked with `#[id = "stable_name"]`. Dereferencing the pointers stored in the values
     /// is only valid as long as this pinned object is valid.
