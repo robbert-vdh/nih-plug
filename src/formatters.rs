@@ -28,11 +28,6 @@ pub fn from_f32_percentage() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> {
 pub fn f32_lin_to_db(digits: usize) -> Arc<dyn Fn(f32) -> String + Send + Sync> {
     Arc::new(move |x| format!("{:.digits$}", x.log10() * 20.0))
 }
-
-/// Turn an `f32` value from dBFS (reference value 1) to linear
-pub fn f32_db_to_lin(digits: usize) -> Arc<dyn Fn(f32) -> String + Send + Sync> {
-    Arc::new(move |x| format!("{:.digits$}", 10f32.powf(x / 20.0)))
-}
 /// Parse a `dBFS` value to a linear value. Handles the dB unit for you. Used in
 /// conjunction with [`f32_lin_to_db`].
 pub fn from_f32_lin_to_db() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> {
@@ -44,6 +39,42 @@ pub fn from_f32_lin_to_db() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> {
             .map(|x: f32| 10f32.powf(x / 20.0))
     })
 }
+/// Turn an `f32` value `[-1, 1]` to a panning value `[100L, 100R]` Value of `0.0` becomes `"C"`
+pub fn f32_panning() -> Arc<dyn Fn(f32) -> String + Send + Sync> {
+    Arc::new(move |x| {
+        if x == 0. {
+            "C".to_string()
+        } else if x > 0. {
+            format!("{:.0}R", x * 100.)
+        } else {
+            format!("{:.0}L", x * -100.)
+        }
+    })
+}
+/// Parse a pan value to a linear value, range `[-1, 1]`. Used in
+/// conjunction with [`f32_panning`].
+pub fn from_f32_panning() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> {
+    Arc::new(|string| {
+        if string.contains('L') {
+            string
+                .trim_end_matches(&[' ', 'L'])
+                .parse()
+                .ok()
+                .map(|x: f32| x / -100.)
+        } else if string.contains('R') {
+            string
+                .trim_end_matches(&[' ', 'R'])
+                .parse()
+                .ok()
+                .map(|x: f32| x / 100.)
+        } else if string == "C" {
+            Some(0.)
+        } else {
+            string.trim_end_matches(&[' ']).parse().ok().map(|x: f32| x)
+        }
+    })
+}
+
 /// Round an `f32` value and divide it by 1000 when it gets over 1000
 pub fn f32_hz_then_khz(digits: usize) -> Arc<dyn Fn(f32) -> String + Send + Sync> {
     Arc::new(move |x| {
