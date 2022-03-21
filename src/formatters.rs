@@ -70,14 +70,14 @@ pub fn from_f32_panning() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> {
     })
 }
 
-/// Round an `f32` value and divide it by 1000 when it gets over 1000
+/// Format a `f32` Hertz value as a rounded `Hz` below 1000 Hz, and as a rounded `kHz` value above
+/// 1000 Hz. This already includes the unit.
 pub fn f32_hz_then_khz(digits: usize) -> Arc<dyn Fn(f32) -> String + Send + Sync> {
-    Arc::new(move |x| {
-        if x < 1000.0 {
-            format!("{:.digits$}", x)
+    Arc::new(move |value| {
+        if value < 1000.0 {
+            format!("{:.digits$} Hz", value)
         } else {
-            let digits = digits + 1;
-            format!("{:.digits$}", x / 1000.0)
+            format!("{:.digits$} kHz", value / 1000.0, digits = digits.min(1))
         }
     })
 }
