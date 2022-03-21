@@ -10,9 +10,6 @@ use super::Param;
 
 /// A floating point parameter that's stored unnormalized. The range is used for the normalization
 /// process.
-///
-/// You can either initialize the struct directly, using `..Default::default()` to fill in the
-/// unused fields, or you can use the builder interface with [`FloatParam::new()`].
 //
 // XXX: To keep the API simple and to allow the optimizer to do its thing, the values are stored as
 //      plain primitive values that are modified through the `*mut` pointers from the plugin's

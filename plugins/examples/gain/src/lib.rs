@@ -1,19 +1,22 @@
 use nih_plug::prelude::*;
 use parking_lot::RwLock;
 use std::pin::Pin;
-use std::sync::Arc;
 
 struct Gain {
     params: Pin<Box<GainParams>>,
 }
 
+/// The [`Params`] derive macro gathers all of the information needed for the wrapepr to know about
+/// the plugin's parameters, persistent serializable fields, and nested parameter groups. You can
+/// aslo easily implement [`Params`] by hand if you want to, for instance, have multiple instances
+/// of a parmaeters struct for multiple identical oscillators/filters/envelopes.
 #[derive(Params)]
 struct GainParams {
+    /// The parameter's ID is used to identify the parameter in the wrappred plugin API. As long as
+    /// these IDs remain constant, you can rename and reorder these fields as you wish. The
+    /// parameters are exposed to the host in the same order thye were defined in.
     #[id = "gain"]
     pub gain: FloatParam,
-
-    #[id = "stable"]
-    pub but_field_names_can_change: BoolParam,
 
     /// This field isn't used in this exampleq, but anything written to the vector would be restored
     /// together with a preset/state file saved for this plugin. This can be useful for storign
@@ -53,37 +56,20 @@ impl Default for Gain {
 impl Default for GainParams {
     fn default() -> Self {
         Self {
-            // There are three ways to specify parameters:
-            //
-            // ...either manually specify all fields:
-            gain: FloatParam {
-                value: 0.0,
-                default: 0.0,
-                smoothed: Smoother::new(SmoothingStyle::Linear(50.0)),
-                value_changed: None,
-                range: FloatRange::Linear {
+            gain: FloatParam::new(
+                "Gain",
+                0.0,
+                FloatRange::Linear {
                     min: -30.0,
                     max: 30.0,
                 },
-                step_size: Some(0.01),
-                name: "Gain",
-                unit: " dB",
-                // This is actually redundant, because a step size of two decimal places already
-                // causes the parameter to shown rounded
-                value_to_string: Some(formatters::f32_rounded(2)),
-                string_to_value: None,
-                // ...or specify the fields you want to initialize directly and leave the other
-                // fields at their defaults:
-                // // ..Default::default(),
-            },
-            // ...or use the builder interface:
-            but_field_names_can_change: BoolParam::new("Important value", false).with_callback(
-                Arc::new(|_new_value: bool| {
-                    // If, for instance, updating this parameter would require other parts of the
-                    // plugin's internal state to be updated other values to also be updated, then
-                    // you can use this callback to for instance modify an atomic in the plugin.
-                }),
-            ),
+            )
+            .with_smoother(SmoothingStyle::Linear(50.0))
+            .with_step_size(0.01)
+            .with_unit(" dB")
+            // This is actually redundant, because a step size of two decimal places already
+            // causes the parameter to shown rounded
+            .with_value_to_string(formatters::f32_rounded(2)),
             // Persisted fields can be intialized like any other fields, and they'll keep their when
             // restoring the plugin's state.
             random_data: RwLock::new(Vec::new()),
