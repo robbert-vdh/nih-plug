@@ -207,6 +207,10 @@ where
         let bar_bounds = bounds.shrink(border_width / 2.0);
         let bar_ticks_start_x = bar_bounds.left().floor() as i32;
         let bar_ticks_end_x = bar_bounds.right().ceil() as i32;
+        // TODO: Right now this means that on higher DPI settings you'll end up with more, denser
+        //       ticks. We can try keeping the number of ticks fixed, but I don't know how that
+        //       would work with fractional scaling since we also want everything to stay aligned to
+        //       the pixel grid.
         let bar_tick_coordinates =
             (bar_ticks_start_x..bar_ticks_end_x).step_by((TICK_WIDTH + TICK_GAP).round() as usize);
         for tick_x in bar_tick_coordinates {
