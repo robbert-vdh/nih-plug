@@ -26,14 +26,6 @@ struct Gain {
 pub struct GainParams {
     #[id = "gain"]
     pub gain: FloatParam,
-    #[id = "foo"]
-    pub foo: EnumParam<Foo>,
-}
-
-#[derive(Debug, PartialEq, Eq, Enum)]
-pub enum Foo {
-    Foo,
-    Bar,
 }
 
 impl Default for Gain {
@@ -62,7 +54,6 @@ impl Default for GainParams {
             .with_smoother(SmoothingStyle::Linear(50.0))
             .with_step_size(0.01)
             .with_unit(" dB"),
-            foo: EnumParam::new("Foo", Foo::Bar),
         }
     }
 }
