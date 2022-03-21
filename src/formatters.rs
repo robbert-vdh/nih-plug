@@ -91,7 +91,7 @@ pub fn from_f32_hz_then_khz() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> 
             .trim_end_matches(&[' ', 'k', 'K', 'h', 'H', 'z', 'Z'])
             .parse()
             .ok();
-        match string.get(string.len() - 3..) {
+        match string.get(string.len().saturating_sub(3)..) {
             Some(unit) if unit.eq_ignore_ascii_case("khz") => cleaned_string.map(|x| x * 1000.0),
             // Even if there's no unit at all, just assume the input is in Hertz
             _ => cleaned_string,
