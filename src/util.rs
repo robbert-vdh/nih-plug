@@ -6,6 +6,9 @@ pub mod window;
 pub use stft::StftHelper;
 
 pub const MINUS_INFINITY_DB: f32 = -100.0;
+pub const NOTES: [&str; 12] = [
+    "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
+];
 
 /// Temporarily allow allocations within `func` if NIH-plug was configured with the
 /// `assert_process_allocs` feature.

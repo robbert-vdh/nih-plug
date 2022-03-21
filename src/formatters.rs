@@ -110,32 +110,29 @@ pub fn from_i32_power_of_two() -> Arc<dyn Fn(&str) -> Option<i32> + Send + Sync>
     Arc::new(|string| string.parse().ok().map(|n: i32| (n as f32).log2() as i32))
 }
 
-const NOTES: [&str; 12] = [
-    "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
-];
-/// Turns an integer midi number (range 0-127 usually) into a note name, e.g. 69 -> A4
+/// Turns an integer MIDI note number (usually in the range [0, 127]) into a note name, where 60 is
+/// C4 and 69 is A4 (nice).
 pub fn i32_note_formatter() -> Arc<dyn Fn(i32) -> String + Send + Sync> {
-    Arc::new(move |x| {
-        let note = x as usize;
-        let note_name = NOTES[note % 12].to_string();
-        let octave = (note / 12) as i32 - 1;
+    Arc::new(move |value| {
+        let note_name = util::NOTES[value as usize % 12];
+        let octave = (value / 12) - 1;
         format!("{note_name}{octave}")
     })
 }
-/// parses a note name into a midi number (range 0-127 usually), e.g. A#4 -> 70
+
+/// Parse a note name to a MIDI number using the inverse mapping from [`i32_note_formatter`].
 pub fn from_i32_note_formatter() -> Arc<dyn Fn(&str) -> Option<i32> + Send + Sync> {
     Arc::new(|string| {
-        // string is too short to be a note name
-        if string.len() < 2 {
-            return None;
-        }
-        let (note_name, octave) = if string.contains("#") {
-            string.split_at(2)
-        } else {
-            string.split_at(1)
-        };
-        // using unwrap_or here, or else trying to parse "##" breaks it
-        let note = NOTES.iter().position(|&r| r == note_name).unwrap_or(0) as i32;
-        octave.parse().ok().map(|n: i32| (n + 1) * 12 + note)
+        let (note_name, octave) = string
+            .trim()
+            .split_once(|c: char| c.is_whitespace() || c.is_digit(10))?;
+
+        let note_id = util::NOTES
+            .iter()
+            .position(|&candidate| note_name.eq_ignore_ascii_case(candidate))?
+            as i32;
+        let octave: i32 = octave.trim().parse().ok()?;
+
+        Some((octave + 1) + (12 * note_id))
     })
 }
