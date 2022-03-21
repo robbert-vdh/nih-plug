@@ -1,7 +1,7 @@
 //! A slider that integrates with NIH-plug's [`Param`] types.
 
 use nih_plug::param::internals::ParamPtr;
-use nih_plug::prelude::{Param, ParamSetter};
+use nih_plug::prelude::Param;
 use vizia::*;
 
 use super::util::{self, ModifiersExt};
@@ -76,13 +76,15 @@ enum ParamSliderInternalEvent {
 }
 
 impl Model for ParamSliderInternal {
-    fn event(&mut self, cx: &mut Context, event: &mut Event) {
+    fn event(&mut self, _cx: &mut Context, event: &mut Event) {
         if let Some(param_slider_internal_event) = event.message.downcast() {
             match param_slider_internal_event {
                 ParamSliderInternalEvent::SetStyle(style) => self.style = *style,
-                ParamSliderInternalEvent::SetTextInputActive(value) => {
-                    cx.current.set_active(cx, *value);
-                    self.text_input_active = *value;
+                ParamSliderInternalEvent::SetTextInputActive(active) => {
+                    self.text_input_active = *active;
+                    if *active {
+                        // TODO: Interact with the Textbox widget
+                    }
                 }
             }
         }
@@ -92,17 +94,17 @@ impl Model for ParamSliderInternal {
 impl ParamSlider {
     /// Creates a new [`ParamSlider`] for the given parameter. To accomdate VIZIA's mapping system,
     /// you'll need to provide a lens containing your `Params` implementation object (check out how
-    /// the `Data` struct is used in `gain_gui_vizia`), the `ParamSetter` for retrieving the
-    /// parameter's default value, and a projection function that maps the `Params` object to the
-    /// parameter you want to display a widget for.
+    /// the `Data` struct is used in `gain_gui_vizia`) and a projection function that maps the
+    /// `Params` object to the parameter you want to display a widget for. Parameter changes are
+    /// handled by emitting [`ParamEvent`][super::ParamEvent]s which are automatically handled by
+    /// the VIZIA wrapper.
     ///
     /// See [`ParamSliderExt`] for additonal options.
-    pub fn new<'a, L, Params, P, F>(
-        cx: &'a mut Context,
+    pub fn new<L, Params, P, F>(
+        cx: &mut Context,
         params: L,
-        setter: &ParamSetter,
         params_to_param: F,
-    ) -> Handle<'a, ParamSlider>
+    ) -> Handle<'_, ParamSlider>
     where
         L: Lens<Target = Params> + Copy,
         F: 'static + Fn(&Params) -> &P + Copy,
@@ -117,11 +119,9 @@ impl ParamSlider {
         let param_ptr = *params
             .map(move |params| params_to_param(params).as_ptr())
             .get(cx);
-        let default_value = unsafe {
-            setter
-                .raw_context
-                .raw_default_normalized_param_value(param_ptr)
-        };
+        let default_value = *params
+            .map(move |params| params_to_param(params).default_normalized_value())
+            .get(cx);
         let step_count = *params
             .map(move |params| params_to_param(params).step_count())
             .get(cx);
@@ -320,7 +320,10 @@ impl View for ParamSlider {
                         // Ctrl+Click and double click should reset the parameter instead of initiating
                         // a drag operation
                         cx.emit(RawParamEvent::BeginSetParameter(self.param_ptr));
-                        cx.emit(RawParamEvent::ResetParameter(self.param_ptr));
+                        cx.emit(RawParamEvent::SetParameterNormalized(
+                            self.param_ptr,
+                            unsafe { self.param_ptr.default_normalized_value() },
+                        ));
                         cx.emit(RawParamEvent::EndSetParameter(self.param_ptr));
                     } else {
                         self.drag_active = true;

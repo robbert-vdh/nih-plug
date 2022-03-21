@@ -2,7 +2,7 @@
 
 use baseview::{WindowHandle, WindowScalePolicy};
 use crossbeam::atomic::AtomicCell;
-use nih_plug::prelude::{Editor, GuiContext, ParamSetter, ParentWindowHandle};
+use nih_plug::prelude::{Editor, GuiContext, ParentWindowHandle};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use vizia::{Application, Color, Context, Entity, Model, PropSet, WindowDescription};
@@ -23,7 +23,7 @@ pub mod widgets;
 /// See [VIZIA](https://github.com/vizia/vizia)'s repository for examples on how to use this.
 pub fn create_vizia_editor<F>(vizia_state: Arc<ViziaState>, app: F) -> Option<Box<dyn Editor>>
 where
-    F: Fn(&mut Context, &ParamSetter) + 'static + Send + Sync,
+    F: Fn(&mut Context) + 'static + Send + Sync,
 {
     Some(Box::new(ViziaEditor {
         vizia_state,
@@ -66,7 +66,7 @@ impl ViziaState {
 struct ViziaEditor {
     vizia_state: Arc<ViziaState>,
     /// The user's app function.
-    app: Arc<dyn Fn(&mut Context, &ParamSetter) + 'static + Send + Sync>,
+    app: Arc<dyn Fn(&mut Context) + 'static + Send + Sync>,
 
     /// The scaling factor reported by the host, if any. On macOS this will never be set and we
     /// should use the system scaling factor instead.
@@ -87,8 +87,6 @@ impl Editor for ViziaEditor {
             WindowDescription::new().with_inner_size(unscaled_width, unscaled_height);
 
         let window = Application::new(window_description, move |cx| {
-            let setter = ParamSetter::new(context.as_ref());
-
             // Set some default styles to match the iced integration
             // TODO: Maybe add a way to override this behavior
             // NOTE: vizia's font rendering looks way too dark and thick. Going one font weight
@@ -112,7 +110,7 @@ impl Editor for ViziaEditor {
             }
             .build(cx);
 
-            app(cx, &setter)
+            app(cx)
         })
         .with_scale_policy(
             scaling_factor

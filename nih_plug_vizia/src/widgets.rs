@@ -38,9 +38,6 @@ pub enum ParamEvent<'a, P: Param> {
     /// Set a parameter to a new normalized value. This needs to be surrounded by a matching
     /// `BeginSetParameter` and `EndSetParameter`.
     SetParameterNormalized(&'a P, f32),
-    /// Reset a parameter to its default value. This needs to be surrounded by a matching
-    /// `BeginSetParameter` and `EndSetParameter`.
-    ResetParameter(&'a P),
     /// End an automation gesture for a parameter.
     EndSetParameter(&'a P),
 }
@@ -53,9 +50,6 @@ pub enum RawParamEvent {
     /// Set a parameter to a new normalized value. This needs to be surrounded by a matching
     /// `BeginSetParameter` and `EndSetParameter`.
     SetParameterNormalized(ParamPtr, f32),
-    /// Reset a parameter to its default value. This needs to be surrounded by a matching
-    /// `BeginSetParameter` and `EndSetParameter`.
-    ResetParameter(ParamPtr),
     /// End an automation gesture for a parameter.
     EndSetParameter(ParamPtr),
 }
@@ -78,10 +72,6 @@ impl Model for ParamModel {
                 RawParamEvent::SetParameterNormalized(p, v) => unsafe {
                     self.context.raw_set_parameter_normalized(p, v)
                 },
-                RawParamEvent::ResetParameter(p) => unsafe {
-                    let default_value = self.context.raw_default_normalized_param_value(p);
-                    self.context.raw_set_parameter_normalized(p, default_value);
-                },
                 RawParamEvent::EndSetParameter(p) => unsafe {
                     self.context.raw_end_set_parameter(p)
                 },
@@ -100,7 +90,6 @@ impl<P: Param> From<ParamEvent<'_, P>> for RawParamEvent {
             ParamEvent::SetParameterNormalized(p, v) => {
                 RawParamEvent::SetParameterNormalized(p.as_ptr(), v)
             }
-            ParamEvent::ResetParameter(p) => RawParamEvent::ResetParameter(p.as_ptr()),
             ParamEvent::EndSetParameter(p) => RawParamEvent::EndSetParameter(p.as_ptr()),
         }
     }

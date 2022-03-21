@@ -84,12 +84,7 @@ impl IcedEditor for DiopserEditor {
     }
 
     fn view(&mut self) -> Element<'_, Self::Message> {
-        GenericUi::new(
-            &mut self.generic_ui_state,
-            self.params.as_ref(),
-            self.context.as_ref(),
-        )
-        .map(Message::ParamUpdate)
+        GenericUi::new(&mut self.generic_ui_state, self.params.as_ref()).map(Message::ParamUpdate)
     }
 
     fn background_color(&self) -> nih_plug_iced::Color {

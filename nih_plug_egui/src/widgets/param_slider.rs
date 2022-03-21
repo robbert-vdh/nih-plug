@@ -124,9 +124,8 @@ impl<'a, P: Param> ParamSlider<'a, P> {
 
     /// Begin and end drag still need to be called when using this..
     fn reset_param(&self) {
-        let normalized_default = self.setter.default_normalized_param_value(self.param);
         self.setter
-            .set_parameter_normalized(self.param, normalized_default);
+            .set_parameter(self.param, self.param.default_plain_value());
     }
 
     fn granular_drag(&self, ui: &Ui, drag_delta: Vec2) {

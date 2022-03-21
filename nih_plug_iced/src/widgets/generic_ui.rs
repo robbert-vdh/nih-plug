@@ -8,7 +8,7 @@ use std::marker::PhantomData;
 use std::pin::Pin;
 
 use nih_plug::param::internals::ParamPtr;
-use nih_plug::prelude::{GuiContext, Param, Params};
+use nih_plug::prelude::{Param, Params};
 
 use super::{ParamMessage, ParamSlider};
 use crate::backend::Renderer;
@@ -27,7 +27,6 @@ pub trait ParamWidget {
     /// Create an [`Element`] for a widget for the specified parameter.
     fn into_widget_element<'a, P: Param>(
         param: &'a P,
-        context: &'a dyn GuiContext,
         state: &'a mut Self::State,
     ) -> Element<'a, ParamMessage>;
 
@@ -38,14 +37,13 @@ pub trait ParamWidget {
     /// Undefined behavior of the `ParamPtr` does not point to a valid parameter.
     unsafe fn into_widget_element_raw<'a>(
         param: &ParamPtr,
-        context: &'a dyn GuiContext,
         state: &'a mut Self::State,
     ) -> Element<'a, ParamMessage> {
         match param {
-            ParamPtr::FloatParam(p) => Self::into_widget_element(&**p, context, state),
-            ParamPtr::IntParam(p) => Self::into_widget_element(&**p, context, state),
-            ParamPtr::BoolParam(p) => Self::into_widget_element(&**p, context, state),
-            ParamPtr::EnumParam(p) => Self::into_widget_element(&**p, context, state),
+            ParamPtr::FloatParam(p) => Self::into_widget_element(&**p, state),
+            ParamPtr::IntParam(p) => Self::into_widget_element(&**p, state),
+            ParamPtr::BoolParam(p) => Self::into_widget_element(&**p, state),
+            ParamPtr::EnumParam(p) => Self::into_widget_element(&**p, state),
         }
     }
 }
@@ -62,7 +60,6 @@ pub struct GenericUi<'a, W: ParamWidget> {
     state: &'a mut State<W>,
 
     params: Pin<&'a dyn Params>,
-    context: &'a dyn GuiContext,
 
     width: Length,
     height: Length,
@@ -89,16 +86,11 @@ where
     W: ParamWidget,
 {
     /// Creates a new [`GenericUi`] for all provided parameters.
-    pub fn new(
-        state: &'a mut State<W>,
-        params: Pin<&'a dyn Params>,
-        context: &'a dyn GuiContext,
-    ) -> Self {
+    pub fn new(state: &'a mut State<W>, params: Pin<&'a dyn Params>) -> Self {
         Self {
             state,
 
             params,
-            context,
 
             width: Length::Fill,
             height: Length::Fill,
@@ -193,9 +185,7 @@ where
                         .horizontal_alignment(alignment::Horizontal::Right)
                         .vertical_alignment(alignment::Vertical::Center),
                 )
-                .push(unsafe {
-                    W::into_widget_element_raw(&param_ptr, self.context, widget_state)
-                });
+                .push(unsafe { W::into_widget_element_raw(&param_ptr, widget_state) });
             if self.pad_scrollbar {
                 // There's already spacing applied, so this element doesn't actually need to hae any
                 // size of its own
@@ -279,10 +269,9 @@ impl ParamWidget for GenericSlider {
 
     fn into_widget_element<'a, P: Param>(
         param: &'a P,
-        context: &'a dyn GuiContext,
         state: &'a mut Self::State,
     ) -> Element<'a, ParamMessage> {
-        ParamSlider::new(state, param, context).into()
+        ParamSlider::new(state, param).into()
     }
 }
 

@@ -71,16 +71,6 @@ pub trait GuiContext: Send + Sync + 'static {
     /// The implementing function still needs to check if `param` actually exists. This function is
     /// mostly marked as unsafe for API reasons.
     unsafe fn raw_end_set_parameter(&self, param: ParamPtr);
-
-    /// Retrieve the default value for a parameter, in case you forgot. This does not perform a
-    /// callback Create a [`ParamSetter`] and use [`ParamSetter::default_param_value()`] instead for
-    /// a safe, user friendly API.
-    ///
-    /// # Safety
-    ///
-    /// The implementing function still needs to check if `param` actually exists. This function is
-    /// mostly marked as unsafe for API reasons.
-    unsafe fn raw_default_normalized_param_value(&self, param: ParamPtr) -> f32;
 }
 
 /// Information about the plugin's transport. Depending on the plugin API and the host not all
@@ -384,20 +374,5 @@ impl<'a> ParamSetter<'a> {
     /// the automation gesture has finished.
     pub fn end_set_parameter<P: Param>(&self, param: &P) {
         unsafe { self.raw_context.raw_end_set_parameter(param.as_ptr()) };
-    }
-
-    /// Retrieve the default value for a parameter, in case you forgot. The value is already
-    /// normalized to `[0, 1]`. This is useful when implementing GUIs, and it does not perform a callback.
-    pub fn default_normalized_param_value<P: Param>(&self, param: &P) -> f32 {
-        unsafe {
-            self.raw_context
-                .raw_default_normalized_param_value(param.as_ptr())
-        }
-    }
-
-    /// The same as [`default_normalized_param_value()`][Self::default_normalized_param_value()],
-    /// but without the normalization.
-    pub fn default_param_value<P: Param>(&self, param: &P) -> P::Plain {
-        param.preview_plain(self.default_normalized_param_value(param))
     }
 }

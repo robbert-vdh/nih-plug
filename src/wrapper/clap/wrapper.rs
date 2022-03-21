@@ -178,10 +178,6 @@ pub struct Wrapper<P: ClapPlugin> {
     /// by slashes, and they're only used to allow the DAW to display parameters in a tree
     /// structure.
     param_group_by_hash: HashMap<u32, String>,
-    /// The default normalized parameter value for every parameter in `param_ids`. We need to store
-    /// this in case the host requeries the parmaeter later. This is also indexed by the hash so we
-    /// can retrieve them later for the UI if needed.
-    pub param_defaults_normalized: HashMap<u32, f32>,
     /// Mappings from string parameter indentifiers to parameter hashes. Useful for debug logging
     /// and when storing and restoring plugin state.
     param_id_to_hash: HashMap<String, u32>,
@@ -370,10 +366,6 @@ impl<P: ClapPlugin> Wrapper<P> {
             .iter()
             .map(|(_, hash, _, group)| (*hash, group.clone()))
             .collect();
-        let param_defaults_normalized = param_id_hashes_ptrs_groups
-            .iter()
-            .map(|(_, hash, ptr, _)| (*hash, unsafe { ptr.normalized_value() }))
-            .collect();
         let param_id_to_hash = param_id_hashes_ptrs_groups
             .iter()
             .map(|(id, hash, _, _)| (id.clone(), *hash))
@@ -509,7 +501,6 @@ impl<P: ClapPlugin> Wrapper<P> {
             param_hashes,
             param_by_hash,
             param_group_by_hash,
-            param_defaults_normalized,
             param_id_to_hash,
             param_ptr_to_hash,
             output_parameter_events: ArrayQueue::new(OUTPUT_EVENT_QUEUE_CAPACITY),
@@ -1746,8 +1737,8 @@ impl<P: ClapPlugin> Wrapper<P> {
         } else {
             let param_hash = &wrapper.param_hashes[param_index as usize];
             let param_group = &wrapper.param_group_by_hash[param_hash];
-            let default_value = &wrapper.param_defaults_normalized[param_hash];
             let param_ptr = &wrapper.param_by_hash[param_hash];
+            let default_value = param_ptr.default_normalized_value();
             let step_count = param_ptr.step_count();
 
             param_info.id = *param_hash;
@@ -1767,7 +1758,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             // range option
             // TODO: This should probably be encapsulated in some way so we don't forget about this in one place
             param_info.max_value = step_count.unwrap_or(1) as f64;
-            param_info.default_value = *default_value as f64 * step_count.unwrap_or(1) as f64;
+            param_info.default_value = default_value as f64 * step_count.unwrap_or(1) as f64;
         }
 
         true

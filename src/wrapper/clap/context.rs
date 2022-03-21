@@ -75,16 +75,6 @@ impl<P: ClapPlugin> GuiContext for WrapperGuiContext<P> {
             None => nih_debug_assert_failure!("Unknown parameter: {:?}", param),
         }
     }
-
-    unsafe fn raw_default_normalized_param_value(&self, param: ParamPtr) -> f32 {
-        match self.wrapper.param_ptr_to_hash.get(&param) {
-            Some(hash) => self.wrapper.param_defaults_normalized[hash],
-            None => {
-                nih_debug_assert_failure!("Unknown parameter: {:?}", param);
-                0.5
-            }
-        }
-    }
 }
 
 impl<P: ClapPlugin> ProcessContext for WrapperProcessContext<'_, P> {

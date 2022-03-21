@@ -86,10 +86,6 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// addresses will remain stable, as they are obtained from a pinned object.
     pub param_by_hash: HashMap<u32, ParamPtr>,
     pub param_units: ParamUnits,
-    /// The default normalized parameter value for every parameter in `param_ids`. We need to store
-    /// this in case the host requeries the parmaeter later. This is also indexed by the hash so we
-    /// can retrieve them later for the UI if needed.
-    pub param_defaults_normalized: HashMap<u32, f32>,
     /// Mappings from string parameter indentifiers to parameter hashes. Useful for debug logging
     /// and when storing and restorign plugin state.
     pub param_id_to_hash: HashMap<String, u32>,
@@ -182,10 +178,6 @@ impl<P: Vst3Plugin> WrapperInner<P> {
                 .map(|(_, hash, _, group_name)| (*hash, group_name.as_str())),
         )
         .expect("Inconsistent parameter groups");
-        let param_defaults_normalized = param_id_hashes_ptrs_groups
-            .iter()
-            .map(|(_, hash, ptr, _)| (*hash, unsafe { ptr.normalized_value() }))
-            .collect();
         let param_id_to_hash = param_id_hashes_ptrs_groups
             .iter()
             .map(|(id, hash, _, _)| (id.clone(), *hash))
@@ -231,7 +223,6 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             param_hashes,
             param_by_hash,
             param_units,
-            param_defaults_normalized,
             param_id_to_hash,
             param_ptr_to_hash,
         };

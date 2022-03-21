@@ -32,7 +32,7 @@ pub(crate) fn create(
     peak_meter: Arc<AtomicF32>,
     editor_state: Arc<ViziaState>,
 ) -> Option<Box<dyn Editor>> {
-    create_vizia_editor(editor_state, move |cx, setter| {
+    create_vizia_editor(editor_state, move |cx| {
         cx.add_theme(STYLE);
 
         Data {
@@ -53,13 +53,13 @@ pub(crate) fn create(
             Label::new(cx, "Gain").bottom(Pixels(-1.0));
 
             VStack::new(cx, |cx| {
-                ParamSlider::new(cx, Data::params, setter, |params| &params.gain);
-                ParamSlider::new(cx, Data::params, setter, |params| &params.gain)
+                ParamSlider::new(cx, Data::params, |params| &params.gain);
+                ParamSlider::new(cx, Data::params, |params| &params.gain)
                     .set_style(ParamSliderStyle::FromLeft);
-                ParamSlider::new(cx, Data::params, setter, |params| &params.foo);
-                ParamSlider::new(cx, Data::params, setter, |params| &params.foo)
+                ParamSlider::new(cx, Data::params, |params| &params.foo);
+                ParamSlider::new(cx, Data::params, |params| &params.foo)
                     .set_style(ParamSliderStyle::CurrentStep);
-                ParamSlider::new(cx, Data::params, setter, |params| &params.foo)
+                ParamSlider::new(cx, Data::params, |params| &params.foo)
                     .set_style(ParamSliderStyle::CurrentStepLabeled);
             })
             .row_between(Pixels(5.0));

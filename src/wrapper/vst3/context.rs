@@ -80,16 +80,6 @@ impl<P: Vst3Plugin> GuiContext for WrapperGuiContext<P> {
             None => nih_debug_assert_failure!("Component handler not yet set"),
         }
     }
-
-    unsafe fn raw_default_normalized_param_value(&self, param: ParamPtr) -> f32 {
-        match self.inner.param_ptr_to_hash.get(&param) {
-            Some(hash) => self.inner.param_defaults_normalized[hash],
-            None => {
-                nih_debug_assert_failure!("Unknown parameter: {:?}", param);
-                0.5
-            }
-        }
-    }
 }
 
 impl<P: Vst3Plugin> ProcessContext for WrapperProcessContext<'_, P> {

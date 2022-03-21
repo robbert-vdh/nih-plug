@@ -27,9 +27,6 @@ pub enum ParamMessage {
     /// Set a parameter to a new normalized value. This needs to be surrounded by a matching
     /// `BeginSetParameter` and `EndSetParameter`.
     SetParameterNormalized(ParamPtr, f32),
-    /// Reset a parameter to its default value. This needs to be surrounded by a matching
-    /// `BeginSetParameter` and `EndSetParameter`.
-    ResetParameter(ParamPtr),
     /// End an automation gesture for a parameter.
     EndSetParameter(ParamPtr),
 }

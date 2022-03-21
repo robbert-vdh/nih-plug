@@ -216,10 +216,6 @@ pub trait IcedEditor: 'static + Send + Sync + Sized {
             ParamMessage::SetParameterNormalized(p, v) => unsafe {
                 context.raw_set_parameter_normalized(p, v)
             },
-            ParamMessage::ResetParameter(p) => unsafe {
-                let default_value = context.raw_default_normalized_param_value(p);
-                context.raw_set_parameter_normalized(p, default_value);
-            },
             ParamMessage::EndSetParameter(p) => unsafe { context.raw_end_set_parameter(p) },
         }
     }

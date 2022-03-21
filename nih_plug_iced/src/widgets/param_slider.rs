@@ -1,7 +1,7 @@
 //! A slider that integrates with NIH-plug's [`Param`] types.
 
 use atomic_refcell::AtomicRefCell;
-use nih_plug::prelude::{GuiContext, Param, ParamSetter};
+use nih_plug::prelude::Param;
 use std::borrow::Borrow;
 
 use crate::backend::widget;
@@ -31,9 +31,6 @@ pub struct ParamSlider<'a, P: Param> {
     state: &'a mut State,
 
     param: &'a P,
-    /// We'll visualize the parameter's current value by drawing the difference between the current
-    /// normalized value and the default normalized value.
-    setter: ParamSetter<'a>,
 
     height: Length,
     width: Length,
@@ -102,14 +99,11 @@ impl widget::text_input::StyleSheet for TextInputStyle {
 
 impl<'a, P: Param> ParamSlider<'a, P> {
     /// Creates a new [`ParamSlider`] for the given parameter.
-    pub fn new(state: &'a mut State, param: &'a P, context: &'a dyn GuiContext) -> Self {
-        let setter = ParamSetter::new(context);
-
+    pub fn new(state: &'a mut State, param: &'a P) -> Self {
         Self {
             state,
 
             param,
-            setter,
 
             width: Length::Units(180),
             height: Length::Units(30),
@@ -328,10 +322,7 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
                         self.state.drag_active = false;
 
                         shell.publish(ParamMessage::BeginSetParameter(self.param.as_ptr()));
-                        self.set_normalized_value(
-                            shell,
-                            self.setter.default_normalized_param_value(self.param),
-                        );
+                        self.set_normalized_value(shell, self.param.default_normalized_value());
                         shell.publish(ParamMessage::EndSetParameter(self.param.as_ptr()));
                     } else if self.state.keyboard_modifiers.shift() {
                         shell.publish(ParamMessage::BeginSetParameter(self.param.as_ptr()));
@@ -494,7 +485,7 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
             // default value lies somewhere in the middle and the parameter is continuous. Otherwise
             // this appraoch looks a bit jarring.
             let current_value = self.param.normalized_value();
-            let default_value = self.setter.default_normalized_param_value(self.param);
+            let default_value = self.param.default_normalized_value();
             let fill_start_x = util::remap_rect_x_t(
                 &bounds_without_borders,
                 if self.param.step_count().is_none() && (0.45..=0.55).contains(&default_value) {

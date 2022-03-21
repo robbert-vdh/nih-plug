@@ -340,15 +340,15 @@ impl<P: Vst3Plugin> IEditController for Wrapper<P> {
                 .param_units
                 .get_vst3_unit_id(*param_hash)
                 .expect("Inconsistent parameter data");
-            let default_value = &self.inner.param_defaults_normalized[param_hash];
             let param_ptr = &self.inner.param_by_hash[param_hash];
+            let default_value = param_ptr.default_normalized_value();
 
             info.id = *param_hash;
             u16strlcpy(&mut info.title, param_ptr.name());
             u16strlcpy(&mut info.short_title, param_ptr.name());
             u16strlcpy(&mut info.units, param_ptr.unit());
             info.step_count = param_ptr.step_count().unwrap_or(0) as i32;
-            info.default_normalized_value = *default_value as f64;
+            info.default_normalized_value = default_value as f64;
             info.unit_id = *param_unit;
             info.flags = vst3_sys::vst::ParameterFlags::kCanAutomate as i32;
         }

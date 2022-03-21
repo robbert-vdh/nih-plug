@@ -95,12 +95,8 @@ impl IcedEditor for GainEditor {
                     .vertical_alignment(alignment::Vertical::Center),
             )
             .push(
-                nih_widgets::ParamSlider::new(
-                    &mut self.gain_slider_state,
-                    &self.params.gain,
-                    self.context.as_ref(),
-                )
-                .map(Message::ParamUpdate),
+                nih_widgets::ParamSlider::new(&mut self.gain_slider_state, &self.params.gain)
+                    .map(Message::ParamUpdate),
             )
             .push(Space::with_height(10.into()))
             .push(
