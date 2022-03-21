@@ -30,3 +30,9 @@ param-slider .value-entry {
   background-color: transparent;
   border-width: 0px;
 }
+param-slider .value-entry .caret {
+  background-color: #0a0a0a;
+}
+param-slider .value-entry .selection {
+  background-color: #0a0a0a30;
+}
