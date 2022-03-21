@@ -11,7 +11,8 @@ use super::RawParamEvent;
 /// noramlized parameter.
 const GRANULAR_DRAG_MULTIPLIER: f32 = 0.1;
 
-/// A slider that integrates with NIH-plug's [`Param`] types.
+/// A slider that integrates with NIH-plug's [`Param`] types. Use the
+/// [`set_style()`][Self::set_style()] method to change how the value gets displayed.
 ///
 /// TODO: Handle scrolling for steps (and shift+scroll for smaller steps?)
 /// TODO: We may want to add a couple dedicated event handlers if it seems like those would be
