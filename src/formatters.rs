@@ -77,7 +77,7 @@ pub fn f32_hz_then_khz(digits: usize) -> Arc<dyn Fn(f32) -> String + Send + Sync
         if value < 1000.0 {
             format!("{:.digits$} Hz", value)
         } else {
-            format!("{:.digits$} kHz", value / 1000.0, digits = digits.min(1))
+            format!("{:.digits$} kHz", value / 1000.0, digits = digits.max(1))
         }
     })
 }
