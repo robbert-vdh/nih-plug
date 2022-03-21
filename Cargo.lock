@@ -2083,7 +2083,7 @@ dependencies = [
 [[package]]
 name = "morphorm"
 version = "0.3.0"
-source = "git+https://github.com/vizia/morphorm?rev=8d955d2f1d5b698e4fd1dbdfe36b3f3d9adbd19a#8d955d2f1d5b698e4fd1dbdfe36b3f3d9adbd19a"
+source = "git+https://github.com/vizia/morphorm?rev=07a8ba20b16660f93b551ad89873d4b382536b54#07a8ba20b16660f93b551ad89873d4b382536b54"
 dependencies = [
  "bitflags",
  "smallvec",
@@ -3606,7 +3606,7 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 [[package]]
 name = "vizia"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#066ada3af33add684193ce77c6d9512288cc6d28"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#4be520b39ba4a93e9e24fb769b058e49ee8256d6"
 dependencies = [
  "vizia_baseview",
  "vizia_core",
@@ -3615,7 +3615,7 @@ dependencies = [
 [[package]]
 name = "vizia_baseview"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#066ada3af33add684193ce77c6d9512288cc6d28"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#4be520b39ba4a93e9e24fb769b058e49ee8256d6"
 dependencies = [
  "baseview",
  "femtovg",
@@ -3627,7 +3627,7 @@ dependencies = [
 [[package]]
 name = "vizia_core"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#066ada3af33add684193ce77c6d9512288cc6d28"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#4be520b39ba4a93e9e24fb769b058e49ee8256d6"
 dependencies = [
  "bitflags",
  "copypasta",
@@ -3650,7 +3650,7 @@ dependencies = [
 [[package]]
 name = "vizia_derive"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#066ada3af33add684193ce77c6d9512288cc6d28"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#4be520b39ba4a93e9e24fb769b058e49ee8256d6"
 dependencies = [
  "proc-macro2",
  "quote",
