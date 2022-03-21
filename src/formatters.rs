@@ -1,5 +1,6 @@
 //! Convenience functions for formatting and parsing parameter values in common formats.
 
+use std::cmp::Ordering;
 use std::sync::Arc;
 
 use crate::util;
@@ -45,38 +46,26 @@ pub fn from_f32_gain_to_db() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> {
     })
 }
 
-/// Turn an `f32` value `[-1, 1]` to a panning value `[100L, 100R]` Value of `0.0` becomes `"C"`
+/// Turn an `f32` `[-1, 1]` value to a panning value where negative values are represented by
+/// `[100L, 1L]`, 0 gets turned into `C`, and positive values become `[1R, 100R]` values.
 pub fn f32_panning() -> Arc<dyn Fn(f32) -> String + Send + Sync> {
-    Arc::new(move |x| {
-        if x == 0. {
-            "C".to_string()
-        } else if x > 0. {
-            format!("{:.0}R", x * 100.)
-        } else {
-            format!("{:.0}L", x * -100.)
-        }
+    Arc::new(move |value| match value.partial_cmp(&0.0) {
+        Some(Ordering::Less) => format!("{:.0}L", value * -100.0),
+        Some(Ordering::Equal) => String::from("C"),
+        Some(Ordering::Greater) => format!("{:.0}R", value * 100.0),
+        None => String::from("NaN"),
     })
 }
-/// Parse a pan value to a linear value, range `[-1, 1]`. Used in
-/// conjunction with [`f32_panning`].
+
+/// Parse a pan value in the format of [`f32_panning`] to a linear value in the range `[-1, 1]`.
 pub fn from_f32_panning() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> {
     Arc::new(|string| {
-        if string.contains('L') {
-            string
-                .trim_end_matches(&[' ', 'L'])
-                .parse()
-                .ok()
-                .map(|x: f32| x / -100.)
-        } else if string.contains('R') {
-            string
-                .trim_end_matches(&[' ', 'R'])
-                .parse()
-                .ok()
-                .map(|x: f32| x / 100.)
-        } else if string == "C" {
-            Some(0.)
-        } else {
-            string.trim_end_matches(&[' ']).parse().ok().map(|x: f32| x)
+        let string = string.trim();
+        let cleaned_string = string.trim_end_matches(&[' ', 'L']).parse().ok();
+        match string.chars().last()?.to_uppercase().next()? {
+            'L' => cleaned_string.map(|x: f32| x / -100.0),
+            'R' => cleaned_string.map(|x: f32| x / 100.0),
+            _ => Some(0.0),
         }
     })
 }
