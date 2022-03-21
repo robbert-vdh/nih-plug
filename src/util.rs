@@ -6,6 +6,7 @@ pub mod window;
 pub use stft::StftHelper;
 
 pub const MINUS_INFINITY_DB: f32 = -100.0;
+pub const MINUS_INFINITY_GAIN: f32 = 1e-5; // 10f32.powf(MINUS_INFINITY_DB / 20)
 pub const NOTES: [&str; 12] = [
     "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
 ];
@@ -36,7 +37,7 @@ pub fn db_to_gain(dbs: f32) -> f32 {
 /// Convert a voltage gain ratio to decibels. Gain ratios that aren't positive will be treated as
 /// [`MINUS_INFINITY_DB`].
 pub fn gain_to_db(gain: f32) -> f32 {
-    if gain > 0.0 {
+    if gain > MINUS_INFINITY_GAIN {
         gain.log10() * 20.0
     } else {
         MINUS_INFINITY_DB
