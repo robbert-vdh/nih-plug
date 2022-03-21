@@ -111,10 +111,6 @@ impl Param for FloatParam {
         self.value
     }
 
-    fn normalized_value(&self) -> f32 {
-        self.preview_normalized(self.value)
-    }
-
     fn default_plain_value(&self) -> Self::Plain {
         self.default
     }

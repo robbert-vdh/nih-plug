@@ -34,8 +34,9 @@ pub trait Param: Display {
     fn plain_value(&self) -> Self::Plain;
 
     /// Get the normalized `[0, 1]` value for this parameter.
-    /// TODO: Add a default implementation for this one as well
-    fn normalized_value(&self) -> f32;
+    fn normalized_value(&self) -> f32 {
+        self.preview_normalized(self.plain_value())
+    }
 
     /// Get the unnormalized default value for this parameter.
     fn default_plain_value(&self) -> Self::Plain;

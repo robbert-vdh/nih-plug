@@ -2,10 +2,10 @@ use std::sync::Arc;
 
 use egui::{vec2, Key, Response, Sense, Stroke, TextEdit, TextStyle, Ui, Vec2, Widget, WidgetText};
 use lazy_static::lazy_static;
+use nih_plug::prelude::{Param, ParamSetter};
 use parking_lot::Mutex;
 
 use super::util;
-use nih_plug::prelude::{Param, ParamSetter};
 
 /// When shift+dragging a parameter, one pixel dragged corresponds to this much change in the
 /// noramlized parameter.
@@ -74,7 +74,7 @@ impl<'a, P: Param> ParamSlider<'a, P> {
     }
 
     fn string_value(&self) -> String {
-        format!("{}", self.param)
+        self.param.to_string()
     }
 
     /// Enable the keyboard entry part of the widget.

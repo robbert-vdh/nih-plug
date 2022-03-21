@@ -114,10 +114,6 @@ impl<T: Enum + PartialEq> Param for EnumParam<T> {
         T::from_index(self.inner.plain_value() as usize)
     }
 
-    fn normalized_value(&self) -> f32 {
-        self.inner.normalized_value()
-    }
-
     fn default_plain_value(&self) -> Self::Plain {
         T::from_index(self.inner.default_plain_value() as usize)
     }
@@ -185,10 +181,6 @@ impl Param for EnumParamInner {
 
     fn plain_value(&self) -> Self::Plain {
         self.inner.plain_value()
-    }
-
-    fn normalized_value(&self) -> f32 {
-        self.inner.normalized_value()
     }
 
     fn default_plain_value(&self) -> Self::Plain {
