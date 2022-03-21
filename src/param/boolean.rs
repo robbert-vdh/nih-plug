@@ -92,10 +92,6 @@ impl Param for BoolParam {
         }
     }
 
-    fn set_normalized_value(&mut self, normalized: f32) {
-        self.set_plain_value(self.preview_plain(normalized));
-    }
-
     fn normalized_value_to_string(&self, normalized: f32, _include_unit: bool) -> String {
         let value = self.preview_plain(normalized);
         match (value, &self.value_to_string) {

@@ -134,10 +134,6 @@ impl<T: Enum + PartialEq> Param for EnumParam<T> {
         self.inner.set_plain_value(T::to_index(plain) as i32)
     }
 
-    fn set_normalized_value(&mut self, normalized: f32) {
-        self.inner.set_normalized_value(normalized)
-    }
-
     fn normalized_value_to_string(&self, normalized: f32, include_unit: bool) -> String {
         self.inner
             .normalized_value_to_string(normalized, include_unit)
@@ -201,10 +197,6 @@ impl Param for EnumParamInner {
 
     fn set_plain_value(&mut self, plain: Self::Plain) {
         self.inner.set_plain_value(plain)
-    }
-
-    fn set_normalized_value(&mut self, normalized: f32) {
-        self.inner.set_normalized_value(normalized)
     }
 
     fn normalized_value_to_string(&self, normalized: f32, _include_unit: bool) -> String {

@@ -149,10 +149,6 @@ impl Param for FloatParam {
         }
     }
 
-    fn set_normalized_value(&mut self, normalized: f32) {
-        self.set_plain_value(self.preview_plain(normalized));
-    }
-
     fn normalized_value_to_string(&self, normalized: f32, include_unit: bool) -> String {
         let value = self.preview_plain(normalized);
         match (&self.value_to_string, &self.step_size, include_unit) {

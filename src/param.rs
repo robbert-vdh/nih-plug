@@ -84,7 +84,9 @@ pub trait Param: Display {
     /// continuous parameters (i.e. [`FloatParam`]).
     ///
     /// This does **not** update the smoother.
-    fn set_normalized_value(&mut self, normalized: f32);
+    fn set_normalized_value(&mut self, normalized: f32) {
+        self.set_plain_value(self.preview_plain(normalized))
+    }
 
     /// Get the string representation for a normalized value. Used as part of the wrappers. Most
     /// plugin formats already have support for units, in which case it shouldn't be part of this
