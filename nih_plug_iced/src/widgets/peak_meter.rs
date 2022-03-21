@@ -230,7 +230,7 @@ where
             Background::Color(Color::TRANSPARENT),
         );
 
-        // Beneat the bar we want to draw the names of the ticks
+        // Beneath the bar we want to draw the names of the ticks
         for tick_db in text_ticks {
             let x_coordinate = db_to_x_coord(tick_db as f32);
 

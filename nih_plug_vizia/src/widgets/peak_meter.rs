@@ -16,6 +16,9 @@ const TICK_GAP: f32 = 1.0;
 const MIN_TICK: f32 = -90.0;
 /// The decibel value corresponding to the very right of the bar.
 const MAX_TICK: f32 = 20.0;
+/// The ticks that will be shown beneath the peak meter's bar. The first value is shown as
+/// -infinity, and at the last position we'll draw the `dBFS` string.
+const TEXT_TICKS: [i32; 6] = [-80, -60, -40, -20, 0, 12];
 
 /// A simple horizontal peak meter.
 ///
@@ -24,7 +27,7 @@ const MAX_TICK: f32 = 20.0;
 pub struct PeakMeter;
 
 /// The bar bit for the peak meter, manually drawn using vertical lines.
-struct PeakMeterInner<L, P>
+struct PeakMeterBar<L, P>
 where
     L: Lens<Target = f32>,
     P: Lens<Target = f32>,
@@ -76,15 +79,54 @@ impl PeakMeter {
                     .map(|_level| -> f32 { util::MINUS_INFINITY_DB }),
             };
 
-            PeakMeterInner {
+            PeakMeterBar {
                 level_dbfs,
                 peak_dbfs,
             }
             .build(cx)
             .class("bar");
 
-            // TODO: Ticks
+            ZStack::new(cx, |cx| {
+                const WIDTH_PCT: f32 = 50.0;
+                for tick_db in TEXT_TICKS {
+                    let tick_fraction = (tick_db as f32 - MIN_TICK) / (MAX_TICK - MIN_TICK);
+                    let tick_pct = tick_fraction * 100.0;
+
+                    ZStack::new(cx, |cx| {
+                        let first_tick = tick_db == TEXT_TICKS[0];
+                        let last_tick = tick_db == TEXT_TICKS[TEXT_TICKS.len() - 1];
+
+                        if !last_tick {
+                            // FIXME: This is not aligned to the pixel grid and some ticks will look
+                            //        blurry, is there a way to fix this?
+                            Element::new(cx).class("ticks__tick");
+                        }
+
+                        if first_tick {
+                            Label::new(cx, "-inf")
+                                .class("ticks__label")
+                                .class("ticks__label--inf");
+                        } else if last_tick {
+                            // This is only inclued in the array to make positioning this easier
+                            Label::new(cx, "dBFS")
+                                .class("ticks__label")
+                                .class("ticks__label--dbfs");
+                        } else {
+                            Label::new(cx, &tick_db.to_string()).class("ticks__label");
+                        };
+                    })
+                    .height(Stretch(1.0))
+                    .left(Percentage(tick_pct - (WIDTH_PCT / 2.0)))
+                    .width(Percentage(WIDTH_PCT))
+                    .child_left(Stretch(1.0))
+                    .child_right(Stretch(1.0))
+                    .overflow(Overflow::Visible);
+                }
+            })
+            .class("ticks")
+            .overflow(Overflow::Visible);
         })
+        .overflow(Overflow::Visible)
     }
 }
 
@@ -94,7 +136,7 @@ impl View for PeakMeter {
     }
 }
 
-impl<L, P> View for PeakMeterInner<L, P>
+impl<L, P> View for PeakMeterBar<L, P>
 where
     L: Lens<Target = f32>,
     P: Lens<Target = f32>,

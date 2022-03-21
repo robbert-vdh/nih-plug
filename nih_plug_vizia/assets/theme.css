@@ -47,6 +47,17 @@ peak-meter .bar {
   border-width: 1px;
   border-color: #0a0a0a;
 }
+
 peak-meter .ticks {
   height: 50%;
+}
+peak-meter .ticks__tick {
+  background-color: #0a0a0a;
+  top: 0;
+  width: 1px;
+  height: 30%;
+}
+peak-meter .ticks__label {
+  top: 4px; /* In pixels in an attempt to get this to better align to the grid */
+  font-size: 10.5; /* 14px */
 }
