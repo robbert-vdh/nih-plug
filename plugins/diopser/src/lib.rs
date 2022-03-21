@@ -170,8 +170,9 @@ impl DiopserParams {
             )
             // This needs quite a bit of smoothing to avoid artifacts
             .with_smoother(SmoothingStyle::Logarithmic(100.0))
-            .with_unit(" Hz")
-            .with_value_to_string(formatters::f32_rounded(0)),
+            // This includes the unit
+            .with_value_to_string(formatters::f32_hz_then_khz(0))
+            .with_string_to_value(formatters::from_f32_hz_then_khz()),
             filter_resonance: FloatParam::new(
                 "Filter Resonance",
                 // The actual default neutral Q-value would be `sqrt(2) / 2`, but this value

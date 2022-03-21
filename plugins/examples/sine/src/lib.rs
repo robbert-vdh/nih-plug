@@ -69,10 +69,10 @@ impl Default for SineParams {
                 },
             )
             .with_smoother(SmoothingStyle::Linear(10.0))
-            .with_unit(" Hz")
             // We purposely don't specify a step size here, but the parameter should still be
-            // displaeyd as rounded
-            .with_value_to_string(formatters::f32_rounded(0)),
+            // displayed as if it were rounded. This formatter also includes the unit.
+            .with_value_to_string(formatters::f32_hz_then_khz(0))
+            .with_string_to_value(formatters::from_f32_hz_then_khz()),
             use_midi: BoolParam::new("Use MIDI", false),
         }
     }
