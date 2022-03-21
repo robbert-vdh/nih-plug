@@ -143,6 +143,9 @@ impl Default for Crisp {
 impl Default for CrispParams {
     #[allow(clippy::derivable_impls)]
     fn default() -> Self {
+        let f32_hz_then_khz = formatters::f32_hz_then_khz(0);
+        let from_f32_hz_then_khz = formatters::from_f32_hz_then_khz();
+
         Self {
             amount: FloatParam::new("Amount", 0.35, FloatRange::Linear { min: 0.0, max: 1.0 })
                 .with_smoother(SmoothingStyle::Linear(10.0))
@@ -200,20 +203,26 @@ impl Default for CrispParams {
             )
             .with_smoother(SmoothingStyle::Logarithmic(100.0))
             // The unit is baked into the value so we can show the disabled string
-            .with_value_to_string(Arc::new(|value| {
-                if value <= MIN_FILTER_FREQUENCY {
-                    String::from("Disabled")
-                } else {
-                    format!("{:.0} Hz", value)
-                }
-            }))
-            .with_string_to_value(Arc::new(|string| {
-                if string == "Disabled" {
-                    Some(MIN_FILTER_FREQUENCY)
-                } else {
-                    string.trim().trim_end_matches(" Hz").parse().ok()
-                }
-            })),
+            .with_value_to_string({
+                let f32_hz_then_khz = f32_hz_then_khz.clone();
+                Arc::new(move |value| {
+                    if value <= MIN_FILTER_FREQUENCY {
+                        String::from("Disabled")
+                    } else {
+                        f32_hz_then_khz(value)
+                    }
+                })
+            })
+            .with_string_to_value({
+                let from_f32_hz_then_khz = from_f32_hz_then_khz.clone();
+                Arc::new(move |string| {
+                    if string == "Disabled" {
+                        Some(MIN_FILTER_FREQUENCY)
+                    } else {
+                        from_f32_hz_then_khz(string)
+                    }
+                })
+            }),
             noise_hpf_q: FloatParam::new(
                 "Noise HP Resonance",
                 2.0f32.sqrt() / 2.0,
@@ -236,18 +245,18 @@ impl Default for CrispParams {
             )
             .with_smoother(SmoothingStyle::Logarithmic(100.0))
             // The unit is baked into the value so we can show the disabled string
-            .with_value_to_string(Arc::new(|value| {
+            .with_value_to_string(Arc::new(move |value| {
                 if value >= MAX_FILTER_FREQUENCY {
                     String::from("Disabled")
                 } else {
-                    format!("{:.0} Hz", value)
+                    f32_hz_then_khz(value)
                 }
             }))
-            .with_string_to_value(Arc::new(|string| {
+            .with_string_to_value(Arc::new(move |string| {
                 if string == "Disabled" {
                     Some(MAX_FILTER_FREQUENCY)
                 } else {
-                    string.trim().trim_end_matches(" Hz").parse().ok()
+                    from_f32_hz_then_khz(string)
                 }
             })),
             noise_lpf_q: FloatParam::new(
