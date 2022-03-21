@@ -16,7 +16,6 @@ const GRANULAR_DRAG_MULTIPLIER: f32 = 0.1;
 /// TODO: Handle scrolling for steps (and shift+scroll for smaller steps?)
 /// TODO: We may want to add a couple dedicated event handlers if it seems like those would be
 ///       useful, having a completely self contained widget is perfectly fine for now though
-/// TODO: Text entry doesn't work correctly yet because vizia's still missing some functionality
 pub struct ParamSlider {
     // We're not allowed to store a reference to the parameter internally, at least not in the
     // struct that implements [`View`]
@@ -81,10 +80,9 @@ impl Model for ParamSliderInternal {
             match param_slider_internal_event {
                 ParamSliderInternalEvent::SetStyle(style) => self.style = *style,
                 ParamSliderInternalEvent::SetTextInputActive(active) => {
+                    // When this gets set to `true` the textbox widget will be created, and when it
+                    // gets created we'll focus it and select all text
                     self.text_input_active = *active;
-                    if *active {
-                        // TODO: Interact with the Textbox widget
-                    }
                 }
             }
         }
@@ -146,113 +144,140 @@ impl ParamSlider {
                     && step_count.is_none()
                     && (0.45..=0.55).contains(&default_value);
 
-                let param_display_value_lens =
-                    params.map(move |params| params_to_param(params).to_string());
-                let param_preview_display_value_lens = |normalized_value| {
-                    params.map(move |params| {
-                        params_to_param(params).normalized_value_to_string(normalized_value, true)
-                    })
-                };
-                let normalized_param_value_lens =
-                    params.map(move |params| params_to_param(params).normalized_value());
-
                 // Only draw the text input widget when it gets focussed. Otherwise, overlay the
-                // label with the slider. We need to always include the text input widget in the
-                // tree because using a `Binding` here would cause the text box to get recreated
-                // whenever `ParamSliderInternal::text_input_active` changes.
-                Textbox::new(cx, param_display_value_lens.clone())
-                    .class("value-entry")
-                    .on_submit(|cx, string| cx.emit(ParamSliderEvent::TextInput(string)))
-                    .on_focus_out(|cx| cx.emit(ParamSliderEvent::CancelTextInput))
-                    .display(ParamSliderInternal::text_input_active)
-                    .child_space(Stretch(1.0))
-                    .height(Stretch(1.0))
-                    .width(Stretch(1.0));
-
-                // This only gets shown when the text box isn't active
-                ZStack::new(cx, move |cx| {
-                    // The filled bar portion. This can be visualized in a couple different
-                    // ways depending on the current style property. See
-                    // [`ParamSliderStyle`].
-                    Element::new(cx)
-                        .class("fill")
-                        .height(Stretch(1.0))
-                        .bind(normalized_param_value_lens, move |handle, value| {
-                            let current_value = *value.get(handle.cx);
-                            let (start_t, delta) = match style {
-                                ParamSliderStyle::Centered if draw_fill_from_default => {
-                                    let delta = (default_value - current_value).abs();
-                                    (
-                                        default_value.min(current_value),
-                                        // Don't draw the filled portion at all if it could have been a
-                                        // rounding error since those slivers just look weird
-                                        if delta >= 1e-3 { delta } else { 0.0 },
-                                    )
-                                }
-                                ParamSliderStyle::Centered | ParamSliderStyle::FromLeft => {
-                                    (0.0, current_value)
-                                }
-                                ParamSliderStyle::CurrentStep
-                                | ParamSliderStyle::CurrentStepLabeled => {
-                                    let previous_step = unsafe {
-                                        param_ptr.previous_normalized_step(current_value)
-                                    };
-                                    let next_step =
-                                        unsafe { param_ptr.next_normalized_step(current_value) };
-                                    (
-                                        (previous_step + current_value) / 2.0,
-                                        (next_step + current_value) / 2.0,
-                                    )
-                                }
-                            };
-
-                            handle
-                                .left(Percentage(start_t * 100.0))
-                                .width(Percentage(delta * 100.0));
-                        })
-                        // Hovering is handled on the param slider as a whole, this should
-                        // not affect that
-                        .hoverable(false);
-
-                    // Either display the current value, or display all values over the
-                    // parameter's steps
-                    // TODO: Do the same thing as in the iced widget where we draw the
-                    //       text overlapping the fill area slightly differently. We can
-                    //       set the cip region directly in vizia.
-                    match (style, step_count) {
-                        (ParamSliderStyle::CurrentStepLabeled, Some(step_count)) => {
-                            HStack::new(cx, |cx| {
-                                // There are step_count + 1 possible values for a
-                                // discrete parameter
-                                for value in 0..step_count + 1 {
-                                    let normalized_value = value as f32 / step_count as f32;
-                                    Label::new(
-                                        cx,
-                                        param_preview_display_value_lens(normalized_value),
-                                    )
-                                    .class("value")
-                                    .class("value--multiple")
-                                    .height(Stretch(1.0))
-                                    .width(Stretch(1.0))
-                                    .hoverable(false);
-                                }
+                // label with the slider. Creating the textbox based on
+                // `ParamSliderInternal::text_input_active` lets us focus the textbox when it gets
+                // created.
+                Binding::new(
+                    cx,
+                    ParamSliderInternal::text_input_active,
+                    move |cx, text_input_active| {
+                        let param_display_value_lens =
+                            params.map(move |params| params_to_param(params).to_string());
+                        let param_preview_display_value_lens = |normalized_value| {
+                            params.map(move |params| {
+                                params_to_param(params)
+                                    .normalized_value_to_string(normalized_value, true)
                             })
-                            .height(Stretch(1.0))
-                            .width(Stretch(1.0))
+                        };
+                        let normalized_param_value_lens =
+                            params.map(move |params| params_to_param(params).normalized_value());
+
+                        if *text_input_active.get(cx) {
+                            Textbox::new(cx, param_display_value_lens)
+                                .class("value-entry")
+                                .on_submit(|cx, string| {
+                                    // FIXME: Remove
+                                    eprintln!("on_submit");
+                                    cx.emit(ParamSliderEvent::TextInput(string))
+                                })
+                                .on_edit_end(|cx| {
+                                    // FIXME: Remove
+                                    eprintln!("on_edit_end");
+                                    cx.emit(ParamSliderEvent::CancelTextInput);
+                                })
+                                .on_build(|cx| {
+                                    // FIXME: Remove
+                                    eprintln!("on_build");
+                                    cx.emit(TextEvent::StartEdit);
+                                    cx.emit(TextEvent::SelectAll);
+                                })
+                                .child_space(Stretch(1.0))
+                                .height(Stretch(1.0))
+                                .width(Stretch(1.0));
+                        } else {
+                            ZStack::new(cx, move |cx| {
+                                // The filled bar portion. This can be visualized in a couple
+                                // different ways depending on the current style property. See
+                                // [`ParamSliderStyle`].
+                                Element::new(cx)
+                                    .class("fill")
+                                    .height(Stretch(1.0))
+                                    .bind(normalized_param_value_lens, move |handle, value| {
+                                        let current_value = *value.get(handle.cx);
+                                        let (start_t, delta) = match style {
+                                            ParamSliderStyle::Centered
+                                                if draw_fill_from_default =>
+                                            {
+                                                let delta = (default_value - current_value).abs();
+                                                (
+                                                    default_value.min(current_value),
+                                                    // Don't draw the filled portion at all if it
+                                                    // could have been a rounding error since those
+                                                    // slivers just look weird
+                                                    if delta >= 1e-3 { delta } else { 0.0 },
+                                                )
+                                            }
+                                            ParamSliderStyle::Centered
+                                            | ParamSliderStyle::FromLeft => (0.0, current_value),
+                                            ParamSliderStyle::CurrentStep
+                                            | ParamSliderStyle::CurrentStepLabeled => {
+                                                let previous_step = unsafe {
+                                                    param_ptr
+                                                        .previous_normalized_step(current_value)
+                                                };
+                                                let next_step = unsafe {
+                                                    param_ptr.next_normalized_step(current_value)
+                                                };
+                                                (
+                                                    (previous_step + current_value) / 2.0,
+                                                    (next_step + current_value) / 2.0,
+                                                )
+                                            }
+                                        };
+
+                                        handle
+                                            .left(Percentage(start_t * 100.0))
+                                            .width(Percentage(delta * 100.0));
+                                    })
+                                    // Hovering is handled on the param slider as a whole, this
+                                    // should not affect that
+                                    .hoverable(false);
+
+                                // Either display the current value, or display all values over the
+                                // parameter's steps
+                                // TODO: Do the same thing as in the iced widget where we draw the
+                                //       text overlapping the fill area slightly differently. We can
+                                //       set the cip region directly in vizia.
+                                match (style, step_count) {
+                                    (ParamSliderStyle::CurrentStepLabeled, Some(step_count)) => {
+                                        HStack::new(cx, |cx| {
+                                            // There are step_count + 1 possible values for a
+                                            // discrete parameter
+                                            for value in 0..step_count + 1 {
+                                                let normalized_value =
+                                                    value as f32 / step_count as f32;
+                                                Label::new(
+                                                    cx,
+                                                    param_preview_display_value_lens(
+                                                        normalized_value,
+                                                    ),
+                                                )
+                                                .class("value")
+                                                .class("value--multiple")
+                                                .height(Stretch(1.0))
+                                                .width(Stretch(1.0))
+                                                .hoverable(false);
+                                            }
+                                        })
+                                        .height(Stretch(1.0))
+                                        .width(Stretch(1.0))
+                                        .hoverable(false);
+                                    }
+                                    _ => {
+                                        Label::new(cx, param_display_value_lens)
+                                            .class("value")
+                                            .class("value--single")
+                                            .height(Stretch(1.0))
+                                            .width(Stretch(1.0))
+                                            .hoverable(false);
+                                    }
+                                };
+                            })
                             .hoverable(false);
                         }
-                        _ => {
-                            Label::new(cx, param_display_value_lens)
-                                .class("value")
-                                .class("value--single")
-                                .height(Stretch(1.0))
-                                .width(Stretch(1.0))
-                                .hoverable(false);
-                        }
-                    };
-                })
-                .display(ParamSliderInternal::text_input_active.map(|active| !active))
-                .hoverable(false);
+                    },
+                );
             });
         })
     }
@@ -310,12 +335,6 @@ impl View for ParamSlider {
                         // ALt+Click brings up a text entry dialog
                         cx.emit(ParamSliderInternalEvent::SetTextInputActive(true));
                         cx.current.set_active(cx, true);
-
-                        // TODO: Once vizia implements it: (and probably do this from
-                        //       `SetTextInputActive`)
-                        //       - Focus the text box
-                        //       - Select all text
-                        //       - Move the caret to the end
                     } else if cx.modifiers.command() || self.is_double_click {
                         // Ctrl+Click and double click should reset the parameter instead of initiating
                         // a drag operation

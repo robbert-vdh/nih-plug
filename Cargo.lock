@@ -3605,7 +3605,7 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 [[package]]
 name = "vizia"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#8247518a4d74d741ad27334fc48ba961f43134ff"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#066ada3af33add684193ce77c6d9512288cc6d28"
 dependencies = [
  "vizia_baseview",
  "vizia_core",
@@ -3614,7 +3614,7 @@ dependencies = [
 [[package]]
 name = "vizia_baseview"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#8247518a4d74d741ad27334fc48ba961f43134ff"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#066ada3af33add684193ce77c6d9512288cc6d28"
 dependencies = [
  "baseview",
  "femtovg",
@@ -3626,7 +3626,7 @@ dependencies = [
 [[package]]
 name = "vizia_core"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#8247518a4d74d741ad27334fc48ba961f43134ff"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#066ada3af33add684193ce77c6d9512288cc6d28"
 dependencies = [
  "bitflags",
  "copypasta",
@@ -3649,7 +3649,7 @@ dependencies = [
 [[package]]
 name = "vizia_derive"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#8247518a4d74d741ad27334fc48ba961f43134ff"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#066ada3af33add684193ce77c6d9512288cc6d28"
 dependencies = [
  "proc-macro2",
  "quote",
