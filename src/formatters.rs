@@ -39,7 +39,7 @@ pub fn f32_gain_to_db(digits: usize) -> Arc<dyn Fn(f32) -> String + Send + Sync>
 pub fn from_f32_gain_to_db() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> {
     Arc::new(|string| {
         string
-            .trim_end_matches(&[' ', 'd', 'B', 'F', 'S'])
+            .trim_end_matches(&[' ', 'd', 'D', 'b', 'B', 'f', 'F', 's', 'S'])
             .parse()
             .ok()
             .map(util::db_to_gain)
@@ -61,7 +61,7 @@ pub fn f32_panning() -> Arc<dyn Fn(f32) -> String + Send + Sync> {
 pub fn from_f32_panning() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> {
     Arc::new(|string| {
         let string = string.trim();
-        let cleaned_string = string.trim_end_matches(&[' ', 'L']).parse().ok();
+        let cleaned_string = string.trim_end_matches(&[' ', 'l', 'L']).parse().ok();
         match string.chars().last()?.to_uppercase().next()? {
             'L' => cleaned_string.map(|x: f32| x / -100.0),
             'R' => cleaned_string.map(|x: f32| x / 100.0),
@@ -78,6 +78,22 @@ pub fn f32_hz_then_khz(digits: usize) -> Arc<dyn Fn(f32) -> String + Send + Sync
             format!("{:.digits$} Hz", value)
         } else {
             format!("{:.digits$} kHz", value / 1000.0, digits = digits.min(1))
+        }
+    })
+}
+
+/// Convert an input in the same format at that of [`f32_hz_then_khz`] to a Hertz value.
+pub fn from_f32_hz_then_khz() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> {
+    Arc::new(move |string| {
+        let string = string.trim();
+        let cleaned_string = string
+            .trim_end_matches(&[' ', 'k', 'K', 'h', 'H', 'z', 'Z'])
+            .parse()
+            .ok();
+        match string.get(string.len() - 3..) {
+            Some(unit) if unit.eq_ignore_ascii_case("khz") => cleaned_string.map(|x| x * 1000.0),
+            // Even if there's no unit at all, just assume the input is in Hertz
+            _ => cleaned_string,
         }
     })
 }
