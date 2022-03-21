@@ -73,6 +73,7 @@ impl<T: Enum + PartialEq + Default> Default for EnumParam<T> {
             inner: EnumParamInner {
                 inner: IntParam {
                     value: T::default().to_index() as i32,
+                    default: T::default().to_index() as i32,
                     range: IntRange::Linear {
                         min: 0,
                         max: variants.len() as i32 - 1,
@@ -115,6 +116,10 @@ impl<T: Enum + PartialEq> Param for EnumParam<T> {
 
     fn normalized_value(&self) -> f32 {
         self.inner.normalized_value()
+    }
+
+    fn default_plain_value(&self) -> Self::Plain {
+        T::from_index(self.inner.default_plain_value() as usize)
     }
 
     fn step_count(&self) -> Option<usize> {
@@ -184,6 +189,10 @@ impl Param for EnumParamInner {
 
     fn normalized_value(&self) -> f32 {
         self.inner.normalized_value()
+    }
+
+    fn default_plain_value(&self) -> Self::Plain {
+        self.inner.default_plain_value()
     }
 
     fn step_count(&self) -> Option<usize> {

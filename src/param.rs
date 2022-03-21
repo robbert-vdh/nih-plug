@@ -34,7 +34,16 @@ pub trait Param: Display {
     fn plain_value(&self) -> Self::Plain;
 
     /// Get the normalized `[0, 1]` value for this parameter.
+    /// TODO: Add a default implementation for this one as well
     fn normalized_value(&self) -> f32;
+
+    /// Get the unnormalized default value for this parameter.
+    fn default_plain_value(&self) -> Self::Plain;
+
+    /// Get the normalized `[0, 1]` default value for this parameter.
+    fn default_normalized_value(&self) -> f32 {
+        self.preview_normalized(self.default_plain_value())
+    }
 
     /// Get the number of steps for this paramter, if it is discrete. Used for the host's generic
     /// UI.

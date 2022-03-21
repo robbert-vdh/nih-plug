@@ -9,8 +9,10 @@ use super::Param;
 /// A simple boolean parmaeter.
 #[repr(C, align(4))]
 pub struct BoolParam {
-    /// The field's current, normalized value. Should be initialized with the default value.
+    /// The field's current value. Should be initialized with the default value.
     pub value: bool,
+    /// The field's default value.
+    pub default: bool,
 
     /// Optional callback for listening to value changes. The argument passed to this function is
     /// the parameter's new value. This should not do anything expensive as it may be called
@@ -33,6 +35,7 @@ impl Default for BoolParam {
     fn default() -> Self {
         Self {
             value: false,
+            default: false,
             value_changed: None,
             name: "",
             value_to_string: None,
@@ -68,6 +71,10 @@ impl Param for BoolParam {
 
     fn normalized_value(&self) -> f32 {
         self.preview_normalized(self.value)
+    }
+
+    fn default_plain_value(&self) -> Self::Plain {
+        self.default
     }
 
     fn step_count(&self) -> Option<usize> {
@@ -141,6 +148,7 @@ impl BoolParam {
     pub fn new(name: &'static str, default: bool) -> Self {
         Self {
             value: default,
+            default,
             name,
             ..Default::default()
         }

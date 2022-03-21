@@ -28,9 +28,12 @@ pub struct FloatParam {
     /// Storing parameter values like this instead of in a single contiguous array is bad for cache
     /// locality, but it does allow for a much nicer declarative API.
     pub value: f32,
+    /// The field's default plain, unnormalized value.
+    pub default: f32,
     /// An optional smoother that will automatically interpolate between the new automation values
     /// set by the host.
     pub smoothed: Smoother<f32>,
+
     /// Optional callback for listening to value changes. The argument passed to this function is
     /// the parameter's new **plain** value. This should not do anything expensive as it may be
     /// called multiple times in rapid succession.
@@ -67,6 +70,7 @@ impl Default for FloatParam {
     fn default() -> Self {
         Self {
             value: 0.0,
+            default: 0.0,
             smoothed: Smoother::none(),
             value_changed: None,
             range: FloatRange::default(),
@@ -109,6 +113,10 @@ impl Param for FloatParam {
 
     fn normalized_value(&self) -> f32 {
         self.preview_normalized(self.value)
+    }
+
+    fn default_plain_value(&self) -> Self::Plain {
+        self.default
     }
 
     fn step_count(&self) -> Option<usize> {
@@ -212,6 +220,7 @@ impl FloatParam {
     pub fn new(name: &'static str, default: f32, range: FloatRange) -> Self {
         Self {
             value: default,
+            default,
             range,
             name,
             ..Default::default()

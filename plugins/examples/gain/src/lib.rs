@@ -58,6 +58,7 @@ impl Default for GainParams {
             // ...either manually specify all fields:
             gain: FloatParam {
                 value: 0.0,
+                default: 0.0,
                 smoothed: Smoother::new(SmoothingStyle::Linear(50.0)),
                 value_changed: None,
                 range: FloatRange::Linear {
