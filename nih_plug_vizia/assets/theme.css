@@ -36,3 +36,17 @@ param-slider .value-entry .caret {
 param-slider .value-entry .selection {
   background-color: #0a0a0a30;
 }
+
+peak-meter {
+  height: 30px;
+  width: 180px;
+}
+
+peak-meter .bar {
+  height: 50%;
+  border-width: 1px;
+  border-color: #0a0a0a;
+}
+peak-meter .ticks {
+  height: 50%;
+}

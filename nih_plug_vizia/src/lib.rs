@@ -8,6 +8,7 @@ use std::sync::Arc;
 use vizia::{Application, Color, Context, Entity, Model, PropSet, WindowDescription};
 
 // Re-export for convenience
+pub use femtovg;
 pub use vizia;
 
 pub mod assets;

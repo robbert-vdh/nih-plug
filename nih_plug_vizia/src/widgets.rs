@@ -12,9 +12,11 @@ use std::sync::Arc;
 use vizia::{Context, Model};
 
 mod param_slider;
+mod peak_meter;
 pub mod util;
 
 pub use param_slider::{ParamSlider, ParamSliderExt, ParamSliderStyle};
+pub use peak_meter::PeakMeter;
 
 /// Register the default theme for the widgets exported by this module. This is automatically called
 /// for you when using [`create_vizia_editor()`][super::create_vizia_editor()].

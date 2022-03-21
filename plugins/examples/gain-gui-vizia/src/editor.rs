@@ -1,10 +1,12 @@
 use atomic_float::AtomicF32;
-use nih_plug::prelude::Editor;
+use nih_plug::prelude::{util, Editor};
 use nih_plug_vizia::vizia::*;
 use nih_plug_vizia::widgets::*;
 use nih_plug_vizia::{assets, create_vizia_editor, ViziaState};
 use std::pin::Pin;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::GainParams;
 
@@ -48,23 +50,21 @@ pub(crate) fn create(
                 .height(Pixels(50.0))
                 .child_top(Stretch(1.0))
                 .child_bottom(Pixels(0.0));
+
             // NOTE: VIZIA adds 1 pixel of additional height to these labels, so we'll need to
             //       compensate for that
             Label::new(cx, "Gain").bottom(Pixels(-1.0));
+            ParamSlider::new(cx, Data::params, |params| &params.gain)
+                .set_style(ParamSliderStyle::FromLeft);
 
-            VStack::new(cx, |cx| {
-                ParamSlider::new(cx, Data::params, |params| &params.gain);
-                ParamSlider::new(cx, Data::params, |params| &params.gain)
-                    .set_style(ParamSliderStyle::FromLeft);
-                ParamSlider::new(cx, Data::params, |params| &params.foo);
-                ParamSlider::new(cx, Data::params, |params| &params.foo)
-                    .set_style(ParamSliderStyle::CurrentStep);
-                ParamSlider::new(cx, Data::params, |params| &params.foo)
-                    .set_style(ParamSliderStyle::CurrentStepLabeled);
-            })
-            .row_between(Pixels(5.0));
-
-            // TODO: Add a peak meter
+            PeakMeter::new(
+                cx,
+                Data::peak_meter
+                    .map(|peak_meter| util::gain_to_db(peak_meter.load(Ordering::Relaxed))),
+                Some(Duration::from_millis(600)),
+            )
+            // This is how adding padding works in vizia
+            .top(Pixels(10.0));
         })
         .row_between(Pixels(0.0))
         .child_left(Stretch(1.0))

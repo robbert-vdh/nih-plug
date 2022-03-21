@@ -2191,6 +2191,7 @@ version = "0.0.0"
 dependencies = [
  "baseview",
  "crossbeam",
+ "femtovg",
  "nih_plug",
  "nih_plug_assets",
  "vizia",
