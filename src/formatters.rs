@@ -2,10 +2,13 @@
 
 use std::sync::Arc;
 
+use crate::util;
+
 /// Round an `f32` value to always have a specific number of decimal digits.
 pub fn f32_rounded(digits: usize) -> Arc<dyn Fn(f32) -> String + Send + Sync> {
-    Arc::new(move |x| format!("{:.digits$}", x))
+    Arc::new(move |value| format!("{:.digits$}", value))
 }
+
 /// Format a `[0, 1]` number as a percentage. Does not include the percent sign, you should specify
 /// this as the parameter's unit.
 pub fn f32_percentage(digits: usize) -> Arc<dyn Fn(f32) -> String + Send + Sync> {
@@ -24,21 +27,24 @@ pub fn from_f32_percentage() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> {
     })
 }
 
-/// Turn an `f32` value from linear to dBFS (reference value 1)
-pub fn f32_lin_to_db(digits: usize) -> Arc<dyn Fn(f32) -> String + Send + Sync> {
-    Arc::new(move |x| format!("{:.digits$}", x.log10() * 20.0))
+/// Turn an `f32` value from voltage gain to decibels using the semantics described in
+/// [`util::gain_to_db`]. You should use either `" dB"` or `" dBFS"` for the parameter's unit.
+pub fn f32_gain_to_db(digits: usize) -> Arc<dyn Fn(f32) -> String + Send + Sync> {
+    Arc::new(move |value| format!("{:.digits$}", util::gain_to_db(value)))
 }
-/// Parse a `dBFS` value to a linear value. Handles the dB unit for you. Used in
-/// conjunction with [`f32_lin_to_db`].
-pub fn from_f32_lin_to_db() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> {
+
+/// Parse a decibel value to a linear voltage gain ratio. Handles the `dB` or `dBFS` units for you.
+/// Used in conjunction with [`f32_lin_to_db`].
+pub fn from_f32_gain_to_db() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> {
     Arc::new(|string| {
         string
-            .trim_end_matches(&[' ', 'd', 'B'])
+            .trim_end_matches(&[' ', 'd', 'B', 'F', 'S'])
             .parse()
             .ok()
-            .map(|x: f32| 10f32.powf(x / 20.0))
+            .map(util::db_to_gain)
     })
 }
+
 /// Turn an `f32` value `[-1, 1]` to a panning value `[100L, 100R]` Value of `0.0` becomes `"C"`
 pub fn f32_panning() -> Arc<dyn Fn(f32) -> String + Send + Sync> {
     Arc::new(move |x| {
