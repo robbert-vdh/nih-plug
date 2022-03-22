@@ -91,6 +91,8 @@ impl PeakMeter {
                 for tick_db in TEXT_TICKS {
                     let tick_fraction = (tick_db as f32 - MIN_TICK) / (MAX_TICK - MIN_TICK);
                     let tick_pct = tick_fraction * 100.0;
+                    // We'll shift negative numbers slightly to the left so they look more centered
+                    let needs_minus_offset = tick_db < 0;
 
                     ZStack::new(cx, |cx| {
                         let first_tick = tick_db == TEXT_TICKS[0];
@@ -102,18 +104,25 @@ impl PeakMeter {
                             Element::new(cx).class("ticks__tick");
                         }
 
-                        if first_tick {
+                        let font_size = *cx.style.font_size.get(cx.current).unwrap_or(&15.0)
+                            * cx.style.dpi_factor as f32;
+                        let label = if first_tick {
                             Label::new(cx, "-inf")
                                 .class("ticks__label")
-                                .class("ticks__label--inf");
+                                .class("ticks__label--inf")
                         } else if last_tick {
                             // This is only inclued in the array to make positioning this easier
                             Label::new(cx, "dBFS")
                                 .class("ticks__label")
-                                .class("ticks__label--dbfs");
+                                .class("ticks__label--dbfs")
                         } else {
-                            Label::new(cx, &tick_db.to_string()).class("ticks__label");
-                        };
+                            Label::new(cx, &tick_db.to_string()).class("ticks__label")
+                        }
+                        .overflow(Overflow::Visible);
+
+                        if needs_minus_offset {
+                            label.child_right(Pixels(font_size * 0.15));
+                        }
                     })
                     .height(Stretch(1.0))
                     .left(Percentage(tick_pct - (WIDTH_PCT / 2.0)))
