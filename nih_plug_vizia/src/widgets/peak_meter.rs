@@ -249,11 +249,11 @@ where
             // need to account for that. Otherwise the ticks will be 2px wide instead of 1px.
             let peak_x = db_to_x_coord(peak_dbfs);
             let mut path = Path::new();
-            path.move_to(peak_x + 0.5, bar_bounds.top());
-            path.line_to(peak_x + 0.5, bar_bounds.bottom());
+            path.move_to(peak_x + (dpi_scale / 2.0), bar_bounds.top());
+            path.line_to(peak_x + (dpi_scale / 2.0), bar_bounds.bottom());
 
             let mut paint = Paint::color(femtovg::Color::rgbaf(0.3, 0.3, 0.3, opacity));
-            paint.set_line_width(TICK_WIDTH);
+            paint.set_line_width(TICK_WIDTH * dpi_scale);
             canvas.stroke_path(&mut path, paint);
         }
 
