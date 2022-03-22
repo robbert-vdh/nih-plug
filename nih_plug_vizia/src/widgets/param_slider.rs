@@ -307,7 +307,8 @@ impl View for ParamSlider {
         if let Some(param_slider_event) = event.message.downcast() {
             match param_slider_event {
                 ParamSliderEvent::CancelTextInput => {
-                    cx.emit(ParamSliderInternalEvent::SetTextInputActive(false))
+                    cx.emit(ParamSliderInternalEvent::SetTextInputActive(false));
+                    cx.current.set_active(cx, false);
                 }
                 ParamSliderEvent::TextInput(string) => {
                     if let Some(normalized_value) =
@@ -318,7 +319,7 @@ impl View for ParamSlider {
                         cx.emit(RawParamEvent::EndSetParameter(self.param_ptr));
                     }
 
-                    cx.emit(ParamSliderInternalEvent::SetTextInputActive(false))
+                    cx.emit(ParamSliderInternalEvent::SetTextInputActive(false));
                 }
             }
         }
