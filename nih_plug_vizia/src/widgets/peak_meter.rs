@@ -207,12 +207,12 @@ where
         let bar_bounds = bounds.shrink(border_width / 2.0);
         let bar_ticks_start_x = bar_bounds.left().floor() as i32;
         let bar_ticks_end_x = bar_bounds.right().ceil() as i32;
-        // TODO: Right now this means that on higher DPI settings you'll end up with more, denser
-        //       ticks. We can try keeping the number of ticks fixed, but I don't know how that
-        //       would work with fractional scaling since we also want everything to stay aligned to
-        //       the pixel grid.
-        let bar_tick_coordinates =
-            (bar_ticks_start_x..bar_ticks_end_x).step_by((TICK_WIDTH + TICK_GAP).round() as usize);
+
+        // NOTE: We'll scale this with the nearest integer DPI ratio. That way it will still look
+        //       good at 2x scaling, and it won't look blurry at 1.x times scaling.
+        let dpi_scale = cx.style.dpi_factor.floor().max(1.0) as f32;
+        let bar_tick_coordinates = (bar_ticks_start_x..bar_ticks_end_x)
+            .step_by(((TICK_WIDTH + TICK_GAP) * dpi_scale).round() as usize);
         for tick_x in bar_tick_coordinates {
             let tick_fraction =
                 (tick_x - bar_ticks_start_x) as f32 / (bar_ticks_end_x - bar_ticks_start_x) as f32;
@@ -224,8 +224,8 @@ where
             // femtovg draws paths centered on these coordinates, so in order to be pixel perfect we
             // need to account for that. Otherwise the ticks will be 2px wide instead of 1px.
             let mut path = Path::new();
-            path.move_to(tick_x as f32 + 0.5, bar_bounds.top());
-            path.line_to(tick_x as f32 + 0.5, bar_bounds.bottom());
+            path.move_to(tick_x as f32 + (dpi_scale / 2.0), bar_bounds.top());
+            path.line_to(tick_x as f32 + (dpi_scale / 2.0), bar_bounds.bottom());
 
             let grayscale_color = 0.3 + ((1.0 - tick_fraction) * 0.5);
             let mut paint = Paint::color(femtovg::Color::rgbaf(
@@ -234,7 +234,7 @@ where
                 grayscale_color,
                 opacity,
             ));
-            paint.set_line_width(TICK_WIDTH);
+            paint.set_line_width(TICK_WIDTH * dpi_scale);
             canvas.stroke_path(&mut path, paint);
         }
 
@@ -244,7 +244,6 @@ where
             bar_ticks_start_x as f32
                 + ((bar_ticks_end_x - bar_ticks_start_x) as f32 * tick_fraction).round()
         };
-
         if (MIN_TICK..MAX_TICK).contains(&peak_dbfs) {
             // femtovg draws paths centered on these coordinates, so in order to be pixel perfect we
             // need to account for that. Otherwise the ticks will be 2px wide instead of 1px.
