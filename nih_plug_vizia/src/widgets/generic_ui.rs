@@ -17,6 +17,15 @@ pub struct GenericUI;
 impl GenericUI {
     /// Creates a new [`GenericUi`] for all provided parameters. Use
     /// [`new_custom()`][Self::new_custom()] to decide which widget gets used for each parameter.
+    ///
+    /// Wrap this in a [`ScrollView`] for plugins with longer parameter lists:
+    ///
+    /// ```ignore
+    /// ScrollView::new(cx, 0.0, 0.0, false, true, |cx| {
+    ///     GenericUI::new(cx, Data::params);
+    /// })
+    /// .width(Percentage(100.0));
+    ///```
     pub fn new<L, PsPtr, Ps>(cx: &mut Context, params: L) -> Handle<'_, GenericUI>
     where
         L: Lens<Target = Pin<PsPtr>> + Copy,

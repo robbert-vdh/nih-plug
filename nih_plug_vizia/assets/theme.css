@@ -1,0 +1,35 @@
+/* Overrides for default VIZIA widgets */
+
+* {
+  color: #0a0a0a;
+  /* VIZIA uses points instead of pixels, this is 20px */
+  font-size: 15;
+}
+
+scrollview > vstack {
+  /* Normally the scroll bar overlaps with the content, so we'll add a little offset to prevent that */
+  child-right: 15px;
+}
+scrollview scrollbar {
+  background-color: #dadada;
+  border-radius: 0;
+  child-space: 0;
+}
+scrollview scrollbar.horizontal {
+  right: 10px;
+  height: 10px;
+}
+scrollview scrollbar.vertical {
+  width: 10px;
+}
+scrollview scrollbar .thumb {
+  background-color: #5d5d5d;
+  border-radius: 0;
+  min-width: 10px;
+  min-height: 10px;
+  transition: background-color 0.1 0;
+}
+scrollview scrollbar .thumb:hover {
+  background-color: #808080;
+  transition: background-color 0.1 0;
+}

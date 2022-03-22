@@ -97,8 +97,7 @@ impl Editor for ViziaEditor {
 
             // TOOD: `:root { background-color: #fafafa; }` in a stylesheet doesn't work
             Entity::root().set_background_color(cx, Color::rgb(250, 250, 250));
-            // VIZIA uses points instead of pixels, this is 20px
-            cx.add_theme("* { color: #0a0a0a; font-size: 15; }");
+            cx.add_theme(include_str!("../assets/theme.css"));
 
             // There doesn't seem to be any way to bundle styles with a widget, so we'll always
             // include the style sheet for our custom widgets at context creation

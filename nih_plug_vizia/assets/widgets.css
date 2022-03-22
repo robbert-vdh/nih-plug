@@ -1,4 +1,5 @@
 /* Default styling for the widgets included in nih_plug_vizia */
+/* See ./theme.css for overrides for the default widgets */
 
 generic-ui {
   child-space: 10px;
