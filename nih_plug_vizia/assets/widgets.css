@@ -7,6 +7,12 @@ generic-ui {
   layout-type: column;
   row-between: 5px;
 }
+scrollview > vstack > generic-ui {
+  child-space: 5px;
+
+  /* Our scrollview styling will already add some padding here */
+  child-right: 0;
+}
 
 generic-ui .row {
   col-between: 6px;
