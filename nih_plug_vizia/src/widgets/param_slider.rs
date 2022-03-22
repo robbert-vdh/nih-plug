@@ -216,7 +216,9 @@ impl ParamSlider {
                                                 };
                                                 (
                                                     (previous_step + current_value) / 2.0,
-                                                    (next_step + current_value) / 2.0,
+                                                    ((next_step - current_value)
+                                                        + (current_value - previous_step))
+                                                        / 2.0,
                                                 )
                                             }
                                         };
