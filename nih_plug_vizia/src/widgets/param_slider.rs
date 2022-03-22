@@ -168,18 +168,12 @@ impl ParamSlider {
                             Textbox::new(cx, param_display_value_lens)
                                 .class("value-entry")
                                 .on_submit(|cx, string| {
-                                    // FIXME: Remove
-                                    eprintln!("on_submit");
                                     cx.emit(ParamSliderEvent::TextInput(string))
                                 })
                                 .on_edit_end(|cx| {
-                                    // FIXME: Remove
-                                    eprintln!("on_edit_end");
                                     cx.emit(ParamSliderEvent::CancelTextInput);
                                 })
                                 .on_build(|cx| {
-                                    // FIXME: Remove
-                                    eprintln!("on_build");
                                     cx.emit(TextEvent::StartEdit);
                                     cx.emit(TextEvent::SelectAll);
                                 })
