@@ -57,7 +57,7 @@ pub(crate) fn create(
                 .child_top(Stretch(1.0))
                 .child_bottom(Pixels(0.0))
                 // Make this more or less align with the parameters column
-                .right(Percentage(14.0));
+                .right(Pixels(67.0));
 
             ScrollView::new(cx, 0.0, 0.0, false, true, |cx| {
                 // This looks better if it's flush at the top, and then we'll just add some padding
