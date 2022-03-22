@@ -23,7 +23,7 @@ pub use peak_meter::PeakMeter;
 /// Register the default theme for the widgets exported by this module. This is automatically called
 /// for you when using [`create_vizia_editor()`][super::create_vizia_editor()].
 pub fn register_theme(cx: &mut Context) {
-    cx.add_theme(include_str!("../assets/theme.css"));
+    cx.add_theme(include_str!("../assets/widgets.css"));
 }
 
 /// An event that updates a parameter's value. Since NIH-plug manages the parameters, interacting
