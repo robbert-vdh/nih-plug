@@ -1,5 +1,24 @@
 /* Default styling for the widgets included in nih_plug_vizia */
 
+generic-ui {
+  child-space: 10px;
+  col-between: 5px;
+  layout-type: column;
+  row-between: 5px;
+}
+
+generic-ui .row {
+  col-between: 6px;
+  layout-type: row;
+}
+
+generic-ui .label {
+  left: 1s;
+  top: 1s;
+  bottom: 1s;
+  right: 0;
+}
+
 param-slider {
   height: 30px;
   width: 180px;

@@ -11,10 +11,12 @@ use std::sync::Arc;
 
 use vizia::{Context, Model};
 
+mod generic_ui;
 mod param_slider;
 mod peak_meter;
 pub mod util;
 
+pub use generic_ui::GenericUI;
 pub use param_slider::{ParamSlider, ParamSliderExt, ParamSliderStyle};
 pub use peak_meter::PeakMeter;
 
