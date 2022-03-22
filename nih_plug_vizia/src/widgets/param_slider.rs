@@ -44,12 +44,15 @@ pub enum ParamSliderStyle {
     Centered,
     /// Always fill the bar starting from the left.
     FromLeft,
-    /// Show the current step instead of filling a portion fothe bar, useful for discrete
-    /// parameters.
-    CurrentStep,
+    /// Show the current step instead of filling a portion of the bar, useful for discrete
+    /// parameters. Set `even` to `true` to distribute the ticks evenly instead of following the
+    /// parameter's distribution. This can be desireable because discrete parameters have smaller
+    /// ranges near the edges (they'll span only half the range, which can make the display look
+    /// odd).
+    CurrentStep { even: bool },
     /// The same as `CurrentStep`, but overlay the labels over the steps instead of showing the
     /// active value. Only useful for discrete parameters with two, maybe three possible values.
-    CurrentStepLabeled,
+    CurrentStepLabeled { even: bool },
 }
 
 enum ParamSliderEvent {
@@ -205,8 +208,21 @@ impl ParamSlider {
                                             }
                                             ParamSliderStyle::Centered
                                             | ParamSliderStyle::FromLeft => (0.0, current_value),
-                                            ParamSliderStyle::CurrentStep
-                                            | ParamSliderStyle::CurrentStepLabeled => {
+                                            ParamSliderStyle::CurrentStep { even: true }
+                                            | ParamSliderStyle::CurrentStepLabeled { even: true }
+                                                if step_count.is_some() =>
+                                            {
+                                                // Assume the normalized value is distributed evenly
+                                                // across the range.
+                                                let step_count = step_count.unwrap() as f32;
+                                                let discrete_values = step_count + 1.0;
+                                                let previous_step = (current_value * step_count)
+                                                    .floor()
+                                                    / discrete_values;
+                                                (previous_step, discrete_values.recip())
+                                            }
+                                            ParamSliderStyle::CurrentStep { .. }
+                                            | ParamSliderStyle::CurrentStepLabeled { .. } => {
                                                 let previous_step = unsafe {
                                                     param_ptr
                                                         .previous_normalized_step(current_value)
@@ -237,7 +253,10 @@ impl ParamSlider {
                                 //       text overlapping the fill area slightly differently. We can
                                 //       set the cip region directly in vizia.
                                 match (style, step_count) {
-                                    (ParamSliderStyle::CurrentStepLabeled, Some(step_count)) => {
+                                    (
+                                        ParamSliderStyle::CurrentStepLabeled { .. },
+                                        Some(step_count),
+                                    ) => {
                                         HStack::new(cx, |cx| {
                                             // There are step_count + 1 possible values for a
                                             // discrete parameter

@@ -52,8 +52,12 @@ impl GenericUi {
                 .set_style(match unsafe { param_ptr.step_count() } {
                     // This looks nice for boolean values, but it's too crowded for anything beyond
                     // that without making the widget wider
-                    Some(step_count) if step_count <= 1 => ParamSliderStyle::CurrentStepLabeled,
-                    Some(step_count) if step_count <= 64 => ParamSliderStyle::CurrentStep,
+                    Some(step_count) if step_count <= 1 => {
+                        ParamSliderStyle::CurrentStepLabeled { even: true }
+                    }
+                    Some(step_count) if step_count <= 64 => {
+                        ParamSliderStyle::CurrentStep { even: true }
+                    }
                     Some(_) => ParamSliderStyle::FromLeft,
                     // This is already the default, but continuous parameters should be drawn from
                     // the center if the default is also centered, or from the left if it is not
