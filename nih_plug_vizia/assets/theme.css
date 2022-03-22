@@ -59,5 +59,5 @@ peak-meter .ticks__tick {
 }
 peak-meter .ticks__label {
   top: 4px; /* In pixels in an attempt to get this to better align to the grid */
-  font-size: 10.5; /* 14px */
+  font-size: 11; /* 14.667px */
 }
