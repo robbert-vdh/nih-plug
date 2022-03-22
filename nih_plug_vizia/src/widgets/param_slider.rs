@@ -216,9 +216,8 @@ impl ParamSlider {
                                                 // across the range.
                                                 let step_count = step_count.unwrap() as f32;
                                                 let discrete_values = step_count + 1.0;
-                                                let previous_step = (current_value * step_count)
-                                                    .floor()
-                                                    / discrete_values;
+                                                let previous_step =
+                                                    (current_value * step_count) / discrete_values;
                                                 (previous_step, discrete_values.recip())
                                             }
                                             ParamSliderStyle::CurrentStep { .. }
@@ -317,6 +316,33 @@ impl ParamSlider {
             ));
         }
     }
+
+    /// `set_normalized_value()`, but resulting from a mouse drag. When using the 'even' stepped
+    /// slider styles from [`ParamSliderStyle`] this will remap the normalized range to match up
+    /// with the fill value display.
+    fn set_normalized_value_drag(&self, cx: &mut Context, normalized_value: f32) {
+        let normalized_value = match (cx.data(), unsafe { self.param_ptr.step_count() }) {
+            (
+                Some(ParamSliderInternal {
+                    style:
+                        ParamSliderStyle::CurrentStep { even: true }
+                        | ParamSliderStyle::CurrentStepLabeled { even: true },
+                    ..
+                }),
+                Some(step_count),
+            ) => {
+                // We'll remap the value range to be the same as the displayed range, e.g. with each
+                // value occupying an equal area on the slider instead of the centers of those
+                // ranges being distributed over the entire `[0, 1]` range.
+                let discrete_values = step_count as f32 + 1.0;
+                let rounded_value = ((normalized_value * discrete_values) - 0.5).round();
+                rounded_value / step_count as f32
+            }
+            _ => normalized_value,
+        };
+
+        self.set_normalized_value(cx, normalized_value);
+    }
 }
 
 impl View for ParamSlider {
@@ -377,7 +403,7 @@ impl View for ParamSlider {
                             }));
                         } else {
                             self.granular_drag_start_x_value = None;
-                            self.set_normalized_value(
+                            self.set_normalized_value_drag(
                                 cx,
                                 util::remap_current_entity_x_coordinate(cx, cx.mouse.cursorx),
                             );
@@ -414,7 +440,7 @@ impl View for ParamSlider {
                                     })
                                 });
 
-                            self.set_normalized_value(
+                            self.set_normalized_value_drag(
                                 cx,
                                 util::remap_current_entity_x_coordinate(
                                     cx,
@@ -426,7 +452,7 @@ impl View for ParamSlider {
                         } else {
                             self.granular_drag_start_x_value = None;
 
-                            self.set_normalized_value(
+                            self.set_normalized_value_drag(
                                 cx,
                                 util::remap_current_entity_x_coordinate(cx, *x),
                             );
