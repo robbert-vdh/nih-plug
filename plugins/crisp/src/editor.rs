@@ -14,88 +14,61 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use nih_plug::prelude::{Editor, GuiContext};
-use nih_plug_iced::widgets as nih_widgets;
-use nih_plug_iced::widgets::generic_ui::GenericUi;
-use nih_plug_iced::*;
+use nih_plug::prelude::Editor;
+use nih_plug_vizia::vizia::*;
+use nih_plug_vizia::widgets::*;
+use nih_plug_vizia::{assets, create_vizia_editor, ViziaState};
 use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::CrispParams;
 
+/// VIZIA uses points instead of pixels for text
+const POINT_SCALE: f32 = 0.75;
+
+#[derive(Lens)]
+// TODO: Lens requires everything to be marked as `pub`
+pub struct Data {
+    params: Pin<Arc<CrispParams>>,
+}
+
+impl Model for Data {}
+
 // Makes sense to also define this here, makes it a bit easier to keep track of
-pub(crate) fn default_state() -> Arc<IcedState> {
-    // We have a scroll bar, so we should proudly show off that we have a scroll bar
-    IcedState::from_size(370, 330)
+pub(crate) fn default_state() -> Arc<ViziaState> {
+    ViziaState::from_size(400, 330)
 }
 
 pub(crate) fn create(
     params: Pin<Arc<CrispParams>>,
-    editor_state: Arc<IcedState>,
+    editor_state: Arc<ViziaState>,
 ) -> Option<Box<dyn Editor>> {
-    create_iced_editor::<CrispEditor>(editor_state, params)
-}
-
-struct CrispEditor {
-    params: Pin<Arc<CrispParams>>,
-    context: Arc<dyn GuiContext>,
-
-    generic_ui_state: nih_widgets::generic_ui::State<nih_widgets::generic_ui::GenericSlider>,
-}
-
-#[derive(Debug, Clone, Copy)]
-enum Message {
-    /// Update a parameter's value.
-    ParamUpdate(nih_widgets::ParamMessage),
-}
-
-impl IcedEditor for CrispEditor {
-    type Executor = executor::Default;
-    type Message = Message;
-    type InitializationFlags = Pin<Arc<CrispParams>>;
-
-    fn new(
-        params: Self::InitializationFlags,
-        context: Arc<dyn GuiContext>,
-    ) -> (Self, Command<Self::Message>) {
-        let editor = CrispEditor {
-            params,
-            context,
-
-            generic_ui_state: Default::default(),
-        };
-
-        (editor, Command::none())
-    }
-
-    fn context(&self) -> &dyn GuiContext {
-        self.context.as_ref()
-    }
-
-    fn update(
-        &mut self,
-        _window: &mut WindowQueue,
-        message: Self::Message,
-    ) -> Command<Self::Message> {
-        match message {
-            Message::ParamUpdate(message) => self.handle_param_message(message),
+    create_vizia_editor(editor_state, move |cx| {
+        Data {
+            params: params.clone(),
         }
+        .build(cx);
 
-        Command::none()
-    }
+        VStack::new(cx, |cx| {
+            Label::new(cx, "Crisp")
+                .font(assets::NOTO_SANS_THIN)
+                .font_size(40.0 * POINT_SCALE)
+                .height(Pixels(50.0))
+                .child_top(Stretch(1.0))
+                .child_bottom(Pixels(0.0))
+                // Make this more or less align with the parameters column
+                .right(Percentage(14.0));
 
-    fn view(&mut self) -> Element<'_, Self::Message> {
-        GenericUi::new(&mut self.generic_ui_state, self.params.as_ref())
-            .pad_scrollbar()
-            .map(Message::ParamUpdate)
-    }
-
-    fn background_color(&self) -> nih_plug_iced::Color {
-        nih_plug_iced::Color {
-            r: 0.98,
-            g: 0.98,
-            b: 0.98,
-            a: 1.0,
-        }
-    }
+            ScrollView::new(cx, 0.0, 0.0, false, true, |cx| {
+                // This looks better if it's flush at the top, and then we'll just add some padding
+                // at the top of the scroll view
+                GenericUi::new(cx, Data::params).child_top(Pixels(0.0));
+            })
+            .width(Percentage(100.0))
+            .top(Pixels(5.0));
+        })
+        .row_between(Pixels(0.0))
+        .child_left(Stretch(1.0))
+        .child_right(Stretch(1.0));
+    })
 }

@@ -18,7 +18,7 @@
 extern crate nih_plug;
 
 use nih_plug::prelude::*;
-use nih_plug_iced::IcedState;
+use nih_plug_vizia::ViziaState;
 use pcg::Pcg32iState;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -45,7 +45,7 @@ const MAX_FILTER_FREQUENCY: f32 = 22_000.0;
 /// since this effect just turns into literal noise at high frequencies.
 struct Crisp {
     params: Pin<Arc<CrispParams>>,
-    editor_state: Arc<IcedState>,
+    editor_state: Arc<ViziaState>,
 
     /// Needed for computing the filter coefficients.
     sample_rate: f32,
