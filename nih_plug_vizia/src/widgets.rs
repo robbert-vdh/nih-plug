@@ -16,7 +16,7 @@ mod param_slider;
 mod peak_meter;
 pub mod util;
 
-pub use generic_ui::GenericUI;
+pub use generic_ui::GenericUi;
 pub use param_slider::{ParamSlider, ParamSliderExt, ParamSliderStyle};
 pub use peak_meter::PeakMeter;
 

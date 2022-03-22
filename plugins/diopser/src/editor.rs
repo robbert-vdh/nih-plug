@@ -60,7 +60,7 @@ pub(crate) fn create(
                 .right(Percentage(12.0));
 
             // See the Crisp generic UI for an example using a ScrollView
-            GenericUI::new(cx, Data::params)
+            GenericUi::new(cx, Data::params)
                 .width(Percentage(100.0))
                 .child_top(Pixels(5.0));
         })

@@ -12,9 +12,9 @@ use super::{ParamSlider, ParamSliderExt, ParamSliderStyle};
 /// [`new()`][`Self::new()`] method to have the generic UI decide which widget to use for your
 /// parmaeters, or you can use the [`new_custom()`][`Self::new_custom()`] method to determine this
 /// yourself.
-pub struct GenericUI;
+pub struct GenericUi;
 
-impl GenericUI {
+impl GenericUi {
     /// Creates a new [`GenericUi`] for all provided parameters. Use
     /// [`new_custom()`][Self::new_custom()] to decide which widget gets used for each parameter.
     ///
@@ -22,11 +22,11 @@ impl GenericUI {
     ///
     /// ```ignore
     /// ScrollView::new(cx, 0.0, 0.0, false, true, |cx| {
-    ///     GenericUI::new(cx, Data::params);
+    ///     GenericUi::new(cx, Data::params);
     /// })
     /// .width(Percentage(100.0));
     ///```
-    pub fn new<L, PsPtr, Ps>(cx: &mut Context, params: L) -> Handle<'_, GenericUI>
+    pub fn new<L, PsPtr, Ps>(cx: &mut Context, params: L) -> Handle<'_, GenericUi>
     where
         L: Lens<Target = Pin<PsPtr>> + Copy,
         PsPtr: 'static + Deref<Target = Ps>,
@@ -69,7 +69,7 @@ impl GenericUI {
         cx: &mut Context,
         params: L,
         mut make_widget: impl FnMut(&mut Context, ParamPtr),
-    ) -> Handle<'_, GenericUI>
+    ) -> Handle<'_, GenericUi>
     where
         L: Lens<Target = Pin<PsPtr>> + Copy,
         PsPtr: 'static + Deref<Target = Ps>,
@@ -87,7 +87,7 @@ impl GenericUI {
     }
 }
 
-impl View for GenericUI {
+impl View for GenericUi {
     fn element(&self) -> Option<String> {
         Some(String::from("generic-ui"))
     }
