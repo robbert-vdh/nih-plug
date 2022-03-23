@@ -220,7 +220,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
         unsafe impl #impl_generics Params for #struct_name #ty_generics #where_clause {
             fn param_map(
                 self: std::pin::Pin<&Self>,
-            ) -> Vec<(String, nih_plug::param::internals::ParamPtr, String)> {
+            ) -> Vec<(String, nih_plug::prelude::ParamPtr, String)> {
                 // This may not be in scope otherwise, used to call .as_ptr()
                 use ::nih_plug::param::Param;
 

@@ -5,8 +5,7 @@ use std::pin::Pin;
 
 use egui::{TextStyle, Ui, Vec2};
 use nih_plug::context::ParamSetter;
-use nih_plug::param::internals::ParamPtr;
-use nih_plug::prelude::{Param, Params};
+use nih_plug::prelude::{Param, ParamPtr, Params};
 
 use super::ParamSlider;
 

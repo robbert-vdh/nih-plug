@@ -1,7 +1,6 @@
 //! A slider that integrates with NIH-plug's [`Param`] types.
 
-use nih_plug::param::internals::ParamPtr;
-use nih_plug::prelude::Param;
+use nih_plug::prelude::{Param, ParamPtr};
 use vizia::*;
 
 use super::util::{self, ModifiersExt};

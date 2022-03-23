@@ -14,7 +14,7 @@ pub use super::buffer::Buffer;
 pub use super::context::{GuiContext, ParamSetter, ProcessContext};
 // This also includes the derive macro
 pub use super::param::enums::{Enum, EnumParam};
-pub use super::param::internals::Params;
+pub use super::param::internals::{ParamPtr, Params};
 pub use super::param::range::{FloatRange, IntRange};
 pub use super::param::smoothing::{Smoother, SmoothingStyle};
 pub use super::param::{BoolParam, FloatParam, IntParam, Param};

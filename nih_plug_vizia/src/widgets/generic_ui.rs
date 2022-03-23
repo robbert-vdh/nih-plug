@@ -2,8 +2,7 @@
 
 use std::{ops::Deref, pin::Pin};
 
-use nih_plug::param::internals::ParamPtr;
-use nih_plug::prelude::Params;
+use nih_plug::prelude::{ParamPtr, Params};
 use vizia::*;
 
 use super::{ParamSlider, ParamSliderExt, ParamSliderStyle};

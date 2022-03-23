@@ -5,8 +5,7 @@
 //! None of these widgets are finalized, and their sizes or looks can change at any point. Feel free
 //! to copy the widgets and modify them to your personal taste.
 
-use nih_plug::param::internals::ParamPtr;
-use nih_plug::prelude::{GuiContext, Param};
+use nih_plug::prelude::{GuiContext, Param, ParamPtr};
 use std::sync::Arc;
 
 use vizia::{Context, Model};

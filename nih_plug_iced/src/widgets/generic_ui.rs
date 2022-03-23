@@ -7,8 +7,7 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::pin::Pin;
 
-use nih_plug::param::internals::ParamPtr;
-use nih_plug::prelude::{Param, Params};
+use nih_plug::prelude::{Param, ParamPtr, Params};
 
 use super::{ParamMessage, ParamSlider};
 use crate::backend::Renderer;
