@@ -4,7 +4,7 @@ use std::fmt::Display;
 use std::sync::Arc;
 
 use super::internals::ParamPtr;
-use super::Param;
+use super::{Param, ParamFlags};
 
 /// A simple boolean parmaeter.
 #[repr(C, align(4))]
@@ -14,6 +14,8 @@ pub struct BoolParam {
     /// The field's default value.
     pub default: bool,
 
+    /// Flags to control the parameter's behavior. See [`ParamFlags`].
+    pub flags: ParamFlags,
     /// Optional callback for listening to value changes. The argument passed to this function is
     /// the parameter's new value. This should not do anything expensive as it may be called
     /// multiple times in rapid succession, and it can be run from both the GUI and the audio
@@ -36,6 +38,7 @@ impl Default for BoolParam {
         Self {
             value: false,
             default: false,
+            flags: ParamFlags::default(),
             value_changed: None,
             name: "",
             value_to_string: None,
@@ -129,6 +132,10 @@ impl Param for BoolParam {
 
     fn initialize_block_smoother(&mut self, _max_block_size: usize) {}
 
+    fn flags(&self) -> ParamFlags {
+        self.flags
+    }
+
     fn as_ptr(&self) -> ParamPtr {
         ParamPtr::BoolParam(self as *const BoolParam as *mut BoolParam)
     }
@@ -172,6 +179,21 @@ impl BoolParam {
         callback: Arc<dyn Fn(&str) -> Option<bool> + Send + Sync>,
     ) -> Self {
         self.string_to_value = Some(callback);
+        self
+    }
+
+    /// Mark the paramter as non-automatable. This means that the parameter cannot be automated from
+    /// the host. Setting this flag also prevents it from showing up in the host's own generic UI
+    /// for this plugin. The parameter can still be changed from the plugin's editor GUI.
+    pub fn non_automatable(mut self) -> Self {
+        self.flags.insert(ParamFlags::NON_AUTOMATABLE);
+        self
+    }
+
+    /// Don't show this parameter when generating a generic UI for the plugin using one of
+    /// NIH-plug's generic UI widgets.
+    pub fn hide_in_generic_ui(mut self) -> Self {
+        self.flags.insert(ParamFlags::HIDE_IN_GENERIC_UI);
         self
     }
 }

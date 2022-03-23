@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::pin::Pin;
 
-use super::Param;
+use super::{Param, ParamFlags};
 
 pub use nih_plug_derive::Params;
 /// Re-export for use in the [`Params`] proc-macro.
@@ -157,6 +157,7 @@ impl ParamPtr {
     param_ptr_forward!(pub unsafe fn initialize_block_smoother(&mut self, max_block_size: usize));
     param_ptr_forward!(pub unsafe fn normalized_value_to_string(&self, normalized: f32, include_unit: bool) -> String);
     param_ptr_forward!(pub unsafe fn string_to_normalized_value(&self, string: &str) -> Option<f32>);
+    param_ptr_forward!(pub unsafe fn flags(&self) -> ParamFlags);
 
     // These functions involve casts since the plugin formats only do floating point types, so we
     // can't generate them with the macro:

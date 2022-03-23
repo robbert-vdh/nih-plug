@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use super::internals::ParamPtr;
 use super::range::IntRange;
-use super::{IntParam, Param};
+use super::{IntParam, Param, ParamFlags};
 
 // Re-export the derive macro
 pub use nih_plug_derive::Enum;
@@ -159,6 +159,10 @@ impl<T: Enum + PartialEq> Param for EnumParam<T> {
         self.inner.initialize_block_smoother(max_block_size)
     }
 
+    fn flags(&self) -> ParamFlags {
+        self.inner.flags()
+    }
+
     fn as_ptr(&self) -> ParamPtr {
         self.inner.as_ptr()
     }
@@ -228,6 +232,10 @@ impl Param for EnumParamInner {
         self.inner.initialize_block_smoother(max_block_size)
     }
 
+    fn flags(&self) -> ParamFlags {
+        self.inner.flags()
+    }
+
     fn as_ptr(&self) -> ParamPtr {
         ParamPtr::EnumParam(self as *const EnumParamInner as *mut EnumParamInner)
     }
@@ -264,6 +272,21 @@ impl<T: Enum + PartialEq + 'static> EnumParam<T> {
         self.inner.inner.value_changed = Some(Arc::new(move |value| {
             callback(T::from_index(value as usize))
         }));
+        self
+    }
+
+    /// Mark the paramter as non-automatable. This means that the parameter cannot be automated from
+    /// the host. Setting this flag also prevents it from showing up in the host's own generic UI
+    /// for this plugin. The parameter can still be changed from the plugin's editor GUI.
+    pub fn non_automatable(mut self) -> Self {
+        self.inner.inner = self.inner.inner.non_automatable();
+        self
+    }
+
+    /// Don't show this parameter when generating a generic UI for the plugin using one of
+    /// NIH-plug's generic UI widgets.
+    pub fn hide_in_generic_ui(mut self) -> Self {
+        self.inner.inner = self.inner.inner.hide_in_generic_ui();
         self
     }
 

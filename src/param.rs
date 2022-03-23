@@ -17,6 +17,21 @@ pub use enums::EnumParam;
 pub use float::FloatParam;
 pub use integer::IntParam;
 
+bitflags::bitflags! {
+    /// Flags for controlling a parameter's behavior.
+    #[repr(transparent)]
+    #[derive(Default)]
+    pub struct ParamFlags: u32 {
+        /// The parameter cannot be automated from the host. Setting this flag also prevents it from
+        /// showing up in the host's own generic UI for this plugin. The parameter can still be
+        /// changed from the plugin's editor GUI.
+        const NON_AUTOMATABLE = 1 << 0;
+        /// Don't show this parameter when generating a generic UI for the plugin using one of
+        /// NIH-plug's generic UI widgets.
+        const HIDE_IN_GENERIC_UI = 1 << 1;
+    }
+}
+
 /// Describes a single parameter of any type.
 pub trait Param: Display {
     /// The plain parameter type.
@@ -111,6 +126,9 @@ pub trait Param: Display {
     /// [`Plugin::initialize_block_smoothers()`][crate::prelude::Plugin::initialize_block_smoothers()] method
     /// will do this for every smoother.
     fn initialize_block_smoother(&mut self, max_block_size: usize);
+
+    /// Flags to control the parameter's behavior. See [`ParamFlags`].
+    fn flags(&self) -> ParamFlags;
 
     /// Internal implementation detail for implementing [`Params`][internals::Params]. This should
     /// not be used directly.

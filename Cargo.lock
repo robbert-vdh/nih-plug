@@ -2133,6 +2133,7 @@ dependencies = [
  "assert_no_alloc",
  "atomic_float",
  "atomic_refcell",
+ "bitflags",
  "cfg-if 1.0.0",
  "clap-sys",
  "crossbeam",

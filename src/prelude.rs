@@ -17,7 +17,7 @@ pub use super::param::enums::{Enum, EnumParam};
 pub use super::param::internals::{ParamPtr, Params};
 pub use super::param::range::{FloatRange, IntRange};
 pub use super::param::smoothing::{Smoother, SmoothingStyle};
-pub use super::param::{BoolParam, FloatParam, IntParam, Param};
+pub use super::param::{BoolParam, FloatParam, IntParam, Param, ParamFlags};
 pub use super::plugin::{
     BufferConfig, BusConfig, ClapPlugin, Editor, NoteEvent, ParentWindowHandle, Plugin,
     ProcessStatus, Vst3Plugin,
