@@ -2,7 +2,7 @@
 
 use std::{ops::Deref, pin::Pin};
 
-use nih_plug::prelude::{ParamPtr, Params};
+use nih_plug::prelude::{ParamFlags, ParamPtr, Params};
 use vizia::*;
 
 use super::{ParamSlider, ParamSliderExt, ParamSliderStyle};
@@ -86,6 +86,11 @@ impl GenericUi {
             // map `params` to some `impl Param` and everything would have been a lot neater
             let param_map = &*params.map(|params| params.as_ref().param_map()).get(cx);
             for (_, param_ptr, _) in param_map {
+                let flags = unsafe { param_ptr.flags() };
+                if flags.contains(ParamFlags::HIDE_IN_GENERIC_UI) {
+                    continue;
+                }
+
                 make_widget(cx, *param_ptr);
             }
         })

@@ -4,8 +4,7 @@
 use std::pin::Pin;
 
 use egui::{TextStyle, Ui, Vec2};
-use nih_plug::context::ParamSetter;
-use nih_plug::prelude::{Param, ParamPtr, Params};
+use nih_plug::prelude::{Param, ParamFlags, ParamPtr, ParamSetter, Params};
 
 use super::ParamSlider;
 
@@ -45,14 +44,22 @@ pub fn create(
         // Take up all remaining space, use a wrapper container to adjust how much space that is
         .auto_shrink([false, false])
         .show(ui, |ui| {
-            for (widget_idx, (_, param_ptr, _)) in params.param_map().into_iter().enumerate() {
+            let mut first_widget = true;
+            for (_, param_ptr, _) in params.param_map().into_iter() {
+                let flags = unsafe { param_ptr.flags() };
+                if flags.contains(ParamFlags::HIDE_IN_GENERIC_UI) {
+                    continue;
+                }
+
                 // This list looks weird without a little padding
-                if widget_idx > 0 {
+                if !first_widget {
                     ui.allocate_space(padding);
                 }
 
                 ui.label(unsafe { param_ptr.name() });
                 unsafe { widget.add_widget_raw(ui, &param_ptr, setter) };
+
+                first_widget = false;
             }
         });
 }

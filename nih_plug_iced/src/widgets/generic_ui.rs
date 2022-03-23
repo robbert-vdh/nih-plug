@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::pin::Pin;
 
-use nih_plug::prelude::{Param, ParamPtr, Params};
+use nih_plug::prelude::{Param, ParamFlags, ParamPtr, Params};
 
 use super::{ParamMessage, ParamSlider};
 use crate::backend::Renderer;
@@ -160,12 +160,22 @@ where
         // Make sure we already have widget state for each widget
         let param_map = self.params.param_map();
         for (_, param_ptr, _) in &param_map {
+            let flags = unsafe { param_ptr.flags() };
+            if flags.contains(ParamFlags::HIDE_IN_GENERIC_UI) {
+                continue;
+            }
+
             if !widget_state.contains_key(param_ptr) {
                 widget_state.insert(*param_ptr, Default::default());
             }
         }
 
         for (_, param_ptr, _) in param_map {
+            let flags = unsafe { param_ptr.flags() };
+            if flags.contains(ParamFlags::HIDE_IN_GENERIC_UI) {
+                continue;
+            }
+
             // SAFETY: We only borrow each item once, and the plugin framework statically asserted
             //         that parameter indices are unique and this widget state cannot outlive this
             //         function
