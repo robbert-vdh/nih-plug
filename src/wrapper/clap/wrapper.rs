@@ -68,6 +68,7 @@ use crate::buffer::Buffer;
 use crate::context::Transport;
 use crate::event_loop::{EventLoop, MainThreadExecutor, TASK_QUEUE_CAPACITY};
 use crate::param::internals::ParamPtr;
+use crate::param::ParamFlags;
 use crate::plugin::{
     BufferConfig, BusConfig, ClapPlugin, Editor, NoteEvent, ParentWindowHandle, ProcessStatus,
 };
@@ -1740,13 +1741,16 @@ impl<P: ClapPlugin> Wrapper<P> {
             let param_ptr = &wrapper.param_by_hash[param_hash];
             let default_value = param_ptr.default_normalized_value();
             let step_count = param_ptr.step_count();
+            let automatable = !param_ptr.flags().contains(ParamFlags::NON_AUTOMATABLE);
 
             param_info.id = *param_hash;
-            param_info.flags = if step_count.is_some() {
-                CLAP_PARAM_IS_STEPPED | CLAP_PARAM_IS_AUTOMATABLE
-            } else {
-                CLAP_PARAM_IS_AUTOMATABLE
-            };
+            param_info.flags = 0;
+            if automatable {
+                param_info.flags |= CLAP_PARAM_IS_AUTOMATABLE
+            }
+            if step_count.is_some() {
+                param_info.flags |= CLAP_PARAM_IS_STEPPED
+            }
             param_info.cookie = ptr::null_mut();
             strlcpy(&mut param_info.name, param_ptr.name());
             strlcpy(&mut param_info.module, param_group);

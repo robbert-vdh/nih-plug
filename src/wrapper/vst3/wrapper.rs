@@ -18,6 +18,7 @@ use super::inner::WrapperInner;
 use super::util::{VstPtr, BYPASS_PARAM_HASH, BYPASS_PARAM_ID};
 use super::view::WrapperView;
 use crate::context::Transport;
+use crate::param::ParamFlags;
 use crate::plugin::{BufferConfig, BusConfig, NoteEvent, ProcessStatus, Vst3Plugin};
 use crate::wrapper::state;
 use crate::wrapper::util::{process_wrapper, u16strlcpy};
@@ -342,6 +343,7 @@ impl<P: Vst3Plugin> IEditController for Wrapper<P> {
                 .expect("Inconsistent parameter data");
             let param_ptr = &self.inner.param_by_hash[param_hash];
             let default_value = param_ptr.default_normalized_value();
+            let automatable = !param_ptr.flags().contains(ParamFlags::NON_AUTOMATABLE);
 
             info.id = *param_hash;
             u16strlcpy(&mut info.title, param_ptr.name());
@@ -350,7 +352,11 @@ impl<P: Vst3Plugin> IEditController for Wrapper<P> {
             info.step_count = param_ptr.step_count().unwrap_or(0) as i32;
             info.default_normalized_value = default_value as f64;
             info.unit_id = *param_unit;
-            info.flags = vst3_sys::vst::ParameterFlags::kCanAutomate as i32;
+            info.flags = if automatable {
+                vst3_sys::vst::ParameterFlags::kCanAutomate as i32
+            } else {
+                vst3_sys::vst::ParameterFlags::kNoFlags as i32
+            };
         }
 
         kResultOk
