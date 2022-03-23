@@ -921,15 +921,21 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                     let mut plugin = self.inner.plugin.write();
                     let mut context = self.inner.make_process_context(transport);
 
-                    let result = plugin.process(&mut output_buffer, &mut context);
-                    self.inner.last_process_status.store(result);
-                    match result {
-                        ProcessStatus::Error(err) => {
-                            nih_debug_assert_failure!("Process error: {}", err);
+                    // Only process audio if the plugin isn't bypassed
+                    if !self.inner.bypass_state.load(Ordering::Relaxed) {
+                        let result = plugin.process(&mut output_buffer, &mut context);
+                        self.inner.last_process_status.store(result);
+                        match result {
+                            ProcessStatus::Error(err) => {
+                                nih_debug_assert_failure!("Process error: {}", err);
 
-                            return kResultFalse;
+                                return kResultFalse;
+                            }
+                            _ => kResultOk,
                         }
-                        _ => kResultOk,
+                    } else {
+                        self.inner.last_process_status.store(ProcessStatus::Normal);
+                        kResultOk
                     }
                 };
 

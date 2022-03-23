@@ -1170,10 +1170,17 @@ impl<P: ClapPlugin> Wrapper<P> {
                     }
                 }
 
-                let mut plugin = wrapper.plugin.write();
-                let mut context = wrapper.make_process_context(transport);
-                let result = plugin.process(&mut output_buffer, &mut context);
-                wrapper.last_process_status.store(result);
+                // Only process audio if the plugin is not currently bypassed
+                let result = if !wrapper.bypass_state.load(Ordering::Relaxed) {
+                    let mut plugin = wrapper.plugin.write();
+                    let mut context = wrapper.make_process_context(transport);
+                    let result = plugin.process(&mut output_buffer, &mut context);
+                    wrapper.last_process_status.store(result);
+                    result
+                } else {
+                    wrapper.last_process_status.store(ProcessStatus::Normal);
+                    ProcessStatus::Normal
+                };
 
                 let clap_result = match result {
                     ProcessStatus::Error(err) => {
