@@ -31,7 +31,8 @@ use clap_sys::ext::note_ports::{
 };
 use clap_sys::ext::params::{
     clap_host_params, clap_param_info, clap_plugin_params, CLAP_EXT_PARAMS,
-    CLAP_PARAM_IS_AUTOMATABLE, CLAP_PARAM_IS_BYPASS, CLAP_PARAM_IS_STEPPED,
+    CLAP_PARAM_IS_AUTOMATABLE, CLAP_PARAM_IS_BYPASS, CLAP_PARAM_IS_HIDDEN, CLAP_PARAM_IS_READONLY,
+    CLAP_PARAM_IS_STEPPED,
 };
 use clap_sys::ext::state::{clap_plugin_state, CLAP_EXT_STATE};
 use clap_sys::ext::tail::{clap_plugin_tail, CLAP_EXT_TAIL};
@@ -1744,10 +1745,11 @@ impl<P: ClapPlugin> Wrapper<P> {
             let automatable = !param_ptr.flags().contains(ParamFlags::NON_AUTOMATABLE);
 
             param_info.id = *param_hash;
-            param_info.flags = 0;
-            if automatable {
-                param_info.flags |= CLAP_PARAM_IS_AUTOMATABLE
-            }
+            param_info.flags = if automatable {
+                CLAP_PARAM_IS_AUTOMATABLE
+            } else {
+                CLAP_PARAM_IS_HIDDEN | CLAP_PARAM_IS_READONLY
+            };
             if step_count.is_some() {
                 param_info.flags |= CLAP_PARAM_IS_STEPPED
             }

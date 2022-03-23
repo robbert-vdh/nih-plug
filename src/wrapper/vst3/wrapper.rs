@@ -355,7 +355,7 @@ impl<P: Vst3Plugin> IEditController for Wrapper<P> {
             info.flags = if automatable {
                 vst3_sys::vst::ParameterFlags::kCanAutomate as i32
             } else {
-                vst3_sys::vst::ParameterFlags::kNoFlags as i32
+                vst3_sys::vst::ParameterFlags::kIsReadOnly as i32 | (1 << 4) // kIsHidden
             };
         }
 
