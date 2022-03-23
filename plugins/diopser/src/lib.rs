@@ -203,9 +203,11 @@ impl DiopserParams {
                     should_update_filters.store(true, Ordering::Release)
                 })),
 
-            very_important: BoolParam::new("Don't touch this", true).with_value_to_string(
-                Arc::new(|value| String::from(if value { "please don't" } else { "stop it" })),
-            ),
+            very_important: BoolParam::new("Don't touch this", true)
+                .with_value_to_string(Arc::new(|value| {
+                    String::from(if value { "please don't" } else { "stop it" })
+                }))
+                .hide_in_generic_ui(),
 
             automation_precision: FloatParam::new(
                 "Automation precision",
