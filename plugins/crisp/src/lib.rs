@@ -63,7 +63,7 @@ struct Crisp {
 }
 
 #[derive(Params)]
-pub struct CrispParams {
+struct CrispParams {
     /// On a range of `[0, 1]`, how much of the modulated sound to mix in.
     #[id = "amount"]
     amount: FloatParam,

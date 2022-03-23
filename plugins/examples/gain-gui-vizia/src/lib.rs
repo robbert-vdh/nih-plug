@@ -22,8 +22,7 @@ struct Gain {
 }
 
 #[derive(Params)]
-// TODO: Lens requires everything to be marked as `pub`
-pub struct GainParams {
+struct GainParams {
     #[id = "gain"]
     pub gain: FloatParam,
 }

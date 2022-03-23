@@ -80,7 +80,7 @@ struct Diopser {
 // TODO: Some combinations of parameters can cause really loud resonance. We should limit the
 //       resonance and filter stages parameter ranges in the GUI until the user unlocks.
 #[derive(Params)]
-pub struct DiopserParams {
+struct DiopserParams {
     /// The number of all-pass filters applied in series.
     #[id = "stages"]
     filter_stages: IntParam,

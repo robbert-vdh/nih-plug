@@ -27,8 +27,7 @@ use crate::DiopserParams;
 const POINT_SCALE: f32 = 0.75;
 
 #[derive(Lens)]
-// TODO: Lens requires everything to be marked as `pub`
-pub struct Data {
+struct Data {
     params: Pin<Arc<DiopserParams>>,
 }
 

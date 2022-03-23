@@ -63,8 +63,7 @@ enum ParamSliderEvent {
 
 /// Internal param slider state the view needs to react to.
 #[derive(Lens)]
-// TODO: Lens requires everything to be marked as `pub`
-pub struct ParamSliderInternal {
+struct ParamSliderInternal {
     /// What style to use for the slider.
     style: ParamSliderStyle,
     /// Will be set to `true` when the field gets Alt+Click'ed which will replae the label with a
