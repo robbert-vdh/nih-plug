@@ -137,3 +137,29 @@ pub fn from_i32_note_formatter() -> Arc<dyn Fn(&str) -> Option<i32> + Send + Syn
         Some((octave + 1) + (12 * note_id))
     })
 }
+
+/// Display 'Bypassed' or 'Not Bypassed' depending on whether the parameter is true or false.
+/// 'Enabled' would have also been a possibilty here, but that could be a bit confusing.
+pub fn bool_bypass() -> Arc<dyn Fn(bool) -> String + Send + Sync> {
+    Arc::new(move |value| {
+        if value {
+            String::from("Bypassed")
+        } else {
+            String::from("Not Bypassed")
+        }
+    })
+}
+
+/// Parse a string in the same format as [`bool_bypass`].
+pub fn from_bool_bypass() -> Arc<dyn Fn(&str) -> Option<bool> + Send + Sync> {
+    Arc::new(|string| {
+        let string = string.trim();
+        if string.eq_ignore_ascii_case("bypass") {
+            Some(true)
+        } else if string.eq_ignore_ascii_case("not bypassed") {
+            Some(false)
+        } else {
+            None
+        }
+    })
+}
