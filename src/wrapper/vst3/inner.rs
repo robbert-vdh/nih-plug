@@ -11,14 +11,15 @@ use vst3_sys::vst::IComponentHandler;
 
 use super::context::{WrapperGuiContext, WrapperProcessContext};
 use super::param_units::ParamUnits;
-use super::util::{ObjectPtr, VstPtr, BYPASS_PARAM_HASH, BYPASS_PARAM_ID};
+use super::util::{ObjectPtr, VstPtr};
 use super::view::WrapperView;
 use crate::buffer::Buffer;
 use crate::context::Transport;
 use crate::event_loop::{EventLoop, MainThreadExecutor, OsEventLoop};
 use crate::param::internals::ParamPtr;
+use crate::param::ParamFlags;
 use crate::plugin::{BufferConfig, BusConfig, Editor, NoteEvent, ProcessStatus, Vst3Plugin};
-use crate::wrapper::util::hash_param_id;
+use crate::wrapper::util::{hash_param_id, Bypass, BYPASS_PARAM_HASH, BYPASS_PARAM_ID};
 
 /// The actual wrapper bits. We need this as an `Arc<T>` so we can safely use our event loop API.
 /// Since we can't combine that with VST3's interior reference counting this just has to be moved to
@@ -56,9 +57,9 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// The current buffer configuration, containing the sample rate and the maximum block size.
     /// Will be set in `IAudioProcessor::setupProcessing()`.
     pub current_buffer_config: AtomicCell<Option<BufferConfig>>,
-    /// Whether the plugin is currently bypassed. This is not yet integrated with the `Plugin`
-    /// trait.
-    pub bypass_state: AtomicBool,
+    /// Contains either a boolean indicating whether the plugin is currently bypassed, or a bypass
+    /// parameter if the plugin has one.
+    pub bypass: Bypass,
     /// The last process status returned by the plugin. This is used for tail handling.
     pub last_process_status: AtomicCell<ProcessStatus>,
     /// The current latency in samples, as set by the plugin through the [`ProcessContext`].
@@ -153,10 +154,6 @@ impl<P: Vst3Plugin> WrapperInner<P> {
                 .iter()
                 .map(|(id, _, _, _)| id.clone())
                 .collect();
-            nih_debug_assert!(
-                !param_ids.contains(BYPASS_PARAM_ID),
-                "The wrapper already adds its own bypass parameter"
-            );
             nih_debug_assert_eq!(
                 param_map.len(),
                 param_ids.len(),
@@ -164,13 +161,38 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             );
         }
 
+        // The plugin either supplies its own bypass parameter, or we'll create one for it
+        let mut bypass = Bypass::Dummy(AtomicBool::new(false));
+        for (id, _, ptr, _) in &param_id_hashes_ptrs_groups {
+            let flags = unsafe { ptr.flags() };
+            let is_bypass = flags.contains(ParamFlags::BYPASS);
+            if cfg!(debug_assertions) {
+                if id == BYPASS_PARAM_ID && !is_bypass {
+                    nih_debug_assert_failure!("Bypass parameters need to be marked with `.is_bypass()`, weird things will happen");
+                }
+                if is_bypass && matches!(bypass, Bypass::Parameter(_)) {
+                    nih_debug_assert_failure!(
+                        "Duplicate bypass parameters found, using the first one"
+                    );
+                    continue;
+                }
+            }
+
+            if is_bypass {
+                bypass = Bypass::Parameter(*ptr);
+                if !cfg!(debug_assertions) {
+                    break;
+                }
+            }
+        }
+
         let param_hashes = param_id_hashes_ptrs_groups
             .iter()
-            .map(|&(_, hash, _, _)| hash)
+            .map(|(_, hash, _, _)| *hash)
             .collect();
         let param_by_hash = param_id_hashes_ptrs_groups
             .iter()
-            .map(|&(_, hash, ptr, _)| (hash, ptr))
+            .map(|(_, hash, ptr, _)| (*hash, *ptr))
             .collect();
         let param_units = ParamUnits::from_param_groups(
             param_id_hashes_ptrs_groups
@@ -207,7 +229,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
                 num_output_channels: P::DEFAULT_NUM_OUTPUTS,
             }),
             current_buffer_config: AtomicCell::new(None),
-            bypass_state: AtomicBool::new(false),
+            bypass,
             last_process_status: AtomicCell::new(ProcessStatus::Normal),
             current_latency: AtomicU32::new(0),
             output_buffer: AtomicRefCell::new(Buffer::default()),
@@ -271,24 +293,25 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         normalized_value: f32,
         sample_rate: Option<f32>,
     ) -> tresult {
-        if hash == *BYPASS_PARAM_HASH {
-            self.bypass_state
-                .store(normalized_value >= 0.5, Ordering::SeqCst);
+        match (&self.bypass, self.param_by_hash.get(&hash)) {
+            (Bypass::Dummy(bypass_state), _) if hash == *BYPASS_PARAM_HASH => {
+                bypass_state.store(normalized_value >= 0.5, Ordering::Relaxed);
 
-            kResultOk
-        } else if let Some(param_ptr) = self.param_by_hash.get(&hash) {
-            // Also update the parameter's smoothing if applicable
-            match (param_ptr, sample_rate) {
-                (_, Some(sample_rate)) => unsafe {
-                    param_ptr.set_normalized_value(normalized_value);
-                    param_ptr.update_smoother(sample_rate, false);
-                },
-                _ => unsafe { param_ptr.set_normalized_value(normalized_value) },
+                kResultOk
             }
+            (_, Some(param_ptr)) => {
+                // Also update the parameter's smoothing if applicable
+                match (param_ptr, sample_rate) {
+                    (_, Some(sample_rate)) => unsafe {
+                        param_ptr.set_normalized_value(normalized_value);
+                        param_ptr.update_smoother(sample_rate, false);
+                    },
+                    _ => unsafe { param_ptr.set_normalized_value(normalized_value) },
+                }
 
-            kResultOk
-        } else {
-            kInvalidArgument
+                kResultOk
+            }
+            _ => kInvalidArgument,
         }
     }
 }

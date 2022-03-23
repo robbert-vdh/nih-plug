@@ -15,13 +15,13 @@ use vst3_sys::VST3;
 use widestring::U16CStr;
 
 use super::inner::WrapperInner;
-use super::util::{VstPtr, BYPASS_PARAM_HASH, BYPASS_PARAM_ID};
+use super::util::VstPtr;
 use super::view::WrapperView;
 use crate::context::Transport;
 use crate::param::ParamFlags;
 use crate::plugin::{BufferConfig, BusConfig, NoteEvent, ProcessStatus, Vst3Plugin};
 use crate::wrapper::state;
-use crate::wrapper::util::{process_wrapper, u16strlcpy};
+use crate::wrapper::util::{process_wrapper, u16strlcpy, Bypass, BYPASS_PARAM_HASH};
 use crate::wrapper::vst3::inner::ParameterChange;
 
 // Alias needed for the VST3 attribute macro
@@ -226,8 +226,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
             &self.inner.param_by_hash,
             &self.inner.param_id_to_hash,
             self.inner.current_buffer_config.load().as_ref(),
-            BYPASS_PARAM_ID,
-            &self.inner.bypass_state,
+            &self.inner.bypass,
         );
         if !success {
             return kResultFalse;
@@ -261,8 +260,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
             self.inner.plugin.read().params(),
             &self.inner.param_by_hash,
             &self.inner.param_id_to_hash,
-            BYPASS_PARAM_ID,
-            &self.inner.bypass_state,
+            &self.inner.bypass,
         );
         match serialized {
             Ok(serialized) => {
@@ -304,9 +302,13 @@ impl<P: Vst3Plugin> IEditController for Wrapper<P> {
     }
 
     unsafe fn get_parameter_count(&self) -> i32 {
-        // NOTE: We add a bypass parameter ourselves on index `self.inner.param_hashes.len()`, so
-        //       these indices are all off by one
-        self.inner.param_hashes.len() as i32 + 1
+        // NOTE: We add a bypass parameter ourselves on index `self.inner.param_hashes.len()` if the
+        //       plugin does not provide its own bypass parmaeter, in which case these indices will
+        //       all be off by one
+        match self.inner.bypass {
+            Bypass::Parameter(_) => self.inner.param_hashes.len() as i32,
+            Bypass::Dummy(_) => self.inner.param_hashes.len() as i32 + 1,
+        }
     }
 
     unsafe fn get_parameter_info(
@@ -316,15 +318,16 @@ impl<P: Vst3Plugin> IEditController for Wrapper<P> {
     ) -> tresult {
         check_null_ptr!(info);
 
-        // Parameter index `self.param_ids.len()` is our own bypass parameter
-        if param_index < 0 || param_index > self.inner.param_hashes.len() as i32 {
+        if param_index < 0 || param_index > self.get_parameter_count() {
             return kInvalidArgument;
         }
 
         *info = std::mem::zeroed();
 
         let info = &mut *info;
-        if param_index == self.inner.param_hashes.len() as i32 {
+        if matches!(self.inner.bypass, Bypass::Dummy(_))
+            && param_index == self.inner.param_hashes.len() as i32
+        {
             info.id = *BYPASS_PARAM_HASH;
             u16strlcpy(&mut info.title, "Bypass");
             u16strlcpy(&mut info.short_title, "Bypass");
@@ -343,7 +346,9 @@ impl<P: Vst3Plugin> IEditController for Wrapper<P> {
                 .expect("Inconsistent parameter data");
             let param_ptr = &self.inner.param_by_hash[param_hash];
             let default_value = param_ptr.default_normalized_value();
-            let automatable = !param_ptr.flags().contains(ParamFlags::NON_AUTOMATABLE);
+            let flags = param_ptr.flags();
+            let automatable = !flags.contains(ParamFlags::NON_AUTOMATABLE);
+            let is_bypass = flags.contains(ParamFlags::BYPASS);
 
             info.id = *param_hash;
             u16strlcpy(&mut info.title, param_ptr.name());
@@ -357,6 +362,9 @@ impl<P: Vst3Plugin> IEditController for Wrapper<P> {
             } else {
                 vst3_sys::vst::ParameterFlags::kIsReadOnly as i32 | (1 << 4) // kIsHidden
             };
+            if is_bypass {
+                info.flags |= vst3_sys::vst::ParameterFlags::kIsBypass as i32;
+            }
         }
 
         kResultOk
@@ -370,26 +378,27 @@ impl<P: Vst3Plugin> IEditController for Wrapper<P> {
     ) -> tresult {
         check_null_ptr!(string);
 
-        // Somehow there's no length there, so we'll assume our own maximum
         let dest = &mut *(string as *mut [TChar; 128]);
 
-        if id == *BYPASS_PARAM_HASH {
-            if value_normalized > 0.5 {
-                u16strlcpy(dest, "Bypassed")
-            } else {
-                u16strlcpy(dest, "Not Bypassed")
+        match (&self.inner.bypass, self.inner.param_by_hash.get(&id)) {
+            (Bypass::Dummy(_), _) if id == *BYPASS_PARAM_HASH => {
+                if value_normalized > 0.5 {
+                    u16strlcpy(dest, "Bypassed")
+                } else {
+                    u16strlcpy(dest, "Not Bypassed")
+                }
+
+                kResultOk
             }
+            (_, Some(param_ptr)) => {
+                u16strlcpy(
+                    dest,
+                    &param_ptr.normalized_value_to_string(value_normalized as f32, false),
+                );
 
-            kResultOk
-        } else if let Some(param_ptr) = self.inner.param_by_hash.get(&id) {
-            u16strlcpy(
-                dest,
-                &param_ptr.normalized_value_to_string(value_normalized as f32, false),
-            );
-
-            kResultOk
-        } else {
-            kInvalidArgument
+                kResultOk
+            }
+            _ => kInvalidArgument,
         }
     }
 
@@ -406,59 +415,60 @@ impl<P: Vst3Plugin> IEditController for Wrapper<P> {
             Err(_) => return kInvalidArgument,
         };
 
-        if id == *BYPASS_PARAM_HASH {
-            let value = match string.as_str() {
-                "Bypassed" => 1.0,
-                "Not Bypassed" => 0.0,
-                _ => return kResultFalse,
-            };
-            *value_normalized = value;
+        match (&self.inner.bypass, self.inner.param_by_hash.get(&id)) {
+            (Bypass::Dummy(_), _) if id == *BYPASS_PARAM_HASH => {
+                let string = string.trim();
+                let value = if string.eq_ignore_ascii_case("bypassed") {
+                    1.0
+                } else if string.eq_ignore_ascii_case("not bypassed") {
+                    0.0
+                } else {
+                    return kInvalidArgument;
+                };
+                *value_normalized = value;
 
-            kResultOk
-        } else if let Some(param_ptr) = self.inner.param_by_hash.get(&id) {
-            let value = match param_ptr.string_to_normalized_value(&string) {
-                Some(v) => v as f64,
-                None => return kResultFalse,
-            };
-            *value_normalized = value;
+                kResultOk
+            }
+            (_, Some(param_ptr)) => {
+                let value = match param_ptr.string_to_normalized_value(&string) {
+                    Some(v) => v as f64,
+                    None => return kResultFalse,
+                };
+                *value_normalized = value;
 
-            kResultOk
-        } else {
-            kInvalidArgument
+                kResultOk
+            }
+            _ => kInvalidArgument,
         }
     }
 
     unsafe fn normalized_param_to_plain(&self, id: u32, value_normalized: f64) -> f64 {
-        if id == *BYPASS_PARAM_HASH {
-            value_normalized
-        } else if let Some(param_ptr) = self.inner.param_by_hash.get(&id) {
-            param_ptr.preview_plain(value_normalized as f32) as f64
-        } else {
-            0.5
+        match (&self.inner.bypass, self.inner.param_by_hash.get(&id)) {
+            (Bypass::Dummy(_), _) if id == *BYPASS_PARAM_HASH => value_normalized.clamp(0.0, 1.0),
+            (_, Some(param_ptr)) => param_ptr.preview_plain(value_normalized as f32) as f64,
+            _ => 0.5,
         }
     }
 
     unsafe fn plain_param_to_normalized(&self, id: u32, plain_value: f64) -> f64 {
-        if id == *BYPASS_PARAM_HASH {
-            plain_value.clamp(0.0, 1.0)
-        } else if let Some(param_ptr) = self.inner.param_by_hash.get(&id) {
-            param_ptr.preview_normalized(plain_value as f32) as f64
-        } else {
-            0.5
+        match (&self.inner.bypass, self.inner.param_by_hash.get(&id)) {
+            (Bypass::Dummy(_), _) if id == *BYPASS_PARAM_HASH => plain_value.clamp(0.0, 1.0),
+            (_, Some(param_ptr)) => param_ptr.preview_normalized(plain_value as f32) as f64,
+            _ => 0.5,
         }
     }
 
     unsafe fn get_param_normalized(&self, id: u32) -> f64 {
-        if id == *BYPASS_PARAM_HASH {
-            if self.inner.bypass_state.load(Ordering::SeqCst) {
-                1.0
-            } else {
-                0.0
+        match (&self.inner.bypass, self.inner.param_by_hash.get(&id)) {
+            (Bypass::Dummy(bypass_state), _) if id == *BYPASS_PARAM_HASH => {
+                if bypass_state.load(Ordering::SeqCst) {
+                    1.0
+                } else {
+                    0.0
+                }
             }
-        } else if let Some(param_ptr) = self.inner.param_by_hash.get(&id) {
-            param_ptr.normalized_value() as f64
-        } else {
-            0.5
+            (_, Some(param_ptr)) => param_ptr.normalized_value() as f64,
+            _ => 0.5,
         }
     }
 
@@ -921,21 +931,25 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                     let mut plugin = self.inner.plugin.write();
                     let mut context = self.inner.make_process_context(transport);
 
-                    // Only process audio if the plugin isn't bypassed
-                    if !self.inner.bypass_state.load(Ordering::Relaxed) {
-                        let result = plugin.process(&mut output_buffer, &mut context);
-                        self.inner.last_process_status.store(result);
-                        match result {
-                            ProcessStatus::Error(err) => {
-                                nih_debug_assert_failure!("Process error: {}", err);
-
-                                return kResultFalse;
-                            }
-                            _ => kResultOk,
+                    // Only process audio if the plugin isn't bypassed. If the plugin provides its
+                    // own bypass parameter then it should decide what to do by itself.
+                    match &self.inner.bypass {
+                        Bypass::Dummy(bypass_state) if bypass_state.load(Ordering::Relaxed) => {
+                            self.inner.last_process_status.store(ProcessStatus::Normal);
+                            kResultOk
                         }
-                    } else {
-                        self.inner.last_process_status.store(ProcessStatus::Normal);
-                        kResultOk
+                        _ => {
+                            let result = plugin.process(&mut output_buffer, &mut context);
+                            self.inner.last_process_status.store(result);
+                            match result {
+                                ProcessStatus::Error(err) => {
+                                    nih_debug_assert_failure!("Process error: {}", err);
+
+                                    return kResultFalse;
+                                }
+                                _ => kResultOk,
+                            }
+                        }
                     }
                 };
 

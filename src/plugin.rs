@@ -21,8 +21,6 @@ use crate::param::internals::Params;
 /// - Sidechain inputs
 /// - Multiple output busses
 /// - Special handling for offline processing
-/// - Bypass parameters, right now the plugin wrappers generates one for you but there's no way to
-///   interact with it yet
 /// - Outputting parameter changes from the plugin
 /// - MIDI CC handling
 /// - Outputting MIDI events from the process function (you can output parmaeter changes from an

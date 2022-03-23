@@ -1,16 +1,5 @@
-use lazy_static::lazy_static;
 use std::ops::Deref;
 use vst3_sys::{interfaces::IUnknown, ComInterface};
-
-use crate::wrapper::util::hash_param_id;
-
-/// Right now the wrapper adds its own bypass parameter.
-///
-/// TODO: Actually use this parameter.
-pub const BYPASS_PARAM_ID: &str = "bypass";
-lazy_static! {
-    pub static ref BYPASS_PARAM_HASH: u32 = hash_param_id(BYPASS_PARAM_ID);
-}
 
 /// Early exit out of a VST3 function when one of the passed pointers is null
 macro_rules! check_null_ptr {

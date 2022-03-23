@@ -22,13 +22,18 @@ bitflags::bitflags! {
     #[repr(transparent)]
     #[derive(Default)]
     pub struct ParamFlags: u32 {
+        /// When applied to a [`BoolParam`], this will cause the parameter to be linked to the
+        /// host's bypass control. Only a single parameter can be marked as a bypass parameter. If
+        /// you don't have a bypass parameter, then NIH-plug will add one for you. You will need to
+        /// implement this yourself if your plugin introduces latency.
+        const BYPASS = 1 << 0;
         /// The parameter cannot be automated from the host. Setting this flag also prevents it from
         /// showing up in the host's own generic UI for this plugin. The parameter can still be
         /// changed from the plugin's editor GUI.
-        const NON_AUTOMATABLE = 1 << 0;
+        const NON_AUTOMATABLE = 1 << 1;
         /// Don't show this parameter when generating a generic UI for the plugin using one of
         /// NIH-plug's generic UI widgets.
-        const HIDE_IN_GENERIC_UI = 1 << 1;
+        const HIDE_IN_GENERIC_UI = 1 << 2;
     }
 }
 

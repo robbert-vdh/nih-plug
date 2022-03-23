@@ -182,6 +182,15 @@ impl BoolParam {
         self
     }
 
+    /// Mark this parameter as a bypass parameter. Plugin hosts can integrate this parameter into
+    /// their UI. Only a single [`BoolParam`] can be a bypass parmaeter, and NIH-plug will add one
+    /// if you don't create one yourself. You will need to implement this yourself if your plugin
+    /// introduces latency.
+    pub fn is_bypass(mut self) -> Self {
+        self.flags.insert(ParamFlags::BYPASS);
+        self
+    }
+
     /// Mark the paramter as non-automatable. This means that the parameter cannot be automated from
     /// the host. Setting this flag also prevents it from showing up in the host's own generic UI
     /// for this plugin. The parameter can still be changed from the plugin's editor GUI.
