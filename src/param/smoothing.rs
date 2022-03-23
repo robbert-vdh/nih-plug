@@ -77,10 +77,18 @@ impl<T: Default> Smoother<T> {
         Default::default()
     }
 
+    /// The number of steps left until calling [`next()`][Self::next()] will stop yielding new
+    /// values.
+    #[inline]
+    pub fn steps_left(&self) -> i32 {
+        self.steps_left.load(Ordering::Relaxed)
+    }
+
     /// Whether calling [`next()`][Self::next()] will yield a new value or an old value. Useful if
     /// you need to recompute something wheenver this parameter changes.
+    #[inline]
     pub fn is_smoothing(&self) -> bool {
-        self.steps_left.load(Ordering::Relaxed) > 0
+        self.steps_left() > 0
     }
 
     /// Allocate memory to store smoothed values for an entire block of audio. Call this in
