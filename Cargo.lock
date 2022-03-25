@@ -247,9 +247,9 @@ dependencies = [
 
 [[package]]
 name = "async-std"
-version = "1.10.0"
+version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8056f1455169ab86dd47b47391e4ab0cbd25410a70e9fe675544f49bafaf952"
+checksum = "52580991739c5cdb36cde8b2a516371c0a3b70dda36d916cc08b82372916808c"
 dependencies = [
  "async-channel",
  "async-global-executor",
@@ -477,7 +477,7 @@ dependencies = [
 [[package]]
 name = "clap-sys"
 version = "0.23.0"
-source = "git+https://github.com/glowcoil/clap-sys#adab81c98f5212b672b052a2fc76148c7efc6e74"
+source = "git+https://github.com/glowcoil/clap-sys#7a4cca3c2166db8d61ed3c5552f31a68694da952"
 
 [[package]]
 name = "clipboard-win"
@@ -1911,9 +1911,9 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.4.14"
+version = "0.4.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51b9bbe6c47d51fc3e1a9b945965946b4c44142ab8792c50835a980d362c2710"
+checksum = "6389c490849ff5bc16be905ae24bc913a9c8892e19b2341dbc175e14c341c2b8"
 dependencies = [
  "cfg-if 1.0.0",
  "value-bag",
@@ -2855,9 +2855,9 @@ checksum = "9ae028b272a6e99d9f8260ceefa3caa09300a8d6c8d2b2001316474bc52122e9"
 
 [[package]]
 name = "redox_syscall"
-version = "0.2.11"
+version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8380fe0152551244f0747b1bf41737e0f8a74f97a14ccefd1148187271634f3c"
+checksum = "8ae183fc1b06c149f0c1793e1eb447c8b04bfe46d48e9e48bfb8d2d7ed64ecf0"
 dependencies = [
  "bitflags",
 ]
@@ -3607,7 +3607,7 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 [[package]]
 name = "vizia"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#78122bddc2bfc9ee27d84d2f4838a10f48becd34"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#c671d86063e5f7754b90fca3c92350efa6d9fc0c"
 dependencies = [
  "vizia_baseview",
  "vizia_core",
@@ -3616,7 +3616,7 @@ dependencies = [
 [[package]]
 name = "vizia_baseview"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#78122bddc2bfc9ee27d84d2f4838a10f48becd34"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#c671d86063e5f7754b90fca3c92350efa6d9fc0c"
 dependencies = [
  "baseview",
  "femtovg",
@@ -3628,7 +3628,7 @@ dependencies = [
 [[package]]
 name = "vizia_core"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#78122bddc2bfc9ee27d84d2f4838a10f48becd34"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#c671d86063e5f7754b90fca3c92350efa6d9fc0c"
 dependencies = [
  "bitflags",
  "copypasta",
@@ -3651,7 +3651,7 @@ dependencies = [
 [[package]]
 name = "vizia_derive"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#78122bddc2bfc9ee27d84d2f4838a10f48becd34"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#c671d86063e5f7754b90fca3c92350efa6d9fc0c"
 dependencies = [
  "proc-macro2",
  "quote",

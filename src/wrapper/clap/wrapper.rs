@@ -1742,13 +1742,13 @@ impl<P: ClapPlugin> Wrapper<P> {
 
     unsafe extern "C" fn ext_params_get_info(
         plugin: *const clap_plugin,
-        param_index: i32,
+        param_index: u32,
         param_info: *mut clap_param_info,
     ) -> bool {
         check_null_ptr!(false, plugin, param_info);
         let wrapper = &*(plugin as *const Self);
 
-        if param_index < 0 || param_index > Self::ext_params_count(plugin) as i32 {
+        if param_index > Self::ext_params_count(plugin) {
             return false;
         }
 
@@ -1758,7 +1758,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         //       hashmap lookup, but for now we'll stay consistent with the VST3 implementation.
         let param_info = &mut *param_info;
         if matches!(wrapper.bypass, Bypass::Dummy(_))
-            && param_index == wrapper.param_hashes.len() as i32
+            && param_index == wrapper.param_hashes.len() as u32
         {
             param_info.id = *BYPASS_PARAM_HASH;
             param_info.flags =
