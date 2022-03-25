@@ -106,13 +106,12 @@ struct CrispParams {
 #[derive(Enum, Debug, PartialEq)]
 enum Mode {
     /// RM the entire waveform.
-    Crispy,
+    Soggy,
     /// RM only the positive part of the waveform.
-    #[name = "Even Crispier"]
-    EvenCrispier,
+    Crispy,
     /// RM only the negative part of the waveform.
-    #[name = "Even Crispier (alt)"]
-    EvenCrispierNegated,
+    #[name = "Crispy (alt)"]
+    CrispyNegated,
 }
 
 /// Controls how to handle stereo input.
@@ -153,7 +152,7 @@ impl Default for CrispParams {
                 .with_value_to_string(formatters::f32_percentage(0))
                 .with_string_to_value(formatters::from_f32_percentage()),
 
-            mode: EnumParam::new("Mode", Mode::EvenCrispier),
+            mode: EnumParam::new("Mode", Mode::Crispy),
             stereo_mode: EnumParam::new("Stereo Mode", StereoMode::Stereo),
 
             rm_input_lpf_freq: FloatParam::new(
@@ -429,9 +428,9 @@ impl Crisp {
 
         // TODO: Avoid branching in the main loop, this just makes it a bit easier to prototype
         match self.params.mode.value() {
-            Mode::Crispy => sample * noise,
-            Mode::EvenCrispier => sample.max(0.0) * noise,
-            Mode::EvenCrispierNegated => sample.max(0.0) * noise,
+            Mode::Soggy => sample * noise,
+            Mode::Crispy => sample.max(0.0) * noise,
+            Mode::CrispyNegated => sample.max(0.0) * noise,
         }
     }
 
