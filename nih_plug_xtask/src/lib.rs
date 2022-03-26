@@ -103,7 +103,8 @@ pub fn main_with_args(command_name: &str, mut args: impl Iterator<Item = String>
 
 /// Change the current directory into the Cargo workspace's root.
 pub fn chdir_workspace_root() -> Result<()> {
-    let project_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+    let cargo_manifest_dir = std::env::var("CARGO_MANIFEST_DIR")?;
+    let project_root = Path::new(&cargo_manifest_dir)
         .parent()
         .context("Could not find project root")?;
     std::env::set_current_dir(project_root).context("Could not change to project root directory")
