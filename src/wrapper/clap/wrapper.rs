@@ -324,7 +324,7 @@ impl<P: ClapPlugin> MainThreadExecutor<Task> for Wrapper<P> {
                 };
 
                 // This channel acts as a promise, there will never be more than a single value
-                // writen to it.
+                // writen to it, and if the other end got dropped then that's okay
                 let _ = result_sender.send(result);
             }
         };
