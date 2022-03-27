@@ -142,15 +142,15 @@ impl Default for Crisp {
 impl Default for CrispParams {
     #[allow(clippy::derivable_impls)]
     fn default() -> Self {
-        let f32_hz_then_khz = formatters::f32_hz_then_khz(0);
-        let from_f32_hz_then_khz = formatters::from_f32_hz_then_khz();
+        let f32_hz_then_khz = formatters::v2s_f32_hz_then_khz(0);
+        let from_f32_hz_then_khz = formatters::s2v_f32_hz_then_khz();
 
         Self {
             amount: FloatParam::new("Amount", 0.35, FloatRange::Linear { min: 0.0, max: 1.0 })
                 .with_smoother(SmoothingStyle::Linear(10.0))
                 .with_unit("%")
-                .with_value_to_string(formatters::f32_percentage(0))
-                .with_string_to_value(formatters::from_f32_percentage()),
+                .with_value_to_string(formatters::v2s_f32_percentage(0))
+                .with_string_to_value(formatters::s2v_f32_percentage()),
 
             mode: EnumParam::new("Mode", Mode::Crispy),
             stereo_mode: EnumParam::new("Stereo Mode", StereoMode::Stereo),
@@ -190,7 +190,7 @@ impl Default for CrispParams {
                 },
             )
             .with_smoother(SmoothingStyle::Logarithmic(100.0))
-            .with_value_to_string(formatters::f32_rounded(2)),
+            .with_value_to_string(formatters::v2s_f32_rounded(2)),
             noise_hpf_freq: FloatParam::new(
                 "Noise HP Frequency",
                 MIN_FILTER_FREQUENCY,
@@ -232,7 +232,7 @@ impl Default for CrispParams {
                 },
             )
             .with_smoother(SmoothingStyle::Logarithmic(100.0))
-            .with_value_to_string(formatters::f32_rounded(2)),
+            .with_value_to_string(formatters::v2s_f32_rounded(2)),
             noise_lpf_freq: FloatParam::new(
                 "Noise LP Frequency",
                 MAX_FILTER_FREQUENCY,
@@ -268,7 +268,7 @@ impl Default for CrispParams {
                 },
             )
             .with_smoother(SmoothingStyle::Logarithmic(100.0))
-            .with_value_to_string(formatters::f32_rounded(2)),
+            .with_value_to_string(formatters::v2s_f32_rounded(2)),
 
             output_gain: FloatParam::new(
                 "Output",

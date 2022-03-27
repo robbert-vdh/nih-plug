@@ -98,8 +98,8 @@ impl Default for PubertySimulator {
 
 impl Default for PubertySimulatorParams {
     fn default() -> Self {
-        let power_of_two_val2str = formatters::i32_power_of_two();
-        let power_of_two_str2val = formatters::from_i32_power_of_two();
+        let power_of_two_val2str = formatters::v2s_i32_power_of_two();
+        let power_of_two_str2val = formatters::s2v_i32_power_of_two();
 
         Self {
             pitch_octaves: FloatParam::new(
@@ -116,7 +116,7 @@ impl Default for PubertySimulatorParams {
             // overlap-add, but sounds kind of slick
             .with_smoother(SmoothingStyle::Linear(100.0))
             .with_unit(" Octaves")
-            .with_value_to_string(formatters::f32_rounded(2)),
+            .with_value_to_string(formatters::v2s_f32_rounded(2)),
 
             window_size_order: IntParam::new(
                 "Window Size",

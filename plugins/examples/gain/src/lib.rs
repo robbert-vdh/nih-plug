@@ -69,7 +69,7 @@ impl Default for GainParams {
             .with_unit(" dB")
             // This is actually redundant, because a step size of two decimal places already
             // causes the parameter to shown rounded
-            .with_value_to_string(formatters::f32_rounded(2)),
+            .with_value_to_string(formatters::v2s_f32_rounded(2)),
             // Persisted fields can be intialized like any other fields, and they'll keep their when
             // restoring the plugin's state.
             random_data: RwLock::new(Vec::new()),
@@ -83,7 +83,7 @@ impl Default for GainParams {
                         factor: FloatRange::skew_factor(2.0),
                     },
                 )
-                .with_value_to_string(formatters::f32_rounded(2)),
+                .with_value_to_string(formatters::v2s_f32_rounded(2)),
                 sub_sub_params: SubSubParams {
                     nope: FloatParam::new("Nope", 0.5, FloatRange::Linear { min: 1.0, max: 2.0 }),
                 },
