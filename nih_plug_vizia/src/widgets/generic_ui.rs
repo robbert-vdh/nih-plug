@@ -74,7 +74,7 @@ impl GenericUi {
         cx: &mut Context,
         params: L,
         mut make_widget: impl FnMut(&mut Context, ParamPtr),
-    ) -> Handle<'_, GenericUi>
+    ) -> Handle<Self>
     where
         L: Lens<Target = Pin<PsPtr>> + Copy,
         PsPtr: 'static + Deref<Target = Ps>,

@@ -8,18 +8,20 @@
 use nih_plug::prelude::{GuiContext, Param, ParamPtr};
 use std::sync::Arc;
 
-use vizia::{Context, Model, WindowEvent};
+use vizia::{Context, Lens, Model, WindowEvent};
 
 use super::ViziaState;
 
 mod generic_ui;
 mod param_slider;
 mod peak_meter;
+mod resize_handle;
 pub mod util;
 
 pub use generic_ui::GenericUi;
 pub use param_slider::{ParamSlider, ParamSliderExt, ParamSliderStyle};
 pub use peak_meter::PeakMeter;
+pub use resize_handle::ResizeHandle;
 
 /// Register the default theme for the widgets exported by this module. This is automatically called
 /// for you when using [`create_vizia_editor()`][super::create_vizia_editor()].
@@ -67,6 +69,7 @@ pub(crate) struct ParamModel {
 
 /// Handles interactions through `WindowEvent` for VIZIA GUIs by updating the `ViziaState`.
 /// Registered in [`ViziaEditor::spawn()`][super::ViziaEditor::spawn()].
+#[derive(Lens)]
 pub(crate) struct WindowModel {
     pub context: Arc<dyn GuiContext>,
     pub vizia_state: Arc<ViziaState>,

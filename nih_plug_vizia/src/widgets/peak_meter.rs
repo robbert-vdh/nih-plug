@@ -39,11 +39,7 @@ where
 impl PeakMeter {
     /// Creates a new [`PeakMeter`] for the given value in decibel, optionally holding the peak
     /// value for a certain amount of time.
-    pub fn new<L>(
-        cx: &mut Context,
-        level_dbfs: L,
-        hold_time: Option<Duration>,
-    ) -> Handle<'_, PeakMeter>
+    pub fn new<L>(cx: &mut Context, level_dbfs: L, hold_time: Option<Duration>) -> Handle<Self>
     where
         L: Lens<Target = f32>,
     {

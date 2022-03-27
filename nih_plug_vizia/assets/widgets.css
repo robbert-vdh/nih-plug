@@ -87,3 +87,21 @@ peak-meter .ticks__label {
   top: 4px; /* In pixels in an attempt to get this to better align to the grid */
   font-size: 11; /* 14.667px */
 }
+
+resize-handle {
+  bottom: 0;
+  color: #696969;
+  height: 20px;
+  left: 1s;
+  opacity: 0.5;
+  position-type: self-directed;
+  right: 0;
+  top: 1s;
+  transition: opacity 0.1 0;
+  width: 20px;
+  z-index: 1337;
+}
+resize-handle:hover {
+  opacity: 0.8;
+  transition: opacity 0.1 0;
+}

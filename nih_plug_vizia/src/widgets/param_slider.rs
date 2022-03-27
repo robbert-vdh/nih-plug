@@ -100,11 +100,7 @@ impl ParamSlider {
     /// the VIZIA wrapper.
     ///
     /// See [`ParamSliderExt`] for additonal options.
-    pub fn new<L, Params, P, F>(
-        cx: &mut Context,
-        params: L,
-        params_to_param: F,
-    ) -> Handle<'_, ParamSlider>
+    pub fn new<L, Params, P, F>(cx: &mut Context, params: L, params_to_param: F) -> Handle<Self>
     where
         L: Lens<Target = Params> + Copy,
         F: 'static + Fn(&Params) -> &P + Copy,
