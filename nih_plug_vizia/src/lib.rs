@@ -29,6 +29,27 @@ where
     Some(Box::new(ViziaEditor {
         vizia_state,
         app: Arc::new(app),
+        apply_theming: true,
+
+        scaling_factor: AtomicCell::new(None),
+    }))
+}
+
+/// The same as [`create_vizia_editor()`] but without changing VIZIA's default styling and font.
+/// This also won't register the styling for any of the widgets that come with `nih_plug_vizia`, or
+/// register the custom fonts. Event handlers for the [`ParamEvent`][widgets::ParamEvent]s are still
+/// set up when using this function instead of [`create_vizia_editor()`].
+pub fn create_vizia_editor_without_theme<F>(
+    vizia_state: Arc<ViziaState>,
+    app: F,
+) -> Option<Box<dyn Editor>>
+where
+    F: Fn(&mut Context) + 'static + Send + Sync,
+{
+    Some(Box::new(ViziaEditor {
+        vizia_state,
+        app: Arc::new(app),
+        apply_theming: false,
 
         scaling_factor: AtomicCell::new(None),
     }))
@@ -68,6 +89,9 @@ struct ViziaEditor {
     vizia_state: Arc<ViziaState>,
     /// The user's app function.
     app: Arc<dyn Fn(&mut Context) + 'static + Send + Sync>,
+    /// Whether to apply `nih_plug_vizia`'s default theme. If this is disabled, then only the event
+    /// handler for `ParamEvent`s is set up.
+    apply_theming: bool,
 
     /// The scaling factor reported by the host, if any. On macOS this will never be set and we
     /// should use the system scaling factor instead.
@@ -81,6 +105,7 @@ impl Editor for ViziaEditor {
         context: Arc<dyn GuiContext>,
     ) -> Box<dyn std::any::Any + Send + Sync> {
         let app = self.app.clone();
+        let apply_theming = self.apply_theming;
 
         let (unscaled_width, unscaled_height) = self.vizia_state.size();
         let scaling_factor = self.scaling_factor.load();
@@ -89,19 +114,20 @@ impl Editor for ViziaEditor {
 
         let window = Application::new(window_description, move |cx| {
             // Set some default styles to match the iced integration
-            // TODO: Maybe add a way to override this behavior
-            // NOTE: vizia's font rendering looks way too dark and thick. Going one font weight
-            //       lower seems to compensate for this.
-            assets::register_fonts(cx);
-            cx.set_default_font(assets::NOTO_SANS_LIGHT);
+            if apply_theming {
+                // NOTE: vizia's font rendering looks way too dark and thick. Going one font weight
+                //       lower seems to compensate for this.
+                assets::register_fonts(cx);
+                cx.set_default_font(assets::NOTO_SANS_LIGHT);
 
-            // TOOD: `:root { background-color: #fafafa; }` in a stylesheet doesn't work
-            Entity::root().set_background_color(cx, Color::rgb(250, 250, 250));
-            cx.add_theme(include_str!("../assets/theme.css"));
+                // TOOD: `:root { background-color: #fafafa; }` in a stylesheet doesn't work
+                Entity::root().set_background_color(cx, Color::rgb(250, 250, 250));
+                cx.add_theme(include_str!("../assets/theme.css"));
 
-            // There doesn't seem to be any way to bundle styles with a widget, so we'll always
-            // include the style sheet for our custom widgets at context creation
-            widgets::register_theme(cx);
+                // There doesn't seem to be any way to bundle styles with a widget, so we'll always
+                // include the style sheet for our custom widgets at context creation
+                widgets::register_theme(cx);
+            }
 
             // Any widget can change the parameters by emitting `ParamEvent` events. This model will
             // handle them automatically.
