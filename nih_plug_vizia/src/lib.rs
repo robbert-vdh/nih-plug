@@ -55,26 +55,65 @@ where
     }))
 }
 
-// TODO: Once we add resizing, we may want to be able to remember the GUI size. In that case we need
-//       to make this serializable (only restoring the size of course) so it can be persisted.
+/// State for a `nih_plug_vizia` editor. The scale factor can be manipulated at runtime by emitting
+/// [`WindowEvent::SetScale`][vizia::WindowEvent::SetScale] events.
+///
+/// # TODO
+///
+/// Make this serializable so it can be persisted.
 pub struct ViziaState {
+    /// The window's size in logical pixels before applying `scale_factor`.
     size: AtomicCell<(u32, u32)>,
+    /// A scale factor that should be applied to `size` separate from from any system HiDPI scaling.
+    /// This can be used to allow GUIs to be scaled uniformly.
+    scale_factor: AtomicCell<f64>,
     open: AtomicBool,
 }
 
 impl ViziaState {
-    /// Initialize the GUI's state. This value can be passed to [`create_vizia_editor()`]. The window
-    /// size is in logical pixels, so before it is multiplied by the DPI scaling factor.
+    /// Initialize the GUI's state. This value can be passed to [`create_vizia_editor()`]. The
+    /// window size is in logical pixels, so before it is multiplied by the DPI scaling factor.
     pub fn from_size(width: u32, height: u32) -> Arc<ViziaState> {
         Arc::new(ViziaState {
             size: AtomicCell::new((width, height)),
+            scale_factor: AtomicCell::new(1.0),
             open: AtomicBool::new(false),
         })
     }
 
-    /// Return a `(width, height)` pair for the current size of the GUI in logical pixels.
-    pub fn size(&self) -> (u32, u32) {
+    /// The same as [`from_size()`][Self::from_size()], but with a separate initial scale factor.
+    /// This scale factor gets applied on top of any HiDPI scaling, and it can be modified at
+    /// runtime by emitting [`WindowEvent::SetScale`][vizia::WindowEvent::SetScale] events.
+    pub fn from_size_with_scale(width: u32, height: u32, scale_factor: f64) -> Arc<ViziaState> {
+        Arc::new(ViziaState {
+            size: AtomicCell::new((width, height)),
+            scale_factor: AtomicCell::new(scale_factor),
+            open: AtomicBool::new(false),
+        })
+    }
+
+    /// Return a `(width, height)` pair for the current size of the GUI in logical pixels, after
+    /// applying the user scale factor.
+    pub fn scaled_logical_size(&self) -> (u32, u32) {
+        let (logical_width, logical_height) = self.size.load();
+        let scale_factor = self.scale_factor.load();
+
+        (
+            (logical_width as f64 * scale_factor).round() as u32,
+            (logical_height as f64 * scale_factor).round() as u32,
+        )
+    }
+
+    /// Return a `(width, height)` pair for the current size of the GUI in logical pixels before
+    /// applying the user scale factor.
+    pub fn inner_logical_size(&self) -> (u32, u32) {
         self.size.load()
+    }
+
+    /// Get the non-DPI related uniform scaling factor the GUI's size will be multiplied with. This
+    /// can be changed by emitting [`WindowEvent::SetScale`][vizia::WindowEvent::SetScale] events.
+    pub fn user_scale_factor(&self) -> f64 {
+        self.scale_factor.load()
     }
 
     /// Whether the GUI is currently visible.
@@ -105,12 +144,15 @@ impl Editor for ViziaEditor {
         context: Arc<dyn GuiContext>,
     ) -> Box<dyn std::any::Any + Send + Sync> {
         let app = self.app.clone();
+        let vizia_state = self.vizia_state.clone();
         let apply_theming = self.apply_theming;
 
-        let (unscaled_width, unscaled_height) = self.vizia_state.size();
-        let scaling_factor = self.scaling_factor.load();
-        let window_description =
-            WindowDescription::new().with_inner_size(unscaled_width, unscaled_height);
+        let (unscaled_width, unscaled_height) = vizia_state.inner_logical_size();
+        let system_scaling_factor = self.scaling_factor.load();
+        let user_scale_factor = vizia_state.user_scale_factor();
+        let window_description = WindowDescription::new()
+            .with_inner_size(unscaled_width, unscaled_height)
+            .with_scale_factor(user_scale_factor);
 
         let window = Application::new(window_description, move |cx| {
             // Set some default styles to match the iced integration
@@ -136,10 +178,18 @@ impl Editor for ViziaEditor {
             }
             .build(cx);
 
+            // And we'll link `WindowEvent::ResizeWindow` and `WindowEvent::SetScale` events to our
+            // `ViziaState`. We'll notify the host when any of these change.
+            widgets::WindowModel {
+                context: context.clone(),
+                vizia_state: vizia_state.clone(),
+            }
+            .build(cx);
+
             app(cx)
         })
         .with_scale_policy(
-            scaling_factor
+            system_scaling_factor
                 .map(|factor| WindowScalePolicy::ScaleFactor(factor as f64))
                 .unwrap_or(WindowScalePolicy::SystemScaleFactor),
         )
@@ -153,16 +203,21 @@ impl Editor for ViziaEditor {
     }
 
     fn size(&self) -> (u32, u32) {
-        self.vizia_state.size()
+        // This includes the user scale factor if set, but not any HiDPI scaling
+        self.vizia_state.scaled_logical_size()
     }
 
     fn set_scale_factor(&self, factor: f32) -> bool {
+        // We're making things a bit more complicated by having both a system scale factor, which is
+        // used for HiDPI and also known to the host, and a user scale factor that the user can use
+        // to arbitrarily resize the GUI
         self.scaling_factor.store(Some(factor));
         true
     }
 
     fn param_values_changed(&self) {
-        // TODO: Update the GUI when this happens
+        // TODO: Update the GUI when this happens, right now this happens automatically as a result
+        //       of of the reactivity
     }
 }
 

@@ -328,6 +328,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "baseview"
+version = "0.1.0"
+source = "git+https://github.com/robbert-vdh/baseview.git?branch=feature/resize#b5d0751c82c3fd0301366f1f31c07f3cd53aa52f"
+dependencies = [
+ "cocoa",
+ "core-foundation",
+ "keyboard-types",
+ "nix",
+ "objc",
+ "raw-window-handle",
+ "uuid",
+ "winapi 0.3.9",
+ "x11",
+ "xcb 0.9.0",
+ "xcb-util",
+]
+
+[[package]]
 name = "bit-set"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -884,7 +902,7 @@ name = "egui-baseview"
 version = "0.0.0"
 source = "git+https://github.com/robbert-vdh/egui-baseview.git?branch=fix/update-dependencies#afde9c661809ee08d69864caa899246592d93f8c"
 dependencies = [
- "baseview",
+ "baseview 0.1.0 (git+https://github.com/robbert-vdh/baseview.git?branch=feature/mouse-event-modifiers)",
  "copypasta",
  "egui",
  "gl",
@@ -1558,7 +1576,7 @@ name = "iced_baseview"
 version = "0.0.3"
 source = "git+https://github.com/robbert-vdh/iced_baseview.git?branch=feature/update-baseview#116e9043779946c9b2a1b4d2a06bf46752930919"
 dependencies = [
- "baseview",
+ "baseview 0.1.0 (git+https://github.com/robbert-vdh/baseview.git?branch=feature/mouse-event-modifiers)",
  "copypasta",
  "iced_core",
  "iced_futures",
@@ -2165,7 +2183,7 @@ dependencies = [
 name = "nih_plug_egui"
 version = "0.0.0"
 dependencies = [
- "baseview",
+ "baseview 0.1.0 (git+https://github.com/robbert-vdh/baseview.git?branch=feature/mouse-event-modifiers)",
  "crossbeam",
  "egui",
  "egui-baseview",
@@ -2179,7 +2197,7 @@ name = "nih_plug_iced"
 version = "0.0.0"
 dependencies = [
  "atomic_refcell",
- "baseview",
+ "baseview 0.1.0 (git+https://github.com/robbert-vdh/baseview.git?branch=feature/mouse-event-modifiers)",
  "crossbeam",
  "iced_baseview",
  "nih_plug",
@@ -2190,7 +2208,7 @@ dependencies = [
 name = "nih_plug_vizia"
 version = "0.0.0"
 dependencies = [
- "baseview",
+ "baseview 0.1.0 (git+https://github.com/robbert-vdh/baseview.git?branch=feature/resize)",
  "crossbeam",
  "femtovg",
  "nih_plug",
@@ -3607,7 +3625,7 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 [[package]]
 name = "vizia"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#c671d86063e5f7754b90fca3c92350efa6d9fc0c"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#6c9844125ee68537842a025657cbd51734a2589d"
 dependencies = [
  "vizia_baseview",
  "vizia_core",
@@ -3616,9 +3634,9 @@ dependencies = [
 [[package]]
 name = "vizia_baseview"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#c671d86063e5f7754b90fca3c92350efa6d9fc0c"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#6c9844125ee68537842a025657cbd51734a2589d"
 dependencies = [
- "baseview",
+ "baseview 0.1.0 (git+https://github.com/robbert-vdh/baseview.git?branch=feature/resize)",
  "femtovg",
  "keyboard-types",
  "raw-window-handle",
@@ -3628,7 +3646,7 @@ dependencies = [
 [[package]]
 name = "vizia_core"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#c671d86063e5f7754b90fca3c92350efa6d9fc0c"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#6c9844125ee68537842a025657cbd51734a2589d"
 dependencies = [
  "bitflags",
  "copypasta",
@@ -3651,7 +3669,7 @@ dependencies = [
 [[package]]
 name = "vizia_derive"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=feature/baseview-modifiers#c671d86063e5f7754b90fca3c92350efa6d9fc0c"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#6c9844125ee68537842a025657cbd51734a2589d"
 dependencies = [
  "proc-macro2",
  "quote",

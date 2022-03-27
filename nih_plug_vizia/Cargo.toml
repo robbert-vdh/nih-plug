@@ -11,10 +11,10 @@ description = "An adapter to use VIZIA GUIs with NIH-plug"
 nih_plug = { path = ".." }
 nih_plug_assets = { git = "https://github.com/robbert-vdh/nih_plug_assets.git" }
 
-baseview = { git = "https://github.com/robbert-vdh/baseview.git", branch = "feature/mouse-event-modifiers" }
+baseview = { git = "https://github.com/robbert-vdh/baseview.git", branch = "feature/resize" }
 crossbeam = "0.8"
 # Vizia doesn't re-export this, we will
 femtovg = { version = "0.3.0", default-features = false, features = ["image-loading"] }
 # This fork contains changed for better keyboard modifier handling and DPI
-# scaling
-vizia = { git = "https://github.com/robbert-vdh/vizia.git", branch = "feature/baseview-modifiers", default_features = false, features = ["baseview", "clipboard"] }
+# scaling, window scaling, and a lot more fixes and improvements
+vizia = { git = "https://github.com/robbert-vdh/vizia.git", branch = "patched", default_features = false, features = ["baseview", "clipboard"] }
