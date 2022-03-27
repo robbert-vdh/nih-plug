@@ -76,10 +76,12 @@ impl View for ResizeHandle {
                             y * self.start_scale_factor as f32,
                         );
                         let (start_physical_x, start_physical_y) = self.start_physical_coordinates;
-                        let new_scale_factor = self.start_scale_factor
+                        let new_scale_factor = (self.start_scale_factor
                             * (compensated_physical_x / start_physical_x)
                                 .max(compensated_physical_y / start_physical_y)
-                                as f64;
+                                as f64)
+                            // Prevent approaching zero here because uh
+                            .max(0.25);
                         if new_scale_factor != vizia_state.user_scale_factor() {
                             cx.emit(WindowEvent::SetScale(new_scale_factor));
                         }
