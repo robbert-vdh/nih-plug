@@ -27,6 +27,13 @@ pub(crate) struct WrapperProcessContext<'a, P: Vst3Plugin> {
 }
 
 impl<P: Vst3Plugin> GuiContext for WrapperGuiContext<P> {
+    fn request_resize(&self) -> bool {
+        match &*self.inner.plug_view.read() {
+            Some(plug_view) => plug_view.request_resize(),
+            None => false,
+        }
+    }
+
     // All of these functions are supposed to be called from the main thread, so we'll put some
     // trust in the caller and assume that this is indeed the case
     unsafe fn raw_begin_set_parameter(&self, param: ParamPtr) {

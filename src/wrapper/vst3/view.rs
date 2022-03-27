@@ -8,7 +8,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use vst3_com::utils::SharedVstPtr;
 use vst3_sys::base::{kInvalidArgument, kResultFalse, kResultOk, tresult, TBool};
-use vst3_sys::gui::{IPlugFrame, IPlugView, IPlugViewContentScaleSupport};
+use vst3_sys::gui::{IPlugFrame, IPlugView, IPlugViewContentScaleSupport, ViewRect};
 use vst3_sys::VST3;
 
 use super::inner::WrapperInner;
@@ -56,6 +56,42 @@ impl<P: Vst3Plugin> WrapperView<P> {
             RwLock::new(None),
             AtomicF32::new(1.0),
         )
+    }
+
+    /// Ask the host to resize the view to the size specified by [Editor::size()]. Will return false
+    /// if the host doesn't like you.
+    pub fn request_resize(&self) -> bool {
+        // Don't do anything if the editor is not open, because that would be strange
+        if self
+            .editor_handle
+            .try_read()
+            .map(|e| e.is_none())
+            .unwrap_or(true)
+        {
+            return false;
+        }
+
+        match &*self.plug_frame.read() {
+            Some(plug_frame) => {
+                let (unscaled_width, unscaled_height) = self.editor.size();
+                let scaling_factor = self.scaling_factor.load(Ordering::Relaxed);
+                let mut size = ViewRect {
+                    right: (unscaled_width as f32 * scaling_factor).round() as i32,
+                    bottom: (unscaled_height as f32 * scaling_factor).round() as i32,
+                    ..Default::default()
+                };
+
+                // The argument types are a bit wonky here because you can't construct a
+                // `SharedVstPtr`. This _should_ work however.
+                // FIXME: Run this in the `IRonLoop` on Linux. Otherwise REAPER will be very cross
+                //        with us.
+                let plug_view: SharedVstPtr<dyn IPlugView> = unsafe { mem::transmute(self) };
+                let result = unsafe { plug_frame.resize_view(plug_view, &mut size) };
+
+                result == kResultOk
+            }
+            None => false,
+        }
     }
 }
 
@@ -179,11 +215,14 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
         kResultOk
     }
 
-    unsafe fn get_size(&self, size: *mut vst3_sys::gui::ViewRect) -> tresult {
+    unsafe fn get_size(&self, size: *mut ViewRect) -> tresult {
         check_null_ptr!(size);
 
         *size = mem::zeroed();
 
+        // TODO: This is technically incorrect during resizing, this should still report the old
+        //       size until `.on_size()` has been called. We should probably only bother fixing this
+        //       if it turns out to be an issue.
         let (unscaled_width, unscaled_height) = self.editor.size();
         let scaling_factor = self.scaling_factor.load(Ordering::Relaxed);
         let size = &mut *size;
@@ -195,10 +234,10 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
         kResultOk
     }
 
-    unsafe fn on_size(&self, new_size: *mut vst3_sys::gui::ViewRect) -> tresult {
-        // TODO: Implement resizing
+    unsafe fn on_size(&self, new_size: *mut ViewRect) -> tresult {
         check_null_ptr!(new_size);
 
+        // TODO: Implement Host->Plugin resizing
         let (unscaled_width, unscaled_height) = self.editor.size();
         let scaling_factor = self.scaling_factor.load(Ordering::Relaxed);
         let (editor_width, editor_height) = (
@@ -231,14 +270,14 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
     }
 
     unsafe fn can_resize(&self) -> tresult {
-        // TODO: Implement resizing
+        // TODO: Implement Host->Plugin resizing
         kResultFalse
     }
 
-    unsafe fn check_size_constraint(&self, rect: *mut vst3_sys::gui::ViewRect) -> tresult {
+    unsafe fn check_size_constraint(&self, rect: *mut ViewRect) -> tresult {
         check_null_ptr!(rect);
 
-        // TODO: Add this with the resizing
+        // TODO: Implement Host->Plugin resizing
         if (*rect).right - (*rect).left > 0 && (*rect).bottom - (*rect).top > 0 {
             kResultOk
         } else {

@@ -26,6 +26,10 @@ pub(crate) struct WrapperProcessContext<'a, P: ClapPlugin> {
 }
 
 impl<P: ClapPlugin> GuiContext for WrapperGuiContext<P> {
+    fn request_resize(&self) -> bool {
+        todo!("Implement window resizing for CLAP");
+    }
+
     // All of these functions are supposed to be called from the main thread, so we'll put some
     // trust in the caller and assume that this is indeed the case
     unsafe fn raw_begin_set_parameter(&self, param: ParamPtr) {
