@@ -8,8 +8,8 @@ use std::simd::{LaneCount, Simd, SupportedLaneCount};
 use super::SamplesIter;
 
 /// An iterator over all samples in the buffer, slicing over the sample-dimension with a maximum
-/// size of `max_block_size`. See [`Buffer::iter_blocks()`]. Yields both the block and the offset
-/// from the start of the buffer.
+/// size of `max_block_size`. See [`Buffer::iter_blocks()`][super::Buffer::iter_blocks()]. Yields
+/// both the block and the offset from the start of the buffer.
 pub struct BlocksIter<'slice, 'sample: 'slice> {
     /// The raw output buffers.
     pub(super) buffers: *mut [&'sample mut [f32]],
@@ -152,7 +152,8 @@ impl<'slice, 'sample> Block<'slice, 'sample> {
     }
 
     /// Iterate over this block on a per-sample per-channel basis. This is identical to
-    /// [`Buffer::iter_samples()`] but for a smaller block instead of the entire buffer
+    /// [`Buffer::iter_samples()`][super::Buffer::iter_samples()] but for a smaller block instead of
+    /// the entire buffer
     #[inline]
     pub fn iter_samples(&mut self) -> SamplesIter<'slice, 'sample> {
         SamplesIter {
@@ -272,7 +273,8 @@ impl<'slice, 'sample> Block<'slice, 'sample> {
     }
 
     /// Write data from a SIMD vector to this sample's channel data for a specific sample in this
-    /// block. This takes the padding added by [`to_simd()`][Self::to_simd()] into account.
+    /// block. This takes the padding added by [`to_channel_simd()`][Self::to_channel_simd()] into
+    /// account.
     ///
     /// Returns `false` if `sample_index` is out of bounds.
     #[cfg(feature = "simd")]

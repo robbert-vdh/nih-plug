@@ -39,8 +39,6 @@ where
 impl PeakMeter {
     /// Creates a new [`PeakMeter`] for the given value in decibel, optionally holding the peak
     /// value for a certain amount of time.
-    ///
-    /// See [`PeakMeterExt`] for additonal options.
     pub fn new<L>(
         cx: &mut Context,
         level_dbfs: L,

@@ -11,7 +11,7 @@ use super::RawParamEvent;
 const GRANULAR_DRAG_MULTIPLIER: f32 = 0.1;
 
 /// A slider that integrates with NIH-plug's [`Param`] types. Use the
-/// [`set_style()`][Self::set_style()] method to change how the value gets displayed.
+/// [`set_style()`][ParamSliderExt::set_style()] method to change how the value gets displayed.
 ///
 /// TODO: Handle scrolling for steps (and shift+scroll for smaller steps?)
 /// TODO: We may want to add a couple dedicated event handlers if it seems like those would be
@@ -34,7 +34,7 @@ pub struct ParamSlider {
 }
 
 /// How the [`ParamSlider`] should display its values. Set this using
-/// [`ParamSliderExt::slider_style()`].
+/// [`ParamSliderExt::set_style()`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Data)]
 pub enum ParamSliderStyle {
     /// Visualize the offset from the default value for continuous parameters with a default value

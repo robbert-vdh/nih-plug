@@ -237,8 +237,8 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
     /// specified size with the windowing function already applied. The summed reults will then be
     /// written back to `main_buffer` exactly one block later, which means that this function will
     /// introduce one block of latency. This can be compensated by calling
-    /// [`ProcessContext::set_latency()`][`crate::prelude::ProcessContext::set_latency()`] in your
-    /// plugin's initialization function.
+    /// [`ProcessContext::set_latency()`][`crate::prelude::ProcessContext::set_latency_samples()`]
+    /// in your plugin's initialization function.
     ///
     /// This function does not apply any gain compensation for the windowing. You will need to do
     /// that yoruself depending on your window function and the amount of overlap.

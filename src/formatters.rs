@@ -35,7 +35,7 @@ pub fn f32_gain_to_db(digits: usize) -> Arc<dyn Fn(f32) -> String + Send + Sync>
 }
 
 /// Parse a decibel value to a linear voltage gain ratio. Handles the `dB` or `dBFS` units for you.
-/// Used in conjunction with [`f32_lin_to_db`].
+/// Used in conjunction with [`f32_gain_to_db()`].
 pub fn from_f32_gain_to_db() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> {
     Arc::new(|string| {
         string
@@ -99,14 +99,14 @@ pub fn from_f32_hz_then_khz() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> 
     })
 }
 
-/// Format an order/power of two. Useful in conjunction with [`from_power_of_two()`] to limit
+/// Format an order/power of two. Useful in conjunction with [`from_i32_power_of_two()`] to limit
 /// integer parameter ranges to be only powers of two.
 pub fn i32_power_of_two() -> Arc<dyn Fn(i32) -> String + Send + Sync> {
     Arc::new(|value| format!("{}", 1 << value))
 }
 
-/// Parse a parameter input string to a power of two. Useful in conjunction with [`power_of_two()`]
-/// to limit integer parameter ranges to be only powers of two.
+/// Parse a parameter input string to a power of two. Useful in conjunction with
+/// [`i32_power_of_two()`] to limit integer parameter ranges to be only powers of two.
 pub fn from_i32_power_of_two() -> Arc<dyn Fn(&str) -> Option<i32> + Send + Sync> {
     Arc::new(|string| string.parse().ok().map(|n: i32| (n as f32).log2() as i32))
 }

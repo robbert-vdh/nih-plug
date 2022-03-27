@@ -19,9 +19,9 @@ pub struct SamplesIter<'slice, 'sample: 'slice> {
 }
 
 /// Can construct iterators over actual iterator over the channel data for a sample, yielded by
-/// [`SamplesIter`]. Can be turned into an iterator, or [`Channels::iter_mut()`] can be used to
-/// iterate over the channel data multiple times, or more efficiently you can use
-/// [`Channels::get_unchecked_mut()`] to do the same thing.
+/// [`SamplesIter`]. Can be turned into an iterator, or [`ChannelSamples::iter_mut()`] can be used
+/// to iterate over the channel data multiple times, or more efficiently you can use
+/// [`ChannelSamples::get_unchecked_mut()`] to do the same thing.
 pub struct ChannelSamples<'slice, 'sample: 'slice> {
     /// The raw output buffers.
     pub(self) buffers: *mut [&'sample mut [f32]],
@@ -29,7 +29,7 @@ pub struct ChannelSamples<'slice, 'sample: 'slice> {
     pub(self) _marker: PhantomData<&'slice mut [&'sample mut [f32]]>,
 }
 
-/// The actual iterator over the channel data for a sample, yielded by [`Channels`].
+/// The actual iterator over the channel data for a sample, yielded by [`ChannelSamples`].
 pub struct ChannelSamplesIter<'slice, 'sample: 'slice> {
     /// The raw output buffers.
     pub(self) buffers: *mut [&'sample mut [f32]],
@@ -123,7 +123,8 @@ impl<'slice, 'sample> ChannelSamples<'slice, 'sample> {
     }
 
     /// A resetting iterator. This lets you iterate over the same channels multiple times. Otherwise
-    /// you don't need to use this function as [`Channels`] already implements [Iterator].
+    /// you don't need to use this function as [`ChannelSamples`] already implements
+    /// [`IntoIterator`].
     #[inline]
     pub fn iter_mut(&mut self) -> ChannelSamplesIter<'slice, 'sample> {
         ChannelSamplesIter {
