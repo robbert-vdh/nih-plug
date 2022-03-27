@@ -186,7 +186,7 @@ impl BoolParam {
     /// their UI. Only a single [`BoolParam`] can be a bypass parmaeter, and NIH-plug will add one
     /// if you don't create one yourself. You will need to implement this yourself if your plugin
     /// introduces latency.
-    pub fn is_bypass(mut self) -> Self {
+    pub fn make_bypass(mut self) -> Self {
         self.flags.insert(ParamFlags::BYPASS);
         self
     }

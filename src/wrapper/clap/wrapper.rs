@@ -352,7 +352,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             let is_bypass = flags.contains(ParamFlags::BYPASS);
             if cfg!(debug_assertions) {
                 if id == BYPASS_PARAM_ID && !is_bypass {
-                    nih_debug_assert_failure!("Bypass parameters need to be marked with `.is_bypass()`, weird things will happen");
+                    nih_debug_assert_failure!("Bypass parameters need to be marked with `.make_bypass()`, weird things will happen");
                 }
                 if is_bypass && matches!(bypass, Bypass::Parameter(_)) {
                     nih_debug_assert_failure!(
