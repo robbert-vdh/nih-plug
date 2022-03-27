@@ -1,4 +1,5 @@
 use atomic_refcell::AtomicRefMut;
+use crossbeam::channel;
 use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -27,7 +28,18 @@ pub(crate) struct WrapperProcessContext<'a, P: ClapPlugin> {
 
 impl<P: ClapPlugin> GuiContext for WrapperGuiContext<P> {
     fn request_resize(&self) -> bool {
-        todo!("Implement window resizing for CLAP");
+        // Bitwig and the CLAP test host require this resize to be done from the main thread, so
+        // we'll use a channel as a substitute for a promise here.
+        let (result_sender, result_receiver) = channel::bounded(1);
+        if !self
+            .wrapper
+            .do_maybe_async(Task::RequestResize(result_sender))
+        {
+            nih_debug_assert_failure!("The task queue is full, dropping task...");
+            return false;
+        }
+
+        result_receiver.recv().expect("Main thread died?")
     }
 
     // All of these functions are supposed to be called from the main thread, so we'll put some

@@ -22,8 +22,8 @@ use clap_sys::ext::audio_ports_config::{
 };
 use clap_sys::ext::event_filter::{clap_plugin_event_filter, CLAP_EXT_EVENT_FILTER};
 use clap_sys::ext::gui::{
-    clap_plugin_gui, clap_window, CLAP_EXT_GUI, CLAP_WINDOW_API_COCOA, CLAP_WINDOW_API_WIN32,
-    CLAP_WINDOW_API_X11,
+    clap_host_gui, clap_plugin_gui, clap_window, CLAP_EXT_GUI, CLAP_WINDOW_API_COCOA,
+    CLAP_WINDOW_API_WIN32, CLAP_WINDOW_API_X11,
 };
 use clap_sys::ext::latency::{clap_host_latency, clap_plugin_latency, CLAP_EXT_LATENCY};
 use clap_sys::ext::note_ports::{
@@ -47,6 +47,7 @@ use clap_sys::process::{
 };
 use clap_sys::stream::{clap_istream, clap_ostream};
 use crossbeam::atomic::AtomicCell;
+use crossbeam::channel;
 use crossbeam::queue::ArrayQueue;
 use parking_lot::RwLock;
 use raw_window_handle::RawWindowHandle;
@@ -153,6 +154,7 @@ pub struct Wrapper<P: ClapPlugin> {
     clap_plugin_event_filter: clap_plugin_event_filter,
 
     clap_plugin_gui: clap_plugin_gui,
+    host_gui: AtomicRefCell<Option<ClapPtr<clap_host_gui>>>,
 
     clap_plugin_latency: clap_plugin_latency,
     host_latency: AtomicRefCell<Option<ClapPtr<clap_host_latency>>>,
@@ -211,10 +213,13 @@ pub struct Wrapper<P: ClapPlugin> {
 /// Tasks that can be sent from the plugin to be executed on the main thread in a non-blocking
 /// realtime safe way. Instead of using a random thread or the OS' event loop like in the Linux
 /// implementation, this uses [`clap_host::request_callback()`] instead.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum Task {
     /// Inform the host that the latency has changed.
     LatencyChanged,
+    /// Request a resize from the main thread. The result is written back to the one element channel
+    /// for a lock of a proper promise type within the current set of libraries.
+    RequestResize(channel::Sender<bool>),
 }
 
 /// The types of CLAP parameter updates for events.
@@ -301,6 +306,27 @@ impl<P: ClapPlugin> MainThreadExecutor<Task> for Wrapper<P> {
                 }
                 None => nih_debug_assert_failure!("Host does not support the latency extension"),
             },
+            Task::RequestResize(result_sender) => {
+                // Both Bitwig and the CLAP test host won't accept resizes coming from a thread that
+                // isn't the main thread
+                let result = match (&*self.host_gui.borrow(), &self.editor) {
+                    (Some(host_gui), Some(editor)) => {
+                        let (unscaled_width, unscaled_height) = editor.size();
+                        let scaling_factor = self.editor_scaling_factor.load(Ordering::Relaxed);
+
+                        (host_gui.request_resize)(
+                            &*self.host_callback,
+                            (unscaled_width as f32 * scaling_factor).round() as u32,
+                            (unscaled_height as f32 * scaling_factor).round() as u32,
+                        )
+                    }
+                    _ => false,
+                };
+
+                // This channel acts as a promise, there will never be more than a single value
+                // writen to it.
+                let _ = result_sender.send(result);
+            }
         };
     }
 }
@@ -494,6 +520,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 show: Self::ext_gui_show,
                 hide: Self::ext_gui_hide,
             },
+            host_gui: AtomicRefCell::new(None),
 
             clap_plugin_latency: clap_plugin_latency {
                 get: Self::ext_latency_get,
@@ -898,6 +925,8 @@ impl<P: ClapPlugin> Wrapper<P> {
         let wrapper = &*(plugin as *const Self);
 
         // We weren't allowed to query these in the constructor, so we need to do it now intead.
+        *wrapper.host_gui.borrow_mut() =
+            query_host_extension::<clap_host_gui>(&wrapper.host_callback, CLAP_EXT_GUI);
         *wrapper.host_latency.borrow_mut() =
             query_host_extension::<clap_host_latency>(&wrapper.host_callback, CLAP_EXT_LATENCY);
         *wrapper.host_params.borrow_mut() =
@@ -1580,7 +1609,7 @@ impl<P: ClapPlugin> Wrapper<P> {
     }
 
     unsafe extern "C" fn ext_gui_can_resize(_plugin: *const clap_plugin) -> bool {
-        // TODO: Implement GUI resizing
+        // TODO: Implement Host->Plugin GUI resizing
         false
     }
 
@@ -1589,7 +1618,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         _width: *mut u32,
         _height: *mut u32,
     ) -> bool {
-        // TODO: Implement GUI resizing
+        // TODO: Implement Host->Plugin GUI resizing
         false
     }
 
@@ -1598,7 +1627,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         width: u32,
         height: u32,
     ) -> bool {
-        // TODO: Implement GUI resizing
+        // TODO: Implement Host->Plugin GUI resizing
         check_null_ptr!(false, plugin);
         let wrapper = &*(plugin as *const Self);
 
