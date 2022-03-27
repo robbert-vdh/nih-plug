@@ -100,6 +100,8 @@ use std::sync::Arc;
 use crate::widgets::ParamMessage;
 
 /// Re-export for convenience.
+// FIXME: Running `cargo doc` on nightly compilers without this attribute triggers an ICE
+#[doc(no_inline)]
 pub use iced_baseview::*;
 
 pub mod assets;
