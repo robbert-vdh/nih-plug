@@ -19,5 +19,5 @@ nih_plug = { path = "../../", features = ["assert_process_allocs"] }
 nih_plug_vizia = { path = "../../nih_plug_vizia" }
 
 # For the GUI
-fftw = "0.7"
+realfft = "3.0"
 triple_buffer = "6.0"

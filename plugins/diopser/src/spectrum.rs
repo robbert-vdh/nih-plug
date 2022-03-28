@@ -14,11 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use fftw::array::AlignedVec;
-use fftw::plan::{R2CPlan, R2CPlan32};
-use fftw::types::{c32, Flag};
 use nih_plug::prelude::*;
+use realfft::num_complex::Complex32;
+use realfft::{RealFftPlanner, RealToComplex};
 use std::f32;
+use std::sync::Arc;
 use triple_buffer::TripleBuffer;
 
 pub const SPECTRUM_WINDOW_SIZE: usize = 2048;
@@ -43,23 +43,14 @@ pub struct SpectrumInput {
     /// A scratch buffer to compute the resulting power amplitude spectrum.
     spectrum_result_buffer: Spectrum,
 
-    /// The algorithm for the FFT operation.
-    plan: Plan,
+    /// The algorithm for the FFT operation used for our spectrum analyzer.
+    plan: Arc<dyn RealToComplex<f32>>,
     /// A Hann window window, passed to the STFT helper. The gain compensation is already part of
     /// this window to save a multiplication step.
     compensated_window_function: Vec<f32>,
-    /// Scratch buffers for computing our FFT. The [`StftHelper`] already contains a buffer for the
-    /// real values.
-    complex_fft_scratch_buffer: AlignedVec<c32>,
+    /// The output of our real->complex FFT.
+    complex_fft_buffer: Vec<Complex32>,
 }
-
-/// FFTW uses raw pointers which aren't Send+Sync, so we'll wrap this in a separate struct.
-struct Plan {
-    r2c_plan: R2CPlan32,
-}
-
-unsafe impl Send for Plan {}
-unsafe impl Sync for Plan {}
 
 impl SpectrumInput {
     /// Create a new spectrum input and output pair. The output should be moved to the editor.
@@ -74,19 +65,13 @@ impl SpectrumInput {
             triple_buffer_input,
             spectrum_result_buffer: [0.0; SPECTRUM_WINDOW_SIZE / 2],
 
-            plan: Plan {
-                r2c_plan: R2CPlan32::aligned(
-                    &[SPECTRUM_WINDOW_SIZE],
-                    Flag::MEASURE | Flag::DESTROYINPUT,
-                )
-                .unwrap(),
-            },
+            plan: RealFftPlanner::new().plan_fft_forward(SPECTRUM_WINDOW_SIZE),
             compensated_window_function: util::window::hann(SPECTRUM_WINDOW_SIZE)
                 .into_iter()
                 // Include the gain compensation in the window function to save some multiplications
                 .map(|x| x / SPECTRUM_WINDOW_SIZE as f32)
                 .collect(),
-            complex_fft_scratch_buffer: AlignedVec::new(SPECTRUM_WINDOW_SIZE / 2 + 1),
+            complex_fft_buffer: vec![Complex32::default(); SPECTRUM_WINDOW_SIZE / 2 + 1],
         };
 
         (input, triple_buffer_output)
@@ -101,10 +86,11 @@ impl SpectrumInput {
             |channel_idx, real_fft_scratch_buffer| {
                 // Forward FFT, the helper has already applied window function
                 self.plan
-                    .r2c_plan
-                    .r2c(
+                    .process_with_scratch(
                         real_fft_scratch_buffer,
-                        &mut self.complex_fft_scratch_buffer,
+                        &mut self.complex_fft_buffer,
+                        // We don't actually need a scratch buffer
+                        &mut [],
                     )
                     .unwrap();
 
@@ -113,7 +99,7 @@ impl SpectrumInput {
                 // Gain compensation has already been baked into the window function.
                 if channel_idx == 0 {
                     for (bin, spectrum_result) in self
-                        .complex_fft_scratch_buffer
+                        .complex_fft_buffer
                         .iter()
                         // We don't care about the DC bin
                         .skip(1)
@@ -123,7 +109,7 @@ impl SpectrumInput {
                     }
                 } else {
                     for (bin, spectrum_result) in self
-                        .complex_fft_scratch_buffer
+                        .complex_fft_buffer
                         .iter()
                         .skip(1)
                         .zip(&mut self.spectrum_result_buffer)
