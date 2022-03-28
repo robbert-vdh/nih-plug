@@ -2725,8 +2725,8 @@ checksum = "9145ac0af1d93c638c98c40cf7d25665f427b2a44ad0a99b1dccf3e2f25bb987"
 name = "puberty_simulator"
 version = "0.1.0"
 dependencies = [
- "fftw",
  "nih_plug",
+ "realfft",
 ]
 
 [[package]]

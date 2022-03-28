@@ -14,12 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use fftw::array::AlignedVec;
-use fftw::plan::{C2RPlan, C2RPlan32, R2CPlan, R2CPlan32};
-use fftw::types::{c32, Flag};
 use nih_plug::prelude::*;
+use realfft::num_complex::Complex32;
+use realfft::{ComplexToReal, RealFftPlanner, RealToComplex};
 use std::f32;
 use std::pin::Pin;
+use std::sync::Arc;
 
 const MIN_WINDOW_ORDER: usize = 6;
 #[allow(dead_code)]
@@ -52,20 +52,17 @@ struct PubertySimulator {
     /// The algorithms for the FFT and IFFT operations, for each supported order so we can switch
     /// between them without replanning or allocations. Initialized during `initialize()`.
     plan_for_order: Option<[Plan; MAX_WINDOW_ORDER - MIN_WINDOW_ORDER + 1]>,
-    /// Scratch buffers for computing our FFT. The [`StftHelper`] already contains a buffer for the
-    /// real values. This type cannot be resized, so we'll simply take a slice of it with the
-    /// correct length instead.
-    complex_fft_scratch_buffer: AlignedVec<c32>,
+    /// The output of our real->complex FFT.
+    complex_fft_buffer: Vec<Complex32>,
 }
 
-/// FFTW uses raw pointers which aren't Send+Sync, so we'll wrap this in a separate struct.
+/// A plan for a specific window size, all of which will be precomputed during initilaization.
 struct Plan {
-    r2c_plan: R2CPlan32,
-    c2r_plan: C2RPlan32,
+    /// The algorithm for the FFT operation.
+    r2c_plan: Arc<dyn RealToComplex<f32>>,
+    /// The algorithm for the IFFT operation.
+    c2r_plan: Arc<dyn ComplexToReal<f32>>,
 }
-
-unsafe impl Send for Plan {}
-unsafe impl Sync for Plan {}
 
 #[derive(Params)]
 struct PubertySimulatorParams {
@@ -91,7 +88,7 @@ impl Default for PubertySimulator {
             window_function: Vec::with_capacity(MAX_WINDOW_SIZE),
 
             plan_for_order: None,
-            complex_fft_scratch_buffer: AlignedVec::new(MAX_WINDOW_SIZE / 2 + 1),
+            complex_fft_buffer: Vec::with_capacity(MAX_WINDOW_SIZE / 2 + 1),
         }
     }
 }
@@ -168,23 +165,14 @@ impl Plugin for PubertySimulator {
         _buffer_config: &BufferConfig,
         context: &mut impl ProcessContext,
     ) -> bool {
+        // Planning with RustFFT is very fast, but it will still allocate we we'll plan all of the
+        // FFTs we might need in advance
         if self.plan_for_order.is_none() {
+            let mut planner = RealFftPlanner::new();
             let plan_for_order: Vec<Plan> = (MIN_WINDOW_ORDER..=MAX_WINDOW_ORDER)
-                // `Flag::MEASURE` is pretty slow above 1024 which hurts initialization time.
-                // `Flag::ESTIMATE` does not seem to hurt performance much at reasonable orders, so
-                // that's good enough for now. An alternative would be to replan on a worker thread,
-                // but this makes switching between window sizes a bit cleaner.
                 .map(|order| Plan {
-                    r2c_plan: R2CPlan32::aligned(
-                        &[1 << order],
-                        Flag::ESTIMATE | Flag::DESTROYINPUT,
-                    )
-                    .unwrap(),
-                    c2r_plan: C2RPlan32::aligned(
-                        &[1 << order],
-                        Flag::ESTIMATE | Flag::DESTROYINPUT,
-                    )
-                    .unwrap(),
+                    r2c_plan: planner.plan_fft_forward(1 << order),
+                    c2r_plan: planner.plan_fft_inverse(1 << order),
                 })
                 .collect();
             self.plan_for_order = Some(
@@ -227,9 +215,6 @@ impl Plugin for PubertySimulator {
             context.set_latency_samples(self.stft.latency_samples());
         }
 
-        // Since this type cannot be resized, we'll simply slice the full buffer instead
-        let complex_fft_scratch_buffer =
-            &mut self.complex_fft_scratch_buffer.as_slice_mut()[..window_size / 2 + 1];
         // These plans have already been made during initialization we can switch between versions
         // without reallocating
         let fft_plan = &mut self.plan_for_order.as_mut().unwrap()
@@ -240,7 +225,7 @@ impl Plugin for PubertySimulator {
             buffer,
             &self.window_function,
             overlap_times,
-            |channel_idx, real_fft_scratch_buffer| {
+            |channel_idx, real_fft_buffer| {
                 // This loop runs whenever there's a block ready, so we can't easily do any post- or
                 // pre-processing without muddying up the interface. But if this is channel 0, then
                 // we're dealing with a new block. We'll use this for our parameter smoothing.
@@ -255,15 +240,17 @@ impl Plugin for PubertySimulator {
                 let frequency_multiplier = 2.0f32.powf(-smoothed_pitch_value);
 
                 // Forward FFT, the helper has already applied window function
+                // RustFFT doesn't actually need a scratch buffer here, so we'll pass an empty
+                // buffer instead
                 fft_plan
                     .r2c_plan
-                    .r2c(real_fft_scratch_buffer, complex_fft_scratch_buffer)
+                    .process_with_scratch(real_fft_buffer, &mut self.complex_fft_buffer, &mut [])
                     .unwrap();
 
                 // This simply interpolates between the complex sinusoids from the frequency bins
                 // for this bin's frequency scaled by the octave pitch multiplies. The iteration
                 // order dependson the pitch shifting direction since we're doing it in place.
-                let num_bins = complex_fft_scratch_buffer.len();
+                let num_bins = self.complex_fft_buffer.len();
                 let mut process_bin = |bin_idx| {
                     let frequency = bin_idx as f32 / window_size as f32 * sample_rate;
                     let target_frequency = frequency * frequency_multiplier;
@@ -274,16 +261,18 @@ impl Plugin for PubertySimulator {
                     let target_bin_high = target_bin.ceil() as usize;
                     let target_low_t = target_bin % 1.0;
                     let target_high_t = 1.0 - target_low_t;
-                    let target_low = complex_fft_scratch_buffer
+                    let target_low = self
+                        .complex_fft_buffer
                         .get(target_bin_low)
                         .copied()
                         .unwrap_or_default();
-                    let target_high = complex_fft_scratch_buffer
+                    let target_high = self
+                        .complex_fft_buffer
                         .get(target_bin_high)
                         .copied()
                         .unwrap_or_default();
 
-                    complex_fft_scratch_buffer[bin_idx] = (target_low * target_low_t
+                    self.complex_fft_buffer[bin_idx] = (target_low * target_low_t
                         + target_high * target_high_t)
                         * 3.0 // Random extra gain, not sure
                         * gain_compensation;
@@ -299,11 +288,15 @@ impl Plugin for PubertySimulator {
                     }
                 }
 
+                // Make sure the imaginary components on the first and last bin are zero
+                self.complex_fft_buffer[0].im = 0.0;
+                self.complex_fft_buffer[num_bins - 1].im = 0.0;
+
                 // Inverse FFT back into the scratch buffer. This will be added to a ring buffer
                 // which gets written back to the host at a one block delay.
                 fft_plan
                     .c2r_plan
-                    .c2r(complex_fft_scratch_buffer, real_fft_scratch_buffer)
+                    .process_with_scratch(&mut self.complex_fft_buffer, real_fft_buffer, &mut [])
                     .unwrap();
             },
         );
@@ -326,6 +319,8 @@ impl PubertySimulator {
         // The FFT algorithms for this window size have already been planned
         self.stft.set_block_size(window_size);
         self.window_function.resize(window_size, 0.0);
+        self.complex_fft_buffer
+            .resize(window_size / 2 + 1, Complex32::default());
         util::window::hann_in_place(&mut self.window_function);
     }
 }
