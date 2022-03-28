@@ -1,9 +1,9 @@
-use fftw::array::AlignedVec;
-use fftw::plan::{C2RPlan, C2RPlan32, R2CPlan, R2CPlan32};
-use fftw::types::{c32, Flag};
 use nih_plug::prelude::*;
+use realfft::num_complex::Complex32;
+use realfft::{ComplexToReal, RealFftPlanner, RealToComplex};
 use std::f32;
 use std::pin::Pin;
+use std::sync::Arc;
 
 const WINDOW_SIZE: usize = 2048;
 const OVERLAP_TIMES: usize = 4;
@@ -17,51 +17,47 @@ struct Stft {
     window_function: Vec<f32>,
 
     /// The FFT of a simple low-pass FIR filter.
-    lp_filter_kernel: Vec<c32>,
+    lp_filter_kernel: Vec<Complex32>,
 
-    /// The algorithms for the FFT and IFFT operations.
-    plan: Plan,
-    /// Scratch buffers for computing our FFT. The [`StftHelper`] already contains a buffer for the
-    /// real values.
-    complex_fft_scratch_buffer: AlignedVec<c32>,
+    /// The algorithm for the FFT operation.
+    r2c_plan: Arc<dyn RealToComplex<f32>>,
+    /// The algorithm for the IFFT operation.
+    c2r_plan: Arc<dyn ComplexToReal<f32>>,
+    /// The output of our real->complex FFT.
+    complex_fft_buffer: Vec<Complex32>,
+    /// Scratch buffers for computing our FFT. RustFFT requires a separate scratch buffer. The
+    /// [`StftHelper`] already contains a buffer for the real values.
+    fft_scratch_buffer: Vec<Complex32>,
 }
-
-/// FFTW uses raw pointers which aren't Send+Sync, so we'll wrap this in a separate struct.
-struct Plan {
-    r2c_plan: R2CPlan32,
-    c2r_plan: C2RPlan32,
-}
-
-unsafe impl Send for Plan {}
-unsafe impl Sync for Plan {}
 
 #[derive(Params)]
 struct StftParams {}
 
 impl Default for Stft {
     fn default() -> Self {
-        let mut r2c_plan: R2CPlan32 =
-            R2CPlan32::aligned(&[WINDOW_SIZE], Flag::MEASURE | Flag::DESTROYINPUT).unwrap();
-        let c2r_plan: C2RPlan32 =
-            C2RPlan32::aligned(&[WINDOW_SIZE], Flag::MEASURE | Flag::DESTROYINPUT).unwrap();
-        let mut real_fft_scratch_buffer: AlignedVec<f32> = AlignedVec::new(WINDOW_SIZE);
-        let mut complex_fft_scratch_buffer: AlignedVec<c32> = AlignedVec::new(WINDOW_SIZE / 2 + 1);
+        let mut planner = RealFftPlanner::new();
+        let r2c_plan = planner.plan_fft_forward(WINDOW_SIZE);
+        let c2r_plan = planner.plan_fft_inverse(WINDOW_SIZE);
+        let mut real_fft_buffer = r2c_plan.make_input_vec();
+        let mut complex_fft_buffer = r2c_plan.make_output_vec();
+        let mut fft_scratch_buffer = r2c_plan.make_scratch_vec();
 
         // Build a super simple low-pass filter from one of the built in window function
         const FILTER_WINDOW_SIZE: usize = 33;
         let filter_window = util::window::hann(FILTER_WINDOW_SIZE);
-        real_fft_scratch_buffer[0..FILTER_WINDOW_SIZE].copy_from_slice(&filter_window);
+        real_fft_buffer[0..FILTER_WINDOW_SIZE].copy_from_slice(&filter_window);
 
         // And make sure to normalize this so convolution sums to 1
-        let filter_normalization_factor = real_fft_scratch_buffer.iter().sum::<f32>().recip();
-        for sample in real_fft_scratch_buffer.as_slice_mut() {
+        let filter_normalization_factor = real_fft_buffer.iter().sum::<f32>().recip();
+        for sample in &mut real_fft_buffer {
             *sample *= filter_normalization_factor;
         }
 
         r2c_plan
-            .r2c(
-                &mut real_fft_scratch_buffer,
-                &mut complex_fft_scratch_buffer,
+            .process_with_scratch(
+                &mut real_fft_buffer,
+                &mut complex_fft_buffer,
+                &mut fft_scratch_buffer,
             )
             .unwrap();
 
@@ -71,14 +67,12 @@ impl Default for Stft {
             stft: util::StftHelper::new(2, WINDOW_SIZE),
             window_function: util::window::hann(WINDOW_SIZE),
 
-            lp_filter_kernel: complex_fft_scratch_buffer
-                .iter()
-                .take(WINDOW_SIZE)
-                .copied()
-                .collect(),
+            lp_filter_kernel: complex_fft_buffer.clone(),
 
-            plan: Plan { r2c_plan, c2r_plan },
-            complex_fft_scratch_buffer,
+            r2c_plan,
+            c2r_plan,
+            complex_fft_buffer,
+            fft_scratch_buffer,
         }
     }
 }
@@ -146,19 +140,18 @@ impl Plugin for Stft {
             OVERLAP_TIMES,
             |_channel_idx, real_fft_scratch_buffer| {
                 // Forward FFT, the helper has already applied window function
-                self.plan
-                    .r2c_plan
-                    .r2c(
+                self.r2c_plan
+                    .process_with_scratch(
                         real_fft_scratch_buffer,
-                        &mut self.complex_fft_scratch_buffer,
+                        &mut self.complex_fft_buffer,
+                        &mut self.fft_scratch_buffer,
                     )
                     .unwrap();
 
                 // As per the convolution theorem we can simply multiply these two buffers. We'll
                 // also apply the gain compensation at this point.
                 for (fft_bin, kernel_bin) in self
-                    .complex_fft_scratch_buffer
-                    .as_slice_mut()
+                    .complex_fft_buffer
                     .iter_mut()
                     .zip(&self.lp_filter_kernel)
                 {
@@ -167,11 +160,11 @@ impl Plugin for Stft {
 
                 // Inverse FFT back into the scratch buffer. This will be added to a ring buffer
                 // which gets written back to the host at a one block delay.
-                self.plan
-                    .c2r_plan
-                    .c2r(
-                        &mut self.complex_fft_scratch_buffer,
+                self.c2r_plan
+                    .process_with_scratch(
+                        &mut self.complex_fft_buffer,
                         real_fft_scratch_buffer,
+                        &mut self.fft_scratch_buffer,
                     )
                     .unwrap();
             },
