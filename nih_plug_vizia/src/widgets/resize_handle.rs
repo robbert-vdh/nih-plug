@@ -3,8 +3,6 @@
 use femtovg::{Paint, Path};
 use vizia::*;
 
-use super::WindowModel;
-
 /// A resize handle placed at the bottom right of the window that lets you resize the window.
 pub struct ResizeHandle {
     /// Will be set to `true` if we're dragging the parameter. Resetting the parameter or entering a
@@ -44,9 +42,8 @@ impl View for ResizeHandle {
                     cx.capture();
                     cx.current.set_active(cx, true);
 
-                    let vizia_state = WindowModel::vizia_state.get(cx);
                     self.drag_active = true;
-                    self.start_scale_factor = vizia_state.user_scale_factor();
+                    self.start_scale_factor = cx.user_scale_factor;
                     self.start_physical_coordinates = (
                         cx.mouse.cursorx * cx.style.dpi_factor as f32,
                         cx.mouse.cursory * cx.style.dpi_factor as f32,
@@ -63,8 +60,6 @@ impl View for ResizeHandle {
                 WindowEvent::MouseMove(x, y) => {
                     // TODO: Filter the hover color and dragging to the actual triangle
                     if self.drag_active {
-                        let vizia_state = WindowModel::vizia_state.get(cx);
-
                         // We need to convert our measurements into physical pixels relative to the
                         // initial drag to be able to keep a consistent ratio. This 'relative to the
                         // start' bit is important because otherwise we would be comparing the
@@ -82,9 +77,9 @@ impl View for ResizeHandle {
                                 as f64)
                             // Prevent approaching zero here because uh
                             .max(0.25);
-                        if new_scale_factor != vizia_state.user_scale_factor() {
-                            cx.emit(WindowEvent::SetScale(new_scale_factor));
-                        }
+
+                        // If this is different then the window will automatically be resized at the end of the frame
+                        cx.user_scale_factor = new_scale_factor;
                     }
                 }
                 _ => {}

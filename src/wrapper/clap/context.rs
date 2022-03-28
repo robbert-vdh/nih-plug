@@ -30,7 +30,7 @@ impl<P: ClapPlugin> GuiContext for WrapperGuiContext<P> {
     fn request_resize(&self) -> bool {
         // Bitwig and the CLAP test host require this resize to be done from the main thread, so
         // we'll use a channel as a substitute for a promise here.
-        let (result_sender, _result_receiver) = channel::bounded(1);
+        let (result_sender, result_receiver) = channel::bounded(1);
         if !self
             .wrapper
             .do_maybe_async(Task::RequestResize(result_sender))
@@ -43,9 +43,7 @@ impl<P: ClapPlugin> GuiContext for WrapperGuiContext<P> {
         //        rapid succession because the X11 GUI thread is not the same as the host's GUI
         //        thread and both Bitwig and CLAP will reject (or outright SIGABRT) if this gets
         //        called from any other thread
-        // result_receiver.recv().expect("Main thread died?")
-
-        true
+        result_receiver.recv().expect("Main thread died?")
     }
 
     // All of these functions are supposed to be called from the main thread, so we'll put some

@@ -99,44 +99,32 @@ impl Model for WindowModel {
     fn event(&mut self, cx: &mut vizia::Context, event: &mut vizia::Event) {
         if let Some(window_event) = event.message.downcast() {
             match *window_event {
-                WindowEvent::ResizeWindow(logical_width, logical_height) => {
-                    let logical_size =
-                        (logical_width.round() as u32, logical_height.round() as u32);
-                    let old_size @ (old_logical_width, old_logical_height) =
+                // This gets fired whenever the inner window gets resized
+                WindowEvent::WindowResize => {
+                    let logical_size = (cx.window_size.width, cx.window_size.height);
+                    let old_logical_size @ (old_logical_width, old_logical_height) =
                         self.vizia_state.size.load();
+                    let scale_factor = cx.user_scale_factor;
+                    let old_user_scale_factor = self.vizia_state.scale_factor.load();
 
                     // Don't do anything if the current size already matches the new size, this
                     // could otherwise also cause a feedback loop on resize failure
-                    if logical_size == old_size {
+                    if logical_size == old_logical_size && scale_factor == old_user_scale_factor {
                         return;
                     }
 
                     // Our embedded baseview window will have already been resized. If the host does
                     // not accept our new size, then we'll try to undo that
                     self.vizia_state.size.store(logical_size);
+                    self.vizia_state.scale_factor.store(scale_factor);
                     if !self.context.request_resize() {
-                        self.vizia_state.size.store(old_size);
-                        cx.emit(WindowEvent::ResizeWindow(
-                            old_logical_width as f32,
-                            old_logical_height as f32,
-                        ));
-                    }
-                }
-                WindowEvent::SetScale(user_scale_factor) => {
-                    let old_user_scale_factor = self.vizia_state.scale_factor.load();
-
-                    // Don't do anything if the current scale already matches the new scale
-                    if user_scale_factor == old_user_scale_factor {
-                        return;
-                    }
-
-                    // This works the same as the `ResizeWindow` handler. The actual window size
-                    // reported to the host gets calculated from a combination of the window's
-                    // logical size (before user scaling) and the user scale factor.
-                    self.vizia_state.scale_factor.store(user_scale_factor);
-                    if !self.context.request_resize() {
+                        self.vizia_state.size.store(old_logical_size);
                         self.vizia_state.scale_factor.store(old_user_scale_factor);
-                        cx.emit(WindowEvent::SetScale(old_user_scale_factor));
+
+                        // This will cause the window's size to be reverted on the next event loop
+                        cx.window_size.width = old_logical_width;
+                        cx.window_size.height = old_logical_height;
+                        cx.user_scale_factor = old_user_scale_factor;
                     }
                 }
 
