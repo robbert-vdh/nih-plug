@@ -25,9 +25,6 @@ struct Stft {
     c2r_plan: Arc<dyn ComplexToReal<f32>>,
     /// The output of our real->complex FFT.
     complex_fft_buffer: Vec<Complex32>,
-    /// Scratch buffers for computing our FFT. RustFFT requires a separate scratch buffer. The
-    /// [`StftHelper`] already contains a buffer for the real values.
-    fft_scratch_buffer: Vec<Complex32>,
 }
 
 #[derive(Params)]
@@ -40,7 +37,6 @@ impl Default for Stft {
         let c2r_plan = planner.plan_fft_inverse(WINDOW_SIZE);
         let mut real_fft_buffer = r2c_plan.make_input_vec();
         let mut complex_fft_buffer = r2c_plan.make_output_vec();
-        let mut fft_scratch_buffer = r2c_plan.make_scratch_vec();
 
         // Build a super simple low-pass filter from one of the built in window function
         const FILTER_WINDOW_SIZE: usize = 33;
@@ -53,12 +49,10 @@ impl Default for Stft {
             *sample *= filter_normalization_factor;
         }
 
+        // RustFFT doesn't actually need a scratch buffer here, so we'll pass an empty buffer
+        // instead
         r2c_plan
-            .process_with_scratch(
-                &mut real_fft_buffer,
-                &mut complex_fft_buffer,
-                &mut fft_scratch_buffer,
-            )
+            .process_with_scratch(&mut real_fft_buffer, &mut complex_fft_buffer, &mut [])
             .unwrap();
 
         Self {
@@ -72,7 +66,6 @@ impl Default for Stft {
             r2c_plan,
             c2r_plan,
             complex_fft_buffer,
-            fft_scratch_buffer,
         }
     }
 }
@@ -138,14 +131,10 @@ impl Plugin for Stft {
             buffer,
             &self.window_function,
             OVERLAP_TIMES,
-            |_channel_idx, real_fft_scratch_buffer| {
+            |_channel_idx, real_fft_buffer| {
                 // Forward FFT, the helper has already applied window function
                 self.r2c_plan
-                    .process_with_scratch(
-                        real_fft_scratch_buffer,
-                        &mut self.complex_fft_buffer,
-                        &mut self.fft_scratch_buffer,
-                    )
+                    .process_with_scratch(real_fft_buffer, &mut self.complex_fft_buffer, &mut [])
                     .unwrap();
 
                 // As per the convolution theorem we can simply multiply these two buffers. We'll
@@ -161,11 +150,7 @@ impl Plugin for Stft {
                 // Inverse FFT back into the scratch buffer. This will be added to a ring buffer
                 // which gets written back to the host at a one block delay.
                 self.c2r_plan
-                    .process_with_scratch(
-                        &mut self.complex_fft_buffer,
-                        real_fft_scratch_buffer,
-                        &mut self.fft_scratch_buffer,
-                    )
+                    .process_with_scratch(&mut self.complex_fft_buffer, real_fft_buffer, &mut [])
                     .unwrap();
             },
         );
