@@ -717,25 +717,37 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                     {
                         let param_hash = param_change_queue.get_parameter_id();
                         let num_changes = param_change_queue.get_point_count();
+                        if num_changes <= 0 {
+                            continue;
+                        }
 
                         let mut sample_offset = 0i32;
                         let mut value = 0.0f64;
-                        if num_changes > 0
-                            && param_change_queue.get_point(
+                        #[allow(clippy::collapsible_else_if)]
+                        if P::SAMPLE_ACCURATE_AUTOMATION {
+                            for change_idx in 0..num_changes {
+                                if param_change_queue.get_point(
+                                    change_idx,
+                                    &mut sample_offset,
+                                    &mut value,
+                                ) == kResultOk
+                                {
+                                    input_param_changes.push(Reverse((
+                                        sample_offset as usize,
+                                        ParameterChange {
+                                            hash: param_hash,
+                                            normalized_value: value as f32,
+                                        },
+                                    )));
+                                }
+                            }
+                        } else {
+                            if param_change_queue.get_point(
                                 num_changes - 1,
                                 &mut sample_offset,
                                 &mut value,
                             ) == kResultOk
-                        {
-                            if P::SAMPLE_ACCURATE_AUTOMATION {
-                                input_param_changes.push(Reverse((
-                                    sample_offset as usize,
-                                    ParameterChange {
-                                        hash: param_hash,
-                                        normalized_value: value as f32,
-                                    },
-                                )));
-                            } else {
+                            {
                                 self.inner.set_normalized_value_by_hash(
                                     param_hash,
                                     value as f32,
