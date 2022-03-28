@@ -48,6 +48,8 @@ pub(crate) fn create(
         }
         .build(cx);
 
+        ResizeHandle::new(cx);
+
         VStack::new(cx, |cx| {
             Label::new(cx, "Diopser")
                 .font(assets::NOTO_SANS_THIN)
