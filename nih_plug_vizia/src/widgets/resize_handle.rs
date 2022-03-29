@@ -212,17 +212,16 @@ fn intersects_triangle(bounds: BoundingBox, (x, y): (f32, f32)) -> bool {
     // triangle's edges. We can compute this using the determinant of the 2x2 matrix formed by two
     // column ve vectors, aka the perp dot product, aka the wedge product.
     // NOTE: Since this element is positioned in the bottom right corner we would technically only
-    //       have to calculate this for `v1`, checking the other two vectors is redundant but for
-    //       now we'll do it anyways
+    //       have to calculate this for `v1`
     let (p1x, p1y) = bounds.bottom_left();
     let (p2x, p2y) = bounds.top_right();
-    let (p3x, p3y) = bounds.bottom_right();
+    // let (p3x, p3y) = bounds.bottom_right();
 
     let (v1x, v1y) = (p2x - p1x, p2y - p1y);
-    let (v2x, v2y) = (p3x - p2x, p3y - p2y);
-    let (v3x, v3y) = (p1x - p3x, p1y - p3y);
+    // let (v2x, v2y) = (p3x - p2x, p3y - p2y);
+    // let (v3x, v3y) = (p1x - p3x, p1y - p3y);
 
     ((x - p1x) * v1y) - ((y - p1y) * v1x) <= 0.0
-        && ((x - p2x) * v2y) - ((y - p2y) * v2x) <= 0.0
-        && ((x - p3x) * v3y) - ((y - p3y) * v3x) <= 0.0
+    // && ((x - p2x) * v2y) - ((y - p2y) * v2x) <= 0.0
+    // && ((x - p3x) * v3y) - ((y - p3y) * v3x) <= 0.0
 }
