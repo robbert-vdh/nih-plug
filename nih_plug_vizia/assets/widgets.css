@@ -93,7 +93,7 @@ resize-handle {
   color: #696969;
   height: 20px;
   left: 1s;
-  opacity: 0.5;
+  opacity: 0.4;
   position-type: self-directed;
   right: 0;
   top: 1s;
@@ -101,6 +101,11 @@ resize-handle {
   width: 20px;
   z-index: 1337;
 }
+resize-handle:active {
+  opacity: 0.8;
+  transition: opacity 0.1 0;
+}
+/* No commas in VIZIA */
 resize-handle:hover {
   opacity: 0.8;
   transition: opacity 0.1 0;
