@@ -43,7 +43,7 @@ pub struct BiquadCoefficients<T> {
     a2: T,
 }
 
-/// Either an `f32` or some SIMD vector type of `f32`s that can be used iwth our biquads.
+/// Either an `f32` or some SIMD vector type of `f32`s that can be used with our biquads.
 pub trait SimdType:
     Mul<Output = Self> + Sub<Output = Self> + Add<Output = Self> + Copy + Sized
 {
