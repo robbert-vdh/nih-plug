@@ -153,6 +153,7 @@ impl<T: SimdType> BiquadCoefficients<T> {
 }
 
 impl SimdType for f32 {
+    #[inline(always)]
     fn from_f32(value: f32) -> Self {
         value
     }
@@ -160,6 +161,7 @@ impl SimdType for f32 {
 
 // TODO: Add SIMD
 // impl SimdType for f32x2 {
+//     #[inline(always)]
 //     fn from_f32(value: f32) -> Self {
 //         f32x2::splat(value)
 //     }
