@@ -210,7 +210,7 @@ fn intersects_triangle(bounds: BoundingBox, (x, y): (f32, f32)) -> bool {
     // We could also compute Barycentric coordinates, but this is simple and I like not having to
     // think. Just check if (going clockwise), the point is on the right of each of all of the
     // triangle's edges. We can compute this using the determinant of the 2x2 matrix formed by two
-    // column ve vectors, aka the perp dot product, aka the wedge product.
+    // column vectors, aka the perp dot product, aka the wedge product.
     // NOTE: Since this element is positioned in the bottom right corner we would technically only
     //       have to calculate this for `v1`
     let (p1x, p1y) = bounds.bottom_left();
