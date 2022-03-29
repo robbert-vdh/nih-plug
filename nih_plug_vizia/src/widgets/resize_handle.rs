@@ -69,11 +69,10 @@ impl View for ResizeHandle {
                     }
                 }
                 WindowEvent::MouseMove(x, y) => {
-                    if !intersects_triangle(cx.cache.get_bounds(cx.current), (x, y)) {
-                        cx.current.set_hover(cx, false);
-                    } else {
-                        cx.current.set_hover(cx, true);
-                    }
+                    cx.current.set_hover(
+                        cx,
+                        intersects_triangle(cx.cache.get_bounds(cx.current), (x, y)),
+                    );
 
                     if self.drag_active {
                         // We need to convert our measurements into physical pixels relative to the
