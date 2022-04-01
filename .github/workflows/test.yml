@@ -123,7 +123,7 @@ jobs:
       - name: Move all packaged plugin into a directory
         run: |
           # GitHub Action strips the top level directory, great, have another one
-          mkdir "$ARCHIVE_NAME/$ARCHIVE_NAME"
+          mkdir -p "$ARCHIVE_NAME/$ARCHIVE_NAME"
           mv target/bundled/* "$ARCHIVE_NAME/$ARCHIVE_NAME"
       - uses: actions/upload-artifact@v2
         with:
