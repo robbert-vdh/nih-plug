@@ -122,8 +122,9 @@ jobs:
           echo "ARCHIVE_NAME=nih-plugs-$(git describe --always)-${{ matrix.os }}" >> "$GITHUB_ENV"
       - name: Move all packaged plugin into a directory
         run: |
-          mkdir "$ARCHIVE_NAME"
-          mv target/bundled/* "$ARCHIVE_NAME"
+          # GitHub Action strips the top level directory, great, have another one
+          mkdir "$ARCHIVE_NAME/$ARCHIVE_NAME"
+          mv target/bundled/* "$ARCHIVE_NAME/$ARCHIVE_NAME"
       - uses: actions/upload-artifact@v2
         with:
           name: ${{ env.ARCHIVE_NAME }}
