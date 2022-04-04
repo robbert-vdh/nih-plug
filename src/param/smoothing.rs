@@ -159,6 +159,17 @@ impl Smoother<f32> {
     /// Panics if this function is called again while another block value slice is still alive.
     #[inline]
     pub fn next_block(&self, block: &Block) -> Option<AtomicRefMut<[f32]>> {
+        self.next_block_mapped(block, |x| x)
+    }
+
+    /// The same as [`next_block()`][Self::next_block()], but with a function applied to each
+    /// produced value. Useful when applying modulation to a smoothed parameter.
+    #[inline]
+    pub fn next_block_mapped(
+        &self,
+        block: &Block,
+        mut f: impl FnMut(f32) -> f32,
+    ) -> Option<AtomicRefMut<[f32]>> {
         let mut block_values = self.block_values.borrow_mut();
         if block_values.len() < block.len() {
             return None;
@@ -168,7 +179,7 @@ impl Smoother<f32> {
         //       unsmoothed parts. Another worthwhile optimization would be to remember if the
         //       buffer is already filled with the target value and [Self::is_smoothing()] is false.
         //       In that case we wouldn't need to do anything ehre.
-        (&mut block_values[..block.len()]).fill_with(|| self.next());
+        (&mut block_values[..block.len()]).fill_with(|| f(self.next()));
 
         Some(AtomicRefMut::map(block_values, |values| {
             &mut values[..block.len()]
@@ -261,12 +272,26 @@ impl Smoother<i32> {
     /// Panics if this function is called again while another block value slice is still alive.
     #[inline]
     pub fn next_block(&self, block: &Block) -> Option<AtomicRefMut<[i32]>> {
+        self.next_block_mapped(block, |x| x)
+    }
+
+    /// The same as [`next_block()`][Self::next_block()], but with a function applied to each
+    /// produced value. Useful when applying modulation to a smoothed parameter.
+    #[inline]
+    pub fn next_block_mapped(
+        &self,
+        block: &Block,
+        mut f: impl FnMut(i32) -> i32,
+    ) -> Option<AtomicRefMut<[i32]>> {
         let mut block_values = self.block_values.borrow_mut();
         if block_values.len() < block.len() {
             return None;
         }
 
-        (&mut block_values[..block.len()]).fill_with(|| self.next());
+        // TODO: Might be useful to apply this function before rounding to an integer, but the f32
+        //       version is not available here without some hacks (i.e. grabbing it from
+        //       `self.current`)
+        (&mut block_values[..block.len()]).fill_with(|| f(self.next()));
 
         Some(AtomicRefMut::map(block_values, |values| {
             &mut values[..block.len()]
