@@ -49,6 +49,14 @@ pub struct Smoother<T> {
     block_values: AtomicRefCell<Vec<T>>,
 }
 
+/// An iterator that continuously produces smoothed values. Can be used as an alternative to the
+/// built-in block-based smoothing API. Since the iterator itself is infinite, you can use
+/// [`Smoother::is_smoothing()`] and [`Smoother::steps_left()`] to get information on the current
+/// smoothing status.
+pub struct SmootherIter<'a, T> {
+    smoother: &'a Smoother<T>,
+}
+
 impl<T: Default> Default for Smoother<T> {
     fn default() -> Self {
         Self {
@@ -60,6 +68,27 @@ impl<T: Default> Default for Smoother<T> {
 
             block_values: AtomicRefCell::new(Vec::new()),
         }
+    }
+}
+
+// We don't have a trait describing the smoother's functions so we need to duplicate this
+// TODO: Maybe add a trait at some point so we can deduplicate some of the functions from this file.
+//       Needing a trait like that is not ideal though
+impl Iterator for SmootherIter<'_, f32> {
+    type Item = f32;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        Some(self.smoother.next())
+    }
+}
+
+impl Iterator for SmootherIter<'_, i32> {
+    type Item = i32;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        Some(self.smoother.next())
     }
 }
 
@@ -89,6 +118,11 @@ impl<T: Default> Smoother<T> {
     #[inline]
     pub fn is_smoothing(&self) -> bool {
         self.steps_left() > 0
+    }
+
+    #[inline]
+    pub fn iter(&self) -> SmootherIter<T> {
+        SmootherIter { smoother: self }
     }
 
     /// Allocate memory to store smoothed values for an entire block of audio. Call this in
@@ -157,14 +191,12 @@ impl Smoother<f32> {
     /// # Panics
     ///
     /// Panics if this function is called again while another block value slice is still alive.
-    #[inline]
     pub fn next_block(&self, block: &Block) -> Option<AtomicRefMut<[f32]>> {
         self.next_block_mapped(block, |x| x)
     }
 
     /// The same as [`next_block()`][Self::next_block()], but with a function applied to each
     /// produced value. Useful when applying modulation to a smoothed parameter.
-    #[inline]
     pub fn next_block_mapped(
         &self,
         block: &Block,
@@ -270,14 +302,12 @@ impl Smoother<i32> {
     /// # Panics
     ///
     /// Panics if this function is called again while another block value slice is still alive.
-    #[inline]
     pub fn next_block(&self, block: &Block) -> Option<AtomicRefMut<[i32]>> {
         self.next_block_mapped(block, |x| x)
     }
 
     /// The same as [`next_block()`][Self::next_block()], but with a function applied to each
     /// produced value. Useful when applying modulation to a smoothed parameter.
-    #[inline]
     pub fn next_block_mapped(
         &self,
         block: &Block,
