@@ -22,8 +22,8 @@ use clap_sys::ext::audio_ports_config::{
 };
 use clap_sys::ext::event_filter::{clap_plugin_event_filter, CLAP_EXT_EVENT_FILTER};
 use clap_sys::ext::gui::{
-    clap_host_gui, clap_plugin_gui, clap_window, CLAP_EXT_GUI, CLAP_WINDOW_API_COCOA,
-    CLAP_WINDOW_API_WIN32, CLAP_WINDOW_API_X11,
+    clap_gui_resize_hints, clap_host_gui, clap_plugin_gui, clap_window, CLAP_EXT_GUI,
+    CLAP_WINDOW_API_COCOA, CLAP_WINDOW_API_WIN32, CLAP_WINDOW_API_X11,
 };
 use clap_sys::ext::latency::{clap_host_latency, clap_plugin_latency, CLAP_EXT_LATENCY};
 use clap_sys::ext::note_ports::{
@@ -47,7 +47,6 @@ use clap_sys::process::{
 };
 use clap_sys::stream::{clap_istream, clap_ostream};
 use crossbeam::atomic::AtomicCell;
-use crossbeam::channel;
 use crossbeam::queue::ArrayQueue;
 use parking_lot::RwLock;
 use raw_window_handle::RawWindowHandle;
@@ -217,9 +216,6 @@ pub struct Wrapper<P: ClapPlugin> {
 pub enum Task {
     /// Inform the host that the latency has changed.
     LatencyChanged,
-    /// Request a resize from the main thread. The result is written back to the one element channel
-    /// for a lock of a proper promise type within the current set of libraries.
-    RequestResize(channel::Sender<bool>),
 }
 
 /// The types of CLAP parameter updates for events.
@@ -306,27 +302,6 @@ impl<P: ClapPlugin> MainThreadExecutor<Task> for Wrapper<P> {
                 }
                 None => nih_debug_assert_failure!("Host does not support the latency extension"),
             },
-            Task::RequestResize(result_sender) => {
-                // Both Bitwig and the CLAP test host won't accept resizes coming from a thread that
-                // isn't the main thread
-                let result = match (&*self.host_gui.borrow(), &self.editor) {
-                    (Some(host_gui), Some(editor)) => {
-                        let (unscaled_width, unscaled_height) = editor.size();
-                        let scaling_factor = self.editor_scaling_factor.load(Ordering::Relaxed);
-
-                        (host_gui.request_resize)(
-                            &*self.host_callback,
-                            (unscaled_width as f32 * scaling_factor).round() as u32,
-                            (unscaled_height as f32 * scaling_factor).round() as u32,
-                        )
-                    }
-                    _ => false,
-                };
-
-                // This channel acts as a promise, there will never be more than a single value
-                // writen to it, and if the other end got dropped then that's okay
-                let _ = result_sender.send(result);
-            }
         };
     }
 }
@@ -507,11 +482,13 @@ impl<P: ClapPlugin> Wrapper<P> {
 
             clap_plugin_gui: clap_plugin_gui {
                 is_api_supported: Self::ext_gui_is_api_supported,
+                get_preferred_api: Self::ext_gui_get_preferred_api,
                 create: Self::ext_gui_create,
                 destroy: Self::ext_gui_destroy,
                 set_scale: Self::ext_gui_set_scale,
                 get_size: Self::ext_gui_get_size,
                 can_resize: Self::ext_gui_can_resize,
+                get_resize_hints: Self::ext_gui_get_resize_hints,
                 adjust_size: Self::ext_gui_adjust_size,
                 set_size: Self::ext_gui_set_size,
                 set_parent: Self::ext_gui_set_parent,
@@ -609,6 +586,27 @@ impl<P: ClapPlugin> Wrapper<P> {
     pub fn notify_param_values_changed(&self) {
         if let Some(editor) = &self.editor {
             editor.param_values_changed();
+        }
+    }
+
+    /// Request a resize based on the editor's current reported size. As of CLAP 0.24 this can
+    /// safely be called from any thread. If this returns `false`, then the plugin should reset its
+    /// size back to the previous value.
+    pub fn request_resize(&self) -> bool {
+        match (&*self.host_gui.borrow(), &self.editor) {
+            (Some(host_gui), Some(editor)) => {
+                let (unscaled_width, unscaled_height) = editor.size();
+                let scaling_factor = self.editor_scaling_factor.load(Ordering::Relaxed);
+
+                unsafe {
+                    (host_gui.request_resize)(
+                        &*self.host_callback,
+                        (unscaled_width as f32 * scaling_factor).round() as u32,
+                        (unscaled_height as f32 * scaling_factor).round() as u32,
+                    )
+                }
+            }
+            _ => false,
         }
     }
 
@@ -1352,10 +1350,23 @@ impl<P: ClapPlugin> Wrapper<P> {
                 let config = &mut *config;
                 config.id = index;
                 strlcpy(&mut config.name, &name);
-                config.input_channel_count = bus_config.num_input_channels;
-                config.input_port_type = input_port_type;
-                config.output_channel_count = bus_config.num_output_channels;
-                config.output_port_type = output_port_type;
+                // TODO: Currently we don't support sidechain inputs or multiple outputs
+                config.input_port_count = if bus_config.num_input_channels > 0 {
+                    1
+                } else {
+                    0
+                };
+                config.output_port_count = if bus_config.num_output_channels > 0 {
+                    1
+                } else {
+                    0
+                };
+                config.has_main_input_channel = bus_config.num_output_channels > 0;
+                config.main_input_channel_count = bus_config.num_output_channels;
+                config.main_input_port_type = input_port_type;
+                config.has_main_output_channel = bus_config.num_output_channels > 0;
+                config.main_output_channel_count = bus_config.num_output_channels;
+                config.main_output_port_type = output_port_type;
 
                 true
             }
@@ -1527,6 +1538,15 @@ impl<P: ClapPlugin> Wrapper<P> {
         false
     }
 
+    unsafe extern "C" fn ext_gui_get_preferred_api(
+        plugin: *const clap_plugin,
+        api: *const c_char,
+        is_floating: bool,
+    ) -> bool {
+        // We don't do floating windows yet, so for us this is the same as the other function
+        Self::ext_gui_is_api_supported(plugin, api, is_floating)
+    }
+
     unsafe extern "C" fn ext_gui_create(
         plugin: *const clap_plugin,
         api: *const c_char,
@@ -1613,6 +1633,14 @@ impl<P: ClapPlugin> Wrapper<P> {
         false
     }
 
+    unsafe extern "C" fn ext_gui_get_resize_hints(
+        _plugin: *const clap_plugin,
+        _hints: *mut clap_gui_resize_hints,
+    ) -> bool {
+        // TODO: Implement Host->Plugin GUI resizing
+        false
+    }
+
     unsafe extern "C" fn ext_gui_adjust_size(
         _plugin: *const clap_plugin,
         _width: *mut u32,
@@ -1628,6 +1656,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         height: u32,
     ) -> bool {
         // TODO: Implement Host->Plugin GUI resizing
+        // TODO: The host will also call this if an asynchronous (on Linux) resize request fails
         check_null_ptr!(false, plugin);
         let wrapper = &*(plugin as *const Self);
 
@@ -1808,6 +1837,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             let automatable = !flags.contains(ParamFlags::NON_AUTOMATABLE);
             let is_bypass = flags.contains(ParamFlags::BYPASS);
 
+            // TODO: Somehow expose modulation and per note/channel/port variations
             param_info.id = *param_hash;
             param_info.flags = if automatable {
                 CLAP_PARAM_IS_AUTOMATABLE
