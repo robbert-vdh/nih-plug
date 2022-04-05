@@ -90,16 +90,15 @@ for download links.
 - Basic note/MIDI support. MIDI CC handling and note output is currently not
   implemented. Let me know if you need this.
 - A plugin bundler accessible through the
-  `cargo xtask bundle <package> <build_arguments>` command that detects
-  automatically detects which plugin targets your plugin exposes and creates the
-  correct plugin bundles for your target platform, with cross-compilation
-  support. The cargo subcommand can easily be added to [your own
-  project](https://github.com/robbert-vdh/nih-plug/tree/master/nih_plug_xtask)
-  as an alias or
-  [globally](https://github.com/robbert-vdh/nih-plug/tree/master/cargo_nih_plug)
+  `cargo xtask bundle <package> <build_arguments>` command that automatically
+  detects which plugin targets your plugin exposes and creates the correct
+  plugin bundles for your target operating system and architecture, with
+  cross-compilation support. The cargo subcommand can easily be added to [your
+  own project](https://github.com/robbert-vdh/nih-plug/tree/master/nih_plug_xtask)
+  as an alias or [globally](https://github.com/robbert-vdh/nih-plug/tree/master/cargo_nih_plug)
   as a regular cargo subcommand.
-- Tested on Linux, Windows, with limited testing on macOS. Windows support has
-  mostly been tested through Wine with
+- Tested on Linux and Windows, with limited testing on macOS. Windows support
+  has mostly been tested through Wine with
   [yabridge](https://github.com/robbert-vdh/yabridge).
 - See the [`Plugin`](src/plugin.rs) trait's documentation for an incomplete list
   of the functionlaity that has currently not yet been implemented.
