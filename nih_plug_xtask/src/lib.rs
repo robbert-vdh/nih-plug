@@ -2,7 +2,7 @@ use anyhow::{bail, Context};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 mod symbols;
@@ -33,16 +33,20 @@ struct PackageConfig {
 /// The target we're generating a plugin for. This can be either the native target or a cross
 /// compilation target, so to reduce redundancy when determining the correct bundle paths we'll use
 /// an enum for this.
-///
-/// TODO: Right now we don't consider ARM targets at all
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
 pub enum CompilationTarget {
-    Linux64,
-    Linux32,
-    Mac64,
-    Windows64,
-    Windows32,
+    Linux(Architecture),
+    MacOS(Architecture),
+    Windows(Architecture),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Architecture {
+    X86,
+    X86_64,
+    // There are also a ton of different 32-bit ARM architectures, we'll just pretend they don't
+    // exist for now
+    AArch64,
 }
 
 /// The main xtask entry point function. See the readme for instructions on how to use this.
@@ -171,7 +175,7 @@ pub fn bundle(package: &str, args: &[String]) -> Result<()> {
     }
 
     let compilation_target = compilation_target(cross_compile_target.as_deref())?;
-    let lib_path = Path::new(target_base(cross_compile_target.as_deref())?)
+    let lib_path = target_base(cross_compile_target.as_deref())?
         .join(if is_release_build { "release" } else { "debug" })
         .join(library_basename(package, compilation_target));
     if !lib_path.exists() {
@@ -295,43 +299,56 @@ fn load_bundler_config() -> Result<Option<BundlerConfig>> {
 /// plugin bundles.
 fn compilation_target(cross_compile_target: Option<&str>) -> Result<CompilationTarget> {
     match cross_compile_target {
-        Some("x86_64-unknown-linux-gnu") => Ok(CompilationTarget::Linux64),
-        Some("x86_64-apple-darwin") => Ok(CompilationTarget::Mac64),
-        Some("x86_64-pc-windows-gnu") => Ok(CompilationTarget::Windows64),
+        Some("i686-unknown-linux-gnu") => Ok(CompilationTarget::Linux(Architecture::X86)),
+        Some("i686-apple-darwin") => Ok(CompilationTarget::MacOS(Architecture::X86)),
+        Some("i686-pc-windows-gnu") | Some("i686-pc-windows-msvc") => {
+            Ok(CompilationTarget::Windows(Architecture::X86))
+        }
+        Some("x86_64-unknown-linux-gnu") => Ok(CompilationTarget::Linux(Architecture::X86_64)),
+        Some("x86_64-apple-darwin") => Ok(CompilationTarget::MacOS(Architecture::X86_64)),
+        Some("x86_64-pc-windows-gnu") | Some("x86_64-pc-windows-msvc") => {
+            Ok(CompilationTarget::Windows(Architecture::X86_64))
+        }
+        Some("aarch64-unknown-linux-gnu") => Ok(CompilationTarget::Linux(Architecture::AArch64)),
+        Some("aarch64-apple-darwin") => Ok(CompilationTarget::MacOS(Architecture::AArch64)),
+        Some("aarch64-pc-windows-gnu") | Some("aarch64-pc-windows-msvc") => {
+            Ok(CompilationTarget::Windows(Architecture::AArch64))
+        }
         Some(target) => bail!("Unhandled cross-compilation target: {}", target),
         None => {
-            #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-            return Ok(CompilationTarget::Linux64);
-            #[cfg(all(target_os = "linux", target_arch = "x86"))]
-            return Ok(CompilationTarget::Linux32);
-            #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-            return Ok(CompilationTarget::Mac64);
-            #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
-            return Ok(CompilationTarget::Windows64);
-            #[cfg(all(target_os = "windows", target_arch = "x86"))]
-            return Ok(CompilationTarget::Windows32);
+            #[cfg(target_arch = "x86")]
+            let architecture = Architecture::X86;
+            #[cfg(target_arch = "x86_64")]
+            let architecture = Architecture::X86_64;
+            #[cfg(target_arch = "aarch64")]
+            let architecture = Architecture::ARM64;
+
+            #[cfg(target_os = "linux")]
+            return Ok(CompilationTarget::Linux(architecture));
+            #[cfg(target_os = "macos")]
+            return Ok(CompilationTarget::MacOS(architecture));
+            #[cfg(target_os = "windows")]
+            return Ok(CompilationTarget::Windows(architecture));
         }
     }
 }
 
 /// The base directory for the compiled binaries. This does not use [`CompilationTarget`] as we need
 /// to be able to differentiate between native and cross-compilation.
-fn target_base(cross_compile_target: Option<&str>) -> Result<&'static str> {
+fn target_base(cross_compile_target: Option<&str>) -> Result<PathBuf> {
     match cross_compile_target {
-        Some("x86_64-unknown-linux-gnu") => Ok("target/x86_64-unknown-linux-gnu"),
-        Some("x86_64-pc-windows-gnu") => Ok("target/x86_64-pc-windows-gnu"),
-        Some("x86_64-apple-darwin") => Ok("target/x86_64-apple-darwin"),
-        Some(target) => bail!("Unhandled cross-compilation target: {}", target),
-        None => Ok("target"),
+        // Unhandled targets will already be handled in `compilation_target`
+        Some(target) => Ok(Path::new("target").join(target)),
+        None => Ok(PathBuf::from("target")),
     }
 }
 
 /// The file name of the compiled library for a `cdylib` crate.
 fn library_basename(package: &str, target: CompilationTarget) -> String {
     match target {
-        CompilationTarget::Linux64 | CompilationTarget::Linux32 => format!("lib{package}.so"),
-        CompilationTarget::Mac64 => format!("lib{package}.dylib"),
-        CompilationTarget::Windows64 | CompilationTarget::Windows32 => format!("{package}.dll"),
+        CompilationTarget::Linux(_) => format!("lib{package}.so"),
+        CompilationTarget::MacOS(_) => format!("lib{package}.dylib"),
+        CompilationTarget::Windows(_) => format!("{package}.dll"),
     }
 }
 
@@ -339,11 +356,8 @@ fn library_basename(package: &str, target: CompilationTarget) -> String {
 /// inside of a CLAP bundle on macOS
 fn clap_bundle_library_name(package: &str, target: CompilationTarget) -> String {
     match target {
-        CompilationTarget::Linux64
-        | CompilationTarget::Linux32
-        | CompilationTarget::Windows64
-        | CompilationTarget::Windows32 => format!("{package}.clap"),
-        CompilationTarget::Mac64 => format!("{package}.clap/Contents/MacOS/{package}"),
+        CompilationTarget::Linux(_) | CompilationTarget::Windows(_) => format!("{package}.clap"),
+        CompilationTarget::MacOS(_) => format!("{package}.clap/Contents/MacOS/{package}"),
     }
 }
 
@@ -351,9 +365,9 @@ fn clap_bundle_library_name(package: &str, target: CompilationTarget) -> String 
 /// bundle.
 fn vst2_bundle_library_name(package: &str, target: CompilationTarget) -> String {
     match target {
-        CompilationTarget::Linux64 | CompilationTarget::Linux32 => format!("{package}.so"),
-        CompilationTarget::Windows64 | CompilationTarget::Windows32 => format!("{package}.dll"),
-        CompilationTarget::Mac64 => format!("{package}.vst/Contents/MacOS/{package}"),
+        CompilationTarget::Linux(_) => format!("{package}.so"),
+        CompilationTarget::MacOS(_) => format!("{package}.vst/Contents/MacOS/{package}"),
+        CompilationTarget::Windows(_) => format!("{package}.dll"),
     }
 }
 
@@ -363,13 +377,25 @@ fn vst2_bundle_library_name(package: &str, target: CompilationTarget) -> String 
 /// See <https://developer.steinberg.help/display/VST/Plug-in+Format+Structure>.
 fn vst3_bundle_library_name(package: &str, target: CompilationTarget) -> String {
     match target {
-        CompilationTarget::Linux64 => format!("{package}.vst3/Contents/x86_64-linux/{package}.so"),
-        CompilationTarget::Linux32 => format!("{package}.vst3/Contents/i386-linux/{package}.so"),
-        CompilationTarget::Mac64 => format!("{package}.vst3/Contents/MacOS/{package}"),
-        CompilationTarget::Windows64 => {
+        CompilationTarget::Linux(Architecture::X86) => {
+            format!("{package}.vst3/Contents/i386-linux/{package}.so")
+        }
+        CompilationTarget::Linux(Architecture::X86_64) => {
+            format!("{package}.vst3/Contents/x86_64-linux/{package}.so")
+        }
+        CompilationTarget::Linux(Architecture::AArch64) => {
+            format!("{package}.vst3/Contents/aarch64-linux/{package}.so")
+        }
+        CompilationTarget::MacOS(_) => format!("{package}.vst3/Contents/MacOS/{package}"),
+        CompilationTarget::Windows(Architecture::X86) => {
+            format!("{package}.vst3/Contents/x86-win/{package}.vst3")
+        }
+        CompilationTarget::Windows(Architecture::X86_64) => {
             format!("{package}.vst3/Contents/x86_64-win/{package}.vst3")
         }
-        CompilationTarget::Windows32 => format!("{package}.vst3/Contents/x86-win/{package}.vst3"),
+        CompilationTarget::Windows(Architecture::AArch64) => {
+            format!("{package}.vst3/Contents/arm_64-win/{package}.vst3")
+        }
     }
 }
 
@@ -382,7 +408,7 @@ pub fn maybe_create_macos_bundle_metadata(
     bundle_home: &Path,
     target: CompilationTarget,
 ) -> Result<()> {
-    if target != CompilationTarget::Mac64 {
+    if !matches!(target, CompilationTarget::MacOS(_)) {
         return Ok(());
     }
 
