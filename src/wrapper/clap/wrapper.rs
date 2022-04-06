@@ -74,9 +74,7 @@ use crate::plugin::{
 };
 use crate::util::permit_alloc;
 use crate::wrapper::state;
-use crate::wrapper::util::{
-    hash_param_id, process_wrapper, strlcpy, Bypass, BYPASS_PARAM_HASH, BYPASS_PARAM_ID,
-};
+use crate::wrapper::util::{hash_param_id, process_wrapper, strlcpy};
 
 /// How many output parameter changes we can store in our output parameter change queue. Storing
 /// more than this many parmaeters at a time will cause changes to get lost.
@@ -112,9 +110,6 @@ pub struct Wrapper<P: ClapPlugin> {
     /// The current buffer configuration, containing the sample rate and the maximum block size.
     /// Will be set in `clap_plugin::activate()`.
     current_buffer_config: AtomicCell<Option<BufferConfig>>,
-    /// Contains either a boolean indicating whether the plugin is currently bypassed, or a bypass
-    /// parameter if the plugin has one.
-    bypass: Bypass,
     /// The incoming events for the plugin, if `P::ACCEPTS_MIDI` is set.
     ///
     /// TODO: Maybe load these lazily at some point instead of needing to spool them all to this
@@ -346,28 +341,19 @@ impl<P: ClapPlugin> Wrapper<P> {
             );
         }
 
-        // The plugin either supplies its own bypass parameter, or we'll create one for it
-        let mut bypass = Bypass::Dummy(AtomicBool::new(false));
-        for (id, _, ptr, _) in &param_id_hashes_ptrs_groups {
-            let flags = unsafe { ptr.flags() };
-            let is_bypass = flags.contains(ParamFlags::BYPASS);
-            if cfg!(debug_assertions) {
-                if id == BYPASS_PARAM_ID && !is_bypass {
-                    nih_debug_assert_failure!("Bypass parameters need to be marked with `.make_bypass()`, weird things will happen");
-                }
-                if is_bypass && matches!(bypass, Bypass::Parameter(_)) {
-                    nih_debug_assert_failure!(
-                        "Duplicate bypass parameters found, using the first one"
-                    );
-                    continue;
-                }
-            }
+        if cfg!(debug_assertions) {
+            let mut bypass_param_exists = false;
+            for (_, _, ptr, _) in &param_id_hashes_ptrs_groups {
+                let flags = unsafe { ptr.flags() };
+                let is_bypass = flags.contains(ParamFlags::BYPASS);
 
-            if is_bypass {
-                bypass = Bypass::Parameter(*ptr);
-                if !cfg!(debug_assertions) {
-                    break;
+                if is_bypass && bypass_param_exists {
+                    nih_debug_assert_failure!(
+                        "Duplicate bypass parameters found, the host will only use the first one"
+                    );
                 }
+
+                bypass_param_exists |= is_bypass;
             }
         }
 
@@ -454,7 +440,6 @@ impl<P: ClapPlugin> Wrapper<P> {
                 num_output_channels: P::DEFAULT_NUM_OUTPUTS,
             }),
             current_buffer_config: AtomicCell::new(None),
-            bypass,
             input_events: AtomicRefCell::new(VecDeque::with_capacity(512)),
             last_process_status: AtomicCell::new(ProcessStatus::Normal),
             current_latency: AtomicU32::new(0),
@@ -628,17 +613,8 @@ impl<P: ClapPlugin> Wrapper<P> {
         update: ClapParamUpdate,
         sample_rate: Option<f32>,
     ) -> bool {
-        match (&self.bypass, self.param_by_hash.get(&hash)) {
-            (Bypass::Dummy(bypass_state), _) if hash == *BYPASS_PARAM_HASH => {
-                match update {
-                    ClapParamUpdate::PlainValueSet(clap_plain_value) => {
-                        bypass_state.store(clap_plain_value >= 0.5, Ordering::SeqCst)
-                    }
-                }
-
-                true
-            }
-            (_, Some(param_ptr)) => {
+        match self.param_by_hash.get(&hash) {
+            Some(param_ptr) => {
                 let normalized_value = match update {
                     ClapParamUpdate::PlainValueSet(clap_plain_value) => {
                         clap_plain_value as f32
@@ -1214,20 +1190,12 @@ impl<P: ClapPlugin> Wrapper<P> {
                     }
                 }
 
-                // Only process audio if the plugin isn't bypassed. If the plugin provides its
-                // own bypass parameter then it should decide what to do by itself.
-                let result = match &wrapper.bypass {
-                    Bypass::Dummy(bypass_state) if bypass_state.load(Ordering::Relaxed) => {
-                        wrapper.last_process_status.store(ProcessStatus::Normal);
-                        ProcessStatus::Normal
-                    }
-                    _ => {
-                        let mut plugin = wrapper.plugin.write();
-                        let mut context = wrapper.make_process_context(transport);
-                        let result = plugin.process(&mut output_buffer, &mut context);
-                        wrapper.last_process_status.store(result);
-                        result
-                    }
+                let result = {
+                    let mut plugin = wrapper.plugin.write();
+                    let mut context = wrapper.make_process_context(transport);
+                    let result = plugin.process(&mut output_buffer, &mut context);
+                    wrapper.last_process_status.store(result);
+                    result
                 };
 
                 let clap_result = match result {
@@ -1789,13 +1757,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         check_null_ptr!(0, plugin);
         let wrapper = &*(plugin as *const Self);
 
-        // NOTE: We add a bypass parameter ourselves on index `self.inner.param_hashes.len()` if the
-        //       plugin does not provide its own bypass parmaeter, in which case these indices will
-        //       all be off by one
-        match wrapper.bypass {
-            Bypass::Parameter(_) => wrapper.param_hashes.len() as u32,
-            Bypass::Dummy(_) => wrapper.param_hashes.len() as u32 + 1,
-        }
+        wrapper.param_hashes.len() as u32
     }
 
     unsafe extern "C" fn ext_params_get_info(
@@ -1810,59 +1772,45 @@ impl<P: ClapPlugin> Wrapper<P> {
             return false;
         }
 
+        let param_hash = &wrapper.param_hashes[param_index as usize];
+        let param_group = &wrapper.param_group_by_hash[param_hash];
+        let param_ptr = &wrapper.param_by_hash[param_hash];
+        let default_value = param_ptr.default_normalized_value();
+        let step_count = param_ptr.step_count();
+        let flags = param_ptr.flags();
+        let automatable = !flags.contains(ParamFlags::NON_AUTOMATABLE);
+        let is_bypass = flags.contains(ParamFlags::BYPASS);
+
         *param_info = std::mem::zeroed();
 
         // TODO: We don't use the cookies at this point. In theory this would be faster than the ID
         //       hashmap lookup, but for now we'll stay consistent with the VST3 implementation.
         let param_info = &mut *param_info;
-        if matches!(wrapper.bypass, Bypass::Dummy(_))
-            && param_index == wrapper.param_hashes.len() as u32
-        {
-            param_info.id = *BYPASS_PARAM_HASH;
-            param_info.flags =
-                CLAP_PARAM_IS_STEPPED | CLAP_PARAM_IS_BYPASS | CLAP_PARAM_IS_AUTOMATABLE;
-            param_info.cookie = ptr::null_mut();
-            strlcpy(&mut param_info.name, "Bypass");
-            strlcpy(&mut param_info.module, "");
-            param_info.min_value = 0.0;
-            param_info.max_value = 1.0;
-            param_info.default_value = 0.0;
+        param_info.id = *param_hash;
+        // TODO: Somehow expose modulation and per note/channel/port variations
+        param_info.flags = if automatable {
+            CLAP_PARAM_IS_AUTOMATABLE
         } else {
-            let param_hash = &wrapper.param_hashes[param_index as usize];
-            let param_group = &wrapper.param_group_by_hash[param_hash];
-            let param_ptr = &wrapper.param_by_hash[param_hash];
-            let default_value = param_ptr.default_normalized_value();
-            let step_count = param_ptr.step_count();
-            let flags = param_ptr.flags();
-            let automatable = !flags.contains(ParamFlags::NON_AUTOMATABLE);
-            let is_bypass = flags.contains(ParamFlags::BYPASS);
-
-            // TODO: Somehow expose modulation and per note/channel/port variations
-            param_info.id = *param_hash;
-            param_info.flags = if automatable {
-                CLAP_PARAM_IS_AUTOMATABLE
-            } else {
-                CLAP_PARAM_IS_HIDDEN | CLAP_PARAM_IS_READONLY
-            };
-            if is_bypass {
-                param_info.flags |= CLAP_PARAM_IS_BYPASS
-            }
-            if step_count.is_some() {
-                param_info.flags |= CLAP_PARAM_IS_STEPPED
-            }
-            param_info.cookie = ptr::null_mut();
-            strlcpy(&mut param_info.name, param_ptr.name());
-            strlcpy(&mut param_info.module, param_group);
-            // We don't use the actual minimum and maximum values here because that would not scale
-            // with skewed integer ranges. Instead, just treat all parameters as `[0, 1]` normalized
-            // paramters multiplied by the step size.
-            param_info.min_value = 0.0;
-            // Stepped parameters are unnormalized float parameters since there's no separate step
-            // range option
-            // TODO: This should probably be encapsulated in some way so we don't forget about this in one place
-            param_info.max_value = step_count.unwrap_or(1) as f64;
-            param_info.default_value = default_value as f64 * step_count.unwrap_or(1) as f64;
+            CLAP_PARAM_IS_HIDDEN | CLAP_PARAM_IS_READONLY
+        };
+        if is_bypass {
+            param_info.flags |= CLAP_PARAM_IS_BYPASS
         }
+        if step_count.is_some() {
+            param_info.flags |= CLAP_PARAM_IS_STEPPED
+        }
+        param_info.cookie = ptr::null_mut();
+        strlcpy(&mut param_info.name, param_ptr.name());
+        strlcpy(&mut param_info.module, param_group);
+        // We don't use the actual minimum and maximum values here because that would not scale
+        // with skewed integer ranges. Instead, just treat all parameters as `[0, 1]` normalized
+        // paramters multiplied by the step size.
+        param_info.min_value = 0.0;
+        // Stepped parameters are unnormalized float parameters since there's no separate step
+        // range option
+        // TODO: This should probably be encapsulated in some way so we don't forget about this in one place
+        param_info.max_value = step_count.unwrap_or(1) as f64;
+        param_info.default_value = default_value as f64 * step_count.unwrap_or(1) as f64;
 
         true
     }
@@ -1875,17 +1823,8 @@ impl<P: ClapPlugin> Wrapper<P> {
         check_null_ptr!(false, plugin, value);
         let wrapper = &*(plugin as *const Self);
 
-        match (&wrapper.bypass, wrapper.param_by_hash.get(&param_id)) {
-            (Bypass::Dummy(bypass_state), _) if param_id == *BYPASS_PARAM_HASH => {
-                *value = if bypass_state.load(Ordering::Relaxed) {
-                    1.0
-                } else {
-                    0.0
-                };
-
-                true
-            }
-            (_, Some(param_ptr)) => {
+        match wrapper.param_by_hash.get(&param_id) {
+            Some(param_ptr) => {
                 *value = param_ptr.normalized_value() as f64
                     * param_ptr.step_count().unwrap_or(1) as f64;
 
@@ -1907,17 +1846,8 @@ impl<P: ClapPlugin> Wrapper<P> {
 
         let dest = std::slice::from_raw_parts_mut(display, size as usize);
 
-        match (&wrapper.bypass, wrapper.param_by_hash.get(&param_id)) {
-            (Bypass::Dummy(_), _) if param_id == *BYPASS_PARAM_HASH => {
-                if value > 0.5 {
-                    strlcpy(dest, "Bypassed")
-                } else {
-                    strlcpy(dest, "Not Bypassed")
-                }
-
-                true
-            }
-            (_, Some(param_ptr)) => {
+        match wrapper.param_by_hash.get(&param_id) {
+            Some(param_ptr) => {
                 strlcpy(
                     dest,
                     // CLAP does not have a separate unit, so we'll include the unit here
@@ -1947,21 +1877,8 @@ impl<P: ClapPlugin> Wrapper<P> {
             Err(_) => return false,
         };
 
-        match (&wrapper.bypass, wrapper.param_by_hash.get(&param_id)) {
-            (Bypass::Dummy(_), _) if param_id == *BYPASS_PARAM_HASH => {
-                let display = display.trim();
-                let normalized_valeu = if display.eq_ignore_ascii_case("bypassed") {
-                    1.0
-                } else if display.eq_ignore_ascii_case("not bypassed") {
-                    0.0
-                } else {
-                    return false;
-                };
-                *value = normalized_valeu;
-
-                true
-            }
-            (_, Some(param_ptr)) => {
+        match wrapper.param_by_hash.get(&param_id) {
+            Some(param_ptr) => {
                 let normalized_value = match param_ptr.string_to_normalized_value(display) {
                     Some(v) => v as f64,
                     None => return false,
@@ -2002,7 +1919,6 @@ impl<P: ClapPlugin> Wrapper<P> {
             wrapper.plugin.read().params(),
             &wrapper.param_by_hash,
             &wrapper.param_id_to_hash,
-            &wrapper.bypass,
         );
         match serialized {
             Ok(serialized) => {
@@ -2064,7 +1980,6 @@ impl<P: ClapPlugin> Wrapper<P> {
             &wrapper.param_by_hash,
             &wrapper.param_id_to_hash,
             wrapper.current_buffer_config.load().as_ref(),
-            &wrapper.bypass,
         );
         if !success {
             return false;

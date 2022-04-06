@@ -4,7 +4,7 @@ use parking_lot::RwLock;
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::mem::MaybeUninit;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32};
 use std::sync::Arc;
 use vst3_sys::base::{kInvalidArgument, kResultOk, tresult};
 use vst3_sys::vst::IComponentHandler;
@@ -19,7 +19,7 @@ use crate::event_loop::{EventLoop, MainThreadExecutor, OsEventLoop};
 use crate::param::internals::ParamPtr;
 use crate::param::ParamFlags;
 use crate::plugin::{BufferConfig, BusConfig, Editor, NoteEvent, ProcessStatus, Vst3Plugin};
-use crate::wrapper::util::{hash_param_id, Bypass, BYPASS_PARAM_HASH, BYPASS_PARAM_ID};
+use crate::wrapper::util::hash_param_id;
 
 /// The actual wrapper bits. We need this as an `Arc<T>` so we can safely use our event loop API.
 /// Since we can't combine that with VST3's interior reference counting this just has to be moved to
@@ -57,9 +57,6 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// The current buffer configuration, containing the sample rate and the maximum block size.
     /// Will be set in `IAudioProcessor::setupProcessing()`.
     pub current_buffer_config: AtomicCell<Option<BufferConfig>>,
-    /// Contains either a boolean indicating whether the plugin is currently bypassed, or a bypass
-    /// parameter if the plugin has one.
-    pub bypass: Bypass,
     /// The last process status returned by the plugin. This is used for tail handling.
     pub last_process_status: AtomicCell<ProcessStatus>,
     /// The current latency in samples, as set by the plugin through the [`ProcessContext`].
@@ -161,28 +158,19 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             );
         }
 
-        // The plugin either supplies its own bypass parameter, or we'll create one for it
-        let mut bypass = Bypass::Dummy(AtomicBool::new(false));
-        for (id, _, ptr, _) in &param_id_hashes_ptrs_groups {
-            let flags = unsafe { ptr.flags() };
-            let is_bypass = flags.contains(ParamFlags::BYPASS);
-            if cfg!(debug_assertions) {
-                if id == BYPASS_PARAM_ID && !is_bypass {
-                    nih_debug_assert_failure!("Bypass parameters need to be marked with `.make_bypass()`, weird things will happen");
-                }
-                if is_bypass && matches!(bypass, Bypass::Parameter(_)) {
-                    nih_debug_assert_failure!(
-                        "Duplicate bypass parameters found, using the first one"
-                    );
-                    continue;
-                }
-            }
+        if cfg!(debug_assertions) {
+            let mut bypass_param_exists = false;
+            for (_, _, ptr, _) in &param_id_hashes_ptrs_groups {
+                let flags = unsafe { ptr.flags() };
+                let is_bypass = flags.contains(ParamFlags::BYPASS);
 
-            if is_bypass {
-                bypass = Bypass::Parameter(*ptr);
-                if !cfg!(debug_assertions) {
-                    break;
+                if is_bypass && bypass_param_exists {
+                    nih_debug_assert_failure!(
+                        "Duplicate bypass parameters found, the host will only use the first one"
+                    );
                 }
+
+                bypass_param_exists |= is_bypass;
             }
         }
 
@@ -229,7 +217,6 @@ impl<P: Vst3Plugin> WrapperInner<P> {
                 num_output_channels: P::DEFAULT_NUM_OUTPUTS,
             }),
             current_buffer_config: AtomicCell::new(None),
-            bypass,
             last_process_status: AtomicCell::new(ProcessStatus::Normal),
             current_latency: AtomicU32::new(0),
             output_buffer: AtomicRefCell::new(Buffer::default()),
@@ -293,13 +280,8 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         normalized_value: f32,
         sample_rate: Option<f32>,
     ) -> tresult {
-        match (&self.bypass, self.param_by_hash.get(&hash)) {
-            (Bypass::Dummy(bypass_state), _) if hash == *BYPASS_PARAM_HASH => {
-                bypass_state.store(normalized_value >= 0.5, Ordering::Relaxed);
-
-                kResultOk
-            }
-            (_, Some(param_ptr)) => {
+        match self.param_by_hash.get(&hash) {
+            Some(param_ptr) => {
                 // Also update the parameter's smoothing if applicable
                 match (param_ptr, sample_rate) {
                     (_, Some(sample_rate)) => unsafe {
