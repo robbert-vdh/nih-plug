@@ -77,6 +77,10 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// The incoming events for the plugin, if `P::ACCEPTS_MIDI` is set. If
     /// `P::SAMPLE_ACCURATE_AUTOMATION`, this is also read in lockstep with the parameter change
     /// block splitting.
+    ///
+    /// NOTE: Because with VST3 MIDI CC messages are sent as parameter changes and VST3 does not
+    ///       interleave parameter changes and note events, this queue has to be sorted when
+    ///       creating the process context
     pub input_events: AtomicRefCell<VecDeque<NoteEvent>>,
     /// Unprocessed parameter changes sent by the host as pairs of `(sample_idx_in_buffer, change)`.
     /// Needed because VST3 does not have a single queue containing all parameter changes. If
@@ -276,9 +280,18 @@ impl<P: Vst3Plugin> WrapperInner<P> {
     }
 
     pub fn make_process_context(&self, transport: Transport) -> WrapperProcessContext<'_, P> {
+        // NOTE: Because with VST3 MIDI CC messages are sent as parameter changes and VST3 does not
+        //       interleave parameter changes and note events, this queue has to be sorted when
+        //       creating the process context. This is quite a waste of resources, but there's no
+        //       way around it.
+        let mut input_events = self.input_events.borrow_mut();
+        input_events
+            .make_contiguous()
+            .sort_by_key(|event| event.timing());
+
         WrapperProcessContext {
             inner: self,
-            input_events_guard: self.input_events.borrow_mut(),
+            input_events_guard: input_events,
             transport,
         }
     }
