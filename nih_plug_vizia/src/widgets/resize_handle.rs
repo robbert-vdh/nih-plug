@@ -1,6 +1,5 @@
 //! A resize handle for uniformly scaling a plugin GUI.
 
-use femtovg::{Paint, Path};
 use vizia::*;
 
 /// A resize handle placed at the bottom right of the window that lets you resize the window.
@@ -26,7 +25,7 @@ impl ResizeHandle {
             start_scale_factor: 1.0,
             start_physical_coordinates: (0.0, 0.0),
         }
-        .build(cx)
+        .build(cx, |_| {})
     }
 }
 
@@ -125,9 +124,9 @@ impl View for ResizeHandle {
             .cloned()
             .unwrap_or_default();
         let opacity = cx.cache.get_opacity(entity);
-        let mut background_color: femtovg::Color = background_color.into();
+        let mut background_color: vg::Color = background_color.into();
         background_color.set_alphaf(background_color.a * opacity);
-        let mut border_color: femtovg::Color = border_color.into();
+        let mut border_color: vg::Color = border_color.into();
         border_color.set_alphaf(border_color.a * opacity);
 
         let border_width = match cx
@@ -142,7 +141,7 @@ impl View for ResizeHandle {
             _ => 0.0,
         };
 
-        let mut path = Path::new();
+        let mut path = vg::Path::new();
         let x = bounds.x + border_width / 2.0;
         let y = bounds.y + border_width / 2.0;
         let w = bounds.w - border_width;
@@ -155,17 +154,17 @@ impl View for ResizeHandle {
         path.close();
 
         // Fill with background color
-        let paint = Paint::color(background_color);
+        let paint = vg::Paint::color(background_color);
         canvas.fill_path(&mut path, paint);
 
         // Borders are only supported to make debugging easier
-        let mut paint = Paint::color(border_color);
+        let mut paint = vg::Paint::color(border_color);
         paint.set_line_width(border_width);
         canvas.stroke_path(&mut path, paint);
 
         // We'll draw a simple triangle, since we're going flat everywhere anyways and that style
         // tends to not look too tacky
-        let mut path = Path::new();
+        let mut path = vg::Path::new();
         let x = bounds.x + border_width / 2.0;
         let y = bounds.y + border_width / 2.0;
         let w = bounds.w - border_width;
@@ -191,15 +190,15 @@ impl View for ResizeHandle {
         // path.move_to(x + (w / 3.0 * 1.5), y + h);
         // path.close();
 
-        let mut color: femtovg::Color = cx
+        let mut color: vg::Color = cx
             .style
             .font_color
             .get(entity)
             .cloned()
-            .unwrap_or(crate::Color::white())
+            .unwrap_or(Color::white())
             .into();
         color.set_alphaf(color.a * opacity);
-        let paint = Paint::color(color);
+        let paint = vg::Paint::color(color);
         canvas.fill_path(&mut path, paint);
     }
 }

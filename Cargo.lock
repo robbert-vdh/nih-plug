@@ -455,7 +455,7 @@ checksum = "17cc5e6b5ab06331c33589842070416baa137e8b0eb912b008cfd4a78ada7919"
 [[package]]
 name = "clap-sys"
 version = "0.24.0"
-source = "git+https://github.com/robbert-vdh/clap-sys?branch=update/clap-0.24#a703ec943df1f34c0c664c91071cef4fb0daaeda"
+source = "git+https://github.com/robbert-vdh/clap-sys?branch=update/clap-0.24#695556c4ebc839952e690577f3a825eb3054d2bb"
 
 [[package]]
 name = "clipboard-win"
@@ -932,8 +932,7 @@ dependencies = [
 [[package]]
 name = "femtovg"
 version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f95b1b0a3a4dc9bb7f866b2d6efc9c5c5f5bccefc21e40be75dfc2c12cb6ef8"
+source = "git+https://github.com/femtovg/femtovg?rev=87fe627794f3f793d8e3a338c838a2f8e8a8aa9d#87fe627794f3f793d8e3a338c838a2f8e8a8aa9d"
 dependencies = [
  "bitflags",
  "fnv",
@@ -1773,9 +1772,9 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "libc"
-version = "0.2.121"
+version = "0.2.122"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "efaa7b300f3b5fe8eb6bf21ce3895e1751d9665086af2d64b42f19701015ff4f"
+checksum = "ec647867e2bf0772e28c8bcde4f0d19a9216916e890543b5a03ed8ef27b8f259"
 
 [[package]]
 name = "libloading"
@@ -1972,7 +1971,7 @@ dependencies = [
 [[package]]
 name = "morphorm"
 version = "0.3.0"
-source = "git+https://github.com/vizia/morphorm?rev=07a8ba20b16660f93b551ad89873d4b382536b54#07a8ba20b16660f93b551ad89873d4b382536b54"
+source = "git+https://github.com/vizia/morphorm?rev=c14e888b1d66719fc3f13ccdb1ea01a10368ef9e#c14e888b1d66719fc3f13ccdb1ea01a10368ef9e"
 dependencies = [
  "bitflags",
  "smallvec",
@@ -2068,7 +2067,6 @@ version = "0.0.0"
 dependencies = [
  "baseview 0.1.0 (git+https://github.com/robbert-vdh/baseview.git?branch=feature/resize)",
  "crossbeam",
- "femtovg",
  "nih_plug",
  "nih_plug_assets",
  "vizia",
@@ -2241,9 +2239,9 @@ dependencies = [
 
 [[package]]
 name = "ouroboros"
-version = "0.14.2"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71643f290d126e18ac2598876d01e1d57aed164afc78fdb6e2a0c6589a1f6662"
+checksum = "9f31a3b678685b150cba82b702dcdc5e155893f63610cf388d30cd988d4ca2bf"
 dependencies = [
  "aliasable",
  "ouroboros_macro",
@@ -2252,9 +2250,9 @@ dependencies = [
 
 [[package]]
 name = "ouroboros_macro"
-version = "0.14.2"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed9a247206016d424fe8497bc611e510887af5c261fbbf977877c4bb55ca4d82"
+checksum = "084fd65d5dd8b3772edccb5ffd1e4b7eba43897ecd0f9401e330e8c542959408"
 dependencies = [
  "Inflector",
  "proc-macro-error",
@@ -2546,9 +2544,9 @@ checksum = "dbf0c48bc1d91375ae5c3cd81e3722dff1abcf81a30960240640d223f59fe0e5"
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.36"
+version = "1.0.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7342d5883fbccae1cc37a2353b09c87c9b0f3afd73f5fb9bba687a1f733b029"
+checksum = "ec757218438d5fda206afc041538b2f6d889286160d649a86a24d37e1235afd1"
 dependencies = [
  "unicode-xid",
 ]
@@ -3199,9 +3197,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "1.0.90"
+version = "1.0.91"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "704df27628939572cd88d33f171cd6f896f4eaca85252c6e0a72d8d8287ee86f"
+checksum = "b683b2b825c8eef438b77c36a06dc262294da3d5a5813fac20da149241dcd44d"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3460,7 +3458,7 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 [[package]]
 name = "vizia"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#9a2cd59c66c60020ca8c2c2a596e8a6fadb9530e"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#c52aad2d80018965266e145d2e125721ed7c9219"
 dependencies = [
  "vizia_baseview",
  "vizia_core",
@@ -3469,7 +3467,7 @@ dependencies = [
 [[package]]
 name = "vizia_baseview"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#9a2cd59c66c60020ca8c2c2a596e8a6fadb9530e"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#c52aad2d80018965266e145d2e125721ed7c9219"
 dependencies = [
  "baseview 0.1.0 (git+https://github.com/robbert-vdh/baseview.git?branch=feature/resize)",
  "femtovg",
@@ -3481,7 +3479,7 @@ dependencies = [
 [[package]]
 name = "vizia_core"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#9a2cd59c66c60020ca8c2c2a596e8a6fadb9530e"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#c52aad2d80018965266e145d2e125721ed7c9219"
 dependencies = [
  "bitflags",
  "copypasta",
@@ -3497,14 +3495,16 @@ dependencies = [
  "locale_config",
  "morphorm",
  "unic-langid",
+ "unicode-bidi",
  "unicode-segmentation",
  "vizia_derive",
+ "web-sys",
 ]
 
 [[package]]
 name = "vizia_derive"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#9a2cd59c66c60020ca8c2c2a596e8a6fadb9530e"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#c52aad2d80018965266e145d2e125721ed7c9219"
 dependencies = [
  "proc-macro2",
  "quote",

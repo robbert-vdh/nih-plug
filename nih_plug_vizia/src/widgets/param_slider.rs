@@ -112,13 +112,13 @@ impl ParamSlider {
         // this appraoch looks a bit jarring.
         // We need to do a bit of a nasty and erase the lifetime bound by going through the raw
         // GuiContext and a ParamPtr.
-        let param_ptr = *params
+        let param_ptr = params
             .map(move |params| params_to_param(params).as_ptr())
             .get(cx);
-        let default_value = *params
+        let default_value = params
             .map(move |params| params_to_param(params).default_normalized_value())
             .get(cx);
-        let step_count = *params
+        let step_count = params
             .map(move |params| params_to_param(params).step_count())
             .get(cx);
 
@@ -129,7 +129,7 @@ impl ParamSlider {
             is_double_click: false,
             granular_drag_start_x_value: None,
         }
-        .build2(cx, move |cx| {
+        .build(cx, move |cx| {
             ParamSliderInternal {
                 style: ParamSliderStyle::Centered,
                 text_input_active: false,
@@ -137,7 +137,7 @@ impl ParamSlider {
             .build(cx);
 
             Binding::new(cx, ParamSliderInternal::style, move |cx, style| {
-                let style = *style.get(cx);
+                let style = style.get(cx);
                 let draw_fill_from_default = matches!(style, ParamSliderStyle::Centered)
                     && step_count.is_none()
                     && (0.45..=0.55).contains(&default_value);
@@ -161,7 +161,7 @@ impl ParamSlider {
                         let normalized_param_value_lens =
                             params.map(move |params| params_to_param(params).normalized_value());
 
-                        if *text_input_active.get(cx) {
+                        if text_input_active.get(cx) {
                             Textbox::new(cx, param_display_value_lens)
                                 .class("value-entry")
                                 .on_submit(|cx, string| {
@@ -174,7 +174,10 @@ impl ParamSlider {
                                     cx.emit(TextEvent::StartEdit);
                                     cx.emit(TextEvent::SelectAll);
                                 })
-                                .child_space(Stretch(1.0))
+                                // `.child_space(Stretch(1.0))` no longer works
+                                .class("align_center")
+                                .child_top(Stretch(1.0))
+                                .child_bottom(Stretch(1.0))
                                 .height(Stretch(1.0))
                                 .width(Stretch(1.0));
                         } else {
@@ -186,7 +189,7 @@ impl ParamSlider {
                                     .class("fill")
                                     .height(Stretch(1.0))
                                     .bind(normalized_param_value_lens, move |handle, value| {
-                                        let current_value = *value.get(handle.cx);
+                                        let current_value = value.get(handle.cx);
                                         let (start_t, delta) = match style {
                                             ParamSliderStyle::Centered
                                                 if draw_fill_from_default =>
@@ -264,6 +267,7 @@ impl ParamSlider {
                                                 )
                                                 .class("value")
                                                 .class("value--multiple")
+                                                .child_space(Stretch(1.0))
                                                 .height(Stretch(1.0))
                                                 .width(Stretch(1.0))
                                                 .hoverable(false);
@@ -277,6 +281,7 @@ impl ParamSlider {
                                         Label::new(cx, param_display_value_lens)
                                             .class("value")
                                             .class("value--single")
+                                            .child_space(Stretch(1.0))
                                             .height(Stretch(1.0))
                                             .width(Stretch(1.0))
                                             .hoverable(false);

@@ -78,17 +78,17 @@ impl GenericUi {
         Ps: Params + 'static,
     {
         // Basic styling is done in the `theme.css` style sheet
-        Self.build2(cx, |cx| {
+        Self.build(cx, |cx| {
             // Rust does not have existential types, otherwise we could have passed functions that
             // map `params` to some `impl Param` and everything would have been a lot neater
-            let param_map = &*params.map(|params| params.as_ref().param_map()).get(cx);
+            let param_map = params.map(|params| params.as_ref().param_map()).get(cx);
             for (_, param_ptr, _) in param_map {
                 let flags = unsafe { param_ptr.flags() };
                 if flags.contains(ParamFlags::HIDE_IN_GENERIC_UI) {
                     continue;
                 }
 
-                make_widget(cx, *param_ptr);
+                make_widget(cx, param_ptr);
             }
         })
     }
