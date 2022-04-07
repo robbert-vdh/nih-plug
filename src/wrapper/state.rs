@@ -24,7 +24,7 @@ pub enum ParamValue {
 /// A plugin's state so it can be restored at a later point. This object can be serialized and
 /// deserialized using serde.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct State {
+pub struct PluginState {
     /// The plugin's parameter values. These are stored unnormalized. This mean sthe old values will
     /// be recalled when when the parameter's range gets increased. Doing so may still mess with
     /// parmaeter automation though, depending on how the host impelments that.
@@ -44,7 +44,7 @@ pub(crate) unsafe fn serialize_object(
     plugin_params: Arc<dyn Params>,
     param_by_hash: &HashMap<u32, ParamPtr>,
     param_id_to_hash: &HashMap<String, u32>,
-) -> State {
+) -> PluginState {
     // We'll serialize parmaeter values as a simple `string_param_id: display_value` map.
     let params: HashMap<_, _> = param_id_to_hash
         .iter()
@@ -78,7 +78,7 @@ pub(crate) unsafe fn serialize_object(
     // storing things like sample data.
     let fields = plugin_params.serialize_fields();
 
-    State { params, fields }
+    PluginState { params, fields }
 }
 
 /// Serialize a plugin's state to a vector containing JSON data. This can (and should) be shared
@@ -92,14 +92,14 @@ pub(crate) unsafe fn serialize_json(
     serde_json::to_vec(&plugin_state)
 }
 
-/// Deserialize a plugin's state from a [`State`] object. This is used to allow the plugin to do its
-/// own internal preset management. Returns `false` and logs an error if the state could not be
-/// deserialized.
+/// Deserialize a plugin's state from a [`PluginState`] object. This is used to allow the plugin to
+/// do its own internal preset management. Returns `false` and logs an error if the state could not
+/// be deserialized.
 ///
 /// Make sure to reinitialize plugin after deserializing the state so it can react to the new
 /// parameter values. The smoothers have already been reset by this function.
 pub(crate) unsafe fn deserialize_object(
-    state: &State,
+    state: &PluginState,
     plugin_params: Arc<dyn Params>,
     param_by_hash: &HashMap<u32, ParamPtr>,
     param_id_to_hash: &HashMap<String, u32>,
@@ -162,7 +162,7 @@ pub(crate) unsafe fn deserialize_json(
     param_id_to_hash: &HashMap<String, u32>,
     current_buffer_config: Option<&BufferConfig>,
 ) -> bool {
-    let state: State = match serde_json::from_slice(state) {
+    let state: PluginState = match serde_json::from_slice(state) {
         Ok(s) => s,
         Err(err) => {
             nih_debug_assert_failure!("Error while deserializing state: {}", err);

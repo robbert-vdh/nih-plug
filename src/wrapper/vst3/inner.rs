@@ -21,7 +21,7 @@ use crate::event_loop::{EventLoop, MainThreadExecutor, OsEventLoop};
 use crate::param::internals::{ParamPtr, Params};
 use crate::param::ParamFlags;
 use crate::plugin::{BufferConfig, BusConfig, Editor, NoteEvent, ProcessStatus, Vst3Plugin};
-use crate::wrapper::state::{self, State};
+use crate::wrapper::state::{self, PluginState};
 use crate::wrapper::util::{hash_param_id, process_wrapper};
 
 /// The actual wrapper bits. We need this as an `Arc<T>` so we can safely use our event loop API.
@@ -91,9 +91,9 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// In other words, the GUI thread acts as a sender and then as a receiver, while the audio
     /// thread acts as a receiver and then as a sender. That way deallocation can happen on the GUI
     /// thread. All of this happens without any blocking on the audio thread.
-    pub updated_state_sender: channel::Sender<State>,
+    pub updated_state_sender: channel::Sender<PluginState>,
     /// The receiver belonging to [`new_state_sender`][Self::new_state_sender].
-    pub updated_state_receiver: channel::Receiver<State>,
+    pub updated_state_receiver: channel::Receiver<PluginState>,
 
     /// The keys from `param_map` in a stable order.
     pub param_hashes: Vec<u32>,
@@ -324,7 +324,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
     /// Get the plugin's state object, may be called by the plugin's GUI as part of its own preset
     /// management. The wrapper doesn't use these functions and serializes and deserializes directly
     /// the JSON in the relevant plugin API methods instead.
-    pub fn get_state_object(&self) -> State {
+    pub fn get_state_object(&self) -> PluginState {
         unsafe {
             state::serialize_object(
                 self.params.clone(),
@@ -337,7 +337,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
     /// Update the plugin's internal state, called by the plugin itself from the GUI thread. To
     /// prevent corrupting data and changing parameters during processing the actual state is only
     /// updated at the end of the audio processing cycle.
-    pub fn set_state_object(&self, mut state: State) {
+    pub fn set_state_object(&self, mut state: PluginState) {
         // Use a loop and timeouts to handle the super rare edge case when this function gets called
         // between a process call and the host disabling the plugin
         loop {

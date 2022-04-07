@@ -22,4 +22,4 @@ pub use crate::plugin::{
     BufferConfig, BusConfig, ClapPlugin, Editor, NoteEvent, ParentWindowHandle, Plugin,
     ProcessStatus, Vst3Plugin,
 };
-pub use crate::wrapper::state::State;
+pub use crate::wrapper::state::PluginState;

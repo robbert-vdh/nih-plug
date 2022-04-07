@@ -80,11 +80,11 @@ impl<P: ClapPlugin> GuiContext for WrapperGuiContext<P> {
         }
     }
 
-    fn get_state(&self) -> crate::wrapper::state::State {
+    fn get_state(&self) -> crate::wrapper::state::PluginState {
         self.wrapper.get_state_object()
     }
 
-    fn set_state(&self, state: crate::wrapper::state::State) {
+    fn set_state(&self, state: crate::wrapper::state::PluginState) {
         self.wrapper.set_state_object(state)
     }
 }

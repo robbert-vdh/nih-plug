@@ -3,7 +3,7 @@
 use crate::param::internals::ParamPtr;
 use crate::param::Param;
 use crate::plugin::NoteEvent;
-use crate::wrapper::state::State;
+use crate::wrapper::state::PluginState;
 
 // TODO: ProcessContext for parameter automation and sending events
 
@@ -83,13 +83,13 @@ pub trait GuiContext: Send + Sync + 'static {
 
     /// Serialize the plugin's current state to a serde-serializable object. Useful for implementing
     /// preset handling within a plugin's GUI.
-    fn get_state(&self) -> State;
+    fn get_state(&self) -> PluginState;
 
     /// Restore the state from a previously serialized state object. This will block the GUI thread
     /// until the state has been restored and a parameter value rescan has been requested from the
     /// host. If the plugin is currently processing audio, then the parameter values will be
     /// restored at the end of the current processing cycle.
-    fn set_state(&self, state: State);
+    fn set_state(&self, state: PluginState);
 }
 
 /// Information about the plugin's transport. Depending on the plugin API and the host not all
