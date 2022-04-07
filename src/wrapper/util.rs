@@ -27,7 +27,8 @@ pub fn hash_param_id(id: &str) -> u32 {
         );
     }
 
-    // Studio One apparently doesn't like negative parameters, so JUCE just zeroes out the sign bit
+    // In VST3 the last bit is reserved for parameters provided by the host
+    // https://developer.steinberg.help/display/VST/Parameters+and+Automation
     hash &= !(1 << 31);
 
     hash
