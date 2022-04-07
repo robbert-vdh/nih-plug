@@ -9,7 +9,9 @@ use clap_sys::events::{
     clap_event_param_value, clap_event_type, clap_input_events, clap_output_events,
     CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_IS_LIVE, CLAP_EVENT_MIDI, CLAP_EVENT_NOTE_EXPRESSION,
     CLAP_EVENT_NOTE_OFF, CLAP_EVENT_NOTE_ON, CLAP_EVENT_PARAM_GESTURE_BEGIN,
-    CLAP_EVENT_PARAM_GESTURE_END, CLAP_EVENT_PARAM_VALUE, CLAP_NOTE_EXPRESSION_PRESSURE,
+    CLAP_EVENT_PARAM_GESTURE_END, CLAP_EVENT_PARAM_VALUE, CLAP_NOTE_EXPRESSION_BRIGHTNESS,
+    CLAP_NOTE_EXPRESSION_EXPRESSION, CLAP_NOTE_EXPRESSION_PAN, CLAP_NOTE_EXPRESSION_PRESSURE,
+    CLAP_NOTE_EXPRESSION_TUNING, CLAP_NOTE_EXPRESSION_VIBRATO, CLAP_NOTE_EXPRESSION_VOLUME,
     CLAP_TRANSPORT_HAS_BEATS_TIMELINE, CLAP_TRANSPORT_HAS_SECONDS_TIMELINE,
     CLAP_TRANSPORT_HAS_TEMPO, CLAP_TRANSPORT_HAS_TIME_SIGNATURE, CLAP_TRANSPORT_IS_LOOP_ACTIVE,
     CLAP_TRANSPORT_IS_PLAYING, CLAP_TRANSPORT_IS_RECORDING, CLAP_TRANSPORT_IS_WITHIN_PRE_ROLL,
@@ -909,7 +911,55 @@ impl<P: ClapPlugin> Wrapper<P> {
                                 note: event.key as u8,
                                 pressure: event.value as f32,
                             });
-                            dbg!(event.value);
+                        }
+                        CLAP_NOTE_EXPRESSION_VOLUME => {
+                            input_events.push_back(NoteEvent::Volume {
+                                timing: raw_event.time - current_sample_idx as u32,
+                                channel: event.channel as u8,
+                                note: event.key as u8,
+                                gain: event.value as f32,
+                            });
+                        }
+                        CLAP_NOTE_EXPRESSION_PAN => {
+                            input_events.push_back(NoteEvent::Pan {
+                                timing: raw_event.time - current_sample_idx as u32,
+                                channel: event.channel as u8,
+                                note: event.key as u8,
+                                // In CLAP this value goes from [0, 1] instead of [-1, 1]
+                                pan: (event.value as f32 * 2.0) - 1.0,
+                            });
+                        }
+                        CLAP_NOTE_EXPRESSION_TUNING => {
+                            input_events.push_back(NoteEvent::Tuning {
+                                timing: raw_event.time - current_sample_idx as u32,
+                                channel: event.channel as u8,
+                                note: event.key as u8,
+                                tuning: event.value as f32,
+                            });
+                        }
+                        CLAP_NOTE_EXPRESSION_VIBRATO => {
+                            input_events.push_back(NoteEvent::Vibrato {
+                                timing: raw_event.time - current_sample_idx as u32,
+                                channel: event.channel as u8,
+                                note: event.key as u8,
+                                vibrato: event.value as f32,
+                            });
+                        }
+                        CLAP_NOTE_EXPRESSION_EXPRESSION => {
+                            input_events.push_back(NoteEvent::Expression {
+                                timing: raw_event.time - current_sample_idx as u32,
+                                channel: event.channel as u8,
+                                note: event.key as u8,
+                                expression: event.value as f32,
+                            });
+                        }
+                        CLAP_NOTE_EXPRESSION_BRIGHTNESS => {
+                            input_events.push_back(NoteEvent::Brightness {
+                                timing: raw_event.time - current_sample_idx as u32,
+                                channel: event.channel as u8,
+                                note: event.key as u8,
+                                brightness: event.value as f32,
+                            });
                         }
                         n => nih_debug_assert_failure!("Unhandled note expression ID {}", n),
                     }

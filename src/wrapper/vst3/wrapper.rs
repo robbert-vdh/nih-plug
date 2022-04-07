@@ -792,6 +792,9 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                     pressure: event.pressure,
                                 });
                             }
+
+                            // TODO: Add note event controllers to support the same expression types
+                            //       we're supporting for CLAP
                         }
                     }
                 }
