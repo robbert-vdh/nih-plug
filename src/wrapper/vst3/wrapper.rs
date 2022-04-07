@@ -781,6 +781,16 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                     note: event.pitch as u8,
                                     velocity: event.velocity,
                                 });
+                            } else if event.type_
+                                == vst3_sys::vst::EventTypes::kPolyPressureEvent as u16
+                            {
+                                let event = event.event.poly_pressure;
+                                input_events.push_back(NoteEvent::PolyPressure {
+                                    timing,
+                                    channel: event.channel as u8,
+                                    note: event.pitch as u8,
+                                    pressure: event.pressure,
+                                });
                             }
                         }
                     }

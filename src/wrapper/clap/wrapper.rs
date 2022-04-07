@@ -5,11 +5,12 @@
 use atomic_float::AtomicF32;
 use atomic_refcell::{AtomicRefCell, AtomicRefMut};
 use clap_sys::events::{
-    clap_event_header, clap_event_note, clap_event_param_gesture, clap_event_param_value,
-    clap_event_type, clap_input_events, clap_output_events, CLAP_CORE_EVENT_SPACE_ID,
-    CLAP_EVENT_IS_LIVE, CLAP_EVENT_MIDI, CLAP_EVENT_NOTE_EXPRESSION, CLAP_EVENT_NOTE_OFF,
-    CLAP_EVENT_NOTE_ON, CLAP_EVENT_PARAM_GESTURE_BEGIN, CLAP_EVENT_PARAM_GESTURE_END,
-    CLAP_EVENT_PARAM_VALUE, CLAP_TRANSPORT_HAS_BEATS_TIMELINE, CLAP_TRANSPORT_HAS_SECONDS_TIMELINE,
+    clap_event_header, clap_event_note, clap_event_note_expression, clap_event_param_gesture,
+    clap_event_param_value, clap_event_type, clap_input_events, clap_output_events,
+    CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_IS_LIVE, CLAP_EVENT_MIDI, CLAP_EVENT_NOTE_EXPRESSION,
+    CLAP_EVENT_NOTE_OFF, CLAP_EVENT_NOTE_ON, CLAP_EVENT_PARAM_GESTURE_BEGIN,
+    CLAP_EVENT_PARAM_GESTURE_END, CLAP_EVENT_PARAM_VALUE, CLAP_NOTE_EXPRESSION_PRESSURE,
+    CLAP_TRANSPORT_HAS_BEATS_TIMELINE, CLAP_TRANSPORT_HAS_SECONDS_TIMELINE,
     CLAP_TRANSPORT_HAS_TEMPO, CLAP_TRANSPORT_HAS_TIME_SIGNATURE, CLAP_TRANSPORT_IS_LOOP_ACTIVE,
     CLAP_TRANSPORT_IS_PLAYING, CLAP_TRANSPORT_IS_RECORDING, CLAP_TRANSPORT_IS_WITHIN_PRE_ROLL,
 };
@@ -898,9 +899,20 @@ impl<P: ClapPlugin> Wrapper<P> {
             }
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_EXPRESSION) => {
                 if P::MIDI_INPUT >= MidiConfig::Basic {
-                    // We currently don't report supporting this at all in the event filter, add that once
-                    // we support MIDI CCs
-                    // TODO: Implement pressure and other expressions along with MIDI CCs
+                    // TODO: Add support for the other expression types
+                    let event = &*(event as *const clap_event_note_expression);
+                    match event.expression_id {
+                        CLAP_NOTE_EXPRESSION_PRESSURE => {
+                            input_events.push_back(NoteEvent::PolyPressure {
+                                timing: raw_event.time - current_sample_idx as u32,
+                                channel: event.channel as u8,
+                                note: event.key as u8,
+                                pressure: event.value as f32,
+                            });
+                            dbg!(event.value);
+                        }
+                        n => nih_debug_assert_failure!("Unhandled note expression ID {}", n),
+                    }
                 }
 
                 false
@@ -1617,8 +1629,8 @@ impl<P: ClapPlugin> Wrapper<P> {
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_VALUE) => true,
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_ON)
             | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_OFF)
+            | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_EXPRESSION)
             // TODO: Implement midi CC handling
-            // | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_EXPRESSION)
             // | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_MIDI)
                 if P::MIDI_INPUT >= MidiConfig::Basic =>
             {

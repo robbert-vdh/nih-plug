@@ -153,6 +153,7 @@ impl Plugin for Sine {
                                     self.midi_note_gain.set_target(self.sample_rate, 0.0);
                                 }
                             }
+                            _ => (),
                         },
                         _ => break 'midi_events,
                     }

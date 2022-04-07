@@ -313,7 +313,8 @@ pub enum MidiConfig {
     Basic,
     // // TODO:
     // /// The plugin receives full MIDI CCs as well as pitch bend information. For VST3 plugins this
-    // /// involves adding
+    // /// involves adding 130*16 parameters to bind to the the 128 MIDI CCs, pitch bend, and channel
+    // /// pressure.
     // MidiCCs,
 }
 
@@ -325,6 +326,7 @@ pub enum MidiConfig {
 ///
 /// TODO: Add more events as needed
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
 pub enum NoteEvent {
     /// A note on event, available on [`MidiConfig::Basic`] and up.
     NoteOn {
@@ -348,6 +350,20 @@ pub enum NoteEvent {
         /// 127 levels available in MIDI.
         velocity: f32,
     },
+    /// A polyphonic note pressure/aftertouch event, available on [`MidiConfig::Basic`] and up. Not
+    /// all hosts may support polyphonic aftertouch.
+    PolyPressure {
+        timing: u32,
+        /// The note's channel, from 0 to 16.
+        channel: u8,
+        /// The note's MIDI key number, from 0 to 127.
+        note: u8,
+        /// The note's velocity, from 0 to 1. Some plugin APIs may allow higher precision than the
+        /// 127 levels available in MIDI.
+        pressure: f32,
+    },
+    // TODO: Add the other non-CC expressions supported by Bitwig and CLAP, register VST3 note
+    //       expressions for hosts that support those
 }
 
 impl NoteEvent {
@@ -356,6 +372,7 @@ impl NoteEvent {
         match &self {
             NoteEvent::NoteOn { timing, .. } => *timing,
             NoteEvent::NoteOff { timing, .. } => *timing,
+            NoteEvent::PolyPressure { timing, .. } => *timing,
         }
     }
 }
