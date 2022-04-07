@@ -13,7 +13,7 @@ use crate::plugin::BufferConfig;
 // management
 
 /// A plain, unnormalized value for a parameter.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ParamValue {
     F32(f32),
@@ -23,7 +23,7 @@ pub enum ParamValue {
 
 /// A plugin's state so it can be restored at a later point. This object can be serialized and
 /// deserialized using serde.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct State {
     /// The plugin's parameter values. These are stored unnormalized. This mean sthe old values will
     /// be recalled when when the parameter's range gets increased. Doing so may still mess with
