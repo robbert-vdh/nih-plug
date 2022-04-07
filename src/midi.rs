@@ -61,6 +61,10 @@ pub enum NoteEvent {
     },
     /// A volume expression event, available on [`MidiConfig::Basic`] and up. Not all hosts may
     /// support these expressions.
+    ///
+    /// # Note
+    ///
+    /// Currently not yet supported for VST3 plugins.
     Volume {
         timing: u32,
         /// The note's channel, from 0 to 16.
@@ -72,6 +76,10 @@ pub enum NoteEvent {
     },
     /// A panning expression event, available on [`MidiConfig::Basic`] and up. Not all hosts may
     /// support these expressions.
+    ///
+    /// # Note
+    ///
+    /// Currently not yet supported for VST3 plugins.
     Pan {
         timing: u32,
         /// The note's channel, from 0 to 16.
@@ -84,6 +92,10 @@ pub enum NoteEvent {
     },
     /// A tuning expression event, available on [`MidiConfig::Basic`] and up. Not all hosts may support
     /// these expressions.
+    ///
+    /// # Note
+    ///
+    /// Currently not yet supported for VST3 plugins.
     Tuning {
         timing: u32,
         /// The note's channel, from 0 to 16.
@@ -95,6 +107,10 @@ pub enum NoteEvent {
     },
     /// A vibrato expression event, available on [`MidiConfig::Basic`] and up. Not all hosts may support
     /// these expressions.
+    ///
+    /// # Note
+    ///
+    /// Currently not yet supported for VST3 plugins.
     Vibrato {
         timing: u32,
         /// The note's channel, from 0 to 16.
@@ -106,6 +122,10 @@ pub enum NoteEvent {
     },
     /// A expression expression (yes, expression expression) event, available on
     /// [`MidiConfig::Basic`] and up. Not all hosts may support these expressions.
+    ///
+    /// # Note
+    ///
+    /// Currently not yet supported for VST3 plugins.
     Expression {
         timing: u32,
         /// The note's channel, from 0 to 16.
@@ -117,6 +137,10 @@ pub enum NoteEvent {
     },
     /// A brightness expression event, available on [`MidiConfig::Basic`] and up. Not all hosts may support
     /// these expressions.
+    ///
+    /// # Note
+    ///
+    /// Currently not yet supported for VST3 plugins.
     Brightness {
         timing: u32,
         /// The note's channel, from 0 to 16.
@@ -127,6 +151,10 @@ pub enum NoteEvent {
         brightness: f32,
     },
     /// A MIDI channel pressure event, available on [`MidiConfig::MidiCCs`] and up.
+    ///
+    /// # Note
+    ///
+    /// Currently not yet supported for VST3 plugins.
     MidiChannelPressure {
         timing: u32,
         /// The affected channel, from 0 to 16.
@@ -135,6 +163,10 @@ pub enum NoteEvent {
         pressure: f32,
     },
     /// A MIDI pitch bend, available on [`MidiConfig::MidiCCs`] and up.
+    ///
+    /// # Note
+    ///
+    /// Currently not yet supported for VST3 plugins.
     MidiPitchBend {
         timing: u32,
         /// The affected channel, from 0 to 16.
@@ -149,6 +181,8 @@ pub enum NoteEvent {
     /// The wrapper does not perform any special handling for two message 14-bit CCs (where the CC
     /// number is in the range `[0, 31]`, and the next CC is that number plus 32) or for four
     /// message RPN messages. For now you will need to handle these CCs yourself.
+    ///
+    /// Currently not yet supported for VST3 plugins.
     MidiCC {
         timing: u32,
         /// The affected channel, from 0 to 16.
