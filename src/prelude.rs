@@ -22,3 +22,4 @@ pub use super::plugin::{
     BufferConfig, BusConfig, ClapPlugin, Editor, NoteEvent, ParentWindowHandle, Plugin,
     ProcessStatus, Vst3Plugin,
 };
+pub use super::wrapper::state::State;

@@ -1,4 +1,5 @@
-//! Utilities for saving a [crate::plugin::Plugin]'s state.
+//! Utilities for saving a [crate::plugin::Plugin]'s state. The actual state object is also exposed
+//! to plugins through the [`GuiContext`][crate::prelude::GuiContext].
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -8,18 +9,22 @@ use crate::param::internals::{ParamPtr, Params};
 use crate::param::Param;
 use crate::plugin::BufferConfig;
 
+// These state objects are also exposed directly to the plugin so it can do its own internal preset
+// management
+
 /// A plain, unnormalized value for a parameter.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum ParamValue {
+pub enum ParamValue {
     F32(f32),
     I32(i32),
     Bool(bool),
 }
 
-/// A plugin's state so it can be restored at a later point.
+/// A plugin's state so it can be restored at a later point. This object can be serialized and
+/// deserialized using serde.
 #[derive(Debug, Serialize, Deserialize)]
-pub(crate) struct State {
+pub struct State {
     /// The plugin's parameter values. These are stored unnormalized. This mean sthe old values will
     /// be recalled when when the parameter's range gets increased. Doing so may still mess with
     /// parmaeter automation though, depending on how the host impelments that.
