@@ -770,7 +770,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                     timing,
                                     channel: event.channel as u8,
                                     note: event.pitch as u8,
-                                    velocity: (event.velocity * 127.0).round() as u8,
+                                    velocity: event.velocity,
                                 });
                             } else if event.type_ == vst3_sys::vst::EventTypes::kNoteOffEvent as u16
                             {
@@ -779,7 +779,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                     timing,
                                     channel: event.channel as u8,
                                     note: event.pitch as u8,
-                                    velocity: (event.velocity * 127.0).round() as u8,
+                                    velocity: event.velocity,
                                 });
                             }
                         }

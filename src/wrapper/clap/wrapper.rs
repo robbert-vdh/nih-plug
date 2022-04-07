@@ -875,7 +875,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                         timing: raw_event.time - current_sample_idx as u32,
                         channel: event.channel as u8,
                         note: event.key as u8,
-                        velocity: (event.velocity * 127.0).round() as u8,
+                        velocity: event.velocity as f32,
                     });
                 }
 
@@ -888,7 +888,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                         timing: raw_event.time - current_sample_idx as u32,
                         channel: event.channel as u8,
                         note: event.key as u8,
-                        velocity: (event.velocity * 127.0).round() as u8,
+                        velocity: event.velocity as f32,
                     });
                 }
 

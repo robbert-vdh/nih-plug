@@ -311,17 +311,27 @@ pub enum ProcessStatus {
 /// TODO: Add more events as needed
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum NoteEvent {
+    /// A note on event.
     NoteOn {
         timing: u32,
+        /// The note's channel, from 0 to 16.
         channel: u8,
+        /// The note's MIDI key number, from 0 to 127.
         note: u8,
-        velocity: u8,
+        /// The note's velocity, from 0 to 1. Some plugin APIs may allow higher precision than the
+        /// 127 levels available in MIDI.
+        velocity: f32,
     },
+    /// A note off event.
     NoteOff {
         timing: u32,
+        /// The note's channel, from 0 to 16.
         channel: u8,
+        /// The note's MIDI key number, from 0 to 127.
         note: u8,
-        velocity: u8,
+        /// The note's velocity, from 0 to 1. Some plugin APIs may allow higher precision than the
+        /// 127 levels available in MIDI.
+        velocity: f32,
     },
 }
 
