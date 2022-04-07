@@ -5,7 +5,7 @@ use atomic_refcell::AtomicRefCell;
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::marker::PhantomData;
-use std::pin::Pin;
+use std::sync::Arc;
 
 use nih_plug::prelude::{Param, ParamFlags, ParamPtr, Params};
 
@@ -58,7 +58,7 @@ pub struct GenericSlider;
 pub struct GenericUi<'a, W: ParamWidget> {
     state: &'a mut State<W>,
 
-    params: Pin<&'a dyn Params>,
+    params: Arc<dyn Params>,
 
     width: Length,
     height: Length,
@@ -85,7 +85,7 @@ where
     W: ParamWidget,
 {
     /// Creates a new [`GenericUi`] for all provided parameters.
-    pub fn new(state: &'a mut State<W>, params: Pin<&'a dyn Params>) -> Self {
+    pub fn new(state: &'a mut State<W>, params: Arc<dyn Params>) -> Self {
         Self {
             state,
 

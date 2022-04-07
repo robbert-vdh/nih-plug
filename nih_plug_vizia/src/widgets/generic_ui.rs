@@ -1,6 +1,6 @@
 //! Generic UIs for NIH-plug using VIZIA.
 
-use std::{ops::Deref, pin::Pin};
+use std::sync::Arc;
 
 use nih_plug::prelude::{ParamFlags, ParamPtr, Params};
 use vizia::*;
@@ -25,14 +25,12 @@ impl GenericUi {
     /// })
     /// .width(Percentage(100.0));
     ///```
-    pub fn new<L, PsPtr, Ps>(cx: &mut Context, params: L) -> Handle<'_, GenericUi>
+    pub fn new<L, Ps>(cx: &mut Context, params: L) -> Handle<'_, GenericUi>
     where
-        L: Lens<Target = Pin<PsPtr>> + Copy,
-        PsPtr: 'static + Deref<Target = Ps>,
-        Ps: Params,
+        L: Lens<Target = Arc<Ps>> + Copy,
+        Ps: Params + 'static,
     {
         // Basic styling is done in the `theme.css` style sheet
-        // TODO: Scrolling
         Self::new_custom(cx, params, |cx, param_ptr| {
             HStack::new(cx, |cx| {
                 // Align this on the right
@@ -70,15 +68,14 @@ impl GenericUi {
 
     /// Creates a new [`GenericUi`] for all provided parameters using a custom closure that receives
     /// a function that should draw some widget for each parameter.
-    pub fn new_custom<L, PsPtr, Ps>(
+    pub fn new_custom<L, Ps>(
         cx: &mut Context,
         params: L,
         mut make_widget: impl FnMut(&mut Context, ParamPtr),
     ) -> Handle<Self>
     where
-        L: Lens<Target = Pin<PsPtr>> + Copy,
-        PsPtr: 'static + Deref<Target = Ps>,
-        Ps: Params,
+        L: Lens<Target = Arc<Ps>> + Copy,
+        Ps: Params + 'static,
     {
         // Basic styling is done in the `theme.css` style sheet
         Self.build2(cx, |cx| {

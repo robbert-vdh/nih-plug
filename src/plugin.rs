@@ -2,7 +2,6 @@
 
 use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
 use std::any::Any;
-use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::buffer::Buffer;
@@ -55,7 +54,7 @@ pub trait Plugin: Default + Send + Sync + 'static {
     /// The plugin's parameters. The host will update the parameter values before calling
     /// `process()`. These parameters are identified by strings that should never change when the
     /// plugin receives an update.
-    fn params(&self) -> Pin<&dyn Params>;
+    fn params(&self) -> Arc<dyn Params>;
 
     /// The plugin's editor, if it has one. The actual editor instance is created in
     /// [`Editor::spawn()`]. A plugin editor likely wants to interact with the plugin's parameters

@@ -1,12 +1,11 @@
 use atomic_float::AtomicF32;
 use nih_plug::prelude::*;
 use nih_plug_egui::{create_egui_editor, egui, widgets, EguiState};
-use std::pin::Pin;
 use std::sync::Arc;
 
 /// This is mostly identical to the gain example, minus some fluff, and with a GUI.
 struct Gain {
-    params: Pin<Arc<GainParams>>,
+    params: Arc<GainParams>,
     editor_state: Arc<EguiState>,
 
     /// Needed to normalize the peak meter's response based on the sample rate.
@@ -32,7 +31,7 @@ struct GainParams {
 impl Default for Gain {
     fn default() -> Self {
         Self {
-            params: Arc::pin(GainParams::default()),
+            params: Arc::new(GainParams::default()),
             editor_state: EguiState::from_size(300, 180),
 
             peak_meter_decay_weight: 1.0,
@@ -74,8 +73,8 @@ impl Plugin for Gain {
     const ACCEPTS_MIDI: bool = false;
     const SAMPLE_ACCURATE_AUTOMATION: bool = true;
 
-    fn params(&self) -> Pin<&dyn Params> {
-        self.params.as_ref()
+    fn params(&self) -> Arc<dyn Params> {
+        self.params.clone()
     }
 
     fn editor(&self) -> Option<Box<dyn Editor>> {

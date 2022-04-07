@@ -18,7 +18,6 @@ use nih_plug::prelude::*;
 use realfft::num_complex::Complex32;
 use realfft::{ComplexToReal, RealFftPlanner, RealToComplex};
 use std::f32;
-use std::pin::Pin;
 use std::sync::Arc;
 
 const MIN_WINDOW_ORDER: usize = 6;
@@ -41,7 +40,7 @@ const MAX_OVERLAP_ORDER: usize = 5;
 const MAX_OVERLAP_TIMES: usize = 1 << MAX_OVERLAP_ORDER; // 32
 
 struct PubertySimulator {
-    params: Pin<Box<PubertySimulatorParams>>,
+    params: Arc<PubertySimulatorParams>,
 
     /// An adapter that performs most of the overlap-add algorithm for us.
     stft: util::StftHelper,
@@ -82,7 +81,7 @@ struct PubertySimulatorParams {
 impl Default for PubertySimulator {
     fn default() -> Self {
         Self {
-            params: Box::pin(PubertySimulatorParams::default()),
+            params: Arc::new(PubertySimulatorParams::default()),
 
             stft: util::StftHelper::new(2, MAX_WINDOW_SIZE),
             window_function: Vec::with_capacity(MAX_WINDOW_SIZE),
@@ -150,8 +149,8 @@ impl Plugin for PubertySimulator {
     const DEFAULT_NUM_INPUTS: u32 = 2;
     const DEFAULT_NUM_OUTPUTS: u32 = 2;
 
-    fn params(&self) -> Pin<&dyn Params> {
-        self.params.as_ref()
+    fn params(&self) -> Arc<dyn Params> {
+        self.params.clone()
     }
 
     fn accepts_bus_config(&self, config: &BusConfig) -> bool {

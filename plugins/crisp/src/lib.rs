@@ -20,7 +20,6 @@ extern crate nih_plug;
 use nih_plug::prelude::*;
 use nih_plug_vizia::ViziaState;
 use pcg::Pcg32iState;
-use std::pin::Pin;
 use std::sync::Arc;
 
 mod editor;
@@ -44,7 +43,7 @@ const MAX_FILTER_FREQUENCY: f32 = 22_000.0;
 /// white (or filtered) noise. That other copy of the sound may have a low-pass filter applied to it
 /// since this effect just turns into literal noise at high frequencies.
 struct Crisp {
-    params: Pin<Arc<CrispParams>>,
+    params: Arc<CrispParams>,
     editor_state: Arc<ViziaState>,
 
     /// Needed for computing the filter coefficients.
@@ -126,7 +125,7 @@ enum StereoMode {
 impl Default for Crisp {
     fn default() -> Self {
         Self {
-            params: Arc::pin(CrispParams::default()),
+            params: Arc::new(CrispParams::default()),
             editor_state: editor::default_state(),
 
             sample_rate: 1.0,
@@ -308,8 +307,8 @@ impl Plugin for Crisp {
 
     const SAMPLE_ACCURATE_AUTOMATION: bool = true;
 
-    fn params(&self) -> Pin<&dyn Params> {
-        self.params.as_ref()
+    fn params(&self) -> Arc<dyn Params> {
+        self.params.clone()
     }
 
     fn editor(&self) -> Option<Box<dyn Editor>> {

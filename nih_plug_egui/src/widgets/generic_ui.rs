@@ -1,7 +1,7 @@
 //! A simple generic UI widget that renders all parameters in a [`Params`] object as a scrollable
 //! list of sliders and labels.
 
-use std::pin::Pin;
+use std::sync::Arc;
 
 use egui::{TextStyle, Ui, Vec2};
 use nih_plug::prelude::{Param, ParamFlags, ParamPtr, ParamSetter, Params};
@@ -35,7 +35,7 @@ pub struct GenericSlider;
 /// space.
 pub fn create(
     ui: &mut Ui,
-    params: Pin<&dyn Params>,
+    params: Arc<impl Params>,
     setter: &ParamSetter,
     widget: impl ParamWidget,
 ) {

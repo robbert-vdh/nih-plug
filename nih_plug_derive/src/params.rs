@@ -218,9 +218,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
 
     quote! {
         unsafe impl #impl_generics Params for #struct_name #ty_generics #where_clause {
-            fn param_map(
-                self: std::pin::Pin<&Self>,
-            ) -> Vec<(String, nih_plug::prelude::ParamPtr, String)> {
+            fn param_map(&self) -> Vec<(String, nih_plug::prelude::ParamPtr, String)> {
                 // This may not be in scope otherwise, used to call .as_ptr()
                 use ::nih_plug::param::Param;
 
@@ -231,8 +229,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                 for (nested_params, group_name) in
                     nested_params_fields.into_iter().zip(nested_params_groups)
                 {
-                    let nested_param_map =
-                        unsafe { std::pin::Pin::new_unchecked(*nested_params).param_map() };
+                    let nested_param_map = nested_params.param_map();
                     let prefixed_nested_param_map =
                         nested_param_map
                             .into_iter()
@@ -260,7 +257,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
 
                 let nested_params_fields: &[&dyn Params] = &[#(&self.#nested_params_field_idents),*];
                 for nested_params in nested_params_fields {
-                    unsafe { serialized.extend(Pin::new_unchecked(*nested_params).serialize_fields()) };
+                    serialized.extend(nested_params.serialize_fields());
                 }
 
                 serialized
@@ -280,7 +277,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                 //        once that gets stabilized.
                 let nested_params_fields: &[&dyn Params] = &[#(&self.#nested_params_field_idents),*];
                 for nested_params in nested_params_fields {
-                    unsafe { Pin::new_unchecked(*nested_params).deserialize_fields(serialized) };
+                    nested_params.deserialize_fields(serialized);
                 }
             }
         }

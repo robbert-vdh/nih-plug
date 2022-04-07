@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::pin::Pin;
+use std::sync::Arc;
 
 use crate::param::internals::{ParamPtr, Params};
 use crate::param::Param;
@@ -41,7 +41,7 @@ pub struct State {
 /// Serialize a plugin's state to a vector containing JSON data. This can (and should) be shared
 /// across plugin formats.
 pub(crate) unsafe fn serialize(
-    plugin_params: Pin<&dyn Params>,
+    plugin_params: Arc<dyn Params>,
     param_by_hash: &HashMap<u32, ParamPtr>,
     param_id_to_hash: &HashMap<String, u32>,
 ) -> serde_json::Result<Vec<u8>> {
@@ -89,7 +89,7 @@ pub(crate) unsafe fn serialize(
 /// parameter values. The smoothers have already been reset by this function.
 pub(crate) unsafe fn deserialize(
     state: &[u8],
-    plugin_params: Pin<&dyn Params>,
+    plugin_params: Arc<dyn Params>,
     param_by_hash: &HashMap<u32, ParamPtr>,
     param_id_to_hash: &HashMap<String, u32>,
     current_buffer_config: Option<&BufferConfig>,

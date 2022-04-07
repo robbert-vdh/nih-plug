@@ -1,7 +1,6 @@
 //! Implementation details for the parameter management.
 
 use std::collections::HashMap;
-use std::pin::Pin;
 
 use super::{Param, ParamFlags};
 
@@ -37,9 +36,9 @@ pub use serde_json::to_string as serialize_field;
 ///
 /// # Safety
 ///
-/// This implementation is safe when using from the wrapper because the plugin object needs to be
-/// pinned, and it can never outlive the wrapper.
-pub unsafe trait Params {
+/// This implementation is safe when using from the wrapper because the plugin's returned `Params`
+/// object lives in an `Arc`, and the wrapper also holds a reference to this `Arc`.
+pub unsafe trait Params: 'static + Send + Sync {
     /// Create a mapping from unique parameter IDs to parameters along with the name of the
     /// group/unit/module they are in. The order of the `Vec` determines the display order in the
     /// (host's) generic UI. The group name is either an empty string for top level parameters, or a
@@ -48,13 +47,13 @@ pub unsafe trait Params {
     /// for every parameter field marked with `#[id = "stable"]`, and it also inlines all fields
     /// from child `Params` structs marked with `#[nested = "Group Name"]`, prefixing that group
     /// name before the parameter's originanl group name. Dereferencing the pointers stored in the
-    /// values is only valid as long as this pinned object is valid.
+    /// values is only valid as long as this object is valid.
     ///
     /// # Note
     ///
     /// This uses `String` even though for the `Params` derive macro `&'static str` would have been
     /// fine to be able to support custom reusable Params implemnetations.
-    fn param_map(self: Pin<&Self>) -> Vec<(String, ParamPtr, String)>;
+    fn param_map(&self) -> Vec<(String, ParamPtr, String)>;
 
     /// Serialize all fields marked with `#[persist = "stable_name"]` into a hash map containing
     /// JSON-representations of those fields so they can be written to the plugin's state and
@@ -84,8 +83,9 @@ pub enum ParamPtr {
     EnumParam(*mut super::enums::EnumParamInner),
 }
 
-// These pointers only point to fields on pinned structs, and the caller always needs to make sure
-// that dereferencing them is safe
+// These pointers only point to fields on structs kept in an `Arc<dyn Params>`, and the caller
+// always needs to make sure that dereferencing them is safe. To do that the plugin wrappers will
+// keep references to that `Arc` around for the entire lifetime of the plugin.
 unsafe impl Send for ParamPtr {}
 unsafe impl Sync for ParamPtr {}
 

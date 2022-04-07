@@ -2,14 +2,13 @@ use nih_plug::prelude::*;
 use realfft::num_complex::Complex32;
 use realfft::{ComplexToReal, RealFftPlanner, RealToComplex};
 use std::f32;
-use std::pin::Pin;
 use std::sync::Arc;
 
 const WINDOW_SIZE: usize = 2048;
 const OVERLAP_TIMES: usize = 4;
 
 struct Stft {
-    params: Pin<Box<StftParams>>,
+    params: Arc<StftParams>,
 
     /// An adapter that performs most of the overlap-add algorithm for us.
     stft: util::StftHelper,
@@ -56,7 +55,7 @@ impl Default for Stft {
             .unwrap();
 
         Self {
-            params: Box::pin(StftParams::default()),
+            params: Arc::new(StftParams::default()),
 
             stft: util::StftHelper::new(2, WINDOW_SIZE),
             window_function: util::window::hann(WINDOW_SIZE),
@@ -91,8 +90,8 @@ impl Plugin for Stft {
     const ACCEPTS_MIDI: bool = false;
     const SAMPLE_ACCURATE_AUTOMATION: bool = true;
 
-    fn params(&self) -> Pin<&dyn Params> {
-        self.params.as_ref()
+    fn params(&self) -> Arc<dyn Params> {
+        self.params.clone()
     }
 
     fn accepts_bus_config(&self, config: &BusConfig) -> bool {

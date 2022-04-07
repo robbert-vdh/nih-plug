@@ -16,7 +16,7 @@ use super::view::WrapperView;
 use crate::buffer::Buffer;
 use crate::context::Transport;
 use crate::event_loop::{EventLoop, MainThreadExecutor, OsEventLoop};
-use crate::param::internals::ParamPtr;
+use crate::param::internals::{ParamPtr, Params};
 use crate::param::ParamFlags;
 use crate::plugin::{BufferConfig, BusConfig, Editor, NoteEvent, ProcessStatus, Vst3Plugin};
 use crate::wrapper::util::hash_param_id;
@@ -27,6 +27,10 @@ use crate::wrapper::util::hash_param_id;
 pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// The wrapped plugin instance.
     pub plugin: RwLock<P>,
+    /// The plugin's parameters. These are fetched once during initialization. That way the
+    /// `ParamPtr`s are guaranteed to live at least as long as this object and we can interact with
+    /// the `Params` object without having to acquire a lock on `plugin`.
+    pub params: Arc<dyn Params>,
     /// The plugin's editor, if it has one. This object does not do anything on its own, but we need
     /// to instantiate this in advance so we don't need to lock the entire [`Plugin`] object when
     /// creating an editor.
@@ -80,8 +84,8 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// The keys from `param_map` in a stable order.
     pub param_hashes: Vec<u32>,
     /// A mapping from parameter ID hashes (obtained from the string parameter IDs) to pointers to
-    /// parameters belonging to the plugin. As long as `plugin` does not get recreated, these
-    /// addresses will remain stable, as they are obtained from a pinned object.
+    /// parameters belonging to the plugin. These addresses will remain stable as long as the
+    /// `params` object does not get deallocated.
     pub param_by_hash: HashMap<u32, ParamPtr>,
     pub param_units: ParamUnits,
     /// Mappings from string parameter indentifiers to parameter hashes. Useful for debug logging
@@ -135,9 +139,8 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         // `wrapper.plugin` is alive. The plugin API identifiers these parameters by hashes, which
         // we'll calculate from the string ID specified by the plugin. These parameters should also
         // remain in the same order as the one returned by the plugin.
-        let param_id_hashes_ptrs_groups: Vec<_> = plugin
-            .read()
-            .params()
+        let params = plugin.read().params();
+        let param_id_hashes_ptrs_groups: Vec<_> = params
             .param_map()
             .into_iter()
             .map(|(id, ptr, group)| {
@@ -146,7 +149,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             })
             .collect();
         if cfg!(debug_assertions) {
-            let param_map = plugin.read().params().param_map();
+            let param_map = params.param_map();
             let param_ids: HashSet<_> = param_id_hashes_ptrs_groups
                 .iter()
                 .map(|(id, _, _, _)| id.clone())
@@ -199,6 +202,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
 
         let wrapper = Self {
             plugin,
+            params,
             editor,
 
             component_handler: AtomicRefCell::new(None),

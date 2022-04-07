@@ -12,14 +12,14 @@
 //! }
 //!
 //! pub(crate) fn create(
-//!     params: Pin<Arc<FooParams>>,
+//!     params: Arc<FooParams>,
 //!     editor_state: Arc<IcedState>,
 //! ) -> Option<Box<dyn Editor>> {
 //!     create_iced_editor::<Foo>(editor_state, params)
 //! }
 //!
 //! struct FooEditor {
-//!     params: Pin<Arc<FooParams>>,
+//!     params: Arc<FooParams>,
 //!     context: Arc<dyn GuiContext>,
 //!
 //!     foo_slider_state: nih_widgets::param_slider::State,
@@ -34,7 +34,7 @@
 //! impl IcedEditor for FooEditor {
 //!     type Executor = executor::Default;
 //!     type Message = Message;
-//!     type InitializationFlags = Pin<Arc<FooParams>>;
+//!     type InitializationFlags = Arc<FooParams>;
 //!
 //!     fn new(
 //!         params: Self::InitializationFlags,
@@ -141,7 +141,7 @@ pub fn create_iced_editor<E: IcedEditor>(
 
 /// A plugin editor using `iced`. This wraps around [`Application`] with the only change being that
 /// the usual `new()` function now additionally takes a `Arc<dyn GuiContext>` that the editor can
-/// store to interact with the parameters. The editor should have a `Pin<Arc<impl Params>>` as part
+/// store to interact with the parameters. The editor should have a `Arc<impl Params>` as part
 /// of their [`InitializationFlags`][Self::InitializationFlags] so it can read the current parameter
 /// values. See [`Application`] for more information.
 pub trait IcedEditor: 'static + Send + Sync + Sized {

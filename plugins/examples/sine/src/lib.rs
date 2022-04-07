@@ -1,11 +1,11 @@
 use nih_plug::prelude::*;
 use std::f32::consts;
-use std::pin::Pin;
+use std::sync::Arc;
 
 /// A test tone generator that can either generate a sine wave based on the plugin's parameters or
 /// based on the current MIDI input.
 struct Sine {
-    params: Pin<Box<SineParams>>,
+    params: Arc<SineParams>,
     sample_rate: f32,
 
     /// The current phase of the sine wave, always kept between in `[0, 1]`.
@@ -35,7 +35,7 @@ struct SineParams {
 impl Default for Sine {
     fn default() -> Self {
         Self {
-            params: Box::pin(SineParams::default()),
+            params: Arc::new(SineParams::default()),
             sample_rate: 1.0,
 
             phase: 0.0,
@@ -106,8 +106,8 @@ impl Plugin for Sine {
     const ACCEPTS_MIDI: bool = true;
     const SAMPLE_ACCURATE_AUTOMATION: bool = true;
 
-    fn params(&self) -> Pin<&dyn Params> {
-        self.params.as_ref()
+    fn params(&self) -> Arc<dyn Params> {
+        self.params.clone()
     }
 
     fn accepts_bus_config(&self, config: &BusConfig) -> bool {

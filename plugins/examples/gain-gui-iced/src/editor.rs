@@ -2,7 +2,6 @@ use atomic_float::AtomicF32;
 use nih_plug::prelude::{util, Editor, GuiContext};
 use nih_plug_iced::widgets as nih_widgets;
 use nih_plug_iced::*;
-use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -14,7 +13,7 @@ pub(crate) fn default_state() -> Arc<IcedState> {
 }
 
 pub(crate) fn create(
-    params: Pin<Arc<GainParams>>,
+    params: Arc<GainParams>,
     peak_meter: Arc<AtomicF32>,
     editor_state: Arc<IcedState>,
 ) -> Option<Box<dyn Editor>> {
@@ -22,7 +21,7 @@ pub(crate) fn create(
 }
 
 struct GainEditor {
-    params: Pin<Arc<GainParams>>,
+    params: Arc<GainParams>,
     context: Arc<dyn GuiContext>,
 
     peak_meter: Arc<AtomicF32>,
@@ -40,7 +39,7 @@ enum Message {
 impl IcedEditor for GainEditor {
     type Executor = executor::Default;
     type Message = Message;
-    type InitializationFlags = (Pin<Arc<GainParams>>, Arc<AtomicF32>);
+    type InitializationFlags = (Arc<GainParams>, Arc<AtomicF32>);
 
     fn new(
         (params, peak_meter): Self::InitializationFlags,

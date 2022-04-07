@@ -18,7 +18,6 @@ use nih_plug::prelude::Editor;
 use nih_plug_vizia::vizia::*;
 use nih_plug_vizia::widgets::*;
 use nih_plug_vizia::{assets, create_vizia_editor, ViziaState};
-use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::DiopserParams;
@@ -28,7 +27,7 @@ const POINT_SCALE: f32 = 0.75;
 
 #[derive(Lens)]
 struct Data {
-    params: Pin<Arc<DiopserParams>>,
+    params: Arc<DiopserParams>,
 }
 
 impl Model for Data {}
@@ -39,7 +38,7 @@ pub(crate) fn default_state() -> Arc<ViziaState> {
 }
 
 pub(crate) fn create(
-    params: Pin<Arc<DiopserParams>>,
+    params: Arc<DiopserParams>,
     editor_state: Arc<ViziaState>,
 ) -> Option<Box<dyn Editor>> {
     create_vizia_editor(editor_state, move |cx| {

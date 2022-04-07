@@ -24,7 +24,6 @@ extern crate nih_plug;
 
 use nih_plug::prelude::*;
 use nih_plug_vizia::ViziaState;
-use std::pin::Pin;
 use std::simd::f32x2;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -49,7 +48,7 @@ const MAX_AUTOMATION_STEP_SIZE: u32 = 512;
 // - Briefly muting the output when changing the number of filters to get rid of the clicks
 // - A proper GUI
 struct Diopser {
-    params: Pin<Arc<DiopserParams>>,
+    params: Arc<DiopserParams>,
     editor_state: Arc<ViziaState>,
 
     /// Needed for computing the filter coefficients.
@@ -125,7 +124,7 @@ impl Default for Diopser {
             SpectrumInput::new(Self::DEFAULT_NUM_OUTPUTS as usize);
 
         Self {
-            params: Arc::pin(DiopserParams::new(should_update_filters.clone())),
+            params: Arc::new(DiopserParams::new(should_update_filters.clone())),
             editor_state: editor::default_state(),
 
             sample_rate: 1.0,
@@ -240,8 +239,8 @@ impl Plugin for Diopser {
 
     const SAMPLE_ACCURATE_AUTOMATION: bool = true;
 
-    fn params(&self) -> Pin<&dyn Params> {
-        self.params.as_ref()
+    fn params(&self) -> Arc<dyn Params> {
+        self.params.clone()
     }
 
     fn editor(&self) -> Option<Box<dyn Editor>> {

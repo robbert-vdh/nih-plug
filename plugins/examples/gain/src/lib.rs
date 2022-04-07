@@ -1,9 +1,9 @@
 use nih_plug::prelude::*;
 use parking_lot::RwLock;
-use std::pin::Pin;
+use std::sync::Arc;
 
 struct Gain {
-    params: Pin<Box<GainParams>>,
+    params: Arc<GainParams>,
 }
 
 /// The [`Params`] derive macro gathers all of the information needed for the wrapepr to know about
@@ -48,7 +48,7 @@ struct SubSubParams {
 impl Default for Gain {
     fn default() -> Self {
         Self {
-            params: Box::pin(GainParams::default()),
+            params: Arc::new(GainParams::default()),
         }
     }
 }
@@ -111,8 +111,8 @@ impl Plugin for Gain {
     // splits.
     const SAMPLE_ACCURATE_AUTOMATION: bool = true;
 
-    fn params(&self) -> Pin<&dyn Params> {
-        self.params.as_ref()
+    fn params(&self) -> Arc<dyn Params> {
+        self.params.clone()
     }
 
     fn accepts_bus_config(&self, config: &BusConfig) -> bool {

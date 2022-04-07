@@ -222,7 +222,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
 
         let success = state::deserialize(
             &read_buffer,
-            self.inner.plugin.read().params(),
+            self.inner.params.clone(),
             &self.inner.param_by_hash,
             &self.inner.param_id_to_hash,
             self.inner.current_buffer_config.load().as_ref(),
@@ -256,7 +256,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
         let state = state.upgrade().unwrap();
 
         let serialized = state::serialize(
-            self.inner.plugin.read().params(),
+            self.inner.params.clone(),
             &self.inner.param_by_hash,
             &self.inner.param_id_to_hash,
         );

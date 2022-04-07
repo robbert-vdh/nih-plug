@@ -67,7 +67,7 @@ use super::util::ClapPtr;
 use crate::buffer::Buffer;
 use crate::context::Transport;
 use crate::event_loop::{EventLoop, MainThreadExecutor, TASK_QUEUE_CAPACITY};
-use crate::param::internals::ParamPtr;
+use crate::param::internals::{ParamPtr, Params};
 use crate::param::ParamFlags;
 use crate::plugin::{
     BufferConfig, BusConfig, ClapPlugin, Editor, NoteEvent, ParentWindowHandle, ProcessStatus,
@@ -90,6 +90,10 @@ pub struct Wrapper<P: ClapPlugin> {
 
     /// The wrapped plugin instance.
     plugin: RwLock<P>,
+    /// The plugin's parameters. These are fetched once during initialization. That way the
+    /// `ParamPtr`s are guaranteed to live at least as long as this object and we can interact with
+    /// the `Params` object without having to acquire a lock on `plugin`.
+    params: Arc<dyn Params>,
     /// The plugin's editor, if it has one. This object does not do anything on its own, but we need
     /// to instantiate this in advance so we don't need to lock the entire [`Plugin`] object when
     /// creating an editor.
@@ -162,8 +166,8 @@ pub struct Wrapper<P: ClapPlugin> {
     /// The keys from `param_map` in a stable order.
     param_hashes: Vec<u32>,
     /// A mapping from parameter ID hashes (obtained from the string parameter IDs) to pointers to
-    /// parameters belonging to the plugin. As long as `plugin` does not get recreated, these
-    /// addresses will remain stable, as they are obtained from a pinned object.
+    /// parameters belonging to the plugin. These addresses will remain stable as long as the
+    /// `params` object does not get deallocated.
     param_by_hash: HashMap<u32, ParamPtr>,
     /// The group name of a parameter, indexed by the parameter's hash. Nested groups are delimited
     /// by slashes, and they're only used to allow the DAW to display parameters in a tree
@@ -318,9 +322,8 @@ impl<P: ClapPlugin> Wrapper<P> {
         // `wrapper.plugin` is alive. The plugin API identifiers these parameters by hashes, which
         // we'll calculate from the string ID specified by the plugin. These parameters should also
         // remain in the same order as the one returned by the plugin.
-        let param_id_hashes_ptrs_groups: Vec<_> = plugin
-            .read()
-            .params()
+        let params = plugin.read().params();
+        let param_id_hashes_ptrs_groups: Vec<_> = params
             .param_map()
             .into_iter()
             .map(|(id, ptr, group)| {
@@ -329,7 +332,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             })
             .collect();
         if cfg!(debug_assertions) {
-            let param_map = plugin.read().params().param_map();
+            let param_map = params.param_map();
             let param_ids: HashSet<_> = param_id_hashes_ptrs_groups
                 .iter()
                 .map(|(id, _, _, _)| id.clone())
@@ -430,6 +433,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             this: AtomicRefCell::new(Weak::new()),
 
             plugin,
+            params,
             editor,
             editor_handle: RwLock::new(None),
             editor_scaling_factor: AtomicF32::new(1.0),
@@ -1916,7 +1920,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         let wrapper = &*(plugin as *const Self);
 
         let serialized = state::serialize(
-            wrapper.plugin.read().params(),
+            wrapper.params.clone(),
             &wrapper.param_by_hash,
             &wrapper.param_id_to_hash,
         );
@@ -1976,7 +1980,7 @@ impl<P: ClapPlugin> Wrapper<P> {
 
         let success = state::deserialize(
             &read_buffer,
-            wrapper.plugin.read().params(),
+            wrapper.params.clone(),
             &wrapper.param_by_hash,
             &wrapper.param_id_to_hash,
             wrapper.current_buffer_config.load().as_ref(),
