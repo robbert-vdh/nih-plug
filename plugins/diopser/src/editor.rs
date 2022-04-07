@@ -41,7 +41,7 @@ pub(crate) fn create(
     params: Arc<DiopserParams>,
     editor_state: Arc<ViziaState>,
 ) -> Option<Box<dyn Editor>> {
-    create_vizia_editor(editor_state, move |cx| {
+    create_vizia_editor(editor_state, move |cx, _| {
         Data {
             params: params.clone(),
         }

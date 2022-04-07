@@ -21,10 +21,14 @@ pub mod widgets;
 /// persisted when restoring a plugin instance, then you can store it in a `#[persist = "key"]`
 /// field on your parameters struct.
 ///
+/// The [`GuiContext`] is also passed to the app function. This is only meant for saving and
+/// restoring state as part of your plugin's preset handling. You should not interact with this
+/// directly to set parameters. Use the `ParamEvent`s instead.
+///
 /// See [VIZIA](https://github.com/vizia/vizia)'s repository for examples on how to use this.
 pub fn create_vizia_editor<F>(vizia_state: Arc<ViziaState>, app: F) -> Option<Box<dyn Editor>>
 where
-    F: Fn(&mut Context) + 'static + Send + Sync,
+    F: Fn(&mut Context, Arc<dyn GuiContext>) + 'static + Send + Sync,
 {
     Some(Box::new(ViziaEditor {
         vizia_state,
@@ -44,7 +48,7 @@ pub fn create_vizia_editor_without_theme<F>(
     app: F,
 ) -> Option<Box<dyn Editor>>
 where
-    F: Fn(&mut Context) + 'static + Send + Sync,
+    F: Fn(&mut Context, Arc<dyn GuiContext>) + 'static + Send + Sync,
 {
     Some(Box::new(ViziaEditor {
         vizia_state,
@@ -127,7 +131,7 @@ impl ViziaState {
 struct ViziaEditor {
     vizia_state: Arc<ViziaState>,
     /// The user's app function.
-    app: Arc<dyn Fn(&mut Context) + 'static + Send + Sync>,
+    app: Arc<dyn Fn(&mut Context, Arc<dyn GuiContext>) + 'static + Send + Sync>,
     /// Whether to apply `nih_plug_vizia`'s default theme. If this is disabled, then only the event
     /// handler for `ParamEvent`s is set up.
     apply_theming: bool,
@@ -186,7 +190,7 @@ impl Editor for ViziaEditor {
             }
             .build(cx);
 
-            app(cx)
+            app(cx, context.clone())
         })
         .with_scale_policy(
             system_scaling_factor
