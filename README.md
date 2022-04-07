@@ -87,6 +87,9 @@ for download links.
   widgets for them that integrate with NIH-plug's parameter system. Currently
   there's support for [egui](nih_plug_egui), [iced](nih_plug_iced) and
   [VIZIA](nih_plug_vizia).
+  - A simple and safe API for state saving and restoring from the editor is
+    provided by the framework if you want to do your own internal preset
+    management.
 - Basic note/MIDI support. MIDI CC handling and note output is currently not
   implemented. Let me know if you need this.
 - A plugin bundler accessible through the
