@@ -2,7 +2,7 @@ use atomic_refcell::AtomicRefMut;
 use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use vst3_sys::vst::IComponentHandler;
+use vst3_sys::vst::{IComponentHandler, RestartFlags};
 
 use super::inner::{Task, WrapperInner};
 use crate::context::{GuiContext, ProcessContext, Transport};
@@ -112,9 +112,7 @@ impl<P: Vst3Plugin> ProcessContext for WrapperProcessContext<'_, P> {
         let old_latency = self.inner.current_latency.swap(samples, Ordering::SeqCst);
         if old_latency != samples {
             let task_posted = unsafe { self.inner.event_loop.borrow().assume_init_ref() }
-                .do_maybe_async(Task::TriggerRestart(
-                    vst3_sys::vst::RestartFlags::kLatencyChanged as i32,
-                ));
+                .do_maybe_async(Task::TriggerRestart(RestartFlags::kLatencyChanged as i32));
             nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
         }
     }

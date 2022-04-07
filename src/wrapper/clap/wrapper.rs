@@ -228,6 +228,8 @@ pub struct Wrapper<P: ClapPlugin> {
 pub enum Task {
     /// Inform the host that the latency has changed.
     LatencyChanged,
+    /// Tell the host that it should rescan the current parameter values.
+    RescanParamValues,
 }
 
 /// The types of CLAP parameter updates for events.
@@ -313,6 +315,12 @@ impl<P: ClapPlugin> MainThreadExecutor<Task> for Wrapper<P> {
                     }
                 }
                 None => nih_debug_assert_failure!("Host does not support the latency extension"),
+            },
+            Task::RescanParamValues => match &*self.host_params.borrow() {
+                Some(host_params) => {
+                    (host_params.rescan)(&*self.host_callback, CLAP_PARAM_RESCAN_VALUES);
+                }
+                None => nih_debug_assert_failure!("The host does not support parameters? What?"),
             },
         };
     }
@@ -993,12 +1001,8 @@ impl<P: ClapPlugin> Wrapper<P> {
         }
 
         // After the state has been updated, notify the host about the new parameter values
-        match &*self.host_params.borrow() {
-            Some(host_params) => {
-                (host_params.rescan)(&*self.host_callback, CLAP_PARAM_RESCAN_VALUES)
-            }
-            None => nih_debug_assert_failure!("The host does not support parameters? What?"),
-        }
+        let task_posted = self.do_maybe_async(Task::RescanParamValues);
+        nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
     }
 
     unsafe extern "C" fn init(plugin: *const clap_plugin) -> bool {

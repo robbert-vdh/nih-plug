@@ -397,14 +397,10 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         }
 
         // After the state has been updated, notify the host about the new parameter values
-        match &*self.component_handler.borrow() {
-            Some(component_handler) => {
-                unsafe {
-                    component_handler.restart_component(RestartFlags::kParamValuesChanged as i32)
-                };
-            }
-            None => nih_debug_assert_failure!("The host does not support parameters? What?"),
-        }
+        let task_posted = unsafe { self.event_loop.borrow().assume_init_ref() }.do_maybe_async(
+            Task::TriggerRestart(RestartFlags::kParamValuesChanged as i32),
+        );
+        nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
     }
 }
 
