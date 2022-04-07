@@ -72,7 +72,8 @@ use crate::event_loop::{EventLoop, MainThreadExecutor, TASK_QUEUE_CAPACITY};
 use crate::param::internals::{ParamPtr, Params};
 use crate::param::ParamFlags;
 use crate::plugin::{
-    BufferConfig, BusConfig, ClapPlugin, Editor, NoteEvent, ParentWindowHandle, ProcessStatus,
+    BufferConfig, BusConfig, ClapPlugin, Editor, MidiConfig, NoteEvent, ParentWindowHandle,
+    ProcessStatus,
 };
 use crate::util::permit_alloc;
 use crate::wrapper::state::{self, PluginState};
@@ -116,7 +117,8 @@ pub struct Wrapper<P: ClapPlugin> {
     /// The current buffer configuration, containing the sample rate and the maximum block size.
     /// Will be set in `clap_plugin::activate()`.
     current_buffer_config: AtomicCell<Option<BufferConfig>>,
-    /// The incoming events for the plugin, if `P::ACCEPTS_MIDI` is set.
+    /// The incoming events for the plugin, if `P::MIDI_INPUT` is set to `MidiConfig::Basic` or
+    /// higher.
     ///
     /// TODO: Maybe load these lazily at some point instead of needing to spool them all to this
     ///       queue first
@@ -867,7 +869,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             //     true
             // }
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_ON) => {
-                if P::ACCEPTS_MIDI {
+                if P::MIDI_INPUT >= MidiConfig::Basic {
                     let event = &*(event as *const clap_event_note);
                     input_events.push_back(NoteEvent::NoteOn {
                         // When splitting up the buffer for sample accurate automation all events
@@ -882,7 +884,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 false
             }
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_OFF) => {
-                if P::ACCEPTS_MIDI {
+                if P::MIDI_INPUT >= MidiConfig::Basic {
                     let event = &*(event as *const clap_event_note);
                     input_events.push_back(NoteEvent::NoteOff {
                         timing: raw_event.time - current_sample_idx as u32,
@@ -895,7 +897,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 false
             }
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_EXPRESSION) => {
-                if P::ACCEPTS_MIDI {
+                if P::MIDI_INPUT >= MidiConfig::Basic {
                     // We currently don't report supporting this at all in the event filter, add that once
                     // we support MIDI CCs
                     // TODO: Implement pressure and other expressions along with MIDI CCs
@@ -904,7 +906,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 false
             }
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_MIDI) => {
-                if P::ACCEPTS_MIDI {
+                if P::MIDI_INPUT >= MidiConfig::Basic {
                     // We currently don't report supporting this at all in the event filter, add that once
                     // we support MIDI CCs
                     // TODO: Implement raw MIDI handling once we add CCs
@@ -1392,7 +1394,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             &wrapper.clap_plugin_gui as *const _ as *const c_void
         } else if id == CStr::from_ptr(CLAP_EXT_LATENCY) {
             &wrapper.clap_plugin_latency as *const _ as *const c_void
-        } else if id == CStr::from_ptr(CLAP_EXT_NOTE_PORTS) && P::ACCEPTS_MIDI {
+        } else if id == CStr::from_ptr(CLAP_EXT_NOTE_PORTS) && P::MIDI_INPUT >= MidiConfig::Basic {
             &wrapper.clap_plugin_note_ports as *const _ as *const c_void
         } else if id == CStr::from_ptr(CLAP_EXT_PARAMS) {
             &wrapper.clap_plugin_params as *const _ as *const c_void
@@ -1618,7 +1620,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             // TODO: Implement midi CC handling
             // | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_EXPRESSION)
             // | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_MIDI)
-                if P::ACCEPTS_MIDI =>
+                if P::MIDI_INPUT >= MidiConfig::Basic =>
             {
                 true
             }
@@ -1870,7 +1872,7 @@ impl<P: ClapPlugin> Wrapper<P> {
     unsafe extern "C" fn ext_note_ports_count(_plugin: *const clap_plugin, is_input: bool) -> u32 {
         // TODO: Outputting notes
         match is_input {
-            true if P::ACCEPTS_MIDI => 1,
+            true if P::MIDI_INPUT >= MidiConfig::Basic => 1,
             _ => 0,
         }
     }
@@ -1882,7 +1884,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         info: *mut clap_note_port_info,
     ) -> bool {
         match (index, is_input) {
-            (0, true) if P::ACCEPTS_MIDI => {
+            (0, true) if P::MIDI_INPUT >= MidiConfig::Basic => {
                 *info = std::mem::zeroed();
 
                 let info = &mut *info;

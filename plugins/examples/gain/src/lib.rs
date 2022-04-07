@@ -103,7 +103,7 @@ impl Plugin for Gain {
     const DEFAULT_NUM_INPUTS: u32 = 2;
     const DEFAULT_NUM_OUTPUTS: u32 = 2;
 
-    const ACCEPTS_MIDI: bool = false;
+    const MIDI_INPUT: MidiConfig = MidiConfig::None;
     // Setting this to `true` will tell the wrapper to split the buffer up into smaller blocks
     // whenever there are inter-buffer parameter changes. This way no changes to the plugin are
     // required to support sample accurate automation and the wrapper handles all of the boring

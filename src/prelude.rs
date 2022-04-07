@@ -19,7 +19,7 @@ pub use crate::param::range::{FloatRange, IntRange};
 pub use crate::param::smoothing::{Smoother, SmoothingStyle};
 pub use crate::param::{BoolParam, FloatParam, IntParam, Param, ParamFlags};
 pub use crate::plugin::{
-    BufferConfig, BusConfig, ClapPlugin, Editor, NoteEvent, ParentWindowHandle, Plugin,
+    BufferConfig, BusConfig, ClapPlugin, Editor, MidiConfig, NoteEvent, ParentWindowHandle, Plugin,
     ProcessStatus, Vst3Plugin,
 };
 pub use crate::wrapper::state::PluginState;

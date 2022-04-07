@@ -19,7 +19,7 @@ use super::util::VstPtr;
 use super::view::WrapperView;
 use crate::context::Transport;
 use crate::param::ParamFlags;
-use crate::plugin::{BufferConfig, BusConfig, NoteEvent, ProcessStatus, Vst3Plugin};
+use crate::plugin::{BufferConfig, BusConfig, MidiConfig, NoteEvent, ProcessStatus, Vst3Plugin};
 use crate::util::permit_alloc;
 use crate::wrapper::state;
 use crate::wrapper::util::{process_wrapper, u16strlcpy};
@@ -71,7 +71,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
             x if x == vst3_sys::vst::MediaTypes::kAudio as i32 => 1,
             x if x == vst3_sys::vst::MediaTypes::kEvent as i32
                 && dir == vst3_sys::vst::BusDirections::kInput as i32
-                && P::ACCEPTS_MIDI =>
+                && P::MIDI_INPUT >= MidiConfig::Basic =>
             {
                 1
             }
@@ -119,7 +119,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
             (t, d, 0)
                 if t == vst3_sys::vst::MediaTypes::kEvent as i32
                     && d == vst3_sys::vst::BusDirections::kInput as i32
-                    && P::ACCEPTS_MIDI =>
+                    && P::MIDI_INPUT >= MidiConfig::Basic =>
             {
                 *info = mem::zeroed();
 
@@ -172,7 +172,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
             (t, d, 0)
                 if t == vst3_sys::vst::MediaTypes::kEvent as i32
                     && d == vst3_sys::vst::BusDirections::kInput as i32
-                    && P::ACCEPTS_MIDI =>
+                    && P::MIDI_INPUT >= MidiConfig::Basic =>
             {
                 kResultOk
             }
@@ -743,7 +743,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                     parameter_values_changed = false;
                 }
 
-                if P::ACCEPTS_MIDI {
+                if P::MIDI_INPUT >= MidiConfig::Basic {
                     let mut input_events = self.inner.input_events.borrow_mut();
                     if let Some(events) = data.input_events.upgrade() {
                         let num_events = events.get_event_count();

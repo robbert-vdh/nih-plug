@@ -41,9 +41,9 @@ pub trait Plugin: Default + Send + Sync + 'static {
     /// instead of setting up the busses properly.
     const DEFAULT_NUM_OUTPUTS: u32 = 2;
 
-    /// Whether the plugin accepts note events. If this is set to `false`, then the plugin won't
-    /// receive any note events.
-    const ACCEPTS_MIDI: bool = false;
+    /// Whether the plugin accepts note events, and which level of . If this is set to
+    /// [`MidiConfig::None`], then the plugin won't receive any note events.
+    const MIDI_INPUT: MidiConfig = MidiConfig::None;
     /// If enabled, the audio processing cycle may be split up into multiple smaller chunks if
     /// parameter values change occur in the middle of the buffer. Depending on the host these
     /// blocks may be as small as a single sample. Bitwig Studio sends at most one parameter change
@@ -303,15 +303,30 @@ pub enum ProcessStatus {
     KeepAlive,
 }
 
-/// Event for (incoming) notes. Right now this only supports a very small subset of the MIDI
-/// specification. See the util module for convenient conversion functions.
+/// Determines which note events a plugin receives.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum MidiConfig {
+    /// The plugin will not have a note input port and will thus not receive any not events.
+    None,
+    /// The plugin receives note on/off events, pressure, and potentially a couple standardized
+    /// expression types depending on the plugin standard and host.
+    Basic,
+    // // TODO:
+    // /// The plugin receives full MIDI CCs as well as pitch bend information. For VST3 plugins this
+    // /// involves adding
+    // MidiCCs,
+}
+
+/// Event for (incoming) notes. The set of supported note events depends on the value of
+/// [`Plugin::MIDI_INPUT`]. Also check out the [`util`][crate::util] module for convenient
+/// conversion functions.
 ///
 /// All of the timings are sample offsets withing the current buffer.
 ///
 /// TODO: Add more events as needed
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum NoteEvent {
-    /// A note on event.
+    /// A note on event, available on [`MidiConfig::Basic`] and up.
     NoteOn {
         timing: u32,
         /// The note's channel, from 0 to 16.
@@ -322,7 +337,7 @@ pub enum NoteEvent {
         /// 127 levels available in MIDI.
         velocity: f32,
     },
-    /// A note off event.
+    /// A note off event, available on [`MidiConfig::Basic`] and up.
     NoteOff {
         timing: u32,
         /// The note's channel, from 0 to 16.

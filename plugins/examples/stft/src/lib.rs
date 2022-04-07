@@ -87,7 +87,7 @@ impl Plugin for Stft {
     const DEFAULT_NUM_INPUTS: u32 = 2;
     const DEFAULT_NUM_OUTPUTS: u32 = 2;
 
-    const ACCEPTS_MIDI: bool = false;
+    const MIDI_INPUT: MidiConfig = MidiConfig::None;
     const SAMPLE_ACCURATE_AUTOMATION: bool = true;
 
     fn params(&self) -> Arc<dyn Params> {
