@@ -32,7 +32,7 @@ use clap_sys::ext::note_ports::{
 use clap_sys::ext::params::{
     clap_host_params, clap_param_info, clap_plugin_params, CLAP_EXT_PARAMS,
     CLAP_PARAM_IS_AUTOMATABLE, CLAP_PARAM_IS_BYPASS, CLAP_PARAM_IS_HIDDEN, CLAP_PARAM_IS_READONLY,
-    CLAP_PARAM_IS_STEPPED,
+    CLAP_PARAM_IS_STEPPED, CLAP_PARAM_RESCAN_VALUES,
 };
 use clap_sys::ext::state::{clap_plugin_state, CLAP_EXT_STATE};
 use clap_sys::ext::tail::{clap_plugin_tail, CLAP_EXT_TAIL};
@@ -47,6 +47,7 @@ use clap_sys::process::{
 };
 use clap_sys::stream::{clap_istream, clap_ostream};
 use crossbeam::atomic::AtomicCell;
+use crossbeam::channel::{self, SendTimeoutError};
 use crossbeam::queue::ArrayQueue;
 use parking_lot::RwLock;
 use raw_window_handle::RawWindowHandle;
@@ -60,6 +61,7 @@ use std::ptr;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 use std::thread::{self, ThreadId};
+use std::time::Duration;
 
 use super::context::{WrapperGuiContext, WrapperProcessContext};
 use super::descriptor::PluginDescriptor;
@@ -73,7 +75,7 @@ use crate::plugin::{
     BufferConfig, BusConfig, ClapPlugin, Editor, NoteEvent, ParentWindowHandle, ProcessStatus,
 };
 use crate::util::permit_alloc;
-use crate::wrapper::state;
+use crate::wrapper::state::{self, State};
 use crate::wrapper::util::{hash_param_id, process_wrapper, strlcpy};
 
 /// How many output parameter changes we can store in our output parameter change queue. Storing
@@ -129,6 +131,17 @@ pub struct Wrapper<P: ClapPlugin> {
     /// between process calls. This buffer owns the vector, because otherwise it would need to store
     /// a mutable reference to the data contained in this mutex.
     pub output_buffer: AtomicRefCell<Buffer<'static>>,
+    /// The plugin is able to restore state through a method on the `GuiContext`. To avoid changing
+    /// parameters mid-processing and running into garbled data if the host also tries to load state
+    /// at the same time the restoring happens at the end of each processing call. If this zero
+    /// capacity channel contains state data at that point, then the audio thread will take the
+    /// state out of the channel, restore the state, and then send it back through the same channel.
+    /// In other words, the GUI thread acts as a sender and then as a receiver, while the audio
+    /// thread acts as a receiver and then as a sender. That way deallocation can happen on the GUI
+    /// thread. All of this happens without any blocking on the audio thread.
+    updated_state_sender: channel::Sender<State>,
+    /// The receiver belonging to [`new_state_sender`][Self::new_state_sender].
+    updated_state_receiver: channel::Receiver<State>,
 
     /// Needs to be boxed because the plugin object is supposed to contain a static reference to
     /// this.
@@ -310,6 +323,10 @@ impl<P: ClapPlugin> Wrapper<P> {
         let plugin = RwLock::new(P::default());
         let editor = plugin.read().editor().map(Arc::from);
 
+        // This is used to allow the plugin to restore preset data from its editor, see the comment
+        // on `Self::updated_state_sender`
+        let (updated_state_sender, updated_state_receiver) = channel::bounded(0);
+
         let plugin_descriptor = Box::new(PluginDescriptor::default());
 
         // We're not allowed to query any extensions until the init function has been called, so we
@@ -448,6 +465,8 @@ impl<P: ClapPlugin> Wrapper<P> {
             last_process_status: AtomicCell::new(ProcessStatus::Normal),
             current_latency: AtomicU32::new(0),
             output_buffer: AtomicRefCell::new(Buffer::default()),
+            updated_state_sender,
+            updated_state_receiver,
 
             plugin_descriptor,
 
@@ -898,6 +917,90 @@ impl<P: ClapPlugin> Wrapper<P> {
         }
     }
 
+    /// Get the plugin's state object, may be called by the plugin's GUI as part of its own preset
+    /// management. The wrapper doesn't use these functions and serializes and deserializes directly
+    /// the JSON in the relevant plugin API methods instead.
+    pub fn get_state_object(&self) -> State {
+        unsafe {
+            state::serialize_object(
+                self.params.clone(),
+                &self.param_by_hash,
+                &self.param_id_to_hash,
+            )
+        }
+    }
+
+    /// Update the plugin's internal state, called by the plugin itself from the GUI thread. To
+    /// prevent corrupting data and changing parameters during processing the actual state is only
+    /// updated at the end of the audio processing cycle.
+    pub fn set_state_object(&self, mut state: State) {
+        // Use a loop and timeouts to handle the super rare edge case when this function gets called
+        // between a process call and the host disabling the plugin
+        loop {
+            if self.is_processing.load(Ordering::SeqCst) {
+                // If the plugin is currently processing audio, then we'll perform the restore
+                // operation at the end of the audio call. This involves sending the state to the
+                // audio thread, having the audio thread handle the state restore at the very end of
+                // the process function, and then sending the state back to this thread so it can be
+                // deallocated without blocking the audio thread.
+                match self
+                    .updated_state_sender
+                    .send_timeout(state, Duration::from_secs(1))
+                {
+                    Ok(_) => {
+                        // As mentioned above, the state object will be passed back to this thread
+                        // so we can deallocate it without blocking.
+                        let state = self.updated_state_receiver.recv();
+                        drop(state);
+                        break;
+                    }
+                    Err(SendTimeoutError::Timeout(value)) => {
+                        state = value;
+                        continue;
+                    }
+                    Err(SendTimeoutError::Disconnected(_)) => {
+                        nih_debug_assert_failure!("State update channel got disconnected");
+                        return;
+                    }
+                }
+            } else {
+                // Otherwise we'll set the state right here and now, since this function should be
+                // called from a GUI thread
+                unsafe {
+                    state::deserialize_object(
+                        &state,
+                        self.params.clone(),
+                        &self.param_by_hash,
+                        &self.param_id_to_hash,
+                        self.current_buffer_config.load().as_ref(),
+                    );
+                }
+
+                self.notify_param_values_changed();
+                let bus_config = self.current_bus_config.load();
+                if let Some(buffer_config) = self.current_buffer_config.load() {
+                    let mut plugin = self.plugin.write();
+                    plugin.initialize(
+                        &bus_config,
+                        &buffer_config,
+                        &mut self.make_process_context(Transport::new(buffer_config.sample_rate)),
+                    );
+                    process_wrapper(|| plugin.reset());
+                }
+
+                break;
+            }
+        }
+
+        // After the state has been updated, notify the host about the new parameter values
+        match &*self.host_params.borrow() {
+            Some(host_params) => {
+                (host_params.rescan)(&*self.host_callback, CLAP_PARAM_RESCAN_VALUES)
+            }
+            None => nih_debug_assert_failure!("The host does not support parameters? What?"),
+        }
+    }
+
     unsafe extern "C" fn init(plugin: *const clap_plugin) -> bool {
         check_null_ptr!(false, plugin);
         let wrapper = &*(plugin as *const Self);
@@ -1025,7 +1128,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             let mut block_start = 0;
             let mut block_end = process.frames_count as usize;
             let mut event_start_idx = 0;
-            loop {
+            let result = loop {
                 if !process.in_events.is_null() {
                     if P::SAMPLE_ACCURATE_AUTOMATION {
                         let split_result = wrapper.handle_in_events_until_next_param_change(
@@ -1226,7 +1329,42 @@ impl<P: ClapPlugin> Wrapper<P> {
                 } else {
                     block_start = block_end;
                 }
+            };
+
+            // After processing audio, we'll check if the editor has sent us updated plugin state.
+            // We'll restore that here on the audio thread to prevent changing the values during the
+            // process call and also to prevent inconsistent state when the host also wants to load
+            // plugin state.
+            // FIXME: Zero capacity channels allocate on receiving, find a better alternative that
+            //        doesn't do that
+            let updated_state = permit_alloc(|| wrapper.updated_state_receiver.try_recv());
+            if let Ok(state) = updated_state {
+                state::deserialize_object(
+                    &state,
+                    wrapper.params.clone(),
+                    &wrapper.param_by_hash,
+                    &wrapper.param_id_to_hash,
+                    wrapper.current_buffer_config.load().as_ref(),
+                );
+
+                wrapper.notify_param_values_changed();
+
+                // TODO: Normally we'd also call initialize after deserializing state, but that's
+                //       not guaranteed to be realtime safe. Should we do it anyways?
+                let mut plugin = wrapper.plugin.write();
+                plugin.reset();
+
+                // We'll pass the state object back to the GUI thread so deallocation can happen
+                // there without potentially blocking the audio thread
+                if let Err(err) = wrapper.updated_state_sender.send(state) {
+                    nih_debug_assert_failure!(
+                        "Failed to send state object back to GUI thread: {}",
+                        err
+                    );
+                };
             }
+
+            result
         })
     }
 
@@ -1919,7 +2057,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         check_null_ptr!(false, plugin, stream);
         let wrapper = &*(plugin as *const Self);
 
-        let serialized = state::serialize(
+        let serialized = state::serialize_json(
             wrapper.params.clone(),
             &wrapper.param_by_hash,
             &wrapper.param_id_to_hash,
@@ -1978,7 +2116,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         nih_debug_assert_eq!(num_bytes_read as u64, length);
         read_buffer.set_len(length as usize);
 
-        let success = state::deserialize(
+        let success = state::deserialize_json(
             &read_buffer,
             wrapper.params.clone(),
             &wrapper.param_by_hash,

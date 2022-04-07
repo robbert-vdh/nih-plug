@@ -20,6 +20,7 @@ use super::view::WrapperView;
 use crate::context::Transport;
 use crate::param::ParamFlags;
 use crate::plugin::{BufferConfig, BusConfig, NoteEvent, ProcessStatus, Vst3Plugin};
+use crate::util::permit_alloc;
 use crate::wrapper::state;
 use crate::wrapper::util::{process_wrapper, u16strlcpy};
 use crate::wrapper::vst3::inner::ParameterChange;
@@ -220,7 +221,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
             return kResultFalse;
         }
 
-        let success = state::deserialize(
+        let success = state::deserialize_json(
             &read_buffer,
             self.inner.params.clone(),
             &self.inner.param_by_hash,
@@ -255,7 +256,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
 
         let state = state.upgrade().unwrap();
 
-        let serialized = state::serialize(
+        let serialized = state::serialize_json(
             self.inner.params.clone(),
             &self.inner.param_by_hash,
             &self.inner.param_id_to_hash,
@@ -710,7 +711,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
             let mut block_start = 0;
             let mut block_end = data.num_samples as usize;
             let mut event_start_idx = 0;
-            loop {
+            let result = loop {
                 // In sample-accurate automation mode we'll handle any parameter changes for the
                 // current sample, and then process the block between the current sample and the
                 // sample containing the next parameter change, if any. All timings also need to be
@@ -910,7 +911,42 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                 } else {
                     block_start = block_end;
                 }
+            };
+
+            // After processing audio, we'll check if the editor has sent us updated plugin state.
+            // We'll restore that here on the audio thread to prevent changing the values during the
+            // process call and also to prevent inconsistent state when the host also wants to load
+            // plugin state.
+            // FIXME: Zero capacity channels allocate on receiving, find a better alternative that
+            //        doesn't do that
+            let updated_state = permit_alloc(|| self.inner.updated_state_receiver.try_recv());
+            if let Ok(state) = updated_state {
+                state::deserialize_object(
+                    &state,
+                    self.inner.params.clone(),
+                    &self.inner.param_by_hash,
+                    &self.inner.param_id_to_hash,
+                    self.inner.current_buffer_config.load().as_ref(),
+                );
+
+                self.inner.notify_param_values_changed();
+
+                // TODO: Normally we'd also call initialize after deserializing state, but that's
+                //       not guaranteed to be realtime safe. Should we do it anyways?
+                let mut plugin = self.inner.plugin.write();
+                plugin.reset();
+
+                // We'll pass the state object back to the GUI thread so deallocation can happen
+                // there without potentially blocking the audio thread
+                if let Err(err) = self.inner.updated_state_sender.send(state) {
+                    nih_debug_assert_failure!(
+                        "Failed to send state object back to GUI thread: {}",
+                        err
+                    );
+                };
             }
+
+            result
         })
     }
 

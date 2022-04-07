@@ -20,7 +20,6 @@ use crate::param::internals::Params;
 /// - Sidechain inputs
 /// - Multiple output busses
 /// - Special handling for offline processing
-/// - Outputting parameter changes from the plugin
 /// - MIDI CC handling
 /// - Outputting MIDI events from the process function (you can output parmaeter changes from an
 ///   editor GUI)

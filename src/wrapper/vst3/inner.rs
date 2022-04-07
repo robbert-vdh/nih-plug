@@ -1,13 +1,15 @@
 use atomic_refcell::AtomicRefCell;
 use crossbeam::atomic::AtomicCell;
+use crossbeam::channel::{self, SendTimeoutError};
 use parking_lot::RwLock;
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::mem::MaybeUninit;
-use std::sync::atomic::{AtomicBool, AtomicU32};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use vst3_sys::base::{kInvalidArgument, kResultOk, tresult};
-use vst3_sys::vst::IComponentHandler;
+use vst3_sys::vst::{IComponentHandler, RestartFlags};
 
 use super::context::{WrapperGuiContext, WrapperProcessContext};
 use super::param_units::ParamUnits;
@@ -19,7 +21,8 @@ use crate::event_loop::{EventLoop, MainThreadExecutor, OsEventLoop};
 use crate::param::internals::{ParamPtr, Params};
 use crate::param::ParamFlags;
 use crate::plugin::{BufferConfig, BusConfig, Editor, NoteEvent, ProcessStatus, Vst3Plugin};
-use crate::wrapper::util::hash_param_id;
+use crate::wrapper::state::{self, State};
+use crate::wrapper::util::{hash_param_id, process_wrapper};
 
 /// The actual wrapper bits. We need this as an `Arc<T>` so we can safely use our event loop API.
 /// Since we can't combine that with VST3's interior reference counting this just has to be moved to
@@ -80,6 +83,17 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// priority queue and the buffer will be processed in small chunks whenever there's a parameter
     /// change at a new sample index.
     pub input_param_changes: AtomicRefCell<BinaryHeap<Reverse<(usize, ParameterChange)>>>,
+    /// The plugin is able to restore state through a method on the `GuiContext`. To avoid changing
+    /// parameters mid-processing and running into garbled data if the host also tries to load state
+    /// at the same time the restoring happens at the end of each processing call. If this zero
+    /// capacity channel contains state data at that point, then the audio thread will take the
+    /// state out of the channel, restore the state, and then send it back through the same channel.
+    /// In other words, the GUI thread acts as a sender and then as a receiver, while the audio
+    /// thread acts as a receiver and then as a sender. That way deallocation can happen on the GUI
+    /// thread. All of this happens without any blocking on the audio thread.
+    pub updated_state_sender: channel::Sender<State>,
+    /// The receiver belonging to [`new_state_sender`][Self::new_state_sender].
+    pub updated_state_receiver: channel::Receiver<State>,
 
     /// The keys from `param_map` in a stable order.
     pub param_hashes: Vec<u32>,
@@ -133,6 +147,10 @@ impl<P: Vst3Plugin> WrapperInner<P> {
     pub fn new() -> Arc<Self> {
         let plugin = RwLock::new(P::default());
         let editor = plugin.read().editor().map(Arc::from);
+
+        // This is used to allow the plugin to restore preset data from its editor, see the comment
+        // on `Self::updated_state_sender`
+        let (updated_state_sender, updated_state_receiver) = channel::bounded(0);
 
         // This is a mapping from the parameter IDs specified by the plugin to pointers to thsoe
         // parameters. These pointers are assumed to be safe to dereference as long as
@@ -232,6 +250,8 @@ impl<P: Vst3Plugin> WrapperInner<P> {
                     0
                 },
             )),
+            updated_state_sender,
+            updated_state_receiver,
 
             param_hashes,
             param_by_hash,
@@ -298,6 +318,92 @@ impl<P: Vst3Plugin> WrapperInner<P> {
                 kResultOk
             }
             _ => kInvalidArgument,
+        }
+    }
+
+    /// Get the plugin's state object, may be called by the plugin's GUI as part of its own preset
+    /// management. The wrapper doesn't use these functions and serializes and deserializes directly
+    /// the JSON in the relevant plugin API methods instead.
+    pub fn get_state_object(&self) -> State {
+        unsafe {
+            state::serialize_object(
+                self.params.clone(),
+                &self.param_by_hash,
+                &self.param_id_to_hash,
+            )
+        }
+    }
+
+    /// Update the plugin's internal state, called by the plugin itself from the GUI thread. To
+    /// prevent corrupting data and changing parameters during processing the actual state is only
+    /// updated at the end of the audio processing cycle.
+    pub fn set_state_object(&self, mut state: State) {
+        // Use a loop and timeouts to handle the super rare edge case when this function gets called
+        // between a process call and the host disabling the plugin
+        loop {
+            if self.is_processing.load(Ordering::SeqCst) {
+                // If the plugin is currently processing audio, then we'll perform the restore
+                // operation at the end of the audio call. This involves sending the state to the
+                // audio thread, having the audio thread handle the state restore at the very end of
+                // the process function, and then sending the state back to this thread so it can be
+                // deallocated without blocking the audio thread.
+                match self
+                    .updated_state_sender
+                    .send_timeout(state, Duration::from_secs(1))
+                {
+                    Ok(_) => {
+                        // As mentioned above, the state object will be passed back to this thread
+                        // so we can deallocate it without blocking.
+                        let state = self.updated_state_receiver.recv();
+                        drop(state);
+                        break;
+                    }
+                    Err(SendTimeoutError::Timeout(value)) => {
+                        state = value;
+                        continue;
+                    }
+                    Err(SendTimeoutError::Disconnected(_)) => {
+                        nih_debug_assert_failure!("State update channel got disconnected");
+                        return;
+                    }
+                }
+            } else {
+                // Otherwise we'll set the state right here and now, since this function should be
+                // called from a GUI thread
+                unsafe {
+                    state::deserialize_object(
+                        &state,
+                        self.params.clone(),
+                        &self.param_by_hash,
+                        &self.param_id_to_hash,
+                        self.current_buffer_config.load().as_ref(),
+                    );
+                }
+
+                self.notify_param_values_changed();
+                let bus_config = self.current_bus_config.load();
+                if let Some(buffer_config) = self.current_buffer_config.load() {
+                    let mut plugin = self.plugin.write();
+                    plugin.initialize(
+                        &bus_config,
+                        &buffer_config,
+                        &mut self.make_process_context(Transport::new(buffer_config.sample_rate)),
+                    );
+                    process_wrapper(|| plugin.reset());
+                }
+
+                break;
+            }
+        }
+
+        // After the state has been updated, notify the host about the new parameter values
+        match &*self.component_handler.borrow() {
+            Some(component_handler) => {
+                unsafe {
+                    component_handler.restart_component(RestartFlags::kParamValuesChanged as i32)
+                };
+            }
+            None => nih_debug_assert_failure!("The host does not support parameters? What?"),
         }
     }
 }

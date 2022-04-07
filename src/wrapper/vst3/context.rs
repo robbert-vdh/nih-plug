@@ -9,6 +9,7 @@ use crate::context::{GuiContext, ProcessContext, Transport};
 use crate::event_loop::EventLoop;
 use crate::param::internals::ParamPtr;
 use crate::plugin::{NoteEvent, Vst3Plugin};
+use crate::wrapper::state::State;
 
 /// A [`GuiContext`] implementation for the wrapper. This is passed to the plugin in
 /// [`Editor::spawn()`][crate::prelude::Editor::spawn()] so it can interact with the rest of the plugin and
@@ -86,6 +87,14 @@ impl<P: Vst3Plugin> GuiContext for WrapperGuiContext<P> {
             },
             None => nih_debug_assert_failure!("Component handler not yet set"),
         }
+    }
+
+    fn get_state(&self) -> State {
+        self.inner.get_state_object()
+    }
+
+    fn set_state(&self, state: State) {
+        self.inner.set_state_object(state)
     }
 }
 

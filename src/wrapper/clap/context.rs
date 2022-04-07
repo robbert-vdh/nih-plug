@@ -79,6 +79,14 @@ impl<P: ClapPlugin> GuiContext for WrapperGuiContext<P> {
             None => nih_debug_assert_failure!("Unknown parameter: {:?}", param),
         }
     }
+
+    fn get_state(&self) -> crate::wrapper::state::State {
+        self.wrapper.get_state_object()
+    }
+
+    fn set_state(&self, state: crate::wrapper::state::State) {
+        self.wrapper.set_state_object(state)
+    }
 }
 
 impl<P: ClapPlugin> ProcessContext for WrapperProcessContext<'_, P> {

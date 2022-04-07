@@ -38,13 +38,13 @@ pub struct State {
     pub fields: HashMap<String, String>,
 }
 
-/// Serialize a plugin's state to a vector containing JSON data. This can (and should) be shared
-/// across plugin formats.
-pub(crate) unsafe fn serialize(
+/// Serialize a plugin's state to a state object. This is separate from [`serialize_json()`] to
+/// allow passing the raw object directly to the plugin.
+pub(crate) unsafe fn serialize_object(
     plugin_params: Arc<dyn Params>,
     param_by_hash: &HashMap<u32, ParamPtr>,
     param_id_to_hash: &HashMap<String, u32>,
-) -> serde_json::Result<Vec<u8>> {
+) -> State {
     // We'll serialize parmaeter values as a simple `string_param_id: display_value` map.
     let params: HashMap<_, _> = param_id_to_hash
         .iter()
@@ -78,32 +78,35 @@ pub(crate) unsafe fn serialize(
     // storing things like sample data.
     let fields = plugin_params.serialize_fields();
 
-    let plugin_state = State { params, fields };
-    serde_json::to_vec(&plugin_state)
+    State { params, fields }
 }
 
 /// Serialize a plugin's state to a vector containing JSON data. This can (and should) be shared
-/// across plugin formats. Returns `false` and logs an error if the state could not be deserialized.
+/// across plugin formats.
+pub(crate) unsafe fn serialize_json(
+    plugin_params: Arc<dyn Params>,
+    param_by_hash: &HashMap<u32, ParamPtr>,
+    param_id_to_hash: &HashMap<String, u32>,
+) -> serde_json::Result<Vec<u8>> {
+    let plugin_state = serialize_object(plugin_params, param_by_hash, param_id_to_hash);
+    serde_json::to_vec(&plugin_state)
+}
+
+/// Deserialize a plugin's state from a [`State`] object. This is used to allow the plugin to do its
+/// own internal preset management. Returns `false` and logs an error if the state could not be
+/// deserialized.
 ///
 /// Make sure to reinitialize plugin after deserializing the state so it can react to the new
 /// parameter values. The smoothers have already been reset by this function.
-pub(crate) unsafe fn deserialize(
-    state: &[u8],
+pub(crate) unsafe fn deserialize_object(
+    state: &State,
     plugin_params: Arc<dyn Params>,
     param_by_hash: &HashMap<u32, ParamPtr>,
     param_id_to_hash: &HashMap<String, u32>,
     current_buffer_config: Option<&BufferConfig>,
 ) -> bool {
-    let state: State = match serde_json::from_slice(state) {
-        Ok(s) => s,
-        Err(err) => {
-            nih_debug_assert_failure!("Error while deserializing state: {}", err);
-            return false;
-        }
-    };
-
     let sample_rate = current_buffer_config.map(|c| c.sample_rate);
-    for (param_id_str, param_value) in state.params {
+    for (param_id_str, param_value) in &state.params {
         let param_ptr = match param_id_to_hash
             .get(param_id_str.as_str())
             .and_then(|hash| param_by_hash.get(hash))
@@ -116,13 +119,13 @@ pub(crate) unsafe fn deserialize(
         };
 
         match (param_ptr, param_value) {
-            (ParamPtr::FloatParam(p), ParamValue::F32(v)) => (**p).set_plain_value(v),
-            (ParamPtr::IntParam(p), ParamValue::I32(v)) => (**p).set_plain_value(v),
-            (ParamPtr::BoolParam(p), ParamValue::Bool(v)) => (**p).set_plain_value(v),
+            (ParamPtr::FloatParam(p), ParamValue::F32(v)) => (**p).set_plain_value(*v),
+            (ParamPtr::IntParam(p), ParamValue::I32(v)) => (**p).set_plain_value(*v),
+            (ParamPtr::BoolParam(p), ParamValue::Bool(v)) => (**p).set_plain_value(*v),
             // Enums are serialized based on the active variant's index (which may not be the same
             // as the discriminator)
             (ParamPtr::EnumParam(p), ParamValue::I32(variant_idx)) => {
-                (**p).set_plain_value(variant_idx)
+                (**p).set_plain_value(*variant_idx)
             }
             (param_ptr, param_value) => {
                 nih_debug_assert_failure!(
@@ -145,4 +148,33 @@ pub(crate) unsafe fn deserialize(
     plugin_params.deserialize_fields(&state.fields);
 
     true
+}
+
+/// Deserialize a plugin's state from a vector containing JSON data. This can (and should) be shared
+/// across plugin formats. Returns `false` and logs an error if the state could not be deserialized.
+///
+/// Make sure to reinitialize plugin after deserializing the state so it can react to the new
+/// parameter values. The smoothers have already been reset by this function.
+pub(crate) unsafe fn deserialize_json(
+    state: &[u8],
+    plugin_params: Arc<dyn Params>,
+    param_by_hash: &HashMap<u32, ParamPtr>,
+    param_id_to_hash: &HashMap<String, u32>,
+    current_buffer_config: Option<&BufferConfig>,
+) -> bool {
+    let state: State = match serde_json::from_slice(state) {
+        Ok(s) => s,
+        Err(err) => {
+            nih_debug_assert_failure!("Error while deserializing state: {}", err);
+            return false;
+        }
+    };
+
+    deserialize_object(
+        &state,
+        plugin_params,
+        param_by_hash,
+        param_id_to_hash,
+        current_buffer_config,
+    )
 }
