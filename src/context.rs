@@ -1,8 +1,8 @@
 //! Different contexts the plugin can use to make callbacks to the host in different...contexts.
 
+use crate::midi::NoteEvent;
 use crate::param::internals::ParamPtr;
 use crate::param::Param;
-use crate::plugin::NoteEvent;
 use crate::wrapper::state::PluginState;
 
 // TODO: ProcessContext for parameter automation and sending events

@@ -5,16 +5,17 @@
 use atomic_float::AtomicF32;
 use atomic_refcell::{AtomicRefCell, AtomicRefMut};
 use clap_sys::events::{
-    clap_event_header, clap_event_note, clap_event_note_expression, clap_event_param_gesture,
-    clap_event_param_value, clap_event_type, clap_input_events, clap_output_events,
-    CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_IS_LIVE, CLAP_EVENT_MIDI, CLAP_EVENT_NOTE_EXPRESSION,
-    CLAP_EVENT_NOTE_OFF, CLAP_EVENT_NOTE_ON, CLAP_EVENT_PARAM_GESTURE_BEGIN,
-    CLAP_EVENT_PARAM_GESTURE_END, CLAP_EVENT_PARAM_VALUE, CLAP_NOTE_EXPRESSION_BRIGHTNESS,
-    CLAP_NOTE_EXPRESSION_EXPRESSION, CLAP_NOTE_EXPRESSION_PAN, CLAP_NOTE_EXPRESSION_PRESSURE,
-    CLAP_NOTE_EXPRESSION_TUNING, CLAP_NOTE_EXPRESSION_VIBRATO, CLAP_NOTE_EXPRESSION_VOLUME,
-    CLAP_TRANSPORT_HAS_BEATS_TIMELINE, CLAP_TRANSPORT_HAS_SECONDS_TIMELINE,
-    CLAP_TRANSPORT_HAS_TEMPO, CLAP_TRANSPORT_HAS_TIME_SIGNATURE, CLAP_TRANSPORT_IS_LOOP_ACTIVE,
-    CLAP_TRANSPORT_IS_PLAYING, CLAP_TRANSPORT_IS_RECORDING, CLAP_TRANSPORT_IS_WITHIN_PRE_ROLL,
+    clap_event_header, clap_event_midi, clap_event_note, clap_event_note_expression,
+    clap_event_param_gesture, clap_event_param_value, clap_event_type, clap_input_events,
+    clap_output_events, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_IS_LIVE, CLAP_EVENT_MIDI,
+    CLAP_EVENT_NOTE_EXPRESSION, CLAP_EVENT_NOTE_OFF, CLAP_EVENT_NOTE_ON,
+    CLAP_EVENT_PARAM_GESTURE_BEGIN, CLAP_EVENT_PARAM_GESTURE_END, CLAP_EVENT_PARAM_VALUE,
+    CLAP_NOTE_EXPRESSION_BRIGHTNESS, CLAP_NOTE_EXPRESSION_EXPRESSION, CLAP_NOTE_EXPRESSION_PAN,
+    CLAP_NOTE_EXPRESSION_PRESSURE, CLAP_NOTE_EXPRESSION_TUNING, CLAP_NOTE_EXPRESSION_VIBRATO,
+    CLAP_NOTE_EXPRESSION_VOLUME, CLAP_TRANSPORT_HAS_BEATS_TIMELINE,
+    CLAP_TRANSPORT_HAS_SECONDS_TIMELINE, CLAP_TRANSPORT_HAS_TEMPO,
+    CLAP_TRANSPORT_HAS_TIME_SIGNATURE, CLAP_TRANSPORT_IS_LOOP_ACTIVE, CLAP_TRANSPORT_IS_PLAYING,
+    CLAP_TRANSPORT_IS_RECORDING, CLAP_TRANSPORT_IS_WITHIN_PRE_ROLL,
 };
 use clap_sys::ext::audio_ports::{
     clap_audio_port_info, clap_plugin_audio_ports, CLAP_AUDIO_PORT_IS_MAIN, CLAP_EXT_AUDIO_PORTS,
@@ -52,6 +53,7 @@ use clap_sys::stream::{clap_istream, clap_ostream};
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::{self, SendTimeoutError};
 use crossbeam::queue::ArrayQueue;
+use midi_consts::channel_event as midi;
 use parking_lot::RwLock;
 use raw_window_handle::RawWindowHandle;
 use std::any::Any;
@@ -72,11 +74,11 @@ use super::util::ClapPtr;
 use crate::buffer::Buffer;
 use crate::context::Transport;
 use crate::event_loop::{EventLoop, MainThreadExecutor, TASK_QUEUE_CAPACITY};
+use crate::midi::{MidiConfig, NoteEvent};
 use crate::param::internals::{ParamPtr, Params};
 use crate::param::ParamFlags;
 use crate::plugin::{
-    BufferConfig, BusConfig, ClapPlugin, Editor, MidiConfig, NoteEvent, ParentWindowHandle,
-    ProcessStatus,
+    BufferConfig, BusConfig, ClapPlugin, Editor, ParentWindowHandle, ProcessStatus,
 };
 use crate::util::permit_alloc;
 use crate::wrapper::state::{self, PluginState};
@@ -968,10 +970,43 @@ impl<P: ClapPlugin> Wrapper<P> {
                 false
             }
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_MIDI) => {
-                if P::MIDI_INPUT >= MidiConfig::Basic {
-                    // We currently don't report supporting this at all in the event filter, add that once
-                    // we support MIDI CCs
-                    // TODO: Implement raw MIDI handling once we add CCs
+                // TODO: We can also handle note on, note off, and polyphonic pressure events, but
+                //       the host should not be sending us those since we prefer CLAP-style events
+                //       on our note ports
+                if P::MIDI_INPUT >= MidiConfig::MidiCCs {
+                    let event = &*(event as *const clap_event_midi);
+
+                    // TODO: Maybe add special handling for 14-bit CCs and RPN messages at some
+                    //       point, right now the plugin has to figure it out for itself
+                    let event_type = event.data[0] & midi::EVENT_TYPE_MASK;
+                    let channel = event.data[0] & midi::MIDI_CHANNEL_MASK;
+                    match event_type {
+                        midi::CHANNEL_KEY_PRESSURE => {
+                            input_events.push_back(NoteEvent::MidiChannelPressure {
+                                timing: raw_event.time - current_sample_idx as u32,
+                                channel,
+                                pressure: event.data[1] as f32 / 127.0,
+                            });
+                        }
+                        midi::PITCH_BEND_CHANGE => {
+                            input_events.push_back(NoteEvent::MidiPitchBend {
+                                timing: raw_event.time - current_sample_idx as u32,
+                                channel,
+                                value: (event.data[1] as u16 + ((event.data[2] as u16) << 7))
+                                    as f32
+                                    / ((1 << 14) - 1) as f32,
+                            });
+                        }
+                        midi::CONTROL_CHANGE => {
+                            input_events.push_back(NoteEvent::MidiCC {
+                                timing: raw_event.time - current_sample_idx as u32,
+                                channel,
+                                cc: event.data[1],
+                                value: event.data[2] as f32 / 127.0,
+                            });
+                        }
+                        n => nih_debug_assert_failure!("Unhandled MIDI message type {}", n),
+                    };
                 }
 
                 false
@@ -1680,10 +1715,11 @@ impl<P: ClapPlugin> Wrapper<P> {
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_ON)
             | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_OFF)
             | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_EXPRESSION)
-            // TODO: Implement midi CC handling
-            // | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_MIDI)
                 if P::MIDI_INPUT >= MidiConfig::Basic =>
             {
+                true
+            }
+            (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_MIDI) if P::MIDI_INPUT >= MidiConfig::MidiCCs => {
                 true
             }
             _ => false,

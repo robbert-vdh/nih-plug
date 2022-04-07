@@ -7,8 +7,9 @@ use vst3_sys::vst::{IComponentHandler, RestartFlags};
 use super::inner::{Task, WrapperInner};
 use crate::context::{GuiContext, ProcessContext, Transport};
 use crate::event_loop::EventLoop;
+use crate::midi::NoteEvent;
 use crate::param::internals::ParamPtr;
-use crate::plugin::{NoteEvent, Vst3Plugin};
+use crate::plugin::Vst3Plugin;
 use crate::wrapper::state::PluginState;
 
 /// A [`GuiContext`] implementation for the wrapper. This is passed to the plugin in

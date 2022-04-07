@@ -90,8 +90,8 @@ for download links.
   - A simple and safe API for state saving and restoring from the editor is
     provided by the framework if you want to do your own internal preset
     management.
-- Basic note/MIDI support. MIDI CC handling and note output is currently not
-  implemented. Let me know if you need this.
+- Basic note/MIDI support for VST3, full support for both expressions and MIDI
+  CCs for CLAP. Similar support for VST3 is coming.
 - A plugin bundler accessible through the
   `cargo xtask bundle <package> <build_arguments>` command that automatically
   detects which plugin targets your plugin exposes and creates the correct

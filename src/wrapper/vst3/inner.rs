@@ -18,9 +18,10 @@ use super::view::WrapperView;
 use crate::buffer::Buffer;
 use crate::context::Transport;
 use crate::event_loop::{EventLoop, MainThreadExecutor, OsEventLoop};
+use crate::midi::NoteEvent;
 use crate::param::internals::{ParamPtr, Params};
 use crate::param::ParamFlags;
-use crate::plugin::{BufferConfig, BusConfig, Editor, NoteEvent, ProcessStatus, Vst3Plugin};
+use crate::plugin::{BufferConfig, BusConfig, Editor, ProcessStatus, Vst3Plugin};
 use crate::wrapper::state::{self, PluginState};
 use crate::wrapper::util::{hash_param_id, process_wrapper};
 

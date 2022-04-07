@@ -1935,6 +1935,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "midi-consts"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f2dd5c7f8aaf48a76e389068ab25ed80bdbc226b887f9013844c415698c9952"
+
+[[package]]
 name = "minimal-lexical"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2013,6 +2019,7 @@ dependencies = [
  "clap-sys",
  "crossbeam",
  "lazy_static",
+ "midi-consts",
  "nih_plug_derive",
  "parking_lot 0.12.0",
  "raw-window-handle",

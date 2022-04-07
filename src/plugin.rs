@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use crate::buffer::Buffer;
 use crate::context::{GuiContext, ProcessContext};
+use crate::midi::MidiConfig;
 use crate::param::internals::Params;
 
 /// Basic functionality that needs to be implemented by a plugin. The wrappers will use this to
@@ -20,7 +21,7 @@ use crate::param::internals::Params;
 /// - Sidechain inputs
 /// - Multiple output busses
 /// - Special handling for offline processing
-/// - MIDI CC handling
+/// - MIDI CC and expression handling for VST3 (those things are implemented for CLAP)
 /// - Outputting MIDI events from the process function (you can output parmaeter changes from an
 ///   editor GUI)
 #[allow(unused_variables)]
@@ -301,149 +302,4 @@ pub enum ProcessStatus {
     /// and should thus not be deactivated by the host. This is essentially the same as having an
     /// infite tail.
     KeepAlive,
-}
-
-/// Determines which note events a plugin receives.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum MidiConfig {
-    /// The plugin will not have a note input port and will thus not receive any not events.
-    None,
-    /// The plugin receives note on/off events, pressure, and potentially a couple standardized
-    /// expression types depending on the plugin standard and host.
-    Basic,
-    // // TODO:
-    // /// The plugin receives full MIDI CCs as well as pitch bend information. For VST3 plugins this
-    // /// involves adding 130*16 parameters to bind to the the 128 MIDI CCs, pitch bend, and channel
-    // /// pressure.
-    // MidiCCs,
-}
-
-/// Event for (incoming) notes. The set of supported note events depends on the value of
-/// [`Plugin::MIDI_INPUT`]. Also check out the [`util`][crate::util] module for convenient
-/// conversion functions.
-///
-/// All of the timings are sample offsets withing the current buffer.
-///
-/// TODO: Add more events as needed
-#[derive(Debug, Clone, Copy, PartialEq)]
-#[non_exhaustive]
-pub enum NoteEvent {
-    /// A note on event, available on [`MidiConfig::Basic`] and up.
-    NoteOn {
-        timing: u32,
-        /// The note's channel, from 0 to 16.
-        channel: u8,
-        /// The note's MIDI key number, from 0 to 127.
-        note: u8,
-        /// The note's velocity, from 0 to 1. Some plugin APIs may allow higher precision than the
-        /// 127 levels available in MIDI.
-        velocity: f32,
-    },
-    /// A note off event, available on [`MidiConfig::Basic`] and up.
-    NoteOff {
-        timing: u32,
-        /// The note's channel, from 0 to 16.
-        channel: u8,
-        /// The note's MIDI key number, from 0 to 127.
-        note: u8,
-        /// The note's velocity, from 0 to 1. Some plugin APIs may allow higher precision than the
-        /// 127 levels available in MIDI.
-        velocity: f32,
-    },
-    /// A polyphonic note pressure/aftertouch event, available on [`MidiConfig::Basic`] and up. Not
-    /// all hosts may support polyphonic aftertouch.
-    PolyPressure {
-        timing: u32,
-        /// The note's channel, from 0 to 16.
-        channel: u8,
-        /// The note's MIDI key number, from 0 to 127.
-        note: u8,
-        /// The note's pressure, from 0 to 1.
-        pressure: f32,
-    },
-    /// A volume expression event, available on [`MidiConfig::Basic`] and up. Not all hosts may
-    /// support these expressions.
-    Volume {
-        timing: u32,
-        /// The note's channel, from 0 to 16.
-        channel: u8,
-        /// The note's MIDI key number, from 0 to 127.
-        note: u8,
-        /// The note's voltage gain ratio, where 1.0 is unity gain.
-        gain: f32,
-    },
-    /// A panning expression event, available on [`MidiConfig::Basic`] and up. Not all hosts may
-    /// support these expressions.
-    Pan {
-        timing: u32,
-        /// The note's channel, from 0 to 16.
-        channel: u8,
-        /// The note's MIDI key number, from 0 to 127.
-        note: u8,
-        /// The note's panning from, from -1 to 1, with -1 being panned hard left, and 1 being
-        /// panned hard right.
-        pan: f32,
-    },
-    /// A tuning expression event, available on [`MidiConfig::Basic`] and up. Not all hosts may support
-    /// these expressions.
-    Tuning {
-        timing: u32,
-        /// The note's channel, from 0 to 16.
-        channel: u8,
-        /// The note's MIDI key number, from 0 to 127.
-        note: u8,
-        /// The note's tuning in semitones, from -120 to 120.
-        tuning: f32,
-    },
-    /// A vibrato expression event, available on [`MidiConfig::Basic`] and up. Not all hosts may support
-    /// these expressions.
-    Vibrato {
-        timing: u32,
-        /// The note's channel, from 0 to 16.
-        channel: u8,
-        /// The note's MIDI key number, from 0 to 127.
-        note: u8,
-        /// The note's vibrato amount, from 0 to 1.
-        vibrato: f32,
-    },
-    /// A expression expression (yes, expression expression) event, available on
-    /// [`MidiConfig::Basic`] and up. Not all hosts may support these expressions.
-    Expression {
-        timing: u32,
-        /// The note's channel, from 0 to 16.
-        channel: u8,
-        /// The note's MIDI key number, from 0 to 127.
-        note: u8,
-        /// The note's expression amount, from 0 to 1.
-        expression: f32,
-    },
-    /// A brightness expression event, available on [`MidiConfig::Basic`] and up. Not all hosts may support
-    /// these expressions.
-    Brightness {
-        timing: u32,
-        /// The note's channel, from 0 to 16.
-        channel: u8,
-        /// The note's MIDI key number, from 0 to 127.
-        note: u8,
-        /// The note's brightness amount, from 0 to 1.
-        brightness: f32,
-    },
-    // TODO: Add MIDI channel pressure, pitchbend, and CCs
-}
-
-impl NoteEvent {
-    /// Return the sample within the current buffer this event belongs to.
-    pub fn timing(&self) -> u32 {
-        match &self {
-            NoteEvent::NoteOn { timing, .. } => *timing,
-            NoteEvent::NoteOff { timing, .. } => *timing,
-            NoteEvent::PolyPressure { timing, .. } => *timing,
-            NoteEvent::Volume { timing, .. } => *timing,
-            NoteEvent::Pan { timing, .. } => *timing,
-            NoteEvent::Tuning { timing, .. } => *timing,
-            NoteEvent::Vibrato { timing, .. } => *timing,
-            NoteEvent::Expression { timing, .. } => *timing,
-            NoteEvent::Brightness { timing, .. } => *timing,
-        }
-    }
 }

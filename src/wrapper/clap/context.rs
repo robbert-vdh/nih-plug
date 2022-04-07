@@ -6,8 +6,9 @@ use std::sync::Arc;
 use super::wrapper::{OutputParamEvent, Task, Wrapper};
 use crate::context::{GuiContext, ProcessContext, Transport};
 use crate::event_loop::EventLoop;
+use crate::midi::NoteEvent;
 use crate::param::internals::ParamPtr;
-use crate::plugin::{ClapPlugin, NoteEvent};
+use crate::plugin::ClapPlugin;
 
 /// A [`GuiContext`] implementation for the wrapper. This is passed to the plugin in
 /// [`Editor::spawn()`][crate::prelude::Editor::spawn()] so it can interact with the rest of the plugin and
