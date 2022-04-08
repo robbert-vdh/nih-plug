@@ -994,7 +994,10 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                             Some(context.project_time_samples + block_start as i64);
                         if context.state & (1 << 9) != 0 {
                             // kProjectTimeMusicValid
-                            if P::SAMPLE_ACCURATE_AUTOMATION && (context.state & (1 << 10) != 0) {
+                            if P::SAMPLE_ACCURATE_AUTOMATION
+                                && block_start > 0
+                                && (context.state & (1 << 10) != 0)
+                            {
                                 // kTempoValid
                                 transport.pos_beats = Some(
                                     context.project_time_music
@@ -1008,7 +1011,16 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
 
                         if context.state & (1 << 11) != 0 {
                             // kBarPositionValid
-                            transport.bar_start_pos_beats = Some(context.bar_position_music);
+                            if P::SAMPLE_ACCURATE_AUTOMATION && block_start > 0 {
+                                // The transport object knows how to recompute this from the other information
+                                transport.bar_start_pos_beats =
+                                    match transport.bar_start_pos_beats() {
+                                        Some(updated) => Some(updated),
+                                        None => Some(context.bar_position_music),
+                                    };
+                            } else {
+                                transport.bar_start_pos_beats = Some(context.bar_position_music);
+                            }
                         }
                         if context.state & (1 << 2) != 0 && context.state & (1 << 12) != 0 {
                             // kCycleActive && kCycleValid

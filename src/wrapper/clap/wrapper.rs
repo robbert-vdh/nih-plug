@@ -1349,8 +1349,11 @@ impl<P: ClapPlugin> Wrapper<P> {
                     if context.flags & CLAP_TRANSPORT_HAS_BEATS_TIMELINE != 0 {
                         let beats = context.song_pos_beats as f64 / CLAP_BEATTIME_FACTOR as f64;
 
-                        // This is a bit messy, but we'll try to compensate for the block splitting
+                        // This is a bit messy, but we'll try to compensate for the block splitting.
+                        // We can't use the functions on the transport information object for this
+                        // because we don't have any sample information.
                         if P::SAMPLE_ACCURATE_AUTOMATION
+                            && block_start > 0
                             && (context.flags & CLAP_TRANSPORT_HAS_TEMPO != 0)
                         {
                             transport.pos_beats = Some(
@@ -1367,6 +1370,7 @@ impl<P: ClapPlugin> Wrapper<P> {
 
                         // Same here
                         if P::SAMPLE_ACCURATE_AUTOMATION
+                            && block_start > 0
                             && (context.flags & CLAP_TRANSPORT_HAS_TEMPO != 0)
                         {
                             transport.pos_seconds =
@@ -1376,9 +1380,20 @@ impl<P: ClapPlugin> Wrapper<P> {
                         }
                     }
                     // TODO: CLAP does not mention whether this is behind a flag or not
-                    transport.bar_start_pos_beats =
-                        Some(context.bar_start as f64 / CLAP_BEATTIME_FACTOR as f64);
-                    transport.bar_number = Some(context.bar_number);
+                    if P::SAMPLE_ACCURATE_AUTOMATION && block_start > 0 {
+                        transport.bar_start_pos_beats = match transport.bar_start_pos_beats() {
+                            Some(updated) => Some(updated),
+                            None => Some(context.bar_start as f64 / CLAP_BEATTIME_FACTOR as f64),
+                        };
+                        transport.bar_number = match transport.bar_number() {
+                            Some(updated) => Some(updated),
+                            None => Some(context.bar_number),
+                        };
+                    } else {
+                        transport.bar_start_pos_beats =
+                            Some(context.bar_start as f64 / CLAP_BEATTIME_FACTOR as f64);
+                        transport.bar_number = Some(context.bar_number);
+                    }
                     // TODO: They also aren't very clear about this, but presumably if the loop is
                     //       active and the corresponding song transport information is available then
                     //       this is also available
