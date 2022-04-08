@@ -8,8 +8,8 @@ use vst3_sys::base::{kInvalidArgument, kNoInterface, kResultFalse, kResultOk, tr
 use vst3_sys::base::{IBStream, IPluginBase};
 use vst3_sys::utils::SharedVstPtr;
 use vst3_sys::vst::{
-    kNoProgramListId, kRootUnitId, IAudioProcessor, IComponent, IEditController, IEventList,
-    IParamValueQueue, IParameterChanges, IUnitInfo, ProgramListInfo, TChar, UnitInfo,
+    kNoProgramListId, kRootUnitId, EventTypes, IAudioProcessor, IComponent, IEditController,
+    IEventList, IParamValueQueue, IParameterChanges, IUnitInfo, ProgramListInfo, TChar, UnitInfo,
 };
 use vst3_sys::VST3;
 use widestring::U16CStr;
@@ -746,6 +746,8 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
 
                 if P::MIDI_INPUT >= MidiConfig::Basic {
                     let mut input_events = self.inner.input_events.borrow_mut();
+                    let mut note_expression_controller =
+                        self.inner.note_expression_controller.borrow_mut();
                     if let Some(events) = data.input_events.upgrade() {
                         let num_events = events.get_event_count();
 
@@ -765,16 +767,20 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                             }
 
                             let timing = event.sample_offset as u32 - block_start as u32;
-                            if event.type_ == vst3_sys::vst::EventTypes::kNoteOnEvent as u16 {
+                            if event.type_ == EventTypes::kNoteOnEvent as u16 {
                                 let event = event.event.note_on;
+
+                                // We need to keep track of note IDs to be able to handle not
+                                // expression value events
+                                note_expression_controller.register_note(&event);
+
                                 input_events.push_back(NoteEvent::NoteOn {
                                     timing,
                                     channel: event.channel as u8,
                                     note: event.pitch as u8,
                                     velocity: event.velocity,
                                 });
-                            } else if event.type_ == vst3_sys::vst::EventTypes::kNoteOffEvent as u16
-                            {
+                            } else if event.type_ == EventTypes::kNoteOffEvent as u16 {
                                 let event = event.event.note_off;
                                 input_events.push_back(NoteEvent::NoteOff {
                                     timing,
@@ -782,9 +788,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                     note: event.pitch as u8,
                                     velocity: event.velocity,
                                 });
-                            } else if event.type_
-                                == vst3_sys::vst::EventTypes::kPolyPressureEvent as u16
-                            {
+                            } else if event.type_ == EventTypes::kPolyPressureEvent as u16 {
                                 let event = event.event.poly_pressure;
                                 input_events.push_back(NoteEvent::PolyPressure {
                                     timing,
@@ -792,6 +796,17 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                     note: event.pitch as u8,
                                     pressure: event.pressure,
                                 });
+                            } else if event.type_ == EventTypes::kNoteExpressionValueEvent as u16 {
+                                let event = event.event.note_expression_value;
+                                match note_expression_controller.translate_event(timing, &event) {
+                                    Some(translated_event) => {
+                                        input_events.push_back(translated_event)
+                                    }
+                                    None => nih_debug_assert_failure!(
+                                        "Unhandled note expression type: {}",
+                                        event.type_id
+                                    ),
+                                }
                             }
 
                             // TODO: Add note event controllers to support the same expression types

@@ -4,6 +4,7 @@ mod util;
 mod context;
 mod factory;
 mod inner;
+mod note_expressions;
 mod param_units;
 mod view;
 mod wrapper;

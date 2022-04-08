@@ -12,6 +12,7 @@ use vst3_sys::base::{kInvalidArgument, kResultOk, tresult};
 use vst3_sys::vst::{IComponentHandler, RestartFlags};
 
 use super::context::{WrapperGuiContext, WrapperProcessContext};
+use super::note_expressions::NoteExpressionController;
 use super::param_units::ParamUnits;
 use super::util::{ObjectPtr, VstPtr};
 use super::view::WrapperView;
@@ -82,6 +83,11 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     ///       interleave parameter changes and note events, this queue has to be sorted when
     ///       creating the process context
     pub input_events: AtomicRefCell<VecDeque<NoteEvent>>,
+    /// VST3 has several useful predefined note expressions, but for some reason they are the only
+    /// note event type that don't have MIDI note ID and channel fields. So we need to keep track of
+    /// the msot recent VST3 note IDs we've seen, and then map those back to MIDI note IDs and
+    /// channels as needed.
+    pub note_expression_controller: AtomicRefCell<NoteExpressionController>,
     /// Unprocessed parameter changes sent by the host as pairs of `(sample_idx_in_buffer, change)`.
     /// Needed because VST3 does not have a single queue containing all parameter changes. If
     /// `P::SAMPLE_ACCURATE_AUTOMATION` is set, then all parameter changes will be read into this
@@ -248,6 +254,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             current_latency: AtomicU32::new(0),
             output_buffer: AtomicRefCell::new(Buffer::default()),
             input_events: AtomicRefCell::new(VecDeque::with_capacity(1024)),
+            note_expression_controller: AtomicRefCell::new(NoteExpressionController::default()),
             input_param_changes: AtomicRefCell::new(BinaryHeap::with_capacity(
                 if P::SAMPLE_ACCURATE_AUTOMATION {
                     4096
