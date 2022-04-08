@@ -2,8 +2,7 @@ use atomic_refcell::AtomicRefCell;
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::{self, SendTimeoutError};
 use parking_lot::RwLock;
-use std::cmp::Reverse;
-use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::mem::MaybeUninit;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
@@ -14,12 +13,12 @@ use vst3_sys::vst::{IComponentHandler, RestartFlags};
 use super::context::{WrapperGuiContext, WrapperProcessContext};
 use super::note_expressions::NoteExpressionController;
 use super::param_units::ParamUnits;
-use super::util::{ObjectPtr, VstPtr};
+use super::util::{ObjectPtr, VstPtr, VST3_MIDI_PARAMS_END, VST3_MIDI_PARAMS_START};
 use super::view::WrapperView;
 use crate::buffer::Buffer;
 use crate::context::Transport;
 use crate::event_loop::{EventLoop, MainThreadExecutor, OsEventLoop};
-use crate::midi::NoteEvent;
+use crate::midi::{MidiConfig, NoteEvent};
 use crate::param::internals::{ParamPtr, Params};
 use crate::param::ParamFlags;
 use crate::plugin::{BufferConfig, BusConfig, Editor, ProcessStatus, Vst3Plugin};
@@ -88,12 +87,16 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// the msot recent VST3 note IDs we've seen, and then map those back to MIDI note IDs and
     /// channels as needed.
     pub note_expression_controller: AtomicRefCell<NoteExpressionController>,
-    /// Unprocessed parameter changes sent by the host as pairs of `(sample_idx_in_buffer, change)`.
-    /// Needed because VST3 does not have a single queue containing all parameter changes. If
-    /// `P::SAMPLE_ACCURATE_AUTOMATION` is set, then all parameter changes will be read into this
-    /// priority queue and the buffer will be processed in small chunks whenever there's a parameter
-    /// change at a new sample index.
-    pub input_param_changes: AtomicRefCell<BinaryHeap<Reverse<(usize, ParameterChange)>>>,
+    /// Unprocessed parameter changes and note events sent by the host during a process call.
+    /// Parameter changes are sent as separate queues for each parameter, and note events are in
+    /// another queue on top of that. And if `P::MIDI_INPUT >= MidiConfig::MidiCCs`, then we can
+    /// also receive MIDI CC messages through special parameter changes. On top of that, we also
+    /// support sample accurate automation through block splitting if
+    /// `P::SAMPLE_ACCURATE_AUTOMATION` is set. To account for all of this, we'll read all of the
+    /// parameter changes and events into a vector at the start of the process call, sort it, and
+    /// then do the block splitting based on that. Note events need to have their timing adjusted to
+    /// match the block start, since they're all read upfront.
+    pub process_events: AtomicRefCell<Vec<ProcessEvent>>,
     /// The plugin is able to restore state through a method on the `GuiContext`. To avoid changing
     /// parameters mid-processing and running into garbled data if the host also tries to load state
     /// at the same time the restoring happens at the end of each processing call. If this zero
@@ -133,24 +136,33 @@ pub enum Task {
     TriggerRestart(i32),
 }
 
-/// An incoming parameter change sent by the host. Kept in a queue to support block-based sample
-/// accurate automation.
-#[derive(Debug, PartialEq, PartialOrd)]
-pub struct ParameterChange {
-    /// The parameter's hash, as used everywhere else.
-    pub hash: u32,
-    /// The normalized values, as provided by the host.
-    pub normalized_value: f32,
-}
-
-// Instances needed for the binary heap, we'll just pray the host doesn't send NaN values
-impl Eq for ParameterChange {}
-
-#[allow(clippy::derive_ord_xor_partial_ord)]
-impl Ord for ParameterChange {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.partial_cmp(other).unwrap_or(std::cmp::Ordering::Equal)
-    }
+/// VST3 makes audio processing pretty complicated. In order to support both block splitting for
+/// sample accurate automation and MIDI CC handling through parameters we need to put all parameter
+/// changes and (translated) note events into a sorted array first.
+#[derive(Debug, PartialEq)]
+pub enum ProcessEvent {
+    /// An incoming parameter change sent by the host. This will only be used when sample accurate
+    /// automation has been enabled, and the parameters are only updated when we process this
+    /// spooled event at the start of a block.
+    ParameterChange {
+        /// The event's sample offset within the buffer. Used for sorting.
+        timing: u32,
+        /// The parameter's hash, as used everywhere else.
+        hash: u32,
+        /// The normalized values, as provided by the host.
+        normalized_value: f32,
+    },
+    /// An incoming parameter change sent by the host. This will only be used when sample accurate
+    /// automation has been enabled, and the parameters are only updated when we process this
+    /// spooled event at the start of a block.
+    NoteEvent {
+        /// The event's sample offset within the buffer. Used for sorting. The timing stored within
+        /// the note event needs to have the block start index subtraced from it.
+        timing: u32,
+        /// The actual note event, make sure to subtract the block start index with
+        /// [`NoteEvent::subtract_timing()`] before putting this into the input event queue.
+        event: NoteEvent,
+    },
 }
 
 impl<P: Vst3Plugin> WrapperInner<P> {
@@ -188,11 +200,9 @@ impl<P: Vst3Plugin> WrapperInner<P> {
                 param_ids.len(),
                 "The plugin has duplicate parameter IDs, weird things may happen"
             );
-        }
 
-        if cfg!(debug_assertions) {
             let mut bypass_param_exists = false;
-            for (_, _, ptr, _) in &param_id_hashes_ptrs_groups {
+            for (id, hash, ptr, _) in &param_id_hashes_ptrs_groups {
                 let flags = unsafe { ptr.flags() };
                 let is_bypass = flags.contains(ParamFlags::BYPASS);
 
@@ -203,6 +213,14 @@ impl<P: Vst3Plugin> WrapperInner<P> {
                 }
 
                 bypass_param_exists |= is_bypass;
+
+                if P::MIDI_INPUT >= MidiConfig::MidiCCs
+                    && (VST3_MIDI_PARAMS_START..VST3_MIDI_PARAMS_END).contains(hash)
+                {
+                    nih_debug_assert_failure!(
+                        "Parameter '{}' collides with an automatically generated MIDI CC parameter, consider giving it a different ID", id
+                    );
+                }
             }
         }
 
@@ -255,13 +273,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             output_buffer: AtomicRefCell::new(Buffer::default()),
             input_events: AtomicRefCell::new(VecDeque::with_capacity(1024)),
             note_expression_controller: AtomicRefCell::new(NoteExpressionController::default()),
-            input_param_changes: AtomicRefCell::new(BinaryHeap::with_capacity(
-                if P::SAMPLE_ACCURATE_AUTOMATION {
-                    4096
-                } else {
-                    0
-                },
-            )),
+            process_events: AtomicRefCell::new(Vec::with_capacity(4096)),
             updated_state_sender,
             updated_state_receiver,
 

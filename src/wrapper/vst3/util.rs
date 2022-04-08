@@ -1,6 +1,20 @@
 use std::ops::Deref;
 use vst3_sys::{interfaces::IUnknown, ComInterface};
 
+/// When `Plugin::MIDI_INPUT` is set to `MidiConfig::MidiCCs` or higher then we'll register 130*16
+/// additional parameters to handle MIDI CCs, channel pressure, and pitch bend, in that order.
+/// vst3-sys doesn't expose these constants.
+pub const VST3_MIDI_CCS: u32 = 130;
+pub const VST3_MIDI_CHANNELS: u32 = 16;
+/// The number of parameters we'll need to register if the plugin accepts MIDI CCs.
+pub const VST3_MIDI_NUM_PARAMS: u32 = VST3_MIDI_CCS * VST3_MIDI_CHANNELS;
+/// The start of the MIDI CC parameter ranges. We'll print an assertion failure if any of the
+/// plugin's parameters overlap with this range. The mapping to a parameter index is
+/// `VST3_MIDI_PARAMS_START + (cc_idx + (channel * VST3_MIDI_CCS))`.
+pub const VST3_MIDI_PARAMS_START: u32 = VST3_MIDI_PARAMS_END - VST3_MIDI_NUM_PARAMS;
+/// The (exlucive) end of the MIDI CC parameter range. Anything above this is reserved by the host.
+pub const VST3_MIDI_PARAMS_END: u32 = (1 << 31) + 1;
+
 /// Early exit out of a VST3 function when one of the passed pointers is null
 macro_rules! check_null_ptr {
     ($ptr:expr $(, $ptrs:expr)* $(, )?) => {

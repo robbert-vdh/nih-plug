@@ -1,4 +1,4 @@
-use std::cmp::{self, Reverse};
+use std::cmp;
 use std::ffi::c_void;
 use std::mem::{self, MaybeUninit};
 use std::ptr;
@@ -9,13 +9,14 @@ use vst3_sys::base::{IBStream, IPluginBase};
 use vst3_sys::utils::SharedVstPtr;
 use vst3_sys::vst::{
     kNoProgramListId, kRootUnitId, EventTypes, IAudioProcessor, IComponent, IEditController,
-    IEventList, IParamValueQueue, IParameterChanges, IUnitInfo, ProgramListInfo, TChar, UnitInfo,
+    IEventList, IMidiMapping, IParamValueQueue, IParameterChanges, IUnitInfo, ParameterFlags,
+    ProgramListInfo, TChar, UnitInfo,
 };
 use vst3_sys::VST3;
 use widestring::U16CStr;
 
 use super::inner::WrapperInner;
-use super::util::VstPtr;
+use super::util::{VstPtr, VST3_MIDI_CCS, VST3_MIDI_NUM_PARAMS, VST3_MIDI_PARAMS_START};
 use super::view::WrapperView;
 use crate::context::Transport;
 use crate::midi::{MidiConfig, NoteEvent};
@@ -24,12 +25,13 @@ use crate::plugin::{BufferConfig, BusConfig, ProcessStatus, Vst3Plugin};
 use crate::util::permit_alloc;
 use crate::wrapper::state;
 use crate::wrapper::util::{process_wrapper, u16strlcpy};
-use crate::wrapper::vst3::inner::ParameterChange;
+use crate::wrapper::vst3::inner::ProcessEvent;
+use crate::wrapper::vst3::util::{VST3_MIDI_CHANNELS, VST3_MIDI_PARAMS_END};
 
 // Alias needed for the VST3 attribute macro
 use vst3_sys as vst3_com;
 
-#[VST3(implements(IComponent, IEditController, IAudioProcessor, IUnitInfo))]
+#[VST3(implements(IComponent, IEditController, IAudioProcessor, IMidiMapping, IUnitInfo))]
 pub(crate) struct Wrapper<P: Vst3Plugin> {
     inner: Arc<WrapperInner<P>>,
 }
@@ -302,7 +304,12 @@ impl<P: Vst3Plugin> IEditController for Wrapper<P> {
     }
 
     unsafe fn get_parameter_count(&self) -> i32 {
-        self.inner.param_hashes.len() as i32
+        // We need to add a whole bunch of parameters if the plugin accepts MIDI CCs
+        if P::MIDI_INPUT >= MidiConfig::MidiCCs {
+            self.inner.param_hashes.len() as i32 + VST3_MIDI_NUM_PARAMS as i32
+        } else {
+            self.inner.param_hashes.len() as i32
+        }
     }
 
     unsafe fn get_parameter_info(
@@ -316,35 +323,57 @@ impl<P: Vst3Plugin> IEditController for Wrapper<P> {
             return kInvalidArgument;
         }
 
-        let param_hash = &self.inner.param_hashes[param_index as usize];
-        let param_unit = &self
-            .inner
-            .param_units
-            .get_vst3_unit_id(*param_hash)
-            .expect("Inconsistent parameter data");
-        let param_ptr = &self.inner.param_by_hash[param_hash];
-        let default_value = param_ptr.default_normalized_value();
-        let flags = param_ptr.flags();
-        let automatable = !flags.contains(ParamFlags::NON_AUTOMATABLE);
-        let is_bypass = flags.contains(ParamFlags::BYPASS);
-
         *info = std::mem::zeroed();
-
         let info = &mut *info;
-        info.id = *param_hash;
-        u16strlcpy(&mut info.title, param_ptr.name());
-        u16strlcpy(&mut info.short_title, param_ptr.name());
-        u16strlcpy(&mut info.units, param_ptr.unit());
-        info.step_count = param_ptr.step_count().unwrap_or(0) as i32;
-        info.default_normalized_value = default_value as f64;
-        info.unit_id = *param_unit;
-        info.flags = if automatable {
-            vst3_sys::vst::ParameterFlags::kCanAutomate as i32
+
+        // If the parameter is a generated MIDI CC/channel pressure/pitch bend then it needs to be
+        // handled separately
+        let num_actual_params = self.inner.param_hashes.len() as i32;
+        if P::MIDI_INPUT >= MidiConfig::MidiCCs && param_index >= num_actual_params {
+            let midi_param_relative_idx = (param_index - num_actual_params) as u32;
+            // This goes up to 130 for the 128 CCs followed by channel pressure and pitch bend
+            let midi_cc = midi_param_relative_idx % VST3_MIDI_CCS;
+            let midi_channel = midi_param_relative_idx / VST3_MIDI_CCS;
+            let name = match midi_cc {
+                // kAfterTouch
+                128 => format!("MIDI Ch. {} Channel Pressure", midi_channel + 1),
+                // kPitchBend
+                129 => format!("MIDI Ch. {} Pitch Bend", midi_channel + 1),
+                n => format!("MIDI Ch. {} CC {}", midi_channel + 1, n),
+            };
+
+            info.id = VST3_MIDI_PARAMS_START + midi_param_relative_idx;
+            u16strlcpy(&mut info.title, &name);
+            u16strlcpy(&mut info.short_title, &name);
+            info.flags = ParameterFlags::kIsReadOnly as i32 | (1 << 4); // kIsHidden
         } else {
-            vst3_sys::vst::ParameterFlags::kIsReadOnly as i32 | (1 << 4) // kIsHidden
-        };
-        if is_bypass {
-            info.flags |= vst3_sys::vst::ParameterFlags::kIsBypass as i32;
+            let param_hash = &self.inner.param_hashes[param_index as usize];
+            let param_unit = &self
+                .inner
+                .param_units
+                .get_vst3_unit_id(*param_hash)
+                .expect("Inconsistent parameter data");
+            let param_ptr = &self.inner.param_by_hash[param_hash];
+            let default_value = param_ptr.default_normalized_value();
+            let flags = param_ptr.flags();
+            let automatable = !flags.contains(ParamFlags::NON_AUTOMATABLE);
+            let is_bypass = flags.contains(ParamFlags::BYPASS);
+
+            info.id = *param_hash;
+            u16strlcpy(&mut info.title, param_ptr.name());
+            u16strlcpy(&mut info.short_title, param_ptr.name());
+            u16strlcpy(&mut info.units, param_ptr.unit());
+            info.step_count = param_ptr.step_count().unwrap_or(0) as i32;
+            info.default_normalized_value = default_value as f64;
+            info.unit_id = *param_unit;
+            info.flags = if automatable {
+                ParameterFlags::kCanAutomate as i32
+            } else {
+                ParameterFlags::kIsReadOnly as i32 | (1 << 4) // kIsHidden
+            };
+            if is_bypass {
+                info.flags |= ParameterFlags::kIsBypass as i32;
+            }
         }
 
         kResultOk
@@ -360,6 +389,8 @@ impl<P: Vst3Plugin> IEditController for Wrapper<P> {
 
         let dest = &mut *(string as *mut [TChar; 128]);
 
+        // TODO: We don't implement these methods at all for our generated MIDI CC parameters,
+        //       should be fine right? They should be hidden anyways.
         match self.inner.param_by_hash.get(&id) {
             Some(param_ptr) => {
                 u16strlcpy(
@@ -403,14 +434,14 @@ impl<P: Vst3Plugin> IEditController for Wrapper<P> {
     unsafe fn normalized_param_to_plain(&self, id: u32, value_normalized: f64) -> f64 {
         match self.inner.param_by_hash.get(&id) {
             Some(param_ptr) => param_ptr.preview_plain(value_normalized as f32) as f64,
-            _ => 0.5,
+            _ => value_normalized,
         }
     }
 
     unsafe fn plain_param_to_normalized(&self, id: u32, plain_value: f64) -> f64 {
         match self.inner.param_by_hash.get(&id) {
             Some(param_ptr) => param_ptr.preview_normalized(plain_value as f32) as f64,
-            _ => 0.5,
+            _ => plain_value,
         }
     }
 
@@ -608,6 +639,8 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
         kResultOk
     }
 
+    // Clippy doesn't understand our `event_start_idx`
+    #[allow(clippy::mut_range_bound)]
     unsafe fn process(&self, data: *mut vst3_sys::vst::ProcessData) -> tresult {
         check_null_ptr!(data);
 
@@ -653,11 +686,17 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
             nih_debug_assert!(data.num_samples >= 0);
 
             // If `P::SAMPLE_ACCURATE_AUTOMATION` is set, then we'll split up the audio buffer into
-            // chunks whenever a parameter change occurs. Otherwise all parameter changes are
-            // handled right here and now.
-            let mut input_param_changes = self.inner.input_param_changes.borrow_mut();
+            // chunks whenever a parameter change occurs. To do that, we'll store all of those
+            // parameter changes in a vector. Otherwise all parameter changes are handled right here
+            // and now. We'll also need to store the note events in the same vector because MIDI CC
+            // messages are sent through parameter changes. This vector gets sorted at the end so we
+            // can treat it as a sort of queue.
+            let mut process_events = self.inner.process_events.borrow_mut();
             let mut parameter_values_changed = false;
-            input_param_changes.clear();
+            process_events.clear();
+
+            // First we'll go through the parameter changes. This may also include MIDI CC messages
+            // if the plugin supports those
             if let Some(param_changes) = data.input_param_changes.upgrade() {
                 let num_param_queues = param_changes.get_parameter_count();
                 for change_queue_idx in 0..num_param_queues {
@@ -672,68 +711,200 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
 
                         let mut sample_offset = 0i32;
                         let mut value = 0.0f64;
-                        #[allow(clippy::collapsible_else_if)]
-                        if P::SAMPLE_ACCURATE_AUTOMATION {
-                            for change_idx in 0..num_changes {
-                                if param_change_queue.get_point(
-                                    change_idx,
-                                    &mut sample_offset,
-                                    &mut value,
-                                ) == kResultOk
-                                {
-                                    input_param_changes.push(Reverse((
-                                        sample_offset as usize,
-                                        ParameterChange {
-                                            hash: param_hash,
-                                            normalized_value: value as f32,
-                                        },
-                                    )));
-                                }
-                            }
-                        } else {
+                        for change_idx in 0..num_changes {
                             if param_change_queue.get_point(
-                                num_changes - 1,
+                                change_idx,
                                 &mut sample_offset,
                                 &mut value,
                             ) == kResultOk
                             {
-                                self.inner.set_normalized_value_by_hash(
-                                    param_hash,
-                                    value as f32,
-                                    Some(sample_rate),
-                                );
-                                parameter_values_changed = true;
+                                let timing = sample_offset as u32;
+                                let value = value as f32;
+
+                                // MIDI CC messages, channel pressure, and pitch bend are also sent
+                                // as parameter changes
+                                if P::MIDI_INPUT >= MidiConfig::MidiCCs
+                                    && (VST3_MIDI_PARAMS_START..VST3_MIDI_PARAMS_END)
+                                        .contains(&param_hash)
+                                {
+                                    let midi_param_relative_idx =
+                                        param_hash - VST3_MIDI_PARAMS_START;
+                                    // This goes up to 130 for the 128 CCs followed by channel pressure and pitch bend
+                                    let midi_cc = (midi_param_relative_idx % VST3_MIDI_CCS) as u8;
+                                    let midi_channel =
+                                        (midi_param_relative_idx / VST3_MIDI_CCS) as u8;
+                                    process_events.push(ProcessEvent::NoteEvent {
+                                        timing,
+                                        event: match midi_cc {
+                                            // kAfterTouch
+                                            128 => NoteEvent::MidiChannelPressure {
+                                                timing,
+                                                channel: midi_channel,
+                                                pressure: value,
+                                            },
+                                            // kPitchBend
+                                            129 => NoteEvent::MidiPitchBend {
+                                                timing,
+                                                channel: midi_channel,
+                                                value,
+                                            },
+                                            n => NoteEvent::MidiCC {
+                                                timing,
+                                                channel: midi_channel,
+                                                cc: n,
+                                                value,
+                                            },
+                                        },
+                                    });
+                                } else if P::SAMPLE_ACCURATE_AUTOMATION {
+                                    process_events.push(ProcessEvent::ParameterChange {
+                                        timing,
+                                        hash: param_hash,
+                                        normalized_value: value,
+                                    });
+                                } else {
+                                    self.inner.set_normalized_value_by_hash(
+                                        param_hash,
+                                        value,
+                                        Some(sample_rate),
+                                    );
+                                    parameter_values_changed = true;
+                                }
                             }
                         }
                     }
                 }
             }
 
-            let mut block_start = 0;
-            let mut block_end = data.num_samples as usize;
+            // Then we'll add all of our input events
+            if P::MIDI_INPUT >= MidiConfig::Basic {
+                let mut note_expression_controller =
+                    self.inner.note_expression_controller.borrow_mut();
+                if let Some(events) = data.input_events.upgrade() {
+                    let num_events = events.get_event_count();
+
+                    let mut event: MaybeUninit<_> = MaybeUninit::uninit();
+                    for i in 0..num_events {
+                        let result = events.get_event(i, event.as_mut_ptr());
+                        nih_debug_assert_eq!(result, kResultOk);
+
+                        let event = event.assume_init();
+                        let timing = event.sample_offset as u32;
+                        if event.type_ == EventTypes::kNoteOnEvent as u16 {
+                            let event = event.event.note_on;
+
+                            // We need to keep track of note IDs to be able to handle not
+                            // expression value events
+                            note_expression_controller.register_note(&event);
+
+                            process_events.push(ProcessEvent::NoteEvent {
+                                timing,
+                                event: NoteEvent::NoteOn {
+                                    timing,
+                                    channel: event.channel as u8,
+                                    note: event.pitch as u8,
+                                    velocity: event.velocity,
+                                },
+                            });
+                        } else if event.type_ == EventTypes::kNoteOffEvent as u16 {
+                            let event = event.event.note_off;
+                            process_events.push(ProcessEvent::NoteEvent {
+                                timing,
+                                event: NoteEvent::NoteOff {
+                                    timing,
+                                    channel: event.channel as u8,
+                                    note: event.pitch as u8,
+                                    velocity: event.velocity,
+                                },
+                            });
+                        } else if event.type_ == EventTypes::kPolyPressureEvent as u16 {
+                            let event = event.event.poly_pressure;
+                            process_events.push(ProcessEvent::NoteEvent {
+                                timing,
+                                event: NoteEvent::PolyPressure {
+                                    timing,
+                                    channel: event.channel as u8,
+                                    note: event.pitch as u8,
+                                    pressure: event.pressure,
+                                },
+                            });
+                        } else if event.type_ == EventTypes::kNoteExpressionValueEvent as u16 {
+                            let event = event.event.note_expression_value;
+                            match note_expression_controller.translate_event(timing, &event) {
+                                Some(translated_event) => {
+                                    process_events.push(ProcessEvent::NoteEvent {
+                                        timing,
+                                        event: translated_event,
+                                    })
+                                }
+                                None => nih_debug_assert_failure!(
+                                    "Unhandled note expression type: {}",
+                                    event.type_id
+                                ),
+                            }
+                        }
+                    }
+                }
+            }
+
+            // And then we'll make sure everything is in the right order
+            // NOTE: It's important that this sort is stable, because parameter changes need to be
+            //       processed before note events. Otherwise you'll get out of bounds note events
+            //       with block splitting when the note event occurs at one index after the end (or
+            //       on the exlusive end index) of the block.
+            process_events.sort_by_key(|event| match event {
+                ProcessEvent::ParameterChange { timing, .. } => *timing,
+                ProcessEvent::NoteEvent { timing, .. } => *timing,
+            });
+
+            let mut block_start = 0usize;
+            let mut block_end;
             let mut event_start_idx = 0;
             let result = loop {
-                // In sample-accurate automation mode we'll handle any parameter changes for the
-                // current sample, and then process the block between the current sample and the
-                // sample containing the next parameter change, if any. All timings also need to be
-                // compensated for this.
-                if P::SAMPLE_ACCURATE_AUTOMATION {
-                    if input_param_changes.is_empty() {
-                        block_end = data.num_samples as usize;
-                    } else {
-                        while let Some(Reverse((sample_idx, _))) = input_param_changes.peek() {
-                            if *sample_idx != block_start {
-                                block_end = *sample_idx;
-                                break;
-                            }
+                // In sample-accurate automation mode we'll handle all parameter changes from the
+                // sorted process event array until we run into for the current sample, and then
+                // process the block between the current sample and the sample containing the next
+                // parameter change, if any. All timings also need to be compensated for this. As
+                // mentioend above, for this to work correctly parameter changes need to be ordered
+                // before note events at the same index.
+                // The extra scope is here to make sure we release the borrow on input_events
+                {
+                    let mut input_events = self.inner.input_events.borrow_mut();
+                    input_events.clear();
 
-                            let Reverse((_, change)) = input_param_changes.pop().unwrap();
-                            self.inner.set_normalized_value_by_hash(
-                                change.hash,
-                                change.normalized_value,
-                                Some(sample_rate),
-                            );
-                            parameter_values_changed = true;
+                    block_end = data.num_samples as usize;
+                    for event_idx in event_start_idx..process_events.len() {
+                        match process_events[event_idx] {
+                            ProcessEvent::ParameterChange {
+                                timing,
+                                hash,
+                                normalized_value,
+                            } => {
+                                // If this parameter change happens after the start of this block, then
+                                // we'll split the block here and handle this parmaeter change after
+                                // we've processed this block
+                                if timing != block_start as u32 {
+                                    event_start_idx = event_idx;
+                                    block_end = timing as usize;
+                                    break;
+                                }
+
+                                self.inner.set_normalized_value_by_hash(
+                                    hash,
+                                    normalized_value,
+                                    Some(sample_rate),
+                                );
+                                parameter_values_changed = true;
+                            }
+                            ProcessEvent::NoteEvent {
+                                timing: _,
+                                mut event,
+                            } => {
+                                // We need to make sure to compensate the event for any block splitting,
+                                // since we had to create the event object beforehand
+                                event.subtract_timing(block_start as u32);
+                                input_events.push_back(event);
+                            }
                         }
                     }
                 }
@@ -742,77 +913,6 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                 if parameter_values_changed {
                     self.inner.notify_param_values_changed();
                     parameter_values_changed = false;
-                }
-
-                if P::MIDI_INPUT >= MidiConfig::Basic {
-                    let mut input_events = self.inner.input_events.borrow_mut();
-                    let mut note_expression_controller =
-                        self.inner.note_expression_controller.borrow_mut();
-                    if let Some(events) = data.input_events.upgrade() {
-                        let num_events = events.get_event_count();
-
-                        input_events.clear();
-                        let mut event: MaybeUninit<_> = MaybeUninit::uninit();
-                        for i in event_start_idx..num_events {
-                            assert_eq!(events.get_event(i, event.as_mut_ptr()), kResultOk);
-                            let event = event.assume_init();
-
-                            // Make sure to only process the events for this block if we're
-                            // splitting the buffer
-                            if P::SAMPLE_ACCURATE_AUTOMATION
-                                && event.sample_offset as u32 >= block_end as u32
-                            {
-                                event_start_idx = i;
-                                break;
-                            }
-
-                            let timing = event.sample_offset as u32 - block_start as u32;
-                            if event.type_ == EventTypes::kNoteOnEvent as u16 {
-                                let event = event.event.note_on;
-
-                                // We need to keep track of note IDs to be able to handle not
-                                // expression value events
-                                note_expression_controller.register_note(&event);
-
-                                input_events.push_back(NoteEvent::NoteOn {
-                                    timing,
-                                    channel: event.channel as u8,
-                                    note: event.pitch as u8,
-                                    velocity: event.velocity,
-                                });
-                            } else if event.type_ == EventTypes::kNoteOffEvent as u16 {
-                                let event = event.event.note_off;
-                                input_events.push_back(NoteEvent::NoteOff {
-                                    timing,
-                                    channel: event.channel as u8,
-                                    note: event.pitch as u8,
-                                    velocity: event.velocity,
-                                });
-                            } else if event.type_ == EventTypes::kPolyPressureEvent as u16 {
-                                let event = event.event.poly_pressure;
-                                input_events.push_back(NoteEvent::PolyPressure {
-                                    timing,
-                                    channel: event.channel as u8,
-                                    note: event.pitch as u8,
-                                    pressure: event.pressure,
-                                });
-                            } else if event.type_ == EventTypes::kNoteExpressionValueEvent as u16 {
-                                let event = event.event.note_expression_value;
-                                match note_expression_controller.translate_event(timing, &event) {
-                                    Some(translated_event) => {
-                                        input_events.push_back(translated_event)
-                                    }
-                                    None => nih_debug_assert_failure!(
-                                        "Unhandled note expression type: {}",
-                                        event.type_id
-                                    ),
-                                }
-                            }
-
-                            // TODO: Add note event controllers to support the same expression types
-                            //       we're supporting for CLAP
-                        }
-                    }
                 }
 
                 let result = if is_parameter_flush {
@@ -986,6 +1086,33 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
             ProcessStatus::KeepAlive => u32::MAX, // kInfiniteTail
             _ => 0,                               // kNoTail
         }
+    }
+}
+
+impl<P: Vst3Plugin> IMidiMapping for Wrapper<P> {
+    unsafe fn get_midi_controller_assignment(
+        &self,
+        bus_index: i32,
+        channel: i16,
+        midi_cc_number: vst3_com::vst::CtrlNumber,
+        param_id: *mut vst3_com::vst::ParamID,
+    ) -> tresult {
+        if P::MIDI_INPUT < MidiConfig::MidiCCs
+            || bus_index != 0
+            || !(0..VST3_MIDI_CHANNELS as i16).contains(&channel)
+            || !(0..VST3_MIDI_CCS as i16).contains(&midi_cc_number)
+        {
+            return kResultFalse;
+        }
+
+        check_null_ptr!(param_id);
+
+        // We reserve a contiguous parameter range right at the end of the allowed parameter indices
+        // for these MIDI CC parameters
+        *param_id =
+            VST3_MIDI_PARAMS_START + midi_cc_number as u32 + (channel as u32 * VST3_MIDI_CCS);
+
+        kResultOk
     }
 }
 

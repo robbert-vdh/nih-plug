@@ -21,7 +21,6 @@ use crate::param::internals::Params;
 /// - Sidechain inputs
 /// - Multiple output busses
 /// - Special handling for offline processing
-/// - MIDI CC and expression handling for VST3 (those things are implemented for CLAP)
 /// - Outputting MIDI events from the process function (you can output parmaeter changes from an
 ///   editor GUI)
 #[allow(unused_variables)]

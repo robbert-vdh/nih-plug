@@ -212,4 +212,23 @@ impl NoteEvent {
             NoteEvent::MidiCC { timing, .. } => *timing,
         }
     }
+
+    /// Subtract a sample offset from this event's timing, needed to compensate for the block
+    /// splitting in the VST3 wrapper implementation because all events have to be read upfront.
+    pub(crate) fn subtract_timing(&mut self, samples: u32) {
+        match self {
+            NoteEvent::NoteOn { timing, .. } => *timing -= samples,
+            NoteEvent::NoteOff { timing, .. } => *timing -= samples,
+            NoteEvent::PolyPressure { timing, .. } => *timing -= samples,
+            NoteEvent::Volume { timing, .. } => *timing -= samples,
+            NoteEvent::Pan { timing, .. } => *timing -= samples,
+            NoteEvent::Tuning { timing, .. } => *timing -= samples,
+            NoteEvent::Vibrato { timing, .. } => *timing -= samples,
+            NoteEvent::Expression { timing, .. } => *timing -= samples,
+            NoteEvent::Brightness { timing, .. } => *timing -= samples,
+            NoteEvent::MidiChannelPressure { timing, .. } => *timing -= samples,
+            NoteEvent::MidiPitchBend { timing, .. } => *timing -= samples,
+            NoteEvent::MidiCC { timing, .. } => *timing -= samples,
+        }
+    }
 }
