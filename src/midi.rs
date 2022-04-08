@@ -21,8 +21,6 @@ pub enum MidiConfig {
 /// conversion functions.
 ///
 /// All of the timings are sample offsets withing the current buffer.
-///
-/// TODO: Add more events as needed
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[non_exhaustive]
 pub enum NoteEvent {
