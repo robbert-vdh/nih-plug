@@ -372,7 +372,8 @@ impl<P: ClapPlugin> Wrapper<P> {
             nih_debug_assert_eq!(
                 param_map.len(),
                 param_ids.len(),
-                "The plugin has duplicate parameter IDs, weird things may happen"
+                "The plugin has duplicate parameter IDs, weird things may happen. \
+                 Consider using 6 character parameter IDs to avoid collissions.."
             );
         }
 
