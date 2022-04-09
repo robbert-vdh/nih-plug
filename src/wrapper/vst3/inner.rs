@@ -299,15 +299,6 @@ impl<P: Vst3Plugin> WrapperInner<P> {
     }
 
     pub fn make_process_context(&self, transport: Transport) -> WrapperProcessContext<'_, P> {
-        // NOTE: Because with VST3 MIDI CC messages are sent as parameter changes and VST3 does not
-        //       interleave parameter changes and note events, this queue has to be sorted when
-        //       creating the process context. This is quite a waste of resources, but there's no
-        //       way around it.
-        let mut input_events = self.input_events.borrow_mut();
-        input_events
-            .make_contiguous()
-            .sort_by_key(|event| event.timing());
-
         WrapperProcessContext {
             inner: self,
             input_events_guard: input_events,
