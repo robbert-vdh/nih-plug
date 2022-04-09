@@ -302,7 +302,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
     pub fn make_process_context(&self, transport: Transport) -> WrapperProcessContext<'_, P> {
         WrapperProcessContext {
             inner: self,
-            input_events_guard: input_events,
+            input_events_guard: self.input_events.borrow_mut(),
             transport,
         }
     }
