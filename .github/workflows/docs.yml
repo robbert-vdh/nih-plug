@@ -1,0 +1,79 @@
+name: Generate documentation
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+      # Run when pushing version tags, since otherwise it's impossible to
+      # restart a successful build after pushing a tag
+      - '*.*.*'
+  pull_request:
+    branches:
+      - master
+
+defaults:
+  run:
+    # This otherwise gets run under dash which does not support brace expansion
+    shell: bash
+
+jobs:
+  docs:
+    name: Build and test all components
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+      # Needed for git-describe to do anything useful
+      - name: Fetch all git history
+        run: git fetch --force --prune --tags --unshallow
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl-dev libxcb1-dev libxcb-icccm4-dev libxcursor-dev libxkbcommon-dev libxcb-shape0-dev libxcb-xfixes0-dev
+
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Set up Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          # Nightly is needed to document the SIMD feature and for the
+          # `doc_auto_cfg` feature
+          toolchain: nightly
+          profile: minimal
+          default: true
+      - name: Build all targets
+        uses: actions-rs/cargo@v1
+        with:
+          command: doc
+          # Don't use --all-features here as that will enable a whole bunch of
+          # conflicting iced features. We also don't want to use `--workspace`
+          # here because that would also document our plugins and binary crates.
+          args: >-
+            --features docs,simd --no-deps
+            -p nih_plug
+            -p nih_plug_derive
+            -p nih_plug_egui
+            -p nih_plug_iced
+            -p nih_plug_vizia
+            -p nih_plug_xtask
+
+      - name: Add a redirect index page
+        run: |
+          cat > target/docs/index.html <<EOF
+          <meta charset="utf-8">
+          <meta http-equiv="refresh" content="0; url=nih_plug>
+          EOF
+      - name: Deploy to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4.3.0
+        with:
+          branch: gh-pages
+          folder: target/doc
