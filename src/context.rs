@@ -20,7 +20,37 @@ pub trait ProcessContext {
     fn transport(&self) -> &Transport;
 
     /// Return the next note event, if there is one. Use [`NoteEvent::timing()`] to get the event's
-    /// timing within the buffer.
+    /// timing within the buffer. Only available when
+    /// [`Plugin::MIDI_INPUT`][crate::prelude::Plugin::MIDI_INPUT] is set.
+    ///
+    /// # Usage
+    ///
+    /// You will likely want to use this with a loop, since there may be zero, one, or more events
+    /// for a sample:
+    ///
+    /// ```ignore
+    /// let mut next_event = context.next_event();
+    /// for (sample_id, channel_samples) in buffer.iter_samples().enumerate() {
+    ///     while let Some(event) = next_event {
+    ///         if event.timing() != sample_id as u32 {
+    ///             break;
+    ///         }
+    ///
+    ///         match event {
+    ///             NoteEvent::NoteOn { note, velocity, .. } => { ... },
+    ///             NoteEvent::NoteOff { note, .. } if note == 69 => { ... },
+    ///             NoteEvent::PolyPressure { note, pressure, .. } { ... },
+    ///             _ => (),
+    ///         }
+    ///
+    ///         next_event = context.next_event();
+    ///     }
+    ///
+    ///     // Do something with `channel_samples`...
+    /// }
+    ///
+    /// ProcessStatus::Normal
+    /// ```
     fn next_event(&mut self) -> Option<NoteEvent>;
 
     /// Update the current latency of the plugin. If the plugin is currently processing audio, then
