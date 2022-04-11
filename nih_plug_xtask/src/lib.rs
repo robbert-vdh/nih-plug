@@ -345,10 +345,13 @@ fn target_base(cross_compile_target: Option<&str>) -> Result<PathBuf> {
 
 /// The file name of the compiled library for a `cdylib` crate.
 fn library_basename(package: &str, target: CompilationTarget) -> String {
+    // Cargo will replace dashes with underscores
+    let lib_name = package.replace('-', "_");
+
     match target {
-        CompilationTarget::Linux(_) => format!("lib{package}.so"),
-        CompilationTarget::MacOS(_) => format!("lib{package}.dylib"),
-        CompilationTarget::Windows(_) => format!("{package}.dll"),
+        CompilationTarget::Linux(_) => format!("lib{lib_name}.so"),
+        CompilationTarget::MacOS(_) => format!("lib{lib_name}.dylib"),
+        CompilationTarget::Windows(_) => format!("{lib_name}.dll"),
     }
 }
 
