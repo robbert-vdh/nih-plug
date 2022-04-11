@@ -25,6 +25,7 @@ pub(crate) struct WrapperGuiContext<P: Vst3Plugin> {
 pub(crate) struct WrapperProcessContext<'a, P: Vst3Plugin> {
     pub(super) inner: &'a WrapperInner<P>,
     pub(super) input_events_guard: AtomicRefMut<'a, VecDeque<NoteEvent>>,
+    pub(super) output_events_guard: AtomicRefMut<'a, VecDeque<NoteEvent>>,
     pub(super) transport: Transport,
 }
 
@@ -106,6 +107,10 @@ impl<P: Vst3Plugin> ProcessContext for WrapperProcessContext<'_, P> {
 
     fn next_event(&mut self) -> Option<NoteEvent> {
         self.input_events_guard.pop_front()
+    }
+
+    fn send_event(&mut self, event: NoteEvent) {
+        self.output_events_guard.push_back(event);
     }
 
     fn set_latency_samples(&self, samples: u32) {

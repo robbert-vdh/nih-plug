@@ -82,6 +82,9 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     ///       interleave parameter changes and note events, this queue has to be sorted when
     ///       creating the process context
     pub input_events: AtomicRefCell<VecDeque<NoteEvent>>,
+    /// Stores any events the plugin has output during the current processing cycle, analogous to
+    /// `input_events`.
+    pub output_events: AtomicRefCell<VecDeque<NoteEvent>>,
     /// VST3 has several useful predefined note expressions, but for some reason they are the only
     /// note event type that don't have MIDI note ID and channel fields. So we need to keep track of
     /// the msot recent VST3 note IDs we've seen, and then map those back to MIDI note IDs and
@@ -273,6 +276,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             current_latency: AtomicU32::new(0),
             output_buffer: AtomicRefCell::new(Buffer::default()),
             input_events: AtomicRefCell::new(VecDeque::with_capacity(1024)),
+            output_events: AtomicRefCell::new(VecDeque::with_capacity(1024)),
             note_expression_controller: AtomicRefCell::new(NoteExpressionController::default()),
             process_events: AtomicRefCell::new(Vec::with_capacity(4096)),
             updated_state_sender,
@@ -303,6 +307,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         WrapperProcessContext {
             inner: self,
             input_events_guard: self.input_events.borrow_mut(),
+            output_events_guard: self.output_events.borrow_mut(),
             transport,
         }
     }

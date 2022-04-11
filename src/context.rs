@@ -53,6 +53,11 @@ pub trait ProcessContext {
     /// ```
     fn next_event(&mut self) -> Option<NoteEvent>;
 
+    /// Send an event to the host. Only available when
+    /// [`Plugin::MIDI_OUTPUT`][crate::prelude::Plugin::MIDI_INPUT] is set. Will not do anything
+    /// otherwise.
+    fn send_event(&mut self, event: NoteEvent);
+
     /// Update the current latency of the plugin. If the plugin is currently processing audio, then
     /// this may cause audio playback to be restarted.
     fn set_latency_samples(&self, samples: u32);

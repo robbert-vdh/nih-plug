@@ -40,9 +40,14 @@ pub trait Plugin: Default + Send + Sync + 'static {
     /// instead of setting up the busses properly.
     const DEFAULT_NUM_OUTPUTS: u32 = 2;
 
-    /// Whether the plugin accepts note events, and which level of . If this is set to
-    /// [`MidiConfig::None`], then the plugin won't receive any note events.
+    /// Whether the plugin accepts note events, and what which events it wants to receive. If this
+    /// is set to [`MidiConfig::None`], then the plugin won't receive any note events.
     const MIDI_INPUT: MidiConfig = MidiConfig::None;
+    /// Whether the plugin can output note events. If this is set to [`MidiConfig::None`], then the
+    /// plugin won't have a note output port. When this is set to another value, then in most hsots
+    /// the plugin will consume all note and MIDI CC input. If you don't want that, then you will
+    /// need to forward those events yourself.
+    const MIDI_OUTPUT: MidiConfig = MidiConfig::None;
     /// If enabled, the audio processing cycle may be split up into multiple smaller chunks if
     /// parameter values change occur in the middle of the buffer. Depending on the host these
     /// blocks may be as small as a single sample. Bitwig Studio sends at most one parameter change

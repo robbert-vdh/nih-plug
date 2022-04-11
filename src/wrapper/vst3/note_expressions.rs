@@ -98,4 +98,46 @@ impl NoteExpressionController {
             _ => None,
         }
     }
+
+    /// Translate a NIH-plug note expression event a VST3 `NoteExpressionValueEvent`. Will return
+    /// `None` if the event is not a polyphonic expression event, i.e. one of the events handled by
+    /// `translate_event()`.
+    pub fn translate_event_reverse(
+        note_id: i32,
+        event: &NoteEvent,
+    ) -> Option<NoteExpressionValueEvent> {
+        match &event {
+            NoteEvent::PolyVolume { gain, .. } => Some(NoteExpressionValueEvent {
+                type_id: 0, // kVolumeTypeID
+                note_id,
+                value: *gain as f64 / 4.0,
+            }),
+            NoteEvent::PolyPan { pan, .. } => Some(NoteExpressionValueEvent {
+                type_id: 1, // kPanTypeId
+                note_id,
+                value: (*pan as f64 + 1.0) / 2.0,
+            }),
+            NoteEvent::PolyTuning { tuning, .. } => Some(NoteExpressionValueEvent {
+                type_id: 2, // kTuningTypeID
+                note_id,
+                value: (*tuning as f64 / 240.0) + 0.5,
+            }),
+            NoteEvent::PolyVibrato { vibrato, .. } => Some(NoteExpressionValueEvent {
+                type_id: 3, // kVibratoTypeID
+                note_id,
+                value: *vibrato as f64,
+            }),
+            NoteEvent::PolyExpression { expression, .. } => Some(NoteExpressionValueEvent {
+                type_id: 4, // kExpressionTypeID
+                note_id,
+                value: *expression as f64,
+            }),
+            NoteEvent::PolyBrightness { brightness, .. } => Some(NoteExpressionValueEvent {
+                type_id: 5, // kBrightnessTypeID
+                note_id,
+                value: *brightness as f64,
+            }),
+            _ => None,
+        }
+    }
 }

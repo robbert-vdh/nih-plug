@@ -8,9 +8,9 @@ use vst3_sys::base::{kInvalidArgument, kNoInterface, kResultFalse, kResultOk, tr
 use vst3_sys::base::{IBStream, IPluginBase};
 use vst3_sys::utils::SharedVstPtr;
 use vst3_sys::vst::{
-    kNoProgramListId, kRootUnitId, EventTypes, IAudioProcessor, IComponent, IEditController,
-    IEventList, IMidiMapping, IParamValueQueue, IParameterChanges, IUnitInfo, ParameterFlags,
-    ProgramListInfo, TChar, UnitInfo,
+    kNoProgramListId, kRootUnitId, Event, EventTypes, IAudioProcessor, IComponent, IEditController,
+    IEventList, IMidiMapping, IParamValueQueue, IParameterChanges, IUnitInfo, LegacyMidiCCOutEvent,
+    NoteOffEvent, NoteOnEvent, ParameterFlags, PolyPressureEvent, ProgramListInfo, TChar, UnitInfo,
 };
 use vst3_sys::VST3;
 use widestring::U16CStr;
@@ -26,6 +26,7 @@ use crate::util::permit_alloc;
 use crate::wrapper::state;
 use crate::wrapper::util::{process_wrapper, u16strlcpy};
 use crate::wrapper::vst3::inner::ProcessEvent;
+use crate::wrapper::vst3::note_expressions::NoteExpressionController;
 use crate::wrapper::vst3::util::{VST3_MIDI_CHANNELS, VST3_MIDI_PARAMS_END};
 
 // Alias needed for the VST3 attribute macro
@@ -75,6 +76,12 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
             x if x == vst3_sys::vst::MediaTypes::kEvent as i32
                 && dir == vst3_sys::vst::BusDirections::kInput as i32
                 && P::MIDI_INPUT >= MidiConfig::Basic =>
+            {
+                1
+            }
+            x if x == vst3_sys::vst::MediaTypes::kEvent as i32
+                && dir == vst3_sys::vst::BusDirections::kOutput as i32
+                && P::MIDI_OUTPUT >= MidiConfig::Basic =>
             {
                 1
             }
@@ -130,7 +137,23 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                 info.media_type = vst3_sys::vst::MediaTypes::kEvent as i32;
                 info.direction = vst3_sys::vst::BusDirections::kInput as i32;
                 info.channel_count = 16;
-                u16strlcpy(&mut info.name, "MIDI");
+                u16strlcpy(&mut info.name, "Note Input");
+                info.bus_type = vst3_sys::vst::BusTypes::kMain as i32;
+                info.flags = vst3_sys::vst::BusFlags::kDefaultActive as u32;
+                kResultOk
+            }
+            (t, d, 0)
+                if t == vst3_sys::vst::MediaTypes::kEvent as i32
+                    && d == vst3_sys::vst::BusDirections::kOutput as i32
+                    && P::MIDI_OUTPUT >= MidiConfig::Basic =>
+            {
+                *info = mem::zeroed();
+
+                let info = &mut *info;
+                info.media_type = vst3_sys::vst::MediaTypes::kEvent as i32;
+                info.direction = vst3_sys::vst::BusDirections::kOutput as i32;
+                info.channel_count = 16;
+                u16strlcpy(&mut info.name, "Note Output");
                 info.bus_type = vst3_sys::vst::BusTypes::kMain as i32;
                 info.flags = vst3_sys::vst::BusFlags::kDefaultActive as u32;
                 kResultOk
@@ -158,6 +181,17 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
 
                 kResultOk
             }
+            (t, 0)
+                if t == vst3_sys::vst::MediaTypes::kEvent as i32
+                    && P::MIDI_INPUT >= MidiConfig::Basic
+                    && P::MIDI_OUTPUT >= MidiConfig::Basic =>
+            {
+                out_info.media_type = vst3_sys::vst::MediaTypes::kEvent as i32;
+                out_info.bus_index = in_info.bus_index;
+                out_info.channel = in_info.channel;
+
+                kResultOk
+            }
             _ => kInvalidArgument,
         }
     }
@@ -176,6 +210,13 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                 if t == vst3_sys::vst::MediaTypes::kEvent as i32
                     && d == vst3_sys::vst::BusDirections::kInput as i32
                     && P::MIDI_INPUT >= MidiConfig::Basic =>
+            {
+                kResultOk
+            }
+            (t, d, 0)
+                if t == vst3_sys::vst::MediaTypes::kEvent as i32
+                    && d == vst3_sys::vst::BusDirections::kOutput as i32
+                    && P::MIDI_OUTPUT >= MidiConfig::Basic =>
             {
                 kResultOk
             }
@@ -1029,11 +1070,152 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                         }
                     }
 
-                    let mut plugin = self.inner.plugin.write();
-                    let mut context = self.inner.make_process_context(transport);
-
-                    let result = plugin.process(&mut output_buffer, &mut context);
+                    let result = {
+                        let mut plugin = self.inner.plugin.write();
+                        let mut context = self.inner.make_process_context(transport);
+                        plugin.process(&mut output_buffer, &mut context)
+                    };
                     self.inner.last_process_status.store(result);
+
+                    // Send any events output by the plugin during the process cycle
+                    if let Some(events) = data.output_events.upgrade() {
+                        let mut output_events = self.inner.output_events.borrow_mut();
+                        while let Some(event) = output_events.pop_front() {
+                            // We'll set the correct variant on this struct, or skip to the next
+                            // loop iteration if we don't handle the event type
+                            let mut vst3_event: Event = mem::zeroed();
+                            vst3_event.bus_index = 0;
+                            // There's also a ppqPos field, but uh how about no
+                            vst3_event.sample_offset = event.timing() as i32 + block_start as i32;
+
+                            match event {
+                                NoteEvent::NoteOn {
+                                    timing: _,
+                                    channel,
+                                    note,
+                                    velocity,
+                                } if P::MIDI_OUTPUT >= MidiConfig::Basic => {
+                                    vst3_event.type_ = EventTypes::kNoteOnEvent as u16;
+                                    vst3_event.event.note_on = NoteOnEvent {
+                                        channel: channel as i16,
+                                        pitch: note as i16,
+                                        tuning: 0.0,
+                                        velocity,
+                                        length: 0, // What?
+                                        // We'll use this for our note IDs, that way we don't have
+                                        // to do anything complicated here
+                                        note_id: ((channel as i32) << 8) | note as i32,
+                                    };
+                                }
+                                NoteEvent::NoteOff {
+                                    timing: _,
+                                    channel,
+                                    note,
+                                    velocity,
+                                } if P::MIDI_OUTPUT >= MidiConfig::Basic => {
+                                    vst3_event.type_ = EventTypes::kNoteOffEvent as u16;
+                                    vst3_event.event.note_off = NoteOffEvent {
+                                        channel: channel as i16,
+                                        pitch: note as i16,
+                                        velocity,
+                                        note_id: ((channel as i32) << 8) | note as i32,
+                                        tuning: 0.0,
+                                    };
+                                }
+                                NoteEvent::PolyPressure {
+                                    timing: _,
+                                    channel,
+                                    note,
+                                    pressure,
+                                } if P::MIDI_OUTPUT >= MidiConfig::Basic => {
+                                    vst3_event.type_ = EventTypes::kPolyPressureEvent as u16;
+                                    vst3_event.event.poly_pressure = PolyPressureEvent {
+                                        channel: channel as i16,
+                                        pitch: note as i16,
+                                        note_id: ((channel as i32) << 8) | note as i32,
+                                        pressure,
+                                    };
+                                }
+                                event @ (NoteEvent::PolyVolume { channel, note, .. }
+                                | NoteEvent::PolyPan { channel, note, .. }
+                                | NoteEvent::PolyTuning { channel, note, .. }
+                                | NoteEvent::PolyVibrato { channel, note, .. }
+                                | NoteEvent::PolyExpression { channel, note, .. }
+                                | NoteEvent::PolyBrightness { channel, note, .. })
+                                    if P::MIDI_OUTPUT >= MidiConfig::Basic =>
+                                {
+                                    match NoteExpressionController::translate_event_reverse(
+                                        ((channel as i32) << 8) | note as i32,
+                                        &event,
+                                    ) {
+                                        Some(translated_event) => {
+                                            vst3_event.type_ =
+                                                EventTypes::kNoteExpressionValueEvent as u16;
+                                            vst3_event.event.note_expression_value =
+                                                translated_event;
+                                        }
+                                        None => {
+                                            nih_debug_assert_failure!(
+                                                "Mishandled note expression value event"
+                                            );
+                                        }
+                                    }
+                                }
+                                NoteEvent::MidiChannelPressure {
+                                    timing: _,
+                                    channel,
+                                    pressure,
+                                } if P::MIDI_OUTPUT >= MidiConfig::MidiCCs => {
+                                    vst3_event.type_ = EventTypes::kLegacyMIDICCOutEvent as u16;
+                                    vst3_event.event.legacy_midi_cc_out = LegacyMidiCCOutEvent {
+                                        control_number: 128, // kAfterTouch
+                                        channel: channel as i8,
+                                        value: (pressure * 127.0).round() as i8,
+                                        value2: 0,
+                                    };
+                                }
+                                NoteEvent::MidiPitchBend {
+                                    timing: _,
+                                    channel,
+                                    value,
+                                } if P::MIDI_OUTPUT >= MidiConfig::MidiCCs => {
+                                    let scaled = (value * ((1 << 14) - 1) as f32).round() as i32;
+
+                                    vst3_event.type_ = EventTypes::kLegacyMIDICCOutEvent as u16;
+                                    vst3_event.event.legacy_midi_cc_out = LegacyMidiCCOutEvent {
+                                        control_number: 129, // kPitchBend
+                                        channel: channel as i8,
+                                        value: (scaled & 0b01111111) as i8,
+                                        value2: ((scaled >> 7) & 0b01111111) as i8,
+                                    };
+                                }
+                                NoteEvent::MidiCC {
+                                    timing: _,
+                                    channel,
+                                    cc,
+                                    value,
+                                } if P::MIDI_OUTPUT >= MidiConfig::MidiCCs => {
+                                    vst3_event.type_ = EventTypes::kLegacyMIDICCOutEvent as u16;
+                                    vst3_event.event.legacy_midi_cc_out = LegacyMidiCCOutEvent {
+                                        control_number: cc,
+                                        channel: channel as i8,
+                                        value: (value * 127.0).round() as i8,
+                                        value2: 0,
+                                    };
+                                }
+                                _ => {
+                                    nih_debug_assert_failure!(
+                                        "Invalid output event for the current MIDI_OUTPUT setting"
+                                    );
+                                    continue;
+                                }
+                            };
+
+                            let result = events.add_event(&mut vst3_event);
+                            nih_debug_assert_eq!(result, kResultOk);
+                        }
+                    }
+
                     match result {
                         ProcessStatus::Error(err) => {
                             nih_debug_assert_failure!("Process error: {}", err);
