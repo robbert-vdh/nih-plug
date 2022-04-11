@@ -70,7 +70,7 @@ jobs:
         run: |
           cat > target/doc/index.html <<EOF
           <meta charset="utf-8">
-          <meta http-equiv="refresh" content="0; url=nih_plug>
+          <meta http-equiv="refresh" content="0; url=nih_plug">
           EOF
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4.3.0
