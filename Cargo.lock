@@ -953,14 +953,14 @@ dependencies = [
 
 [[package]]
 name = "flate2"
-version = "1.0.22"
+version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e6988e897c1c9c485f43b47a529cef42fde0547f9d8d41a7062518f1d8fc53f"
+checksum = "b39522e96686d38f4bc984b9198e3a0613264abaebaff2c5c918bfa6b6da09af"
 dependencies = [
  "cfg-if 1.0.0",
  "crc32fast",
  "libc",
- "miniz_oxide 0.4.4",
+ "miniz_oxide 0.5.1",
 ]
 
 [[package]]
@@ -1953,16 +1953,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "791daaae1ed6889560f8c4359194f56648355540573244a5448a83ba1ecc7435"
 dependencies = [
  "adler32",
-]
-
-[[package]]
-name = "miniz_oxide"
-version = "0.4.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a92518e98c078586bc6c934028adcca4c92a53d6a958196de835170a01d84e4b"
-dependencies = [
- "adler",
- "autocfg",
 ]
 
 [[package]]
@@ -3521,7 +3511,7 @@ dependencies = [
 [[package]]
 name = "vst3-com"
 version = "0.1.0"
-source = "git+https://github.com/RustAudio/vst3-sys.git#81ee70462870a0f4d9e3f9a0e09c8c4539a2e0fe"
+source = "git+https://github.com/robbert-vdh/vst3-sys.git?branch=fix/note-off-event#bda8be0f6dacd2155765a64a32351dc9308164fe"
 dependencies = [
  "vst3-com-macros",
 ]
@@ -3529,7 +3519,7 @@ dependencies = [
 [[package]]
 name = "vst3-com-macros"
 version = "0.2.0"
-source = "git+https://github.com/RustAudio/vst3-sys.git#81ee70462870a0f4d9e3f9a0e09c8c4539a2e0fe"
+source = "git+https://github.com/robbert-vdh/vst3-sys.git?branch=fix/note-off-event#bda8be0f6dacd2155765a64a32351dc9308164fe"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3540,7 +3530,7 @@ dependencies = [
 [[package]]
 name = "vst3-com-macros-support"
 version = "0.2.0"
-source = "git+https://github.com/RustAudio/vst3-sys.git#81ee70462870a0f4d9e3f9a0e09c8c4539a2e0fe"
+source = "git+https://github.com/robbert-vdh/vst3-sys.git?branch=fix/note-off-event#bda8be0f6dacd2155765a64a32351dc9308164fe"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3550,7 +3540,7 @@ dependencies = [
 [[package]]
 name = "vst3-sys"
 version = "0.1.0"
-source = "git+https://github.com/RustAudio/vst3-sys.git#81ee70462870a0f4d9e3f9a0e09c8c4539a2e0fe"
+source = "git+https://github.com/robbert-vdh/vst3-sys.git?branch=fix/note-off-event#bda8be0f6dacd2155765a64a32351dc9308164fe"
 dependencies = [
  "vst3-com",
 ]
