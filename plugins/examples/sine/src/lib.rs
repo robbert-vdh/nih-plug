@@ -139,7 +139,7 @@ impl Plugin for Sine {
     }
 
     fn process(&mut self, buffer: &mut Buffer, context: &mut impl ProcessContext) -> ProcessStatus {
-        let mut next_event = context.next_midi_event();
+        let mut next_event = context.next_event();
         for (sample_id, channel_samples) in buffer.iter_samples().enumerate() {
             // Smoothing is optionally built into the parameters themselves
             let gain = self.params.gain.smoothed.next();
@@ -168,7 +168,7 @@ impl Plugin for Sine {
                         _ => break 'midi_events,
                     }
 
-                    next_event = context.next_midi_event();
+                    next_event = context.next_event();
                 }
 
                 // This gain envelope prevents clicks with new notes and with released notes

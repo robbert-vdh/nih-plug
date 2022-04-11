@@ -104,7 +104,7 @@ impl<P: Vst3Plugin> ProcessContext for WrapperProcessContext<'_, P> {
         &self.transport
     }
 
-    fn next_midi_event(&mut self) -> Option<NoteEvent> {
+    fn next_event(&mut self) -> Option<NoteEvent> {
         self.input_events_guard.pop_front()
     }
 

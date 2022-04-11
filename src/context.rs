@@ -19,12 +19,9 @@ pub trait ProcessContext {
     /// Get information about the current transport position and status.
     fn transport(&self) -> &Transport;
 
-    /// Return the next note event, if there is one. The event contains the timing
-    ///
-    /// TODO: Rethink this API, both in terms of ergonomics, and if we can do this in a way that
-    ///       doesn't require locks (because of the thread safe-ness, which we don't really need
-    ///       here)
-    fn next_midi_event(&mut self) -> Option<NoteEvent>;
+    /// Return the next note event, if there is one. Use [`NoteEvent::timing()`] to get the event's
+    /// timing within the buffer.
+    fn next_event(&mut self) -> Option<NoteEvent>;
 
     /// Update the current latency of the plugin. If the plugin is currently processing audio, then
     /// this may cause audio playback to be restarted.
