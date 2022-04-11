@@ -43,7 +43,8 @@ impl Plugin for MidiInverter {
         _buffer: &mut Buffer,
         context: &mut impl ProcessContext,
     ) -> ProcessStatus {
-        // Act on the next MIDI event
+        // We'll invert the channel, note index, velocity, pressure, CC value, pitch bend, and
+        // anything else that is invertable for all events we receive
         while let Some(event) = context.next_event() {
             match event {
                 NoteEvent::NoteOn {
