@@ -21,8 +21,7 @@ use crate::param::internals::Params;
 /// - Sidechain inputs
 /// - Multiple output busses
 /// - Special handling for offline processing
-/// - Outputting MIDI events from the process function (you can output parmaeter changes from an
-///   editor GUI)
+/// - MIDI SysEx and MIDI2 for CLAP, note expressions and MIDI1 are already supported
 #[allow(unused_variables)]
 pub trait Plugin: Default + Send + Sync + 'static {
     const NAME: &'static str;
