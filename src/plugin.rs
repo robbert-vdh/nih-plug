@@ -76,7 +76,8 @@ pub trait Plugin: Default + Send + Sync + 'static {
     /// Whether the plugin supports a bus config. This only acts as a check, and the plugin
     /// shouldn't do anything beyond returning true or false.
     fn accepts_bus_config(&self, config: &BusConfig) -> bool {
-        config.num_input_channels == 2 && config.num_output_channels == 2
+        config.num_input_channels == Self::DEFAULT_NUM_INPUTS
+            && config.num_output_channels == Self::DEFAULT_NUM_OUTPUTS
     }
 
     /// Initialize the plugin for the given bus and buffer configurations. If the plugin is being
