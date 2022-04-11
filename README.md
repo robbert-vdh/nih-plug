@@ -14,7 +14,9 @@ myself or that was requested by others. See the [current
 features](#current-features) section for more information on the project's
 current status.
 
-Come join us on the [Rust Audio Discord](https://discord.gg/ykxU3rt4Cb).
+Come join us on the [Rust Audio Discord](https://discord.gg/ykxU3rt4Cb), or
+check out the [documentation](https://robbert-vdh.github.io/nih-plug) (work in
+progress).
 
 ### Table of contents
 
