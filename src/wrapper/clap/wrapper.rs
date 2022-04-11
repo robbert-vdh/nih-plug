@@ -852,7 +852,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 } if P::MIDI_OUTPUT >= MidiConfig::Basic => {
                     let event = clap_event_note {
                         header: clap_event_header {
-                            size: mem::size_of::<clap_event_param_gesture>() as u32,
+                            size: mem::size_of::<clap_event_note>() as u32,
                             time,
                             space_id: CLAP_CORE_EVENT_SPACE_ID,
                             type_: CLAP_EVENT_NOTE_ON,
@@ -875,7 +875,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 } if P::MIDI_OUTPUT >= MidiConfig::Basic => {
                     let event = clap_event_note {
                         header: clap_event_header {
-                            size: mem::size_of::<clap_event_param_gesture>() as u32,
+                            size: mem::size_of::<clap_event_note>() as u32,
                             time,
                             space_id: CLAP_CORE_EVENT_SPACE_ID,
                             type_: CLAP_EVENT_NOTE_OFF,
@@ -897,7 +897,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 } if P::MIDI_OUTPUT >= MidiConfig::Basic => {
                     let event = clap_event_note_expression {
                         header: clap_event_header {
-                            size: mem::size_of::<clap_event_param_gesture>() as u32,
+                            size: mem::size_of::<clap_event_note_expression>() as u32,
                             time,
                             space_id: CLAP_CORE_EVENT_SPACE_ID,
                             type_: CLAP_EVENT_NOTE_EXPRESSION,
@@ -920,7 +920,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 } if P::MIDI_OUTPUT >= MidiConfig::Basic => {
                     let event = clap_event_note_expression {
                         header: clap_event_header {
-                            size: mem::size_of::<clap_event_param_gesture>() as u32,
+                            size: mem::size_of::<clap_event_note_expression>() as u32,
                             time,
                             space_id: CLAP_CORE_EVENT_SPACE_ID,
                             type_: CLAP_EVENT_NOTE_EXPRESSION,
@@ -943,7 +943,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 } if P::MIDI_OUTPUT >= MidiConfig::Basic => {
                     let event = clap_event_note_expression {
                         header: clap_event_header {
-                            size: mem::size_of::<clap_event_param_gesture>() as u32,
+                            size: mem::size_of::<clap_event_note_expression>() as u32,
                             time,
                             space_id: CLAP_CORE_EVENT_SPACE_ID,
                             type_: CLAP_EVENT_NOTE_EXPRESSION,
@@ -966,7 +966,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 } if P::MIDI_OUTPUT >= MidiConfig::Basic => {
                     let event = clap_event_note_expression {
                         header: clap_event_header {
-                            size: mem::size_of::<clap_event_param_gesture>() as u32,
+                            size: mem::size_of::<clap_event_note_expression>() as u32,
                             time,
                             space_id: CLAP_CORE_EVENT_SPACE_ID,
                             type_: CLAP_EVENT_NOTE_EXPRESSION,
@@ -989,7 +989,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 } if P::MIDI_OUTPUT >= MidiConfig::Basic => {
                     let event = clap_event_note_expression {
                         header: clap_event_header {
-                            size: mem::size_of::<clap_event_param_gesture>() as u32,
+                            size: mem::size_of::<clap_event_note_expression>() as u32,
                             time,
                             space_id: CLAP_CORE_EVENT_SPACE_ID,
                             type_: CLAP_EVENT_NOTE_EXPRESSION,
@@ -1012,7 +1012,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 } if P::MIDI_OUTPUT >= MidiConfig::Basic => {
                     let event = clap_event_note_expression {
                         header: clap_event_header {
-                            size: mem::size_of::<clap_event_param_gesture>() as u32,
+                            size: mem::size_of::<clap_event_note_expression>() as u32,
                             time,
                             space_id: CLAP_CORE_EVENT_SPACE_ID,
                             type_: CLAP_EVENT_NOTE_EXPRESSION,
@@ -1035,7 +1035,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 } if P::MIDI_OUTPUT >= MidiConfig::Basic => {
                     let event = clap_event_note_expression {
                         header: clap_event_header {
-                            size: mem::size_of::<clap_event_param_gesture>() as u32,
+                            size: mem::size_of::<clap_event_note_expression>() as u32,
                             time,
                             space_id: CLAP_CORE_EVENT_SPACE_ID,
                             type_: CLAP_EVENT_NOTE_EXPRESSION,
@@ -1057,7 +1057,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 } if P::MIDI_OUTPUT >= MidiConfig::MidiCCs => {
                     let event = clap_event_midi {
                         header: clap_event_header {
-                            size: mem::size_of::<clap_event_param_gesture>() as u32,
+                            size: mem::size_of::<clap_event_midi>() as u32,
                             time,
                             space_id: CLAP_CORE_EVENT_SPACE_ID,
                             type_: CLAP_EVENT_MIDI,
@@ -1082,7 +1082,7 @@ impl<P: ClapPlugin> Wrapper<P> {
 
                     let event = clap_event_midi {
                         header: clap_event_header {
-                            size: mem::size_of::<clap_event_param_gesture>() as u32,
+                            size: mem::size_of::<clap_event_midi>() as u32,
                             time,
                             space_id: CLAP_CORE_EVENT_SPACE_ID,
                             type_: CLAP_EVENT_MIDI,
@@ -1106,7 +1106,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 } if P::MIDI_OUTPUT >= MidiConfig::MidiCCs => {
                     let event = clap_event_midi {
                         header: clap_event_header {
-                            size: mem::size_of::<clap_event_param_gesture>() as u32,
+                            size: mem::size_of::<clap_event_midi>() as u32,
                             time,
                             space_id: CLAP_CORE_EVENT_SPACE_ID,
                             type_: CLAP_EVENT_MIDI,
