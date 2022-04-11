@@ -1,6 +1,7 @@
 //! Documentation is currently a work in progress. Import everything from the [`prelude`] module and
 //! check out the example plugins to get started.
 
+#![cfg_attr(feature = "docs", feature(doc_auto_cfg))]
 #![cfg_attr(feature = "simd", feature(portable_simd))]
 
 #[macro_use]

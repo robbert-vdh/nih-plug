@@ -40,6 +40,8 @@ assert_process_allocs = ["assert_no_alloc"]
 # Add adapters to the Buffer object for reading the channel data to and from
 # `std::simd` vectors. Requires a nightly compiler.
 simd = []
+# Only relevant when generating docs, adds the `doc_auto_cfg` nightly feature
+docs = []
 
 [dependencies]
 nih_plug_derive = { path = "nih_plug_derive" }
