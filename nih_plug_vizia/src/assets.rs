@@ -1,5 +1,5 @@
-//! Binary assets for use with `nih_plug_iced. These fonts first need to be registered by calling
-//! [`nih_plug_iced::assets::register_fonts()`][register_fonts()`].
+//! Binary assets for use with `nih_plug_vizia`. These fonts first need to be registered by calling
+//! [`nih_plug_vizia::assets::register_fonts()`][register_fonts()].
 
 use vizia::Context;
 
