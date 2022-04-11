@@ -1547,14 +1547,6 @@ impl<P: ClapPlugin> Wrapper<P> {
             // we'll process every incoming event.
             let process = &*process;
 
-            // I don't think this is a thing for CLAP since there's a dedicated flush function, but
-            // might as well protect against this
-            // TOOD: Send the output events when doing a flush
-            if process.audio_outputs_count == 0 || process.frames_count == 0 {
-                nih_log!("CLAP process call event flush");
-                return CLAP_PROCESS_CONTINUE;
-            }
-
             // If `P::SAMPLE_ACCURATE_AUTOMATION` is set, then we'll split up the audio buffer into
             // chunks whenever a parameter change occurs
             let mut block_start = 0;
@@ -1588,21 +1580,16 @@ impl<P: ClapPlugin> Wrapper<P> {
                 // - 1 input bus
                 // - 1 output bus
                 // - 1 input bus and 1 output bus
+                // - 1 input bus and 1 output bus
+                //
+                // Depending on the host either of these may also be missing if the number of
+                // channels is set to 0.
                 nih_debug_assert!(
                     process.audio_inputs_count <= 1 && process.audio_outputs_count <= 1,
                     "The host provides more than one input or output bus"
                 );
 
                 // Right now we don't handle any auxiliary outputs
-                check_null_ptr_msg!(
-                    "Null pointers passed for audio outputs in process function",
-                    CLAP_PROCESS_ERROR,
-                    process.audio_outputs,
-                    (*process.audio_outputs).data32
-                );
-                let audio_outputs = &*process.audio_outputs;
-                let num_output_channels = audio_outputs.channel_count as usize;
-
                 // This vector has been preallocated to contain enough slices as there are output
                 // channels
                 // TODO: The audio buffers have a latency field, should we use those?
@@ -1610,30 +1597,43 @@ impl<P: ClapPlugin> Wrapper<P> {
                 //       flags?
                 let mut output_buffer = wrapper.output_buffer.borrow_mut();
                 output_buffer.with_raw_vec(|output_slices| {
-                    nih_debug_assert_eq!(num_output_channels, output_slices.len());
-                    for (output_channel_idx, output_channel_slice) in
-                        output_slices.iter_mut().enumerate()
+                    if !process.audio_outputs.is_null()
+                        && !(*process.audio_outputs).data32.is_null()
                     {
-                        // If `P::SAMPLE_ACCURATE_AUTOMATION` is set, then we may be iterating over
-                        // the buffer in smaller sections.
-                        // SAFETY: These pointers may not be valid outside of this function even though
-                        // their lifetime is equal to this structs. This is still safe because they are
-                        // only dereferenced here later as part of this process function.
-                        let channel_ptr =
-                            *(audio_outputs.data32 as *mut *mut f32).add(output_channel_idx);
-                        *output_channel_slice = std::slice::from_raw_parts_mut(
-                            channel_ptr.add(block_start),
-                            block_end - block_start,
-                        );
+                        let audio_outputs = &*process.audio_outputs;
+                        let num_output_channels = audio_outputs.channel_count as usize;
+                        nih_debug_assert_eq!(num_output_channels, output_slices.len());
+
+                        for (output_channel_idx, output_channel_slice) in
+                            output_slices.iter_mut().enumerate()
+                        {
+                            // If `P::SAMPLE_ACCURATE_AUTOMATION` is set, then we may be iterating over
+                            // the buffer in smaller sections.
+                            // SAFETY: These pointers may not be valid outside of this function even though
+                            // their lifetime is equal to this structs. This is still safe because they are
+                            // only dereferenced here later as part of this process function.
+                            let channel_ptr =
+                                *(audio_outputs.data32 as *mut *mut f32).add(output_channel_idx);
+                            *output_channel_slice = std::slice::from_raw_parts_mut(
+                                channel_ptr.add(block_start),
+                                block_end - block_start,
+                            );
+                        }
                     }
                 });
 
                 // Some hosts process data in place, in which case we don't need to do any copying
                 // ourselves. If the pointers do not alias, then we'll do the copy here and then the
                 // plugin can just do normal in place processing.
-                if !process.audio_inputs.is_null() {
+                if !process.audio_outputs.is_null()
+                    && !(*process.audio_outputs).data32.is_null()
+                    && !process.audio_inputs.is_null()
+                    && !(*process.audio_inputs).data32.is_null()
+                {
                     // We currently don't support sidechain inputs
+                    let audio_outputs = &*process.audio_outputs;
                     let audio_inputs = &*process.audio_inputs;
+                    let num_output_channels = audio_outputs.channel_count as usize;
                     let num_input_channels = audio_inputs.channel_count as usize;
                     nih_debug_assert!(
                         num_input_channels <= num_output_channels,

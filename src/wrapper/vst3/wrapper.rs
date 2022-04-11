@@ -697,22 +697,13 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                 .expect("Process call without prior setup call")
                 .sample_rate;
 
-            // It's possible the host only wanted to send new parameter values
-            let is_parameter_flush = data.num_outputs == 0;
-            if is_parameter_flush {
-                nih_log!("VST3 parameter flush");
-            } else {
-                check_null_ptr_msg!(
-                    "Process output pointer is null",
-                    data.outputs,
-                    (*data.outputs).buffers,
-                );
-            }
-
             // The setups we suppport are:
             // - 1 input bus
             // - 1 output bus
             // - 1 input bus and 1 output bus
+            //
+            // Depending on the host either of these may also be missing if the number of channels
+            // is set to 0.
             nih_debug_assert!(
                 data.num_inputs >= 0
                     && data.num_inputs <= 1
@@ -956,24 +947,23 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                     parameter_values_changed = false;
                 }
 
-                let result = if is_parameter_flush {
-                    kResultOk
-                } else {
-                    let num_output_channels = (*data.outputs).num_channels as usize;
-
-                    // This vector has been preallocated to contain enough slices as there are
-                    // output channels
-                    let mut output_buffer = self.inner.output_buffer.borrow_mut();
-                    output_buffer.with_raw_vec(|output_slices| {
+                // This vector has been preallocated to contain enough slices as there are
+                // output channels
+                let mut output_buffer = self.inner.output_buffer.borrow_mut();
+                output_buffer.with_raw_vec(|output_slices| {
+                    if !data.outputs.is_null() {
+                        let num_output_channels = (*data.outputs).num_channels as usize;
                         nih_debug_assert_eq!(num_output_channels, output_slices.len());
+
                         for (output_channel_idx, output_channel_slice) in
                             output_slices.iter_mut().enumerate()
                         {
-                            // If `P::SAMPLE_ACCURATE_AUTOMATION` is set, then we may be iterating over
-                            // the buffer in smaller sections.
-                            // SAFETY: These pointers may not be valid outside of this function even though
-                            // their lifetime is equal to this structs. This is still safe because they are
-                            // only dereferenced here later as part of this process function.
+                            // If `P::SAMPLE_ACCURATE_AUTOMATION` is set, then we may be iterating
+                            // over the buffer in smaller sections.
+                            // SAFETY: These pointers may not be valid outside of this function even
+                            // though their lifetime is equal to this structs. This is still safe
+                            // because they are only dereferenced here later as part of this process
+                            // function.
                             let channel_ptr =
                                 *((*data.outputs).buffers as *mut *mut f32).add(output_channel_idx);
                             *output_channel_slice = std::slice::from_raw_parts_mut(
@@ -981,249 +971,245 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                 block_end - block_start,
                             );
                         }
-                    });
+                    }
+                });
 
-                    // Some hosts process data in place, in which case we don't need to do any
-                    // copying ourselves. If the pointers do not alias, then we'll do the copy here
-                    // and then the plugin can just do normal in place processing.
-                    if !data.inputs.is_null() {
-                        let num_input_channels = (*data.inputs).num_channels as usize;
-                        nih_debug_assert!(
-                            num_input_channels <= num_output_channels,
-                            "Stereo to mono and similar configurations are not supported"
-                        );
-                        for input_channel_idx in
-                            0..cmp::min(num_input_channels, num_output_channels)
+                // Some hosts process data in place, in which case we don't need to do any copying
+                // ourselves. If the pointers do not alias, then we'll do the copy here and then the
+                // plugin can just do normal in place processing.
+                if !data.outputs.is_null() && !data.inputs.is_null() {
+                    let num_output_channels = (*data.outputs).num_channels as usize;
+                    let num_input_channels = (*data.inputs).num_channels as usize;
+                    nih_debug_assert!(
+                        num_input_channels <= num_output_channels,
+                        "Stereo to mono and similar configurations are not supported"
+                    );
+                    for input_channel_idx in 0..cmp::min(num_input_channels, num_output_channels) {
+                        let output_channel_ptr =
+                            *((*data.outputs).buffers as *mut *mut f32).add(input_channel_idx);
+                        let input_channel_ptr =
+                            *((*data.inputs).buffers as *const *const f32).add(input_channel_idx);
+                        if input_channel_ptr != output_channel_ptr {
+                            ptr::copy_nonoverlapping(
+                                input_channel_ptr.add(block_start),
+                                output_channel_ptr.add(block_start),
+                                block_end - block_start,
+                            );
+                        }
+                    }
+                }
+
+                // Some of the fields are left empty because VST3 does not provide this
+                // information, but the methods on [`Transport`] can reconstruct these values
+                // from the other fields
+                let mut transport = Transport::new(sample_rate);
+                if !data.context.is_null() {
+                    let context = &*data.context;
+
+                    // These constants are missing from vst3-sys, see:
+                    // https://steinbergmedia.github.io/vst3_doc/vstinterfaces/structSteinberg_1_1Vst_1_1ProcessContext.html
+                    transport.playing = context.state & (1 << 1) != 0; // kPlaying
+                    transport.recording = context.state & (1 << 3) != 0; // kRecording
+                    if context.state & (1 << 10) != 0 {
+                        // kTempoValid
+                        transport.tempo = Some(context.tempo);
+                    }
+                    if context.state & (1 << 13) != 0 {
+                        // kTimeSigValid
+                        transport.time_sig_numerator = Some(context.time_sig_num);
+                        transport.time_sig_denominator = Some(context.time_sig_den);
+                    }
+
+                    // We need to compensate for the block splitting here
+                    transport.pos_samples = Some(context.project_time_samples + block_start as i64);
+                    if context.state & (1 << 9) != 0 {
+                        // kProjectTimeMusicValid
+                        if P::SAMPLE_ACCURATE_AUTOMATION
+                            && block_start > 0
+                            && (context.state & (1 << 10) != 0)
                         {
-                            let output_channel_ptr =
-                                *((*data.outputs).buffers as *mut *mut f32).add(input_channel_idx);
-                            let input_channel_ptr = *((*data.inputs).buffers as *const *const f32)
-                                .add(input_channel_idx);
-                            if input_channel_ptr != output_channel_ptr {
-                                ptr::copy_nonoverlapping(
-                                    input_channel_ptr.add(block_start),
-                                    output_channel_ptr.add(block_start),
-                                    block_end - block_start,
-                                );
-                            }
-                        }
-                    }
-
-                    // Some of the fields are left empty because VST3 does not provide this
-                    // information, but the methods on [`Transport`] can reconstruct these values
-                    // from the other fields
-                    let mut transport = Transport::new(sample_rate);
-                    if !data.context.is_null() {
-                        let context = &*data.context;
-
-                        // These constants are missing from vst3-sys, see:
-                        // https://steinbergmedia.github.io/vst3_doc/vstinterfaces/structSteinberg_1_1Vst_1_1ProcessContext.html
-                        transport.playing = context.state & (1 << 1) != 0; // kPlaying
-                        transport.recording = context.state & (1 << 3) != 0; // kRecording
-                        if context.state & (1 << 10) != 0 {
                             // kTempoValid
-                            transport.tempo = Some(context.tempo);
-                        }
-                        if context.state & (1 << 13) != 0 {
-                            // kTimeSigValid
-                            transport.time_sig_numerator = Some(context.time_sig_num);
-                            transport.time_sig_denominator = Some(context.time_sig_den);
-                        }
-
-                        // We need to compensate for the block splitting here
-                        transport.pos_samples =
-                            Some(context.project_time_samples + block_start as i64);
-                        if context.state & (1 << 9) != 0 {
-                            // kProjectTimeMusicValid
-                            if P::SAMPLE_ACCURATE_AUTOMATION
-                                && block_start > 0
-                                && (context.state & (1 << 10) != 0)
-                            {
-                                // kTempoValid
-                                transport.pos_beats = Some(
-                                    context.project_time_music
-                                        + (block_start as f64 / sample_rate as f64 / 60.0
-                                            * context.tempo),
-                                );
-                            } else {
-                                transport.pos_beats = Some(context.project_time_music);
-                            }
-                        }
-
-                        if context.state & (1 << 11) != 0 {
-                            // kBarPositionValid
-                            if P::SAMPLE_ACCURATE_AUTOMATION && block_start > 0 {
-                                // The transport object knows how to recompute this from the other information
-                                transport.bar_start_pos_beats =
-                                    match transport.bar_start_pos_beats() {
-                                        Some(updated) => Some(updated),
-                                        None => Some(context.bar_position_music),
-                                    };
-                            } else {
-                                transport.bar_start_pos_beats = Some(context.bar_position_music);
-                            }
-                        }
-                        if context.state & (1 << 2) != 0 && context.state & (1 << 12) != 0 {
-                            // kCycleActive && kCycleValid
-                            transport.loop_range_beats =
-                                Some((context.cycle_start_music, context.cycle_end_music));
+                            transport.pos_beats = Some(
+                                context.project_time_music
+                                    + (block_start as f64 / sample_rate as f64 / 60.0
+                                        * context.tempo),
+                            );
+                        } else {
+                            transport.pos_beats = Some(context.project_time_music);
                         }
                     }
 
-                    let result = {
-                        let mut plugin = self.inner.plugin.write();
-                        let mut context = self.inner.make_process_context(transport);
-                        plugin.process(&mut output_buffer, &mut context)
-                    };
-                    self.inner.last_process_status.store(result);
+                    if context.state & (1 << 11) != 0 {
+                        // kBarPositionValid
+                        if P::SAMPLE_ACCURATE_AUTOMATION && block_start > 0 {
+                            // The transport object knows how to recompute this from the other information
+                            transport.bar_start_pos_beats = match transport.bar_start_pos_beats() {
+                                Some(updated) => Some(updated),
+                                None => Some(context.bar_position_music),
+                            };
+                        } else {
+                            transport.bar_start_pos_beats = Some(context.bar_position_music);
+                        }
+                    }
+                    if context.state & (1 << 2) != 0 && context.state & (1 << 12) != 0 {
+                        // kCycleActive && kCycleValid
+                        transport.loop_range_beats =
+                            Some((context.cycle_start_music, context.cycle_end_music));
+                    }
+                }
 
-                    // Send any events output by the plugin during the process cycle
-                    if let Some(events) = data.output_events.upgrade() {
-                        let mut output_events = self.inner.output_events.borrow_mut();
-                        while let Some(event) = output_events.pop_front() {
-                            // We'll set the correct variant on this struct, or skip to the next
-                            // loop iteration if we don't handle the event type
-                            let mut vst3_event: Event = mem::zeroed();
-                            vst3_event.bus_index = 0;
-                            // There's also a ppqPos field, but uh how about no
-                            vst3_event.sample_offset = event.timing() as i32 + block_start as i32;
+                let result = {
+                    let mut plugin = self.inner.plugin.write();
+                    let mut context = self.inner.make_process_context(transport);
+                    plugin.process(&mut output_buffer, &mut context)
+                };
+                self.inner.last_process_status.store(result);
 
-                            match event {
-                                NoteEvent::NoteOn {
-                                    timing: _,
-                                    channel,
-                                    note,
+                // Send any events output by the plugin during the process cycle
+                if let Some(events) = data.output_events.upgrade() {
+                    let mut output_events = self.inner.output_events.borrow_mut();
+                    while let Some(event) = output_events.pop_front() {
+                        // We'll set the correct variant on this struct, or skip to the next
+                        // loop iteration if we don't handle the event type
+                        let mut vst3_event: Event = mem::zeroed();
+                        vst3_event.bus_index = 0;
+                        // There's also a ppqPos field, but uh how about no
+                        vst3_event.sample_offset = event.timing() as i32 + block_start as i32;
+
+                        match event {
+                            NoteEvent::NoteOn {
+                                timing: _,
+                                channel,
+                                note,
+                                velocity,
+                            } if P::MIDI_OUTPUT >= MidiConfig::Basic => {
+                                vst3_event.type_ = EventTypes::kNoteOnEvent as u16;
+                                vst3_event.event.note_on = NoteOnEvent {
+                                    channel: channel as i16,
+                                    pitch: note as i16,
+                                    tuning: 0.0,
                                     velocity,
-                                } if P::MIDI_OUTPUT >= MidiConfig::Basic => {
-                                    vst3_event.type_ = EventTypes::kNoteOnEvent as u16;
-                                    vst3_event.event.note_on = NoteOnEvent {
-                                        channel: channel as i16,
-                                        pitch: note as i16,
-                                        tuning: 0.0,
-                                        velocity,
-                                        length: 0, // What?
-                                        // We'll use this for our note IDs, that way we don't have
-                                        // to do anything complicated here
-                                        note_id: ((channel as i32) << 8) | note as i32,
-                                    };
-                                }
-                                NoteEvent::NoteOff {
-                                    timing: _,
-                                    channel,
-                                    note,
+                                    length: 0, // What?
+                                    // We'll use this for our note IDs, that way we don't have
+                                    // to do anything complicated here
+                                    note_id: ((channel as i32) << 8) | note as i32,
+                                };
+                            }
+                            NoteEvent::NoteOff {
+                                timing: _,
+                                channel,
+                                note,
+                                velocity,
+                            } if P::MIDI_OUTPUT >= MidiConfig::Basic => {
+                                vst3_event.type_ = EventTypes::kNoteOffEvent as u16;
+                                vst3_event.event.note_off = NoteOffEvent {
+                                    channel: channel as i16,
+                                    pitch: note as i16,
                                     velocity,
-                                } if P::MIDI_OUTPUT >= MidiConfig::Basic => {
-                                    vst3_event.type_ = EventTypes::kNoteOffEvent as u16;
-                                    vst3_event.event.note_off = NoteOffEvent {
-                                        channel: channel as i16,
-                                        pitch: note as i16,
-                                        velocity,
-                                        note_id: ((channel as i32) << 8) | note as i32,
-                                        tuning: 0.0,
-                                    };
-                                }
-                                NoteEvent::PolyPressure {
-                                    timing: _,
-                                    channel,
-                                    note,
+                                    note_id: ((channel as i32) << 8) | note as i32,
+                                    tuning: 0.0,
+                                };
+                            }
+                            NoteEvent::PolyPressure {
+                                timing: _,
+                                channel,
+                                note,
+                                pressure,
+                            } if P::MIDI_OUTPUT >= MidiConfig::Basic => {
+                                vst3_event.type_ = EventTypes::kPolyPressureEvent as u16;
+                                vst3_event.event.poly_pressure = PolyPressureEvent {
+                                    channel: channel as i16,
+                                    pitch: note as i16,
+                                    note_id: ((channel as i32) << 8) | note as i32,
                                     pressure,
-                                } if P::MIDI_OUTPUT >= MidiConfig::Basic => {
-                                    vst3_event.type_ = EventTypes::kPolyPressureEvent as u16;
-                                    vst3_event.event.poly_pressure = PolyPressureEvent {
-                                        channel: channel as i16,
-                                        pitch: note as i16,
-                                        note_id: ((channel as i32) << 8) | note as i32,
-                                        pressure,
-                                    };
-                                }
-                                event @ (NoteEvent::PolyVolume { channel, note, .. }
-                                | NoteEvent::PolyPan { channel, note, .. }
-                                | NoteEvent::PolyTuning { channel, note, .. }
-                                | NoteEvent::PolyVibrato { channel, note, .. }
-                                | NoteEvent::PolyExpression { channel, note, .. }
-                                | NoteEvent::PolyBrightness { channel, note, .. })
-                                    if P::MIDI_OUTPUT >= MidiConfig::Basic =>
-                                {
-                                    match NoteExpressionController::translate_event_reverse(
-                                        ((channel as i32) << 8) | note as i32,
-                                        &event,
-                                    ) {
-                                        Some(translated_event) => {
-                                            vst3_event.type_ =
-                                                EventTypes::kNoteExpressionValueEvent as u16;
-                                            vst3_event.event.note_expression_value =
-                                                translated_event;
-                                        }
-                                        None => {
-                                            nih_debug_assert_failure!(
-                                                "Mishandled note expression value event"
-                                            );
-                                        }
+                                };
+                            }
+                            event @ (NoteEvent::PolyVolume { channel, note, .. }
+                            | NoteEvent::PolyPan { channel, note, .. }
+                            | NoteEvent::PolyTuning { channel, note, .. }
+                            | NoteEvent::PolyVibrato { channel, note, .. }
+                            | NoteEvent::PolyExpression { channel, note, .. }
+                            | NoteEvent::PolyBrightness { channel, note, .. })
+                                if P::MIDI_OUTPUT >= MidiConfig::Basic =>
+                            {
+                                match NoteExpressionController::translate_event_reverse(
+                                    ((channel as i32) << 8) | note as i32,
+                                    &event,
+                                ) {
+                                    Some(translated_event) => {
+                                        vst3_event.type_ =
+                                            EventTypes::kNoteExpressionValueEvent as u16;
+                                        vst3_event.event.note_expression_value = translated_event;
+                                    }
+                                    None => {
+                                        nih_debug_assert_failure!(
+                                            "Mishandled note expression value event"
+                                        );
                                     }
                                 }
-                                NoteEvent::MidiChannelPressure {
-                                    timing: _,
-                                    channel,
-                                    pressure,
-                                } if P::MIDI_OUTPUT >= MidiConfig::MidiCCs => {
-                                    vst3_event.type_ = EventTypes::kLegacyMIDICCOutEvent as u16;
-                                    vst3_event.event.legacy_midi_cc_out = LegacyMidiCCOutEvent {
-                                        control_number: 128, // kAfterTouch
-                                        channel: channel as i8,
-                                        value: (pressure * 127.0).round() as i8,
-                                        value2: 0,
-                                    };
-                                }
-                                NoteEvent::MidiPitchBend {
-                                    timing: _,
-                                    channel,
-                                    value,
-                                } if P::MIDI_OUTPUT >= MidiConfig::MidiCCs => {
-                                    let scaled = (value * ((1 << 14) - 1) as f32).round() as i32;
+                            }
+                            NoteEvent::MidiChannelPressure {
+                                timing: _,
+                                channel,
+                                pressure,
+                            } if P::MIDI_OUTPUT >= MidiConfig::MidiCCs => {
+                                vst3_event.type_ = EventTypes::kLegacyMIDICCOutEvent as u16;
+                                vst3_event.event.legacy_midi_cc_out = LegacyMidiCCOutEvent {
+                                    control_number: 128, // kAfterTouch
+                                    channel: channel as i8,
+                                    value: (pressure * 127.0).round() as i8,
+                                    value2: 0,
+                                };
+                            }
+                            NoteEvent::MidiPitchBend {
+                                timing: _,
+                                channel,
+                                value,
+                            } if P::MIDI_OUTPUT >= MidiConfig::MidiCCs => {
+                                let scaled = (value * ((1 << 14) - 1) as f32).round() as i32;
 
-                                    vst3_event.type_ = EventTypes::kLegacyMIDICCOutEvent as u16;
-                                    vst3_event.event.legacy_midi_cc_out = LegacyMidiCCOutEvent {
-                                        control_number: 129, // kPitchBend
-                                        channel: channel as i8,
-                                        value: (scaled & 0b01111111) as i8,
-                                        value2: ((scaled >> 7) & 0b01111111) as i8,
-                                    };
-                                }
-                                NoteEvent::MidiCC {
-                                    timing: _,
-                                    channel,
-                                    cc,
-                                    value,
-                                } if P::MIDI_OUTPUT >= MidiConfig::MidiCCs => {
-                                    vst3_event.type_ = EventTypes::kLegacyMIDICCOutEvent as u16;
-                                    vst3_event.event.legacy_midi_cc_out = LegacyMidiCCOutEvent {
-                                        control_number: cc,
-                                        channel: channel as i8,
-                                        value: (value * 127.0).round() as i8,
-                                        value2: 0,
-                                    };
-                                }
-                                _ => {
-                                    nih_debug_assert_failure!(
-                                        "Invalid output event for the current MIDI_OUTPUT setting"
-                                    );
-                                    continue;
-                                }
-                            };
+                                vst3_event.type_ = EventTypes::kLegacyMIDICCOutEvent as u16;
+                                vst3_event.event.legacy_midi_cc_out = LegacyMidiCCOutEvent {
+                                    control_number: 129, // kPitchBend
+                                    channel: channel as i8,
+                                    value: (scaled & 0b01111111) as i8,
+                                    value2: ((scaled >> 7) & 0b01111111) as i8,
+                                };
+                            }
+                            NoteEvent::MidiCC {
+                                timing: _,
+                                channel,
+                                cc,
+                                value,
+                            } if P::MIDI_OUTPUT >= MidiConfig::MidiCCs => {
+                                vst3_event.type_ = EventTypes::kLegacyMIDICCOutEvent as u16;
+                                vst3_event.event.legacy_midi_cc_out = LegacyMidiCCOutEvent {
+                                    control_number: cc,
+                                    channel: channel as i8,
+                                    value: (value * 127.0).round() as i8,
+                                    value2: 0,
+                                };
+                            }
+                            _ => {
+                                nih_debug_assert_failure!(
+                                    "Invalid output event for the current MIDI_OUTPUT setting"
+                                );
+                                continue;
+                            }
+                        };
 
-                            let result = events.add_event(&mut vst3_event);
-                            nih_debug_assert_eq!(result, kResultOk);
-                        }
+                        let result = events.add_event(&mut vst3_event);
+                        nih_debug_assert_eq!(result, kResultOk);
                     }
+                }
 
-                    match result {
-                        ProcessStatus::Error(err) => {
-                            nih_debug_assert_failure!("Process error: {}", err);
+                let result = match result {
+                    ProcessStatus::Error(err) => {
+                        nih_debug_assert_failure!("Process error: {}", err);
 
-                            return kResultFalse;
-                        }
-                        _ => kResultOk,
+                        return kResultFalse;
                     }
+                    _ => kResultOk,
                 };
 
                 // If our block ends at the end of the buffer then that means there are no more
