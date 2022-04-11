@@ -982,6 +982,33 @@ impl<P: ClapPlugin> Wrapper<P> {
                     let event_type = event.data[0] & midi::EVENT_TYPE_MASK;
                     let channel = event.data[0] & midi::MIDI_CHANNEL_MASK;
                     match event_type {
+                        // Hosts shouldn't be sending this, bu twe'll handle it just in case
+                        midi::NOTE_ON => {
+                            input_events.push_back(NoteEvent::NoteOn {
+                                timing: raw_event.time - current_sample_idx as u32,
+                                channel,
+                                note: event.data[1],
+                                velocity: event.data[2] as f32 / 127.0,
+                            });
+                        }
+                        // Hosts shouldn't be sending this, bu twe'll handle it just in case
+                        midi::NOTE_OFF => {
+                            input_events.push_back(NoteEvent::NoteOff {
+                                timing: raw_event.time - current_sample_idx as u32,
+                                channel,
+                                note: event.data[1],
+                                velocity: event.data[2] as f32 / 127.0,
+                            });
+                        }
+                        // Hosts shouldn't be sending this, bu twe'll handle it just in case
+                        midi::POLYPHONIC_KEY_PRESSURE => {
+                            input_events.push_back(NoteEvent::PolyPressure {
+                                timing: raw_event.time - current_sample_idx as u32,
+                                channel,
+                                note: event.data[1],
+                                pressure: event.data[2] as f32 / 127.0,
+                            });
+                        }
                         midi::CHANNEL_KEY_PRESSURE => {
                             input_events.push_back(NoteEvent::MidiChannelPressure {
                                 timing: raw_event.time - current_sample_idx as u32,
