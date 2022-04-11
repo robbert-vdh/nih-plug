@@ -50,7 +50,7 @@ pub struct FloatParam {
     /// this is also used when formatting the parameter. This must be a positive, nonzero number.
     pub step_size: Option<f32>,
     /// The parameter's human readable display name.
-    pub name: &'static str,
+    pub name: String,
     /// The parameter value's unit, added after [`value_to_string`][Self::value_to_string] if that
     /// is set. NIH-plug will not automatically add a space before the unit.
     pub unit: &'static str,
@@ -75,7 +75,7 @@ impl Default for FloatParam {
             value_changed: None,
             range: FloatRange::default(),
             step_size: None,
-            name: "",
+            name: String::new(),
             unit: "",
             value_to_string: None,
             string_to_value: None,
@@ -99,8 +99,8 @@ impl Display for FloatParam {
 impl Param for FloatParam {
     type Plain = f32;
 
-    fn name(&self) -> &'static str {
-        self.name
+    fn name(&self) -> &str {
+        &self.name
     }
 
     fn unit(&self) -> &'static str {
@@ -213,12 +213,12 @@ impl Param for FloatParam {
 impl FloatParam {
     /// Build a new [`FloatParam`]. Use the other associated functions to modify the behavior of the
     /// parameter.
-    pub fn new(name: &'static str, default: f32, range: FloatRange) -> Self {
+    pub fn new(name: impl Into<String>, default: f32, range: FloatRange) -> Self {
         Self {
             value: default,
             default,
             range,
-            name,
+            name: name.into(),
             ..Default::default()
         }
     }

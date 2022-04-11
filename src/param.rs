@@ -47,7 +47,7 @@ pub trait Param: Display {
     type Plain: PartialEq;
 
     /// Get the human readable name for this parameter.
-    fn name(&self) -> &'static str;
+    fn name(&self) -> &str;
 
     /// Get the unit label for this parameter, if any.
     fn unit(&self) -> &'static str;

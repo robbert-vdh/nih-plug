@@ -23,7 +23,7 @@ pub struct BoolParam {
     pub value_changed: Option<Arc<dyn Fn(bool) + Send + Sync>>,
 
     /// The parameter's human readable display name.
-    pub name: &'static str,
+    pub name: String,
     /// Optional custom conversion function from a boolean value to a string.
     pub value_to_string: Option<Arc<dyn Fn(bool) -> String + Send + Sync>>,
     /// Optional custom conversion function from a string to a boolean value. If the string cannot
@@ -40,7 +40,7 @@ impl Default for BoolParam {
             default: false,
             flags: ParamFlags::default(),
             value_changed: None,
-            name: "",
+            name: String::new(),
             value_to_string: None,
             string_to_value: None,
         }
@@ -60,8 +60,8 @@ impl Display for BoolParam {
 impl Param for BoolParam {
     type Plain = bool;
 
-    fn name(&self) -> &'static str {
-        self.name
+    fn name(&self) -> &str {
+        &self.name
     }
 
     fn unit(&self) -> &'static str {
@@ -144,11 +144,11 @@ impl Param for BoolParam {
 impl BoolParam {
     /// Build a new [`BoolParam`]. Use the other associated functions to modify the behavior of the
     /// parameter.
-    pub fn new(name: &'static str, default: bool) -> Self {
+    pub fn new(name: impl Into<String>, default: bool) -> Self {
         Self {
             value: default,
             default,
-            name,
+            name: name.into(),
             ..Default::default()
         }
     }

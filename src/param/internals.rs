@@ -145,7 +145,7 @@ macro_rules! param_ptr_forward(
 );
 
 impl ParamPtr {
-    param_ptr_forward!(pub unsafe fn name(&self) -> &'static str);
+    param_ptr_forward!(pub unsafe fn name(&self) -> &str);
     param_ptr_forward!(pub unsafe fn unit(&self) -> &'static str);
     param_ptr_forward!(pub unsafe fn normalized_value(&self) -> f32);
     param_ptr_forward!(pub unsafe fn default_normalized_value(&self) -> f32);

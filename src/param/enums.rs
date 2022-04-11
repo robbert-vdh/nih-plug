@@ -102,7 +102,7 @@ impl Display for EnumParamInner {
 impl<T: Enum + PartialEq> Param for EnumParam<T> {
     type Plain = T;
 
-    fn name(&self) -> &'static str {
+    fn name(&self) -> &str {
         self.inner.name()
     }
 
@@ -171,8 +171,8 @@ impl<T: Enum + PartialEq> Param for EnumParam<T> {
 impl Param for EnumParamInner {
     type Plain = i32;
 
-    fn name(&self) -> &'static str {
-        self.inner.name
+    fn name(&self) -> &str {
+        &self.inner.name
     }
 
     fn unit(&self) -> &'static str {
@@ -244,7 +244,7 @@ impl Param for EnumParamInner {
 impl<T: Enum + PartialEq + 'static> EnumParam<T> {
     /// Build a new [Self]. Use the other associated functions to modify the behavior of the
     /// parameter.
-    pub fn new(name: &'static str, default: T) -> Self {
+    pub fn new(name: impl Into<String>, default: T) -> Self {
         let variants = T::variants();
 
         Self {
@@ -255,7 +255,7 @@ impl<T: Enum + PartialEq + 'static> EnumParam<T> {
                         min: 0,
                         max: variants.len() as i32 - 1,
                     },
-                    name,
+                    name: name.into(),
                     ..Default::default()
                 },
                 variants,
