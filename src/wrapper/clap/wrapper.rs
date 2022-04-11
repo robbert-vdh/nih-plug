@@ -1796,12 +1796,29 @@ impl<P: ClapPlugin> Wrapper<P> {
     }
 
     unsafe extern "C" fn ext_gui_get_preferred_api(
-        plugin: *const clap_plugin,
-        api: *const c_char,
-        is_floating: bool,
+        _plugin: *const clap_plugin,
+        api: *mut *const c_char,
+        is_floating: *mut bool,
     ) -> bool {
-        // We don't do floating windows yet, so for us this is the same as the other function
-        Self::ext_gui_is_api_supported(plugin, api, is_floating)
+        check_null_ptr!(false, api, is_floating);
+
+        #[cfg(all(target_family = "unix", not(target_os = "macos")))]
+        {
+            *api = CLAP_WINDOW_API_X11;
+        }
+        #[cfg(target_os = "macos")]
+        {
+            *api = CLAP_WINDOW_API_COCOA;
+        }
+        #[cfg(target_os = "windows")]
+        {
+            *api = CLAP_WINDOW_API_WIN32;
+        }
+
+        // We don't do standalone floating windows yet
+        *is_floating = false;
+
+        true
     }
 
     unsafe extern "C" fn ext_gui_create(
