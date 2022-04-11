@@ -25,7 +25,7 @@ You can download the development binaries for Linux, Windows and macOS from the
 [automated
 builds](https://github.com/robbert-vdh/nih-plug/actions/workflows/test.yml?query=branch%3Amaster)
 page. If you're not signed in on GitHub, then you can also find the last nightly
-build [here](https://nightly.link/robbert-vdh/nih-plug/workflows/test/master).
+build [here](https://nightly.link/robbert-vdh/nih-plug/workflows/build/master).
 
 The macOS version has not been tested and may not work correctly. You may also
 have to [disable Gatekeeper](https://disable-gatekeeper.github.io/) to use the
