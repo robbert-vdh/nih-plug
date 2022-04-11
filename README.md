@@ -145,6 +145,9 @@ examples.
   [egui](plugins/examples/gain-gui-egui),
   [iced](plugins/examples/gain-gui-iced), and
   [VIZIA](plugins/examples/gain-gui-vizia).
+- [**midi-inverter**](plugins/examples/midi-inverter) takes note/MIDI events and
+  flips around the note, channel, expression, pressure, and CC values. This
+  example demonstrates how to receive and output those events.
 - [**sine**](plugins/examples/sine) is a simple test tone generator plugin with
   frequency smoothing that can also make use of MIDI input instead of generating
   a static signal based on the plugin's parameters.
