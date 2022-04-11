@@ -58,8 +58,8 @@ where
     }))
 }
 
-/// State for a `nih_plug_vizia` editor. The scale factor can be manipulated at runtime by emitting
-/// [`WindowEvent::SetScale`][vizia::WindowEvent::SetScale] events.
+/// State for a `nih_plug_vizia` editor. The scale factor can be manipulated at runtime by changing
+/// `cx.user_scale_factor`.
 ///
 /// # TODO
 ///
@@ -86,7 +86,7 @@ impl ViziaState {
 
     /// The same as [`from_size()`][Self::from_size()], but with a separate initial scale factor.
     /// This scale factor gets applied on top of any HiDPI scaling, and it can be modified at
-    /// runtime by emitting [`WindowEvent::SetScale`][vizia::WindowEvent::SetScale] events.
+    /// runtime by changing `cx.user_scale_factor`.
     pub fn from_size_with_scale(width: u32, height: u32, scale_factor: f64) -> Arc<ViziaState> {
         Arc::new(ViziaState {
             size: AtomicCell::new((width, height)),
@@ -114,7 +114,7 @@ impl ViziaState {
     }
 
     /// Get the non-DPI related uniform scaling factor the GUI's size will be multiplied with. This
-    /// can be changed by emitting [`WindowEvent::SetScale`][vizia::WindowEvent::SetScale] events.
+    /// can be changed by changing `cx.user_scale_factor`.
     pub fn user_scale_factor(&self) -> f64 {
         self.scale_factor.load()
     }

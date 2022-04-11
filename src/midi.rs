@@ -17,8 +17,8 @@ pub enum MidiConfig {
 }
 
 /// Event for (incoming) notes. The set of supported note events depends on the value of
-/// [`Plugin::MIDI_INPUT`]. Also check out the [`util`][crate::util] module for convenient
-/// conversion functions.
+/// [`Plugin::MIDI_INPUT`][crate::prelude::Plugin::MIDI_INPUT]. Also check out the
+/// [`util`][crate::util] module for convenient conversion functions.
 ///
 /// All of the timings are sample offsets withing the current buffer.
 #[derive(Debug, Clone, Copy, PartialEq)]
