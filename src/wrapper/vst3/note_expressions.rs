@@ -49,7 +49,7 @@ impl NoteExpressionController {
 
         match event.type_id {
             // kVolumeTypeID
-            0 => Some(NoteEvent::Volume {
+            0 => Some(NoteEvent::PolyVolume {
                 timing,
                 channel,
                 note,
@@ -58,7 +58,7 @@ impl NoteExpressionController {
                 gain: event.value as f32 * 4.0,
             }),
             // kPanTypeId
-            1 => Some(NoteEvent::Pan {
+            1 => Some(NoteEvent::PolyPan {
                 timing,
                 channel,
                 note,
@@ -66,7 +66,7 @@ impl NoteExpressionController {
                 pan: (event.value as f32 * 2.0) - 1.0,
             }),
             // kTuningTypeID
-            2 => Some(NoteEvent::Tuning {
+            2 => Some(NoteEvent::PolyTuning {
                 timing,
                 channel,
                 note,
@@ -75,21 +75,21 @@ impl NoteExpressionController {
                 tuning: 240.0 * (event.value as f32 - 0.5),
             }),
             // kVibratoTypeID
-            3 => Some(NoteEvent::Vibrato {
+            3 => Some(NoteEvent::PolyVibrato {
                 timing,
                 channel,
                 note,
                 vibrato: event.value as f32,
             }),
             // kExpressionTypeID
-            4 => Some(NoteEvent::Brightness {
+            4 => Some(NoteEvent::PolyBrightness {
                 timing,
                 channel,
                 note,
                 brightness: event.value as f32,
             }),
             // kBrightnessTypeID
-            5 => Some(NoteEvent::Expression {
+            5 => Some(NoteEvent::PolyExpression {
                 timing,
                 channel,
                 note,

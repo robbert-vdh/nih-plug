@@ -59,7 +59,7 @@ pub enum NoteEvent {
     },
     /// A volume expression event, available on [`MidiConfig::Basic`] and up. Not all hosts may
     /// support these expressions.
-    Volume {
+    PolyVolume {
         timing: u32,
         /// The note's channel, from 0 to 16.
         channel: u8,
@@ -70,7 +70,7 @@ pub enum NoteEvent {
     },
     /// A panning expression event, available on [`MidiConfig::Basic`] and up. Not all hosts may
     /// support these expressions.
-    Pan {
+    PolyPan {
         timing: u32,
         /// The note's channel, from 0 to 16.
         channel: u8,
@@ -82,7 +82,7 @@ pub enum NoteEvent {
     },
     /// A tuning expression event, available on [`MidiConfig::Basic`] and up. Not all hosts may support
     /// these expressions.
-    Tuning {
+    PolyTuning {
         timing: u32,
         /// The note's channel, from 0 to 16.
         channel: u8,
@@ -93,7 +93,7 @@ pub enum NoteEvent {
     },
     /// A vibrato expression event, available on [`MidiConfig::Basic`] and up. Not all hosts may support
     /// these expressions.
-    Vibrato {
+    PolyVibrato {
         timing: u32,
         /// The note's channel, from 0 to 16.
         channel: u8,
@@ -104,7 +104,7 @@ pub enum NoteEvent {
     },
     /// A expression expression (yes, expression expression) event, available on
     /// [`MidiConfig::Basic`] and up. Not all hosts may support these expressions.
-    Expression {
+    PolyExpression {
         timing: u32,
         /// The note's channel, from 0 to 16.
         channel: u8,
@@ -115,7 +115,7 @@ pub enum NoteEvent {
     },
     /// A brightness expression event, available on [`MidiConfig::Basic`] and up. Not all hosts may support
     /// these expressions.
-    Brightness {
+    PolyBrightness {
         timing: u32,
         /// The note's channel, from 0 to 16.
         channel: u8,
@@ -165,12 +165,12 @@ impl NoteEvent {
             NoteEvent::NoteOn { timing, .. } => *timing,
             NoteEvent::NoteOff { timing, .. } => *timing,
             NoteEvent::PolyPressure { timing, .. } => *timing,
-            NoteEvent::Volume { timing, .. } => *timing,
-            NoteEvent::Pan { timing, .. } => *timing,
-            NoteEvent::Tuning { timing, .. } => *timing,
-            NoteEvent::Vibrato { timing, .. } => *timing,
-            NoteEvent::Expression { timing, .. } => *timing,
-            NoteEvent::Brightness { timing, .. } => *timing,
+            NoteEvent::PolyVolume { timing, .. } => *timing,
+            NoteEvent::PolyPan { timing, .. } => *timing,
+            NoteEvent::PolyTuning { timing, .. } => *timing,
+            NoteEvent::PolyVibrato { timing, .. } => *timing,
+            NoteEvent::PolyExpression { timing, .. } => *timing,
+            NoteEvent::PolyBrightness { timing, .. } => *timing,
             NoteEvent::MidiChannelPressure { timing, .. } => *timing,
             NoteEvent::MidiPitchBend { timing, .. } => *timing,
             NoteEvent::MidiCC { timing, .. } => *timing,
@@ -184,12 +184,12 @@ impl NoteEvent {
             NoteEvent::NoteOn { timing, .. } => *timing -= samples,
             NoteEvent::NoteOff { timing, .. } => *timing -= samples,
             NoteEvent::PolyPressure { timing, .. } => *timing -= samples,
-            NoteEvent::Volume { timing, .. } => *timing -= samples,
-            NoteEvent::Pan { timing, .. } => *timing -= samples,
-            NoteEvent::Tuning { timing, .. } => *timing -= samples,
-            NoteEvent::Vibrato { timing, .. } => *timing -= samples,
-            NoteEvent::Expression { timing, .. } => *timing -= samples,
-            NoteEvent::Brightness { timing, .. } => *timing -= samples,
+            NoteEvent::PolyVolume { timing, .. } => *timing -= samples,
+            NoteEvent::PolyPan { timing, .. } => *timing -= samples,
+            NoteEvent::PolyTuning { timing, .. } => *timing -= samples,
+            NoteEvent::PolyVibrato { timing, .. } => *timing -= samples,
+            NoteEvent::PolyExpression { timing, .. } => *timing -= samples,
+            NoteEvent::PolyBrightness { timing, .. } => *timing -= samples,
             NoteEvent::MidiChannelPressure { timing, .. } => *timing -= samples,
             NoteEvent::MidiPitchBend { timing, .. } => *timing -= samples,
             NoteEvent::MidiCC { timing, .. } => *timing -= samples,

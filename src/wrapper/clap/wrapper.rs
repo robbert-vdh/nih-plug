@@ -916,7 +916,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                             });
                         }
                         CLAP_NOTE_EXPRESSION_VOLUME => {
-                            input_events.push_back(NoteEvent::Volume {
+                            input_events.push_back(NoteEvent::PolyVolume {
                                 timing: raw_event.time - current_sample_idx as u32,
                                 channel: event.channel as u8,
                                 note: event.key as u8,
@@ -924,7 +924,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                             });
                         }
                         CLAP_NOTE_EXPRESSION_PAN => {
-                            input_events.push_back(NoteEvent::Pan {
+                            input_events.push_back(NoteEvent::PolyPan {
                                 timing: raw_event.time - current_sample_idx as u32,
                                 channel: event.channel as u8,
                                 note: event.key as u8,
@@ -933,7 +933,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                             });
                         }
                         CLAP_NOTE_EXPRESSION_TUNING => {
-                            input_events.push_back(NoteEvent::Tuning {
+                            input_events.push_back(NoteEvent::PolyTuning {
                                 timing: raw_event.time - current_sample_idx as u32,
                                 channel: event.channel as u8,
                                 note: event.key as u8,
@@ -941,7 +941,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                             });
                         }
                         CLAP_NOTE_EXPRESSION_VIBRATO => {
-                            input_events.push_back(NoteEvent::Vibrato {
+                            input_events.push_back(NoteEvent::PolyVibrato {
                                 timing: raw_event.time - current_sample_idx as u32,
                                 channel: event.channel as u8,
                                 note: event.key as u8,
@@ -949,7 +949,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                             });
                         }
                         CLAP_NOTE_EXPRESSION_EXPRESSION => {
-                            input_events.push_back(NoteEvent::Expression {
+                            input_events.push_back(NoteEvent::PolyExpression {
                                 timing: raw_event.time - current_sample_idx as u32,
                                 channel: event.channel as u8,
                                 note: event.key as u8,
@@ -957,7 +957,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                             });
                         }
                         CLAP_NOTE_EXPRESSION_BRIGHTNESS => {
-                            input_events.push_back(NoteEvent::Brightness {
+                            input_events.push_back(NoteEvent::PolyBrightness {
                                 timing: raw_event.time - current_sample_idx as u32,
                                 channel: event.channel as u8,
                                 note: event.key as u8,
