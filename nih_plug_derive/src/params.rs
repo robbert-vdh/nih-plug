@@ -174,7 +174,11 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                             serialized.insert(String::from(#persist_key), data);
                         }
                         Err(err) => {
-                            ::nih_plug::nih_log!("Could not serialize '{}': {}", #persist_key, err)
+                            ::nih_plug::nih_debug_assert_failure!(
+                                "Could not serialize '{}': {}",
+                                #persist_key,
+                                err
+                            )
                         }
                     };
                 });
@@ -188,7 +192,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                                 );
                             }
                             Err(err) => {
-                                ::nih_plug::nih_log!(
+                                ::nih_plug::nih_debug_assert_failure!(
                                     "Could not deserialize '{}': {}",
                                     #persist_key,
                                     err
@@ -267,7 +271,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                 for (field_name, data) in serialized {
                     match field_name.as_str() {
                         #(#field_deserialize_tokens)*
-                        _ => ::nih_plug::nih_log!("Unknown serialized field name: {} (this may not be accurate)", field_name),
+                        _ => ::nih_plug::nih_debug_assert_failure!("Unknown serialized field name: {} (this may not be accurate)", field_name),
                     }
                 }
 
