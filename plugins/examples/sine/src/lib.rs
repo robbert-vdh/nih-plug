@@ -147,25 +147,26 @@ impl Plugin for Sine {
             // This plugin can be either triggered by MIDI or controleld by a parameter
             let sine = if self.params.use_midi.value {
                 // Act on the next MIDI event
-                'midi_events: loop {
-                    match next_event {
-                        Some(event) if event.timing() == sample_id as u32 => match event {
-                            NoteEvent::NoteOn { note, velocity, .. } => {
-                                self.midi_note_id = note;
-                                self.midi_note_freq = util::midi_note_to_freq(note);
-                                self.midi_note_gain.set_target(self.sample_rate, velocity);
-                            }
-                            NoteEvent::NoteOff { note, .. } if note == self.midi_note_id => {
-                                self.midi_note_gain.set_target(self.sample_rate, 0.0);
-                            }
-                            NoteEvent::PolyPressure { note, pressure, .. }
-                                if note == self.midi_note_id =>
-                            {
-                                self.midi_note_gain.set_target(self.sample_rate, pressure);
-                            }
-                            _ => (),
-                        },
-                        _ => break 'midi_events,
+                while let Some(event) = next_event {
+                    if event.timing() != sample_id as u32 {
+                        break;
+                    }
+
+                    match event {
+                        NoteEvent::NoteOn { note, velocity, .. } => {
+                            self.midi_note_id = note;
+                            self.midi_note_freq = util::midi_note_to_freq(note);
+                            self.midi_note_gain.set_target(self.sample_rate, velocity);
+                        }
+                        NoteEvent::NoteOff { note, .. } if note == self.midi_note_id => {
+                            self.midi_note_gain.set_target(self.sample_rate, 0.0);
+                        }
+                        NoteEvent::PolyPressure { note, pressure, .. }
+                            if note == self.midi_note_id =>
+                        {
+                            self.midi_note_gain.set_target(self.sample_rate, pressure);
+                        }
+                        _ => (),
                     }
 
                     next_event = context.next_event();
