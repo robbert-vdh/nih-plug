@@ -31,7 +31,9 @@ pub fn strlcpy(dest: &mut [c_char], src: &str) {
     }
 
     let src_bytes: &[u8] = src.as_bytes();
-    let src_bytes_signed: &[i8] = unsafe { &*(src_bytes as *const [u8] as *const [i8]) };
+    // NOTE: `c_char` is i8 on x86 based archs, and u8 on AArch64. There this line won't do
+    //       anything.
+    let src_bytes_signed: &[c_char] = unsafe { &*(src_bytes as *const [u8] as *const [c_char]) };
 
     // Make sure there's always room for a null terminator
     let copy_len = cmp::min(dest.len() - 1, src.len());
