@@ -93,6 +93,7 @@ struct ScopedFtz {
 
 impl ScopedFtz {
     fn enable() -> Self {
+        // TODO: Implement this for AArch64/neon
         cfg_if::cfg_if! {
             if #[cfg(target_feature = "sse")] {
                 let mode = unsafe { std::arch::x86_64::_MM_GET_FLUSH_ZERO_MODE() };
