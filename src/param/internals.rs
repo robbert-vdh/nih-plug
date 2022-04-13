@@ -39,15 +39,16 @@ pub use serde_json::to_string as serialize_field;
 /// This implementation is safe when using from the wrapper because the plugin's returned `Params`
 /// object lives in an `Arc`, and the wrapper also holds a reference to this `Arc`.
 pub unsafe trait Params: 'static + Send + Sync {
-    /// Create a mapping from unique parameter IDs to parameters along with the name of the
-    /// group/unit/module they are in. The order of the `Vec` determines the display order in the
-    /// (host's) generic UI. The group name is either an empty string for top level parameters, or a
-    /// slash/delimited `"Group Name 1/Group Name 2"` path for parameters in nested groups. All
-    /// components of a group path must exist or may encounter panics. The derive macro does this
-    /// for every parameter field marked with `#[id = "stable"]`, and it also inlines all fields
-    /// from child `Params` structs marked with `#[nested = "Group Name"]`, prefixing that group
-    /// name before the parameter's originanl group name. Dereferencing the pointers stored in the
-    /// values is only valid as long as this object is valid.
+    /// Create a mapping from unique parameter IDs to parameter pointers along with the name of the
+    /// group/unit/module they are in, as a `(param_id, param_ptr, group)` triple. The order of the
+    /// `Vec` determines the display order in the (host's) generic UI. The group name is either an
+    /// empty string for top level parameters, or a slash/delimited `"Group Name 1/Group Name 2"` if
+    /// this `Params` object contains nested child objects. All components of a group path must
+    /// exist or you may encounter panics. The derive macro does this for every parameter field
+    /// marked with `#[id = "stable"]`, and it also inlines all fields from nested child `Params`
+    /// structs marked with `#[nested = "Group Name"]` while prefixing that group name before the
+    /// parameter's originanl group name. Dereferencing the pointers stored in the values is only
+    /// valid as long as this object is valid.
     ///
     /// # Note
     ///
