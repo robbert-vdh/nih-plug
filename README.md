@@ -142,9 +142,9 @@ examples.
   serializable state.
 - **gain-gui** is the same plugin as gain, but with a GUI to control the
   parameter and a digital peak meter. Comes in three exciting flavors:
-  [egui](plugins/examples/gain-gui-egui),
-  [iced](plugins/examples/gain-gui-iced), and
-  [VIZIA](plugins/examples/gain-gui-vizia).
+  [egui](plugins/examples/gain_gui_egui),
+  [iced](plugins/examples/gain_gui_iced), and
+  [VIZIA](plugins/examples/gain_gui_vizia).
 - [**midi-inverter**](plugins/examples/midi-inverter) takes note/MIDI events and
   flips around the note, channel, expression, pressure, and CC values. This
   example demonstrates how to receive and output those events.

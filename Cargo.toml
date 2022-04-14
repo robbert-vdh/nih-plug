@@ -21,9 +21,9 @@ members = [
   "xtask",
 
   "plugins/examples/gain",
-  "plugins/examples/gain-gui-egui",
-  "plugins/examples/gain-gui-iced",
-  "plugins/examples/gain-gui-vizia",
+  "plugins/examples/gain_gui_egui",
+  "plugins/examples/gain_gui_iced",
+  "plugins/examples/gain_gui_vizia",
   "plugins/examples/midi-inverter",
   "plugins/examples/sine",
   "plugins/examples/stft",
