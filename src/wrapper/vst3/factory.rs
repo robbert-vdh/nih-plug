@@ -8,9 +8,10 @@ use vst3_sys::VST3;
 // Alias needed for the VST3 attribute macro
 use vst3_sys as vst3_com;
 
+use super::util::u16strlcpy;
 use super::wrapper::Wrapper;
 use crate::plugin::Vst3Plugin;
-use crate::wrapper::util::{strlcpy, u16strlcpy};
+use crate::wrapper::util::strlcpy;
 
 /// The VST3 SDK version this is roughtly based on.
 const VST3_SDK_VERSION: &str = "VST 3.6.14";

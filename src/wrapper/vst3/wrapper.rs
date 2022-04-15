@@ -16,7 +16,9 @@ use vst3_sys::VST3;
 use widestring::U16CStr;
 
 use super::inner::WrapperInner;
-use super::util::{VstPtr, VST3_MIDI_CCS, VST3_MIDI_NUM_PARAMS, VST3_MIDI_PARAMS_START};
+use super::util::{
+    u16strlcpy, VstPtr, VST3_MIDI_CCS, VST3_MIDI_NUM_PARAMS, VST3_MIDI_PARAMS_START,
+};
 use super::view::WrapperView;
 use crate::context::Transport;
 use crate::midi::{MidiConfig, NoteEvent};
@@ -24,7 +26,7 @@ use crate::param::ParamFlags;
 use crate::plugin::{BufferConfig, BusConfig, ProcessStatus, Vst3Plugin};
 use crate::util::permit_alloc;
 use crate::wrapper::state;
-use crate::wrapper::util::{process_wrapper, u16strlcpy};
+use crate::wrapper::util::process_wrapper;
 use crate::wrapper::vst3::inner::ProcessEvent;
 use crate::wrapper::vst3::note_expressions::NoteExpressionController;
 use crate::wrapper::vst3::util::{VST3_MIDI_CHANNELS, VST3_MIDI_PARAMS_END};

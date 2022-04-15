@@ -1,5 +1,9 @@
+use std::cmp;
 use std::ops::Deref;
-use vst3_sys::{interfaces::IUnknown, ComInterface};
+use vst3_sys::interfaces::IUnknown;
+use vst3_sys::vst::TChar;
+use vst3_sys::ComInterface;
+use widestring::U16CString;
 
 /// When `Plugin::MIDI_INPUT` is set to `MidiConfig::MidiCCs` or higher then we'll register 130*16
 /// additional parameters to handle MIDI CCs, channel pressure, and pitch bend, in that order.
@@ -30,6 +34,29 @@ macro_rules! check_null_ptr_msg {
             return kInvalidArgument;
         }
     };
+}
+
+/// The same as [`strlcpy()`], but for VST3's fun UTF-16 strings instead.
+pub fn u16strlcpy(dest: &mut [TChar], src: &str) {
+    if dest.is_empty() {
+        return;
+    }
+
+    let src_utf16 = match U16CString::from_str(src) {
+        Ok(s) => s,
+        Err(err) => {
+            nih_debug_assert_failure!("Invalid UTF-16 string: {}", err);
+            return;
+        }
+    };
+    let src_utf16_chars = src_utf16.as_slice();
+    let src_utf16_chars_signed: &[TChar] =
+        unsafe { &*(src_utf16_chars as *const [u16] as *const [TChar]) };
+
+    // Make sure there's always room for a null terminator
+    let copy_len = cmp::min(dest.len() - 1, src_utf16_chars_signed.len());
+    dest[..copy_len].copy_from_slice(&src_utf16_chars_signed[..copy_len]);
+    dest[copy_len] = 0;
 }
 
 /// Send+Sync wrapper for these interface pointers.
@@ -88,3 +115,36 @@ unsafe impl<T: ComInterface + ?Sized> Sync for VstPtr<T> {}
 
 unsafe impl<T: IUnknown> Send for ObjectPtr<T> {}
 unsafe impl<T: IUnknown> Sync for ObjectPtr<T> {}
+
+#[cfg(test)]
+mod miri {
+    use widestring::U16CStr;
+
+    use super::*;
+
+    #[test]
+    fn u16strlcpy_normal() {
+        let mut dest = [0; 256];
+        u16strlcpy(&mut dest, "Hello, world!");
+
+        assert_eq!(
+            unsafe { U16CStr::from_ptr_str(dest.as_ptr() as *const u16) }
+                .to_string()
+                .unwrap(),
+            "Hello, world!"
+        );
+    }
+
+    #[test]
+    fn u16strlcpy_overflow() {
+        let mut dest = [0; 6];
+        u16strlcpy(&mut dest, "Hello, world!");
+
+        assert_eq!(
+            unsafe { U16CStr::from_ptr_str(dest.as_ptr() as *const u16) }
+                .to_string()
+                .unwrap(),
+            "Hello"
+        );
+    }
+}
