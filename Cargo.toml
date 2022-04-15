@@ -34,10 +34,15 @@ members = [
 ]
 
 [features]
-default = []
+default = ["vst3"]
 # Enabling this feature will cause the plugin to terminate when allocations
 # occur in the processing function while compiling in debug mode.
-assert_process_allocs = ["assert_no_alloc"]
+assert_process_allocs = ["dep:assert_no_alloc"]
+# Enables the `nih_export_vst3()` macro. Enabled by default. This feature exists
+# mostly for GPL-compliance reasons, since even if you don't use the VST3
+# wrapper you might otherwise still include a couple (unused) symbols from the
+# `vst3-sys` create.
+vst3 = ["dep:vst3-sys"]
 # Add adapters to the Buffer object for reading the channel data to and from
 # `std::simd` vectors. Requires a nightly compiler.
 simd = []
@@ -60,7 +65,7 @@ parking_lot = "0.12"
 raw-window-handle = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-vst3-sys = { git = "https://github.com/robbert-vdh/vst3-sys.git", branch = "fix/note-off-event" }
+vst3-sys = { git = "https://github.com/robbert-vdh/vst3-sys.git", branch = "fix/note-off-event", optional = true }
 widestring = "1.0.0-beta.1"
 
 assert_no_alloc = { version = "1.1", optional = true }
