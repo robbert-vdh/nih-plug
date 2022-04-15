@@ -150,7 +150,8 @@ impl Plugin for PubertySimulator {
     const DEFAULT_NUM_OUTPUTS: u32 = 2;
 
     fn params(&self) -> Arc<dyn Params> {
-        self.params.clone()
+        // The explicit cast is not needed, but Rust Analyzer gets very upset when you don't do it
+        self.params.clone() as Arc<dyn Params>
     }
 
     fn accepts_bus_config(&self, config: &BusConfig) -> bool {
