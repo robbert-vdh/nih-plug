@@ -24,7 +24,7 @@ members = [
   "plugins/examples/gain_gui_egui",
   "plugins/examples/gain_gui_iced",
   "plugins/examples/gain_gui_vizia",
-  "plugins/examples/midi-inverter",
+  "plugins/examples/midi_inverter",
   "plugins/examples/sine",
   "plugins/examples/stft",
 
