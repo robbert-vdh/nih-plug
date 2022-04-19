@@ -1,11 +1,5 @@
 /* Overrides for default VIZIA widgets */
 
-* {
-  color: #0a0a0a;
-  /* VIZIA uses points instead of pixels, this is 20px */
-  font-size: 15;
-}
-
 scrollview > vstack {
   /* Normally the scroll bar overlaps with the content, so we'll add a little offset to prevent that */
   child-right: 15px;
