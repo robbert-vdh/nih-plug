@@ -101,41 +101,25 @@ impl View for ResizeHandle {
         }
     }
 
-    fn draw(&self, cx: &mut Context, canvas: &mut Canvas) {
+    fn draw(&self, cx: &mut DrawContext, canvas: &mut Canvas) {
         // We'll draw the handle directly as styling elements for this is going to be a bit tricky
 
         // These basics are taken directly from the default implementation of this function
-        let entity = cx.current;
-        let bounds = cx.cache.get_bounds(entity);
+        let entity = cx.current();
+        let bounds = cx.cache().get_bounds(entity);
         if bounds.w == 0.0 || bounds.h == 0.0 {
             return;
         }
 
-        let background_color = cx
-            .style
-            .background_color
-            .get(entity)
-            .cloned()
-            .unwrap_or_default();
-        let border_color = cx
-            .style
-            .border_color
-            .get(entity)
-            .cloned()
-            .unwrap_or_default();
-        let opacity = cx.cache.get_opacity(entity);
+        let background_color = cx.background_color(entity).copied().unwrap_or_default();
+        let border_color = cx.border_color(entity).copied().unwrap_or_default();
+        let opacity = cx.cache().get_opacity(entity);
         let mut background_color: vg::Color = background_color.into();
         background_color.set_alphaf(background_color.a * opacity);
         let mut border_color: vg::Color = border_color.into();
         border_color.set_alphaf(border_color.a * opacity);
 
-        let border_width = match cx
-            .style
-            .border_width
-            .get(entity)
-            .cloned()
-            .unwrap_or_default()
-        {
+        let border_width = match cx.border_width(entity).unwrap_or_default() {
             Units::Pixels(val) => val,
             Units::Percentage(val) => bounds.w.min(bounds.h) * (val / 100.0),
             _ => 0.0,
@@ -191,10 +175,8 @@ impl View for ResizeHandle {
         // path.close();
 
         let mut color: vg::Color = cx
-            .style
-            .font_color
-            .get(entity)
-            .cloned()
+            .font_color(entity)
+            .copied()
             .unwrap_or(Color::white())
             .into();
         color.set_alphaf(color.a * opacity);
