@@ -143,28 +143,44 @@ where
     L: Lens<Target = f32>,
     P: Lens<Target = f32>,
 {
-    fn draw(&self, cx: &mut DrawContext, canvas: &mut Canvas) {
+    fn draw(&self, cx: &mut Context, canvas: &mut Canvas) {
         let level_dbfs = self.level_dbfs.get(cx);
         let peak_dbfs = self.peak_dbfs.get(cx);
 
         // These basics are taken directly from the default implementation of this function
-        let entity = cx.current();
-        let bounds = cx.cache().get_bounds(entity);
+        let entity = cx.current;
+        let bounds = cx.cache.get_bounds(entity);
         if bounds.w == 0.0 || bounds.h == 0.0 {
             return;
         }
 
         // TODO: It would be cool to allow the text color property to control the gradient here. For
         //       now we'll only support basic background colors and borders.
-        let background_color = cx.background_color(entity).cloned().unwrap_or_default();
-        let border_color = cx.border_color(entity).cloned().unwrap_or_default();
-        let opacity = cx.cache().get_opacity(entity);
+        let background_color = cx
+            .style
+            .background_color
+            .get(entity)
+            .cloned()
+            .unwrap_or_default();
+        let border_color = cx
+            .style
+            .border_color
+            .get(entity)
+            .cloned()
+            .unwrap_or_default();
+        let opacity = cx.cache.get_opacity(entity);
         let mut background_color: vg::Color = background_color.into();
         background_color.set_alphaf(background_color.a * opacity);
         let mut border_color: vg::Color = border_color.into();
         border_color.set_alphaf(border_color.a * opacity);
 
-        let border_width = match cx.border_width(entity).unwrap_or_default() {
+        let border_width = match cx
+            .style
+            .border_width
+            .get(entity)
+            .cloned()
+            .unwrap_or_default()
+        {
             Units::Pixels(val) => val,
             Units::Percentage(val) => bounds.w.min(bounds.h) * (val / 100.0),
             _ => 0.0,
@@ -196,7 +212,7 @@ where
 
         // NOTE: We'll scale this with the nearest integer DPI ratio. That way it will still look
         //       good at 2x scaling, and it won't look blurry at 1.x times scaling.
-        let dpi_scale = cx.logical_to_physical(1.0).floor().max(1.0) as f32;
+        let dpi_scale = cx.style.dpi_factor.floor().max(1.0) as f32;
         let bar_tick_coordinates = (bar_ticks_start_x..bar_ticks_end_x)
             .step_by(((TICK_WIDTH + TICK_GAP) * dpi_scale).round() as usize);
         for tick_x in bar_tick_coordinates {
