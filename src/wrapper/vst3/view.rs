@@ -20,8 +20,14 @@ use vst3_sys as vst3_com;
 
 // Thanks for putting this behind a platform-specific ifdef...
 // NOTE: This should also be used on the BSDs, but vst3-sys exposes these interfaces only for Linux
-#[cfg(all(target_os = "linux"))]
-use vst3_sys::gui::linux::{FileDescriptor, IEventHandler, IRunLoop};
+#[cfg(target_os = "linux")]
+use {
+    super::inner::Task,
+    crate::event_loop::{EventLoop, MainThreadExecutor, TASK_QUEUE_CAPACITY},
+    crossbeam::queue::ArrayQueue,
+    libc,
+    vst3_sys::gui::linux::{FileDescriptor, IEventHandler, IRunLoop},
+};
 
 // Window handle type constants missing from vst3-sys
 #[allow(unused)]
@@ -48,8 +54,8 @@ pub(crate) struct WrapperView<P: Vst3Plugin> {
     /// Allows handling events events on the host's GUI thread when using Linux. Needed because
     /// otherwise REAPER doesn't like us very much. The event handler could be implemented directly
     /// on this object but vst3-sys does not let us conditionally implement interfaces.
-    #[cfg(all(target_os = "linux"))]
-    run_loop_event_handler: RwLock<Option<Box<RunLoopEventHandler>>>,
+    #[cfg(target_os = "linux")]
+    run_loop_event_handler: RwLock<Option<Box<RunLoopEventHandler<P>>>>,
 
     /// The DPI scaling factor as passed to the [IPlugViewContentScaleSupport::set_scale_factor()]
     /// function. Defaults to 1.0, and will be kept there on macOS. When reporting and handling size
@@ -58,12 +64,33 @@ pub(crate) struct WrapperView<P: Vst3Plugin> {
     scaling_factor: AtomicF32,
 }
 
-// This doesn't need to be a separate struct, but vst3-sys does not let us implement interfaces
-// conditionally and the interface is only exposed when compiling on Linux
-#[cfg(all(target_os = "linux"))]
+/// Allow handling tasks on the host's GUI thread on Linux. This doesn't need to be a separate
+/// struct, but vst3-sys does not let us implement interfaces conditionally and the interface is
+/// only exposed when compiling on Linux. The struct will register itself when calling
+/// [`RunLoopEventHandler::new()`] and it will unregister itself when it gets dropped.
+#[cfg(target_os = "linux")]
 #[VST3(implements(IEventHandler))]
-struct RunLoopEventHandler {
+struct RunLoopEventHandler<P: Vst3Plugin> {
+    /// We need access to the inner wrapper so we that we can post any outstanding tasks there when
+    /// this object gets dropped so no work is lost.
+    inner: Arc<WrapperInner<P>>,
+
+    /// The host's run lopp interface. This lets us run tasks on the same thread as the host's UI.
     run_loop: VstPtr<dyn IRunLoop>,
+
+    /// We need a Unix domain socket the host can poll to know that we have an event to handle. In
+    /// theory eventfd would be much better suited for this, but Ardour doesn't respond to fds that
+    /// aren't sockets. So instead, we will write a single byte here for every message we should
+    /// handle.
+    socket_read_fd: i32,
+    socket_write_fd: i32,
+
+    /// A queue of tasks that still need to be performed. Because CLAP lets the plugin request a
+    /// host callback directly, we don't need to use the OsEventLoop we use in our other plugin
+    /// implementations. Instead, we'll post tasks to this queue, ask the host to call
+    /// [`on_main_thread()`][Self::on_main_thread()] on the main thread, and then continue to pop
+    /// tasks off this queue there until it is empty.
+    tasks: ArrayQueue<Task>,
 }
 
 impl<P: Vst3Plugin> WrapperView<P> {
@@ -73,7 +100,7 @@ impl<P: Vst3Plugin> WrapperView<P> {
             editor,
             RwLock::new(None),
             RwLock::new(None),
-            #[cfg(all(target_os = "linux"))]
+            #[cfg(target_os = "linux")]
             RwLock::new(None),
             AtomicF32::new(1.0),
         )
@@ -106,13 +133,102 @@ impl<P: Vst3Plugin> WrapperView<P> {
                 // `SharedVstPtr`. This _should_ work however.
                 // FIXME: Run this in the `IRonLoop` on Linux. Otherwise REAPER will be very cross
                 //        with us.
-                let plug_view: SharedVstPtr<dyn IPlugView> = unsafe { mem::transmute(self) };
+                let plug_view: SharedVstPtr<dyn IPlugView> =
+                    unsafe { mem::transmute(self.__iplugviewvptr) };
                 let result = unsafe { plug_frame.resize_view(plug_view, &mut size) };
 
                 result == kResultOk
             }
             None => false,
         }
+    }
+
+    /// If the host supports `IRunLoop`, then this will post the task to a task queue that will be
+    /// run on the host's UI thread. If not, then this will return an `Err` value containing the
+    /// task so it can be run elsewhere.
+    #[cfg(target_os = "linux")]
+    pub fn do_maybe_in_run_loop(&self, task: Task) -> Result<(), Task> {
+        match &*self.run_loop_event_handler.read() {
+            Some(run_loop) => run_loop.post_task(task),
+            None => Err(task),
+        }
+    }
+
+    /// If the host supports `IRunLoop`, then this will post the task to a task queue that will be
+    /// run on the host's UI thread. If not, then this will return an `Err` value containing the
+    /// task so it can be run elsewhere.
+    #[cfg(not(target_os = "linux"))]
+    #[must_use]
+    pub fn do_maybe_in_run_loop(&self, task: Task) -> Result<(), Task> {
+        Err(task)
+    }
+}
+
+#[cfg(target_os = "linux")]
+impl<P: Vst3Plugin> RunLoopEventHandler<P> {
+    pub fn new(inner: Arc<WrapperInner<P>>, run_loop: VstPtr<dyn IRunLoop>) -> Box<Self> {
+        let mut sockets = [0i32; 2];
+        assert_eq!(
+            unsafe {
+                libc::socketpair(
+                    libc::AF_UNIX,
+                    libc::SOCK_STREAM | libc::SOCK_CLOEXEC | libc::SOCK_NONBLOCK,
+                    0,
+                    sockets.as_mut_ptr(),
+                )
+            },
+            0
+        );
+        let [socket_read_fd, socket_write_fd] = sockets;
+
+        // vst3-sys provides no way to convert to a SharedVstPtr, so, uh, yeah
+        let handler = RunLoopEventHandler::allocate(
+            inner,
+            run_loop,
+            socket_read_fd,
+            socket_write_fd,
+            ArrayQueue::new(TASK_QUEUE_CAPACITY),
+        );
+        let event_handler: SharedVstPtr<dyn IEventHandler> =
+            unsafe { mem::transmute(handler.__ieventhandlervptr) };
+        assert_eq!(
+            unsafe {
+                handler
+                    .run_loop
+                    .register_event_handler(event_handler, handler.socket_read_fd)
+            },
+            kResultOk
+        );
+
+        handler
+    }
+
+    /// Post a task to the tasks queue so it will be run on the host's GUI thread later. Returns the
+    /// task if the queue is full and the task could not be posted.
+    pub fn post_task(&self, task: Task) -> Result<(), Task> {
+        let () = self.tasks.push(task)?;
+
+        // We need to use a Unix domain socket to let the host know to call our event handler. In
+        // theory eventfd would be more suitable here, but Ardour does not support that.
+        // XXX: This can technically lead to a race condition if the host is currently calling
+        //      `on_fd_is_set()` on another thread and the task has already been popped and executed
+        //      and this value has not yet been written to the socket. Doing it the other way around
+        //      gets you the other situation where the event handler could be run without the task
+        //      being posted yet. In practice this won't cause any issues however.
+        let notify_value = 1i8;
+        const NOTIFY_VALUE_SIZE: usize = std::mem::size_of::<i8>();
+        assert_eq!(
+            unsafe {
+                libc::write(
+                    self.socket_write_fd,
+                    &notify_value as *const _ as *const c_void,
+                    NOTIFY_VALUE_SIZE,
+                )
+            },
+            NOTIFY_VALUE_SIZE as isize
+        );
+
+        Ok(())
     }
 }
 
@@ -129,7 +245,7 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
         }
     }
 
-    #[cfg(all(target_os = "macos"))]
+    #[cfg(target_os = "macos")]
     unsafe fn is_platform_type_supported(&self, type_: vst3_sys::base::FIDString) -> tresult {
         let type_ = CStr::from_ptr(type_);
         match type_.to_str() {
@@ -141,7 +257,7 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
         }
     }
 
-    #[cfg(all(target_os = "windows"))]
+    #[cfg(target_os = "windows")]
     unsafe fn is_platform_type_supported(&self, type_: vst3_sys::base::FIDString) -> tresult {
         let type_ = CStr::from_ptr(type_);
         match type_.to_str() {
@@ -164,13 +280,13 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
                     handle.window = parent as usize as u32;
                     RawWindowHandle::Xcb(handle)
                 }
-                #[cfg(all(target_os = "macos"))]
+                #[cfg(target_os = "macos")]
                 Ok(type_) if type_ == VST3_PLATFORM_NSVIEW => {
                     let mut handle = raw_window_handle::AppKitHandle::empty();
                     handle.ns_view = parent;
                     RawWindowHandle::AppKit(handle)
                 }
-                #[cfg(all(target_os = "windows"))]
+                #[cfg(target_os = "windows")]
                 Ok(type_) if type_ == VST3_PLATFORM_HWND => {
                     let mut handle = raw_window_handle::Win32Handle::empty();
                     handle.hwnd = parent;
@@ -286,16 +402,16 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
             Some(frame) => {
                 // On Linux the host will expose another interface that lets us run code on the
                 // host's GUI thread. REAPER will segfault when we don't do this for resizes.
-                #[cfg(all(target_os = "linux"))]
+                #[cfg(target_os = "linux")]
                 {
-                    *self.run_loop_event_handler.write() = frame
-                        .cast()
-                        .map(|run_loop| RunLoopEventHandler::allocate(VstPtr::from(run_loop)));
+                    *self.run_loop_event_handler.write() = frame.cast().map(|run_loop| {
+                        RunLoopEventHandler::new(self.inner.clone(), VstPtr::from(run_loop))
+                    });
                 }
                 *self.plug_frame.write() = Some(VstPtr::from(frame));
             }
             None => {
-                #[cfg(all(target_os = "linux"))]
+                #[cfg(target_os = "linux")]
                 {
                     *self.run_loop_event_handler.write() = None;
                 }
@@ -340,9 +456,58 @@ impl<P: Vst3Plugin> IPlugViewContentScaleSupport for WrapperView<P> {
     }
 }
 
-#[cfg(all(target_os = "linux"))]
-impl IEventHandler for RunLoopEventHandler {
-    unsafe fn on_fd_is_set(&self, fd: FileDescriptor) {
-        todo!()
+#[cfg(target_os = "linux")]
+impl<P: Vst3Plugin> IEventHandler for RunLoopEventHandler<P> {
+    unsafe fn on_fd_is_set(&self, _fd: FileDescriptor) {
+        // This gets called from the host's UI thread because we wrote some bytes to the Unix domain
+        // socket. We'll read that data from the socket again just to make REAPER happy.
+        while let Some(task) = self.tasks.pop() {
+            self.inner.execute(task);
+
+            let mut notify_value = 1i8;
+            const NOTIFY_VALUE_SIZE: usize = std::mem::size_of::<i8>();
+            assert_eq!(
+                libc::read(
+                    self.socket_read_fd,
+                    &mut notify_value as *mut _ as *mut c_void,
+                    NOTIFY_VALUE_SIZE
+                ),
+                NOTIFY_VALUE_SIZE as isize
+            );
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+impl<P: Vst3Plugin> Drop for RunLoopEventHandler<P> {
+    fn drop(&mut self) {
+        // When this object gets dropped and there are still unprocssed tasks left, then we'll
+        // handle those in the regular event loop so no work gets lost
+        let mut posting_failed = false;
+        while let Some(task) = self.tasks.pop() {
+            posting_failed |= !unsafe {
+                self.inner
+                    .event_loop
+                    .borrow()
+                    .assume_init_ref()
+                    .do_maybe_async(task)
+            };
+        }
+
+        if posting_failed {
+            nih_debug_assert_failure!(
+                "Outstanding tasks have been dropped when clsoing \
+                 the editor as the task queue was full"
+            );
+        }
+
+        unsafe {
+            libc::close(self.socket_read_fd);
+            libc::close(self.socket_write_fd);
+        }
+
+        let event_handler: SharedVstPtr<dyn IEventHandler> =
+            unsafe { mem::transmute(self.__ieventhandlervptr) };
+        unsafe { self.run_loop.unregister_event_handler(event_handler) };
     }
 }

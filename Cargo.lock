@@ -2004,6 +2004,7 @@ dependencies = [
  "clap-sys",
  "crossbeam",
  "lazy_static",
+ "libc",
  "midi-consts",
  "nih_plug_derive",
  "parking_lot 0.12.0",
