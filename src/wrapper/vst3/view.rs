@@ -139,6 +139,11 @@ impl<P: Vst3Plugin> WrapperView<P> {
                     mem::transmute(&self.__iplugviewvptr as *const *const _);
                 let result = plug_frame.resize_view(plug_view, &mut size);
 
+                debug_assert_eq!(
+                    result, kResultOk,
+                    "The host denied the resize, we currently don't handle this for VST3 plugins"
+                );
+
                 result == kResultOk
             }
             None => false,
