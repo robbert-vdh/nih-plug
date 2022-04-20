@@ -139,6 +139,9 @@ pub enum Task {
     /// Trigger a restart with the given restart flags. This is a bit set of the flags from
     /// [`vst3_sys::vst::RestartFlags`].
     TriggerRestart(i32),
+    /// Request the editor to be resized according to its current size. Right now there is no way to
+    /// handle denied resize requestsyet.
+    RequestResize,
 }
 
 /// VST3 makes audio processing pretty complicated. In order to support both block splitting for
@@ -478,6 +481,12 @@ impl<P: Vst3Plugin> MainThreadExecutor<Task> for WrapperInner<P> {
                     handler.restart_component(flags);
                 }
                 None => nih_debug_assert_failure!("Component handler not yet set"),
+            },
+            Task::RequestResize => match &*self.plug_view.read() {
+                Some(plug_view) => {
+                    plug_view.request_resize();
+                }
+                None => nih_debug_assert_failure!("Can't resize a closed editor"),
             },
         }
     }

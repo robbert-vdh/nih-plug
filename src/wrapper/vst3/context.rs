@@ -30,10 +30,12 @@ pub(crate) struct WrapperProcessContext<'a, P: Vst3Plugin> {
 
 impl<P: Vst3Plugin> GuiContext for WrapperGuiContext<P> {
     fn request_resize(&self) -> bool {
-        match &*self.inner.plug_view.read() {
-            Some(plug_view) => plug_view.request_resize(),
-            None => false,
-        }
+        let task_posted = self.inner.do_maybe_async(Task::RequestResize);
+        nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+
+        // TODO: We don't handle resize request failures right now. In practice this should however
+        //       not happen.
+        true
     }
 
     // All of these functions are supposed to be called from the main thread, so we'll put some

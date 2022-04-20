@@ -107,8 +107,12 @@ impl<P: Vst3Plugin> WrapperView<P> {
     }
 
     /// Ask the host to resize the view to the size specified by [Editor::size()]. Will return false
-    /// if the host doesn't like you.
-    pub fn request_resize(&self) -> bool {
+    /// if the host doesn't like you. This **needs** to be run from the GUI thread.
+    ///
+    /// # Safety
+    ///
+    /// May cause memory corruption in Linux REAPER when called from outside of the `IRunLoop`.
+    pub unsafe fn request_resize(&self) -> bool {
         // Don't do anything if the editor is not open, because that would be strange
         if self
             .editor_handle
@@ -131,11 +135,8 @@ impl<P: Vst3Plugin> WrapperView<P> {
 
                 // The argument types are a bit wonky here because you can't construct a
                 // `SharedVstPtr`. This _should_ work however.
-                // FIXME: Run this in the `IRonLoop` on Linux. Otherwise REAPER will be very cross
-                //        with us.
-                let plug_view: SharedVstPtr<dyn IPlugView> =
-                    unsafe { mem::transmute(self.__iplugviewvptr) };
-                let result = unsafe { plug_frame.resize_view(plug_view, &mut size) };
+                let plug_view: SharedVstPtr<dyn IPlugView> = mem::transmute(self.__iplugviewvptr);
+                let result = plug_frame.resize_view(plug_view, &mut size);
 
                 result == kResultOk
             }
