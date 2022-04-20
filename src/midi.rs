@@ -49,6 +49,12 @@ pub enum NoteEvent {
     },
     /// A polyphonic note pressure/aftertouch event, available on [`MidiConfig::Basic`] and up. Not
     /// all hosts may support polyphonic aftertouch.
+    ///
+    /// # Note
+    ///
+    /// When implementing MPE support you should use MIDI channel pressure instead as polyphonic key
+    /// pressure + MPE is undefined as per the MPE specification. Or as a more generic catch all,
+    /// you may manually combine the polyphonic key pressure and MPE channel pressure.
     PolyPressure {
         timing: u32,
         /// The note's channel, from 0 to 16.
