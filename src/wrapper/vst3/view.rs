@@ -135,7 +135,8 @@ impl<P: Vst3Plugin> WrapperView<P> {
 
                 // The argument types are a bit wonky here because you can't construct a
                 // `SharedVstPtr`. This _should_ work however.
-                let plug_view: SharedVstPtr<dyn IPlugView> = mem::transmute(self.__iplugviewvptr);
+                let plug_view: SharedVstPtr<dyn IPlugView> =
+                    mem::transmute(&self.__iplugviewvptr as *const *const _);
                 let result = plug_frame.resize_view(plug_view, &mut size);
 
                 result == kResultOk
@@ -182,7 +183,6 @@ impl<P: Vst3Plugin> RunLoopEventHandler<P> {
         );
         let [socket_read_fd, socket_write_fd] = sockets;
 
-        // vst3-sys provides no way to convert to a SharedVstPtr, so, uh, yeah
         let handler = RunLoopEventHandler::allocate(
             inner,
             run_loop,
@@ -190,8 +190,11 @@ impl<P: Vst3Plugin> RunLoopEventHandler<P> {
             socket_write_fd,
             ArrayQueue::new(TASK_QUEUE_CAPACITY),
         );
+
+        // vst3-sys provides no way to convert to a SharedVstPtr, so, uh, yeah. These are pointers
+        // to vtable poitners.
         let event_handler: SharedVstPtr<dyn IEventHandler> =
-            unsafe { mem::transmute(handler.__ieventhandlervptr) };
+            unsafe { mem::transmute(&handler.__ieventhandlervptr as *const *const _) };
         assert_eq!(
             unsafe {
                 handler
@@ -508,7 +511,7 @@ impl<P: Vst3Plugin> Drop for RunLoopEventHandler<P> {
         }
 
         let event_handler: SharedVstPtr<dyn IEventHandler> =
-            unsafe { mem::transmute(self.__ieventhandlervptr) };
+            unsafe { mem::transmute(&self.__ieventhandlervptr as *const _) };
         unsafe { self.run_loop.unregister_event_handler(event_handler) };
     }
 }
