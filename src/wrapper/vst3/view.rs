@@ -18,6 +18,11 @@ use crate::plugin::{Editor, ParentWindowHandle, Vst3Plugin};
 // Alias needed for the VST3 attribute macro
 use vst3_sys as vst3_com;
 
+// Thanks for putting this behind a platform-specific ifdef...
+// NOTE: This should also be used on the BSDs, but vst3-sys exposes these interfaces only for Linux
+#[cfg(all(target_os = "linux"))]
+use vst3_sys::gui::linux::IRunLoop;
+
 // Window handle type constants missing from vst3-sys
 #[allow(unused)]
 const VST3_PLATFORM_HWND: &str = "HWND";
@@ -39,7 +44,10 @@ pub(crate) struct WrapperView<P: Vst3Plugin> {
     editor_handle: RwLock<Option<Box<dyn Any>>>,
 
     /// The `IPlugFrame` instance passed by the host during [IPlugView::set_frame()].
-    pub plug_frame: RwLock<Option<VstPtr<dyn IPlugFrame>>>,
+    plug_frame: RwLock<Option<VstPtr<dyn IPlugFrame>>>,
+    #[cfg(all(target_os = "linux"))]
+    run_loop: RwLock<Option<VstPtr<dyn IRunLoop>>>,
+
     /// The DPI scaling factor as passed to the [IPlugViewContentScaleSupport::set_scale_factor()]
     /// function. Defaults to 1.0, and will be kept there on macOS. When reporting and handling size
     /// the sizes communicated to and from the DAW should be scaled by this factor since NIH-plug's
@@ -53,6 +61,8 @@ impl<P: Vst3Plugin> WrapperView<P> {
             inner,
             editor,
             RwLock::new(None),
+            RwLock::new(None),
+            #[cfg(all(target_os = "linux"))]
             RwLock::new(None),
             AtomicF32::new(1.0),
         )
@@ -262,8 +272,22 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
         // The correct argument type is missing from the bindings
         let frame: SharedVstPtr<dyn IPlugFrame> = mem::transmute(frame);
         match frame.upgrade() {
-            Some(frame) => *self.plug_frame.write() = Some(frame.into()),
-            None => *self.plug_frame.write() = None,
+            Some(frame) => {
+                // On Linux the host will expose another interface that lets us run code on the
+                // host's GUI thread. REAPER will segfault when we don't do this for resizes.
+                #[cfg(all(target_os = "linux"))]
+                {
+                    *self.run_loop.write() = frame.cast().map(VstPtr::from);
+                }
+                *self.plug_frame.write() = Some(VstPtr::from(frame));
+            }
+            None => {
+                #[cfg(all(target_os = "linux"))]
+                {
+                    *self.run_loop.write() = None;
+                }
+                *self.plug_frame.write() = None;
+            }
         }
 
         kResultOk
