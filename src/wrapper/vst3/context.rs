@@ -6,7 +6,6 @@ use vst3_sys::vst::{IComponentHandler, RestartFlags};
 
 use super::inner::{Task, WrapperInner};
 use crate::context::{GuiContext, ProcessContext, Transport};
-use crate::event_loop::EventLoop;
 use crate::midi::NoteEvent;
 use crate::param::internals::ParamPtr;
 use crate::plugin::Vst3Plugin;
@@ -117,7 +116,8 @@ impl<P: Vst3Plugin> ProcessContext for WrapperProcessContext<'_, P> {
         // Only trigger a restart if it's actually needed
         let old_latency = self.inner.current_latency.swap(samples, Ordering::SeqCst);
         if old_latency != samples {
-            let task_posted = unsafe { self.inner.event_loop.borrow().assume_init_ref() }
+            let task_posted = self
+                .inner
                 .do_maybe_async(Task::TriggerRestart(RestartFlags::kLatencyChanged as i32));
             nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
         }

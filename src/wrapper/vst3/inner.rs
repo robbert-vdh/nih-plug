@@ -49,7 +49,9 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     pub plug_view: RwLock<Option<ObjectPtr<WrapperView<P>>>>,
 
     /// A realtime-safe task queue so the plugin can schedule tasks that need to be run later on the
-    /// GUI thread.
+    /// GUI thread. This field should not be used directly for posting tasks. This should be done
+    /// through [`Self::do_maybe_async()`] instead. That method posts the task to the host's
+    /// `IRunLoop` instead of it's available.
     ///
     /// This RwLock is only needed because it has to be initialized late. There is no reason to
     /// mutably borrow the event loop, so reads will never be contested.
@@ -309,6 +311,34 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             input_events_guard: self.input_events.borrow_mut(),
             output_events_guard: self.output_events.borrow_mut(),
             transport,
+        }
+    }
+
+    /// Either posts the function to the task queue using [`EventLoop::do_maybe_async()`] so it can
+    /// be delegated to the main thread, executes the task directly if this is the main thread, or
+    /// runs the task on the host's `IRunLoop` if the GUI is open and it exposes one. This function
+    ///
+    /// If the task queue is full, then this will return false.
+    #[must_use]
+    pub fn do_maybe_async(&self, task: Task) -> bool {
+        let event_loop = self.event_loop.borrow();
+        let event_loop = unsafe { event_loop.assume_init_ref() };
+        if event_loop.is_main_thread() {
+            unsafe { self.execute(task) };
+            true
+        } else {
+            // If the editor is open, and the host exposes the `IRunLoop` interface, then we'll run
+            // the task on the host's GUI thread using that interface. Otherwise we'll use the
+            // regular eent loop. If the editor gets dropped while there's still outstanding work
+            // left in the run loop task queue, then those tasks will be posted to the regular event
+            // loop so no work is lost.
+            match &*self.plug_view.read() {
+                Some(plug_view) => match plug_view.do_maybe_in_run_loop(task) {
+                    Ok(()) => true,
+                    Err(task) => event_loop.do_maybe_async(task),
+                },
+                None => event_loop.do_maybe_async(task),
+            }
         }
     }
 
