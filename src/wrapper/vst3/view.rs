@@ -6,9 +6,9 @@ use std::ffi::{c_void, CStr};
 use std::mem;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use vst3_com::utils::SharedVstPtr;
 use vst3_sys::base::{kInvalidArgument, kResultFalse, kResultOk, tresult, TBool};
 use vst3_sys::gui::{IPlugFrame, IPlugView, IPlugViewContentScaleSupport, ViewRect};
+use vst3_sys::utils::SharedVstPtr;
 use vst3_sys::VST3;
 
 use super::inner::WrapperInner;
@@ -21,7 +21,7 @@ use vst3_sys as vst3_com;
 // Thanks for putting this behind a platform-specific ifdef...
 // NOTE: This should also be used on the BSDs, but vst3-sys exposes these interfaces only for Linux
 #[cfg(all(target_os = "linux"))]
-use vst3_sys::gui::linux::IRunLoop;
+use vst3_sys::gui::linux::{FileDescriptor, IEventHandler, IRunLoop};
 
 // Window handle type constants missing from vst3-sys
 #[allow(unused)]
@@ -45,14 +45,25 @@ pub(crate) struct WrapperView<P: Vst3Plugin> {
 
     /// The `IPlugFrame` instance passed by the host during [IPlugView::set_frame()].
     plug_frame: RwLock<Option<VstPtr<dyn IPlugFrame>>>,
+    /// Allows handling events events on the host's GUI thread when using Linux. Needed because
+    /// otherwise REAPER doesn't like us very much. The event handler could be implemented directly
+    /// on this object but vst3-sys does not let us conditionally implement interfaces.
     #[cfg(all(target_os = "linux"))]
-    run_loop: RwLock<Option<VstPtr<dyn IRunLoop>>>,
+    run_loop_event_handler: RwLock<Option<Box<RunLoopEventHandler>>>,
 
     /// The DPI scaling factor as passed to the [IPlugViewContentScaleSupport::set_scale_factor()]
     /// function. Defaults to 1.0, and will be kept there on macOS. When reporting and handling size
     /// the sizes communicated to and from the DAW should be scaled by this factor since NIH-plug's
     /// APIs only deal in logical pixels.
     scaling_factor: AtomicF32,
+}
+
+// This doesn't need to be a separate struct, but vst3-sys does not let us implement interfaces
+// conditionally and the interface is only exposed when compiling on Linux
+#[cfg(all(target_os = "linux"))]
+#[VST3(implements(IEventHandler))]
+struct RunLoopEventHandler {
+    run_loop: VstPtr<dyn IRunLoop>,
 }
 
 impl<P: Vst3Plugin> WrapperView<P> {
@@ -277,14 +288,16 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
                 // host's GUI thread. REAPER will segfault when we don't do this for resizes.
                 #[cfg(all(target_os = "linux"))]
                 {
-                    *self.run_loop.write() = frame.cast().map(VstPtr::from);
+                    *self.run_loop_event_handler.write() = frame
+                        .cast()
+                        .map(|run_loop| RunLoopEventHandler::allocate(VstPtr::from(run_loop)));
                 }
                 *self.plug_frame.write() = Some(VstPtr::from(frame));
             }
             None => {
                 #[cfg(all(target_os = "linux"))]
                 {
-                    *self.run_loop.write() = None;
+                    *self.run_loop_event_handler.write() = None;
                 }
                 *self.plug_frame.write() = None;
             }
@@ -324,5 +337,12 @@ impl<P: Vst3Plugin> IPlugViewContentScaleSupport for WrapperView<P> {
         } else {
             kResultFalse
         }
+    }
+}
+
+#[cfg(all(target_os = "linux"))]
+impl IEventHandler for RunLoopEventHandler {
+    unsafe fn on_fd_is_set(&self, fd: FileDescriptor) {
+        todo!()
     }
 }
