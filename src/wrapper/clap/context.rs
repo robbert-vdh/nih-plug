@@ -4,7 +4,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use super::wrapper::{OutputParamEvent, Task, Wrapper};
-use crate::context::{GuiContext, ProcessContext, Transport};
+use crate::context::{GuiContext, PluginApi, ProcessContext, Transport};
 use crate::event_loop::EventLoop;
 use crate::midi::NoteEvent;
 use crate::param::internals::ParamPtr;
@@ -28,6 +28,10 @@ pub(crate) struct WrapperProcessContext<'a, P: ClapPlugin> {
 }
 
 impl<P: ClapPlugin> GuiContext for WrapperGuiContext<P> {
+    fn plugin_api(&self) -> PluginApi {
+        PluginApi::Clap
+    }
+
     fn request_resize(&self) -> bool {
         self.wrapper.request_resize()
     }
@@ -92,6 +96,10 @@ impl<P: ClapPlugin> GuiContext for WrapperGuiContext<P> {
 }
 
 impl<P: ClapPlugin> ProcessContext for WrapperProcessContext<'_, P> {
+    fn plugin_api(&self) -> PluginApi {
+        PluginApi::Clap
+    }
+
     fn transport(&self) -> &Transport {
         &self.transport
     }

@@ -5,7 +5,7 @@ use std::sync::Arc;
 use vst3_sys::vst::{IComponentHandler, RestartFlags};
 
 use super::inner::{Task, WrapperInner};
-use crate::context::{GuiContext, ProcessContext, Transport};
+use crate::context::{GuiContext, PluginApi, ProcessContext, Transport};
 use crate::midi::NoteEvent;
 use crate::param::internals::ParamPtr;
 use crate::plugin::Vst3Plugin;
@@ -29,6 +29,10 @@ pub(crate) struct WrapperProcessContext<'a, P: Vst3Plugin> {
 }
 
 impl<P: Vst3Plugin> GuiContext for WrapperGuiContext<P> {
+    fn plugin_api(&self) -> PluginApi {
+        PluginApi::Vst3
+    }
+
     fn request_resize(&self) -> bool {
         let task_posted = self.inner.do_maybe_async(Task::RequestResize);
         nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
@@ -102,6 +106,10 @@ impl<P: Vst3Plugin> GuiContext for WrapperGuiContext<P> {
 }
 
 impl<P: Vst3Plugin> ProcessContext for WrapperProcessContext<'_, P> {
+    fn plugin_api(&self) -> PluginApi {
+        PluginApi::Vst3
+    }
+
     fn transport(&self) -> &Transport {
         &self.transport
     }

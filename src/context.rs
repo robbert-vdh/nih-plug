@@ -1,5 +1,7 @@
 //! Different contexts the plugin can use to make callbacks to the host in different...contexts.
 
+use std::fmt::Display;
+
 use crate::midi::NoteEvent;
 use crate::param::internals::ParamPtr;
 use crate::param::Param;
@@ -16,6 +18,9 @@ use crate::wrapper::state::PluginState;
 // The implementing wrapper needs to be able to handle concurrent requests, and it should perform
 // the actual callback within [MainThreadQueue::do_maybe_async].
 pub trait ProcessContext {
+    /// Get the current plugin API.
+    fn plugin_api(&self) -> PluginApi;
+
     /// Get information about the current transport position and status.
     fn transport(&self) -> &Transport;
 
@@ -77,6 +82,10 @@ pub trait ProcessContext {
 // The implementing wrapper can assume that everything is being called from the main thread. Since
 // NIH-plug doesn't own the GUI event loop, this invariant cannot be part of the interface.
 pub trait GuiContext: Send + Sync + 'static {
+    /// Get the current plugin API. This may be useful to display in the plugin's GUI as part of an
+    /// about screen.
+    fn plugin_api(&self) -> PluginApi;
+
     /// Ask the host to resize the editor window to the size specified by
     /// [`Editor::size()`][crate::prelude::Editor::size()]. This will return false if the host
     /// somehow didn't like this and rejected the resize, in which case the window should revert to
@@ -184,6 +193,23 @@ pub struct Transport {
 /// functions should only be called from the main thread.
 pub struct ParamSetter<'a> {
     pub raw_context: &'a dyn GuiContext,
+}
+
+/// The currently active plugin API. This may be useful to display in an about screen in the
+/// plugin's GUI for debugging purposes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PluginApi {
+    Clap,
+    Vst3,
+}
+
+impl Display for PluginApi {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PluginApi::Clap => write!(f, "CLAP"),
+            PluginApi::Vst3 => write!(f, "VST3"),
+        }
+    }
 }
 
 // TODO: These conversions have not really been tested yet, there might be an error in there somewhere
