@@ -22,6 +22,7 @@ use crate::param::internals::Params;
 /// - Multiple output busses
 /// - Special handling for offline processing
 /// - MIDI SysEx and MIDI2 for CLAP, note expressions and MIDI1 are already supported
+/// - An export target for a standalone application
 #[allow(unused_variables)]
 pub trait Plugin: Default + Send + Sync + 'static {
     const NAME: &'static str;
