@@ -226,7 +226,12 @@ fn bundle_binary(
             .next()
             .expect("Malformed standalone binary path"),
     );
-    maybe_create_macos_bundle_metadata(package, &standalone_bundle_home, compilation_target)?;
+    maybe_create_macos_bundle_metadata(
+        package,
+        &bundle_name,
+        &standalone_bundle_home,
+        compilation_target,
+    )?;
 
     eprintln!(
         "Created a standalone bundle at '{}'",
@@ -276,7 +281,12 @@ fn bundle_plugin(
                 .next()
                 .expect("Malformed CLAP library path"),
         );
-        maybe_create_macos_bundle_metadata(package, &clap_bundle_home, compilation_target)?;
+        maybe_create_macos_bundle_metadata(
+            package,
+            &bundle_name,
+            &clap_bundle_home,
+            compilation_target,
+        )?;
 
         eprintln!("Created a CLAP bundle at '{}'", clap_bundle_home.display());
     }
@@ -297,7 +307,12 @@ fn bundle_plugin(
                 .next()
                 .expect("Malformed VST2 library path"),
         );
-        maybe_create_macos_bundle_metadata(package, &vst2_bundle_home, compilation_target)?;
+        maybe_create_macos_bundle_metadata(
+            package,
+            &bundle_name,
+            &vst2_bundle_home,
+            compilation_target,
+        )?;
 
         eprintln!("Created a VST2 bundle at '{}'", vst2_bundle_home.display());
     }
@@ -317,7 +332,12 @@ fn bundle_plugin(
             .unwrap()
             .parent()
             .unwrap();
-        maybe_create_macos_bundle_metadata(package, vst3_bundle_home, compilation_target)?;
+        maybe_create_macos_bundle_metadata(
+            package,
+            &bundle_name,
+            vst3_bundle_home,
+            compilation_target,
+        )?;
 
         eprintln!("Created a VST3 bundle at '{}'", vst3_bundle_home.display());
     }
@@ -491,14 +511,13 @@ fn vst3_bundle_library_name(package: &str, target: CompilationTarget) -> String 
 /// yourself first.
 pub fn maybe_create_macos_bundle_metadata(
     package: &str,
+    display_name: &str,
     bundle_home: &Path,
     target: CompilationTarget,
 ) -> Result<()> {
     if !matches!(target, CompilationTarget::MacOS(_)) {
         return Ok(());
     }
-
-    // TODO: Use the display name from bundler.toml
 
     // TODO: May want to add bundler.toml fields for the identifier, version and signature at some
     //       point.
@@ -518,9 +537,9 @@ pub fn maybe_create_macos_bundle_metadata(
     <key>CFBundleIdentifier</key>
     <string>com.nih-plug.{package}</string>
     <key>CFBundleName</key>
-    <string>{package}</string>
+    <string>{display_name}</string>
     <key>CFBundleDisplayName</key>
-    <string>{package}</string>
+    <string>{display_name}</string>
     <key>CFBundlePackageType</key>
     <string>BNDL</string>
     <key>CFBundleSignature</key>
