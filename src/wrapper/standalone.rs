@@ -72,19 +72,28 @@ pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = Stri
 
     let wrapper = match Wrapper::<P>::new(config.clone()) {
         Ok(wrapper) => wrapper,
-        Err(WrapperError::IncompatibleConfig) => {
-            eprintln!("The plugin does not support the {} channel input and {} channel output configuration", config.input_channels, config.output_channels);
-            return false;
-        }
-        Err(WrapperError::InitializationFailed) => {
-            eprintln!("The plugin failed to initialize");
+        Err(err) => {
+            print_error(err, &config);
             return false;
         }
     };
 
-    // TODO: Open the editor if available, do IO things
-    // TODO: If the plugin has an editor, block until the editor is closed. Otherwise block
-    //       indefinitely or until SIGINT (how do signal handlers work in Rust?)
+    match wrapper.run() {
+        Ok(()) => true,
+        Err(err) => {
+            print_error(err, &config);
+            false
+        }
+    }
+}
 
-    true
+fn print_error(error: WrapperError, config: &WrapperConfig) {
+    match error {
+        WrapperError::IncompatibleConfig => {
+            eprintln!("The plugin does not support the {} channel input and {} channel output configuration", config.input_channels, config.output_channels);
+        }
+        WrapperError::InitializationFailed => {
+            eprintln!("The plugin failed to initialize");
+        }
+    }
 }

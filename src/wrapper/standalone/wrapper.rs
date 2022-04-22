@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use super::context::WrapperProcessContext;
 use crate::context::Transport;
-use crate::plugin::{BufferConfig, BusConfig, Plugin};
+use crate::plugin::{BufferConfig, BusConfig, Editor, Plugin};
 
 /// Configuration for a standalone plugin that would normally be provided by the DAW.
 #[derive(Debug, Clone)]
@@ -28,6 +28,10 @@ pub struct WrapperConfig {
 pub struct Wrapper<P: Plugin> {
     /// The wrapped plugin instance.
     plugin: RwLock<P>,
+    /// The plugin's editor, if it has one. This object does not do anything on its own, but we need
+    /// to instantiate this in advance so we don't need to lock the entire [`Plugin`] object when
+    /// creating an editor.
+    editor: Option<Box<dyn Editor>>,
 
     config: WrapperConfig,
 
@@ -37,6 +41,7 @@ pub struct Wrapper<P: Plugin> {
 }
 
 /// Errors that may arise while initializing the wrapped plugins.
+#[derive(Debug, Clone, Copy)]
 pub enum WrapperError {
     /// The plugin does not accept the IO configuration from the config.
     IncompatibleConfig,
@@ -48,8 +53,13 @@ impl<P: Plugin> Wrapper<P> {
     /// Instantiate a new instance of the standalone wrapper. Returns an error if the plugin does
     /// not accept the IO configuration from the wrapper config.
     pub fn new(config: WrapperConfig) -> Result<Arc<Self>, WrapperError> {
+        let plugin = P::default();
+        let editor = plugin.editor();
+
         let wrapper = Arc::new(Wrapper {
-            plugin: RwLock::new(P::default()),
+            plugin: RwLock::new(plugin),
+            editor,
+
             bus_config: BusConfig {
                 num_input_channels: config.input_channels,
                 num_output_channels: config.output_channels,
@@ -79,6 +89,19 @@ impl<P: Plugin> Wrapper<P> {
         }
 
         Ok(wrapper)
+    }
+
+    /// Open the editor, start processing audio, and block this thread until the editor is closed.
+    /// If the plugin does not have an editor, then this will block until SIGINT is received.
+    ///
+    /// Will return an error if the plugin threw an error during audio processing or if the editor
+    /// could not be opened.
+    pub fn run(self: Arc<Self>) -> Result<(), WrapperError> {
+        // TODO: Open the editor and block until it is closed
+        // TODO: Do IO things
+        // TODO: Block until SIGINT is received if the plugin does not have an editor
+
+        Ok(())
     }
 
     fn make_process_context(&self, transport: Transport) -> WrapperProcessContext<'_, P> {
