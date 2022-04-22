@@ -58,9 +58,10 @@ pub fn main() -> Result<()> {
 /// The main xtask entry point function, but with custom command line arguments. `args` should not
 /// contain the command name, so you should always skip at least one argument from
 /// `std::env::args()` before passing it to this function.
-pub fn main_with_args(command_name: &str, mut args: impl Iterator<Item = String>) -> Result<()> {
+pub fn main_with_args(command_name: &str, args: impl IntoIterator<Item = String>) -> Result<()> {
     chdir_workspace_root()?;
 
+    let mut args = args.into_iter();
     let usage_string = build_usage_string(command_name);
     let command = args
         .next()
