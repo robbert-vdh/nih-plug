@@ -5,6 +5,8 @@ pub mod clap;
 pub mod state;
 pub(crate) mod util;
 
+#[cfg(feature = "standalone")]
+pub mod standalone;
 #[cfg(feature = "vst3")]
 pub mod vst3;
 

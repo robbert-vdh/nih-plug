@@ -54,6 +54,8 @@ for download links.
 - Supports both VST3 and [CLAP](https://github.com/free-audio/clap) by simply
   adding the corresponding `nih_export_<api>!(Foo)` macro to your plugin's
   library.
+- Standalone binaries can be made by calling `nih_export_standalone(Foo)` from
+  your `main()` function.
 - Declarative parameter handling without any boilerplate.
   - Define parameters for your plugin by adding `FloatParam`, `IntParam`,
     `BoolParam`, and `EnumParam<T>` fields to your parameter struct, assign

@@ -175,6 +175,8 @@ pub fn bundle(package: &str, args: &[String]) -> Result<()> {
         }
     }
 
+    // TODO: Add support for binary targets. This would simply copy/reflink the binary to the
+    //       `bundled` directory to make it easier to ship all versions of a plugin.
     let compilation_target = compilation_target(cross_compile_target.as_deref())?;
     let lib_path = target_base(cross_compile_target.as_deref())?
         .join(if is_release_build { "release" } else { "debug" })
