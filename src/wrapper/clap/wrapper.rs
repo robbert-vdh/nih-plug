@@ -106,7 +106,7 @@ pub struct Wrapper<P: ClapPlugin> {
     /// The plugin's editor, if it has one. This object does not do anything on its own, but we need
     /// to instantiate this in advance so we don't need to lock the entire [`Plugin`] object when
     /// creating an editor.
-    editor: Option<Arc<dyn Editor>>,
+    editor: Option<Box<dyn Editor>>,
     /// A handle for the currently active editor instance. The plugin should implement `Drop` on
     /// this handle for its closing behavior.
     editor_handle: RwLock<Option<Box<dyn Any + Send + Sync>>>,
@@ -339,8 +339,8 @@ impl<P: ClapPlugin> MainThreadExecutor<Task> for Wrapper<P> {
 
 impl<P: ClapPlugin> Wrapper<P> {
     pub fn new(host_callback: *const clap_host) -> Arc<Self> {
-        let plugin = RwLock::new(P::default());
-        let editor = plugin.read().editor().map(Arc::from);
+        let plugin = P::default();
+        let editor = plugin.editor();
 
         // This is used to allow the plugin to restore preset data from its editor, see the comment
         // on `Self::updated_state_sender`
@@ -358,7 +358,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         // `wrapper.plugin` is alive. The plugin API identifiers these parameters by hashes, which
         // we'll calculate from the string ID specified by the plugin. These parameters should also
         // remain in the same order as the one returned by the plugin.
-        let params = plugin.read().params();
+        let params = plugin.params();
         let param_id_hashes_ptrs_groups: Vec<_> = params
             .param_map()
             .into_iter()
@@ -427,7 +427,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                     num_input_channels,
                     num_output_channels,
                 };
-                if plugin.read().accepts_bus_config(&bus_config) {
+                if plugin.accepts_bus_config(&bus_config) {
                     supported_bus_configs.push(bus_config);
                 }
             }
@@ -440,7 +440,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             num_output_channels: P::DEFAULT_NUM_OUTPUTS,
         };
         if !supported_bus_configs.contains(&default_bus_config)
-            && plugin.read().accepts_bus_config(&default_bus_config)
+            && plugin.accepts_bus_config(&default_bus_config)
         {
             supported_bus_configs.push(default_bus_config);
         }
@@ -469,7 +469,7 @@ impl<P: ClapPlugin> Wrapper<P> {
 
             this: AtomicRefCell::new(Weak::new()),
 
-            plugin,
+            plugin: RwLock::new(plugin),
             params,
             editor,
             editor_handle: RwLock::new(None),

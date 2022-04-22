@@ -176,8 +176,8 @@ pub enum ProcessEvent {
 impl<P: Vst3Plugin> WrapperInner<P> {
     #[allow(unused_unsafe)]
     pub fn new() -> Arc<Self> {
-        let plugin = RwLock::new(P::default());
-        let editor = plugin.read().editor().map(Arc::from);
+        let plugin = P::default();
+        let editor = plugin.editor().map(Arc::from);
 
         // This is used to allow the plugin to restore preset data from its editor, see the comment
         // on `Self::updated_state_sender`
@@ -188,7 +188,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         // `wrapper.plugin` is alive. The plugin API identifiers these parameters by hashes, which
         // we'll calculate from the string ID specified by the plugin. These parameters should also
         // remain in the same order as the one returned by the plugin.
-        let params = plugin.read().params();
+        let params = plugin.params();
         let param_id_hashes_ptrs_groups: Vec<_> = params
             .param_map()
             .into_iter()
@@ -257,7 +257,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             .collect();
 
         let wrapper = Self {
-            plugin,
+            plugin: RwLock::new(plugin),
             params,
             editor,
 
