@@ -6,6 +6,7 @@ use crate::context::Transport;
 use crate::plugin::{BufferConfig, BusConfig, Plugin};
 
 /// Configuration for a standalone plugin that would normally be provided by the DAW.
+#[derive(Debug, Clone)]
 pub struct WrapperConfig {
     /// The number of input channels.
     pub input_channels: u32,

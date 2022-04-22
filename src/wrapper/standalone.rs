@@ -1,7 +1,7 @@
 //! A standalone plugin target that directly connects to the system's audio and MIDI ports instead
 //! of relying on a plugin host. This is mostly useful for quickly testing GUI changes.
 
-use self::wrapper::{Wrapper, WrapperConfig};
+use self::wrapper::{Wrapper, WrapperConfig, WrapperError};
 use crate::plugin::Plugin;
 
 mod context;
@@ -38,17 +38,24 @@ mod wrapper;
 /// By default this will connect to the 'default' audio and MIDI ports. Use the command line options
 /// to change this. `--help` lists all available options.
 ///
+/// If the wrapped plugin fails to initialize or throws an error during audio processing, then this
+/// function will return `false`.
+///
 /// # TODOs
 ///
 /// The aforementioned command line options have not yet been implemented. Currently there's also no
 /// way to change these options at runtime, for instance through the plugin's GUI. And lastly
 /// there's no way to interact with parameters outside of what's exposed through the plugin's GUI.
 /// We should implement a REPL at some point for interacting with the plugin.
-pub fn nih_export_standalone<P: Plugin>() {
+pub fn nih_export_standalone<P: Plugin>() -> bool {
     nih_export_standalone_with_args::<P, _>(std::env::args())
 }
 
-pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = String>>(args: Args) {
+/// The same as [`nih_export_standalone()`], but with the arguments taken from an iterator instead
+/// of using [`std::env::args()`].
+pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = String>>(
+    args: Args,
+) -> bool {
     // TODO: Do something with the arguments
 
     // FIXME: The configuration should be set based on the command line arguments
@@ -63,9 +70,21 @@ pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = Stri
         timesig_denom: 4,
     };
 
-    Wrapper::<P>::new(config);
+    let wrapper = match Wrapper::<P>::new(config.clone()) {
+        Ok(wrapper) => wrapper,
+        Err(WrapperError::IncompatibleConfig) => {
+            eprintln!("The plugin does not support the {} channel input and {} channel output configuration", config.input_channels, config.output_channels);
+            return false;
+        }
+        Err(WrapperError::InitializationFailed) => {
+            eprintln!("The plugin failed to initialize");
+            return false;
+        }
+    };
 
     // TODO: Open the editor if available, do IO things
     // TODO: If the plugin has an editor, block until the editor is closed. Otherwise block
     //       indefinitely or until SIGINT (how do signal handlers work in Rust?)
+
+    true
 }
