@@ -1,6 +1,7 @@
 use parking_lot::Mutex;
 use std::sync::Arc;
 
+use super::backend::Backend;
 use super::wrapper::Wrapper;
 use crate::context::{GuiContext, PluginApi, ProcessContext, Transport};
 use crate::midi::NoteEvent;
@@ -10,8 +11,8 @@ use crate::plugin::Plugin;
 /// A [`GuiContext`] implementation for the wrapper. This is passed to the plugin in
 /// [`Editor::spawn()`][crate::prelude::Editor::spawn()] so it can interact with the rest of the plugin and
 /// with the host for things like setting parameters.
-pub(crate) struct WrapperGuiContext<P: Plugin> {
-    pub(super) wrapper: Arc<Wrapper<P>>,
+pub(crate) struct WrapperGuiContext<P: Plugin, B: Backend> {
+    pub(super) wrapper: Arc<Wrapper<P, B>>,
 
     /// If the widnow should be resized, then we will write the size here. This will be set on the
     /// window at the start of the next frame.
@@ -21,15 +22,15 @@ pub(crate) struct WrapperGuiContext<P: Plugin> {
 /// A [`ProcessContext`] implementation for the standalone wrapper. This is a separate object so it
 /// can hold on to lock guards for event queues. Otherwise reading these events would require
 /// constant unnecessary atomic operations to lock the uncontested RwLocks.
-pub(crate) struct WrapperProcessContext<'a, P: Plugin> {
-    pub(super) wrapper: &'a Wrapper<P>,
+pub(crate) struct WrapperProcessContext<'a, P: Plugin, B: Backend> {
+    pub(super) wrapper: &'a Wrapper<P, B>,
     // TODO: Events
     // pub(super) input_events_guard: AtomicRefMut<'a, VecDeque<NoteEvent>>,
     // pub(super) output_events_guard: AtomicRefMut<'a, VecDeque<NoteEvent>>,
     pub(super) transport: Transport,
 }
 
-impl<P: Plugin> GuiContext for WrapperGuiContext<P> {
+impl<P: Plugin, B: Backend> GuiContext for WrapperGuiContext<P, B> {
     fn plugin_api(&self) -> PluginApi {
         PluginApi::Standalone
     }
@@ -67,7 +68,7 @@ impl<P: Plugin> GuiContext for WrapperGuiContext<P> {
     }
 }
 
-impl<P: Plugin> ProcessContext for WrapperProcessContext<'_, P> {
+impl<P: Plugin, B: Backend> ProcessContext for WrapperProcessContext<'_, P, B> {
     fn plugin_api(&self) -> PluginApi {
         PluginApi::Standalone
     }

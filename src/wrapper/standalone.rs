@@ -4,6 +4,7 @@
 use self::wrapper::{Wrapper, WrapperConfig, WrapperError};
 use crate::plugin::Plugin;
 
+mod backend;
 mod context;
 mod wrapper;
 
@@ -73,7 +74,10 @@ pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = Stri
         timesig_denom: 4,
     };
 
-    let wrapper = match Wrapper::<P>::new(config.clone()) {
+    // TODO: We should try JACK first, then CPAL, and then fall back to the dummy backend. With a
+    //       command line option to override this behavior.
+    let backend = backend::Dummy::new(config.clone());
+    let wrapper = match Wrapper::<P, _>::new(backend, config.clone()) {
         Ok(wrapper) => wrapper,
         Err(err) => {
             print_error(err, &config);

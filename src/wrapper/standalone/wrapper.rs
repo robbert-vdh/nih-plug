@@ -4,6 +4,7 @@ use raw_window_handle::HasRawWindowHandle;
 use std::any::Any;
 use std::sync::Arc;
 
+use super::backend::Backend;
 use super::context::{WrapperGuiContext, WrapperProcessContext};
 use crate::context::Transport;
 use crate::plugin::{BufferConfig, BusConfig, Editor, ParentWindowHandle, Plugin};
@@ -34,7 +35,9 @@ pub struct WrapperConfig {
     pub timesig_denom: u32,
 }
 
-pub struct Wrapper<P: Plugin> {
+pub struct Wrapper<P: Plugin, B: Backend> {
+    backend: B,
+
     /// The wrapped plugin instance.
     plugin: RwLock<P>,
     /// The plugin's editor, if it has one. This object does not do anything on its own, but we need
@@ -87,14 +90,16 @@ impl WindowHandler for WrapperWindowHandler {
     }
 }
 
-impl<P: Plugin> Wrapper<P> {
+impl<P: Plugin, B: Backend> Wrapper<P, B> {
     /// Instantiate a new instance of the standalone wrapper. Returns an error if the plugin does
     /// not accept the IO configuration from the wrapper config.
-    pub fn new(config: WrapperConfig) -> Result<Arc<Self>, WrapperError> {
+    pub fn new(backend: B, config: WrapperConfig) -> Result<Arc<Self>, WrapperError> {
         let plugin = P::default();
         let editor = plugin.editor().map(Arc::from);
 
         let wrapper = Arc::new(Wrapper {
+            backend,
+
             plugin: RwLock::new(plugin),
             editor,
 
@@ -196,14 +201,14 @@ impl<P: Plugin> Wrapper<P> {
     fn make_gui_context(
         self: Arc<Self>,
         new_window_size: Arc<Mutex<Option<(u32, u32)>>>,
-    ) -> Arc<WrapperGuiContext<P>> {
+    ) -> Arc<WrapperGuiContext<P, B>> {
         Arc::new(WrapperGuiContext {
             wrapper: self,
             new_window_size,
         })
     }
 
-    fn make_process_context(&self, transport: Transport) -> WrapperProcessContext<'_, P> {
+    fn make_process_context(&self, transport: Transport) -> WrapperProcessContext<'_, P, B> {
         WrapperProcessContext {
             wrapper: self,
             transport,
