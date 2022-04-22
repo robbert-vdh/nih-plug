@@ -1,9 +1,10 @@
 //! A standalone plugin target that directly connects to the system's audio and MIDI ports instead
 //! of relying on a plugin host. This is mostly useful for quickly testing GUI changes.
 
-use self::wrapper::Wrapper;
+use self::wrapper::{Wrapper, WrapperConfig};
 use crate::plugin::Plugin;
 
+mod context;
 mod wrapper;
 
 /// Open an NIH-plug plugin as a standalone application. If the plugin has an editor, this will open
@@ -50,7 +51,19 @@ pub fn nih_export_standalone<P: Plugin>() {
 pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = String>>(args: Args) {
     // TODO: Do something with the arguments
 
-    Wrapper::<P>::new();
+    // FIXME: The configuration should be set based on the command line arguments
+    let config = WrapperConfig {
+        input_channels: 2,
+        output_channels: 2,
+        sample_rate: 44100.0,
+        period_size: 512,
+
+        tempo: 120.0,
+        timesig_num: 4,
+        timesig_denom: 4,
+    };
+
+    Wrapper::<P>::new(config);
 
     // TODO: Open the editor if available, do IO things
     // TODO: If the plugin has an editor, block until the editor is closed. Otherwise block
