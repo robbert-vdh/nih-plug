@@ -37,12 +37,12 @@ mod wrapper;
 /// By default this will connect to the 'default' audio and MIDI ports. Use the command line options
 /// to change this. `--help` lists all available options.
 ///
-/// # TODO
+/// # TODOs
 ///
-/// The aforementioned command line options have not yet been implemented.
-//
-// TODO: Actually implement command line flags for changing the IO configuration
-// TODO: Add a way to set the IO configuration at runtime, for instance through the plugin's GUI
+/// The aforementioned command line options have not yet been implemented. Currently there's also no
+/// way to change these options at runtime, for instance through the plugin's GUI. And lastly
+/// there's no way to interact with parameters outside of what's exposed through the plugin's GUI.
+/// We should implement a REPL at some point for interacting with the plugin.
 pub fn nih_export_standalone<P: Plugin>() {
     nih_export_standalone_with_args::<P, _>(std::env::args())
 }
