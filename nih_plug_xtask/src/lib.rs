@@ -49,6 +49,13 @@ pub enum Architecture {
     AArch64,
 }
 
+/// The type of a MacOS bundle.
+#[derive(Debug, Clone, Copy)]
+pub enum BundleType {
+    Plugin,
+    Binary,
+}
+
 /// The main xtask entry point function. See the readme for instructions on how to use this.
 pub fn main() -> Result<()> {
     let args = std::env::args().skip(1);
@@ -231,6 +238,7 @@ fn bundle_binary(
         &bundle_name,
         &standalone_bundle_home,
         compilation_target,
+        BundleType::Binary,
     )?;
 
     eprintln!(
@@ -286,6 +294,7 @@ fn bundle_plugin(
             &bundle_name,
             &clap_bundle_home,
             compilation_target,
+            BundleType::Plugin,
         )?;
 
         eprintln!("Created a CLAP bundle at '{}'", clap_bundle_home.display());
@@ -312,6 +321,7 @@ fn bundle_plugin(
             &bundle_name,
             &vst2_bundle_home,
             compilation_target,
+            BundleType::Plugin,
         )?;
 
         eprintln!("Created a VST2 bundle at '{}'", vst2_bundle_home.display());
@@ -337,6 +347,7 @@ fn bundle_plugin(
             &bundle_name,
             vst3_bundle_home,
             compilation_target,
+            BundleType::Plugin,
         )?;
 
         eprintln!("Created a VST3 bundle at '{}'", vst3_bundle_home.display());
@@ -514,15 +525,24 @@ pub fn maybe_create_macos_bundle_metadata(
     display_name: &str,
     bundle_home: &Path,
     target: CompilationTarget,
+    bundle_type: BundleType,
 ) -> Result<()> {
     if !matches!(target, CompilationTarget::MacOS(_)) {
         return Ok(());
     }
 
+    let package_type = match bundle_type {
+        BundleType::Plugin => "BNDL",
+        BundleType::Binary => "APPL",
+    };
+
     // TODO: May want to add bundler.toml fields for the identifier, version and signature at some
     //       point.
-    fs::write(bundle_home.join("Contents").join("PkgInfo"), "BNDL????")
-        .context("Could not create PkgInfo file")?;
+    fs::write(
+        bundle_home.join("Contents").join("PkgInfo"),
+        format!("{package_type}????"),
+    )
+    .context("Could not create PkgInfo file")?;
     fs::write(
         bundle_home.join("Contents").join("Info.plist"),
         format!(r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -541,7 +561,7 @@ pub fn maybe_create_macos_bundle_metadata(
     <key>CFBundleDisplayName</key>
     <string>{display_name}</string>
     <key>CFBundlePackageType</key>
-    <string>BNDL</string>
+    <string>{package_type}</string>
     <key>CFBundleSignature</key>
     <string>????</string>
     <key>CFBundleShortVersionString</key>
