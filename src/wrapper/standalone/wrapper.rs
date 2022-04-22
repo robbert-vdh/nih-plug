@@ -1,8 +1,10 @@
 use atomic_refcell::AtomicRefCell;
 use baseview::{EventStatus, Window, WindowHandler, WindowOpenOptions};
+use crossbeam::queue::ArrayQueue;
 use parking_lot::{Mutex, RwLock};
 use raw_window_handle::HasRawWindowHandle;
 use std::any::Any;
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
@@ -10,7 +12,13 @@ use std::thread;
 use super::backend::Backend;
 use super::context::{WrapperGuiContext, WrapperProcessContext};
 use crate::context::Transport;
+use crate::param::internals::{ParamPtr, Params};
+use crate::param::ParamFlags;
 use crate::plugin::{BufferConfig, BusConfig, Editor, ParentWindowHandle, Plugin};
+
+/// How many parameter changes we can store in our unprocessed parameter change queue. Storing more
+/// than this many parmaeters at a time will cause changes to get lost.
+const EVENT_QUEUE_CAPACITY: usize = 2048;
 
 /// Configuration for a standalone plugin that would normally be provided by the DAW.
 #[derive(Debug, Clone)]
@@ -43,6 +51,10 @@ pub struct Wrapper<P: Plugin, B: Backend> {
 
     /// The wrapped plugin instance.
     plugin: RwLock<P>,
+    /// The plugin's parameters. These are fetched once during initialization. That way the
+    /// `ParamPtr`s are guaranteed to live at least as long as this object and we can interact with
+    /// the `Params` object without having to acquire a lock on `plugin`.
+    _params: Arc<dyn Params>,
     /// The plugin's editor, if it has one. This object does not do anything on its own, but we need
     /// to instantiate this in advance so we don't need to lock the entire [`Plugin`] object when
     /// creating an editor.
@@ -53,6 +65,15 @@ pub struct Wrapper<P: Plugin, B: Backend> {
     /// The bus and buffer configurations are static for the standalone target.
     bus_config: BusConfig,
     buffer_config: BufferConfig,
+
+    /// The set of parameter pointers in `params`. This is technically not necessary, but for
+    /// consistency with the plugin wrappers we'll check whether the `ParamPtr` for an incoming
+    /// parameter change actually belongs to a registered parameter.
+    known_parameters: HashSet<ParamPtr>,
+    /// Parameter changes that have been output by the GUI that have not yet been set in the plugin.
+    /// This queue will be flushed at the end of every processing cycle, just like in the plugin
+    /// versions.
+    unprocessed_param_changes: ArrayQueue<(ParamPtr, f32)>,
 }
 
 /// Errors that may arise while initializing the wrapped plugins.
@@ -98,12 +119,41 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
     /// not accept the IO configuration from the wrapper config.
     pub fn new(backend: B, config: WrapperConfig) -> Result<Arc<Self>, WrapperError> {
         let plugin = P::default();
+        let params = plugin.params();
         let editor = plugin.editor().map(Arc::from);
+
+        // For consistency's sake we'll include the same assertions as the other backends
+        // TODO: Move these common checks to a function instead of repeating them in every wrapper
+        let param_map = params.param_map();
+        if cfg!(debug_assertions) {
+            let param_ids: HashSet<_> = param_map.iter().map(|(id, _, _)| id.clone()).collect();
+            nih_debug_assert_eq!(
+                param_map.len(),
+                param_ids.len(),
+                "The plugin has duplicate parameter IDs, weird things may happen. \
+                 Consider using 6 character parameter IDs to avoid collissions.."
+            );
+
+            let mut bypass_param_exists = false;
+            for (_, ptr, _) in &param_map {
+                let flags = unsafe { ptr.flags() };
+                let is_bypass = flags.contains(ParamFlags::BYPASS);
+
+                if is_bypass && bypass_param_exists {
+                    nih_debug_assert_failure!(
+                        "Duplicate bypass parameters found, the host will only use the first one"
+                    );
+                }
+
+                bypass_param_exists |= is_bypass;
+            }
+        }
 
         let wrapper = Arc::new(Wrapper {
             backend: AtomicRefCell::new(backend),
 
             plugin: RwLock::new(plugin),
+            _params: params,
             editor,
 
             bus_config: BusConfig {
@@ -115,6 +165,9 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
                 max_buffer_size: config.period_size,
             },
             config,
+
+            known_parameters: param_map.into_iter().map(|(_, ptr, _)| ptr).collect(),
+            unprocessed_param_changes: ArrayQueue::new(EVENT_QUEUE_CAPACITY),
         });
 
         // Right now the IO configuration is fixed in the standalone target, so if the plugin cannot
@@ -150,12 +203,37 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
             let terminate_audio_thread = terminate_audio_thread.clone();
             let this = self.clone();
             thread::spawn(move || {
-                this.backend.borrow_mut().run(move |buffer| {
+                this.clone().backend.borrow_mut().run(move |buffer| {
                     if terminate_audio_thread.load(Ordering::SeqCst) {
                         return false;
                     }
 
+                    // TODO: Process incoming events
                     // TODO: Process audio
+                    // TODO: Handle parameter chagnes
+
+                    // We'll always write these events to the first sample, so even when we add note output we
+                    // shouldn't have to think about interleaving events here
+                    let sample_rate = this.buffer_config.sample_rate;
+                    let mut parameter_values_changed = false;
+                    while let Some((param_ptr, normalized_value)) =
+                        this.unprocessed_param_changes.pop()
+                    {
+                        unsafe { param_ptr.set_normalized_value(normalized_value) };
+                        unsafe { param_ptr.update_smoother(sample_rate, false) };
+                        parameter_values_changed = true;
+                    }
+
+                    // Allow the editor to react to the new parameter values if the editor uses a reactive data
+                    // binding model
+                    if parameter_values_changed {
+                        if let Some(editor) = &this.editor {
+                            editor.param_values_changed();
+                        }
+                    }
+
+                    // TODO: MIDI output
+                    // TODO: Handle state restore
 
                     true
                 });
@@ -216,9 +294,29 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
         }
 
         terminate_audio_thread.store(true, Ordering::SeqCst);
-        audio_thread.join();
+        audio_thread.join().unwrap();
 
         Ok(())
+    }
+
+    /// Set a parameter based on a `ParamPtr`. The value will be updated at the end of the next
+    /// processing cycle, and this won't do anything if the parameter has not been registered by the
+    /// plugin.
+    ///
+    /// This returns false if the parmeter was not set because the `Paramptr` was either unknown or
+    /// the queue is full.
+    pub fn set_parameter(&self, param: ParamPtr, normalized: f32) -> bool {
+        if !self.known_parameters.contains(&param) {
+            return false;
+        }
+
+        let push_succesful = self
+            .unprocessed_param_changes
+            .push((param, normalized))
+            .is_ok();
+        nih_debug_assert!(push_succesful, "The parmaeter change queue was full");
+
+        push_succesful
     }
 
     fn make_gui_context(

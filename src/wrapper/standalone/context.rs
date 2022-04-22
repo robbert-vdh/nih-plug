@@ -45,19 +45,15 @@ impl<P: Plugin, B: Backend> GuiContext for WrapperGuiContext<P, B> {
         true
     }
 
-    // All of these functions are supposed to be called from the main thread, so we'll put some
-    // trust in the caller and assume that this is indeed the case
-    unsafe fn raw_begin_set_parameter(&self, param: ParamPtr) {
-        nih_debug_assert_failure!("TODO: WrapperGuiContext::raw_begin_set_parameter()");
+    unsafe fn raw_begin_set_parameter(&self, _param: ParamPtr) {
+        // Since there's no autmoation being recorded here, gestures don't mean anything
     }
 
     unsafe fn raw_set_parameter_normalized(&self, param: ParamPtr, normalized: f32) {
-        nih_debug_assert_failure!("TODO: WrapperGuiContext::raw_set_parameter_normalized()");
+        self.wrapper.set_parameter(param, normalized);
     }
 
-    unsafe fn raw_end_set_parameter(&self, param: ParamPtr) {
-        nih_debug_assert_failure!("TODO: WrapperGuiContext::raw_end_set_parameter()");
-    }
+    unsafe fn raw_end_set_parameter(&self, _param: ParamPtr) {}
 
     fn get_state(&self) -> crate::wrapper::state::PluginState {
         todo!("WrapperGuiContext::get_state()");

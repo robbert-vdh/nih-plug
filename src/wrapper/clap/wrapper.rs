@@ -379,9 +379,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 "The plugin has duplicate parameter IDs, weird things may happen. \
                  Consider using 6 character parameter IDs to avoid collissions.."
             );
-        }
 
-        if cfg!(debug_assertions) {
             let mut bypass_param_exists = false;
             for (_, _, ptr, _) in &param_id_hashes_ptrs_groups {
                 let flags = unsafe { ptr.flags() };

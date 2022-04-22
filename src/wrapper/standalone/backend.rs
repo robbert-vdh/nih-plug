@@ -15,10 +15,10 @@ pub trait Backend: 'static + Send + Sync {
     fn run(&mut self, cb: impl FnMut(&mut Buffer) -> bool);
 }
 
-/// Uses JACK audio and MIDI.
-pub struct Jack {
-    // TODO
-}
+// /// Uses JACK audio and MIDI.
+// pub struct Jack {
+//     // TODO
+// }
 
 /// This backend doesn't input or output any audio or MIDI. It only exists so the standalone
 /// application can continue to run even when there is no audio backend available. This can be
@@ -27,11 +27,12 @@ pub struct Dummy {
     config: WrapperConfig,
 }
 
-impl Backend for Jack {
-    fn run(&mut self, cb: impl FnMut(&mut Buffer) -> bool) {
-        todo!()
-    }
-}
+// TODO: Add a JACK backend
+// impl Backend for Jack {
+//     fn run(&mut self, cb: impl FnMut(&mut Buffer) -> bool) {
+//         todo!()
+//     }
+// }
 
 impl Backend for Dummy {
     fn run(&mut self, mut cb: impl FnMut(&mut Buffer) -> bool) {
