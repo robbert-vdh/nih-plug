@@ -138,18 +138,17 @@ pub fn build(packages: &[String], args: &[String]) -> Result<()> {
     }
 }
 
-/// Bundle a package that was previoulsly built by a call to [`build()`] using the provided `cargo
+/// Bundle a package that was previously built by a call to [`build()`] using the provided `cargo
 /// build` arguments. These two functions are split up because building can be done in parallel by
 /// Cargo itself while bundling is sequential. Options from the `bundler.toml` file in the
 /// workspace's root are respected (see
 /// <https://github.com/robbert-vdh/nih-plug/blob/master/bundler.toml>). This requires the current
 /// working directory to have been set to the workspace's root using [`chdir_workspace_root()`].
+///
+/// If the package also exposes a binary target in addition to a library (or just a binary, in case
+/// the binary target has a different name) then this will also be copied into the `bundled`
+/// directory.
 pub fn bundle(package: &str, args: &[String]) -> Result<()> {
-    let bundle_name = match load_bundler_config()?.and_then(|c| c.get(package).cloned()) {
-        Some(PackageConfig { name: Some(name) }) => name,
-        _ => package.to_string(),
-    };
-
     let mut is_release_build = false;
     let mut cross_compile_target: Option<String> = None;
     for arg_idx in (0..args.len()).rev() {
@@ -175,15 +174,78 @@ pub fn bundle(package: &str, args: &[String]) -> Result<()> {
         }
     }
 
-    // TODO: Add support for binary targets. This would simply copy/reflink the binary to the
-    //       `bundled` directory to make it easier to ship all versions of a plugin.
+    // We can bundle both library targets (for plugins) and binary targets (for standalone
+    // applications)
     let compilation_target = compilation_target(cross_compile_target.as_deref())?;
-    let lib_path = target_base(cross_compile_target.as_deref())?
-        .join(if is_release_build { "release" } else { "debug" })
-        .join(library_basename(package, compilation_target));
-    if !lib_path.exists() {
+    let target_base = target_base(cross_compile_target.as_deref())?.join(if is_release_build {
+        "release"
+    } else {
+        "debug"
+    });
+    let bin_path = target_base.join(binary_basename(package, compilation_target));
+    let lib_path = target_base.join(library_basename(package, compilation_target));
+    if !bin_path.exists() && !lib_path.exists() {
         bail!("Could not find built library at '{}'", lib_path.display());
     }
+
+    eprintln!();
+    if bin_path.exists() {
+        bundle_binary(package, &bin_path, compilation_target)?;
+    }
+    if lib_path.exists() {
+        bundle_plugin(package, &lib_path, compilation_target)?;
+    }
+
+    Ok(())
+}
+
+/// Bundle a standalone target.
+fn bundle_binary(
+    package: &str,
+    bin_path: &Path,
+    compilation_target: CompilationTarget,
+) -> Result<()> {
+    let bundle_name = match load_bundler_config()?.and_then(|c| c.get(package).cloned()) {
+        Some(PackageConfig { name: Some(name) }) => name,
+        _ => package.to_string(),
+    };
+
+    // On MacOS the standalone target needs to be in a bundle
+    let standalone_bundle_binary_name =
+        standalone_bundle_binary_name(&bundle_name, compilation_target);
+    let standalone_binary_path = Path::new(BUNDLE_HOME).join(&standalone_bundle_binary_name);
+
+    fs::create_dir_all(standalone_binary_path.parent().unwrap())
+        .context("Could not create standalone bundle directory")?;
+    reflink::reflink_or_copy(&bin_path, &standalone_binary_path)
+        .context("Could not copy binary to standalone bundle")?;
+
+    let standalone_bundle_home = Path::new(BUNDLE_HOME).join(
+        Path::new(&standalone_bundle_binary_name)
+            .components()
+            .next()
+            .expect("Malformed standalone binary path"),
+    );
+    maybe_create_macos_bundle_metadata(package, &standalone_bundle_home, compilation_target)?;
+
+    eprintln!(
+        "Created a standalone bundle at '{}'",
+        standalone_bundle_home.display()
+    );
+
+    Ok(())
+}
+
+/// Bundle all plugin targets for a plugin library.
+fn bundle_plugin(
+    package: &str,
+    lib_path: &Path,
+    compilation_target: CompilationTarget,
+) -> Result<()> {
+    let bundle_name = match load_bundler_config()?.and_then(|c| c.get(package).cloned()) {
+        Some(PackageConfig { name: Some(name) }) => name,
+        _ => package.to_string(),
+    };
 
     // We'll detect the pugin formats supported by the plugin binary and create bundled accordingly
     // NOTE: NIH-plug does not support VST2, but we'll support bundling VST2 plugins anyways because
@@ -197,8 +259,6 @@ pub fn bundle(package: &str, args: &[String]) -> Result<()> {
     let bundle_vst3 = symbols::exported(&lib_path, "GetPluginFactory")
         .with_context(|| format!("Could not parse '{}'", lib_path.display()))?;
     let bundled_plugin = bundle_clap || bundle_vst2 || bundle_vst3;
-
-    eprintln!();
     if bundle_clap {
         let clap_bundle_library_name = clap_bundle_library_name(&bundle_name, compilation_target);
         let clap_lib_path = Path::new(BUNDLE_HOME).join(&clap_bundle_library_name);
@@ -346,6 +406,17 @@ fn target_base(cross_compile_target: Option<&str>) -> Result<PathBuf> {
     }
 }
 
+/// The file name of the compiled library for a binary crate.
+fn binary_basename(package: &str, target: CompilationTarget) -> String {
+    // Cargo will replace dashes with underscores
+    let bin_name = package.replace('-', "_");
+
+    match target {
+        CompilationTarget::Linux(_) | CompilationTarget::MacOS(_) => bin_name,
+        CompilationTarget::Windows(_) => format!("{bin_name}.exe"),
+    }
+}
+
 /// The file name of the compiled library for a `cdylib` crate.
 fn library_basename(package: &str, target: CompilationTarget) -> String {
     // Cargo will replace dashes with underscores
@@ -358,8 +429,17 @@ fn library_basename(package: &str, target: CompilationTarget) -> String {
     }
 }
 
+/// The filename of the binary target. On macOS this is part of a bundle.
+fn standalone_bundle_binary_name(package: &str, target: CompilationTarget) -> String {
+    match target {
+        CompilationTarget::Linux(_) => package.to_owned(),
+        CompilationTarget::MacOS(_) => format!("{package}.app/Contents/MacOS/{package}"),
+        CompilationTarget::Windows(_) => format!("{package}.exe"),
+    }
+}
+
 /// The filename of the CLAP plugin for Linux and Windows, or the full path to the library file
-/// inside of a CLAP bundle on macOS
+/// inside of a CLAP bundle on macOS.
 fn clap_bundle_library_name(package: &str, target: CompilationTarget) -> String {
     match target {
         CompilationTarget::Linux(_) | CompilationTarget::Windows(_) => format!("{package}.clap"),
@@ -417,6 +497,8 @@ pub fn maybe_create_macos_bundle_metadata(
     if !matches!(target, CompilationTarget::MacOS(_)) {
         return Ok(());
     }
+
+    // TODO: Use the display name from bundler.toml
 
     // TODO: May want to add bundler.toml fields for the identifier, version and signature at some
     //       point.
