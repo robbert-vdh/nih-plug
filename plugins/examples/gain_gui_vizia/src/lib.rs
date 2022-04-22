@@ -6,7 +6,7 @@ use std::sync::Arc;
 mod editor;
 
 /// This is mostly identical to the gain example, minus some fluff, and with a GUI.
-struct Gain {
+pub struct Gain {
     params: Arc<GainParams>,
     editor_state: Arc<ViziaState>,
 

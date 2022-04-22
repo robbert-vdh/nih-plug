@@ -8,8 +8,31 @@ mod wrapper;
 
 /// Open an NIH-plug plugin as a standalone application. If the plugin has an editor, this will open
 /// the editor and block until the editor is closed. Otherwise this will block until SIGINT is
-/// received. This is mainly useful for quickly testing plugin GUIs. You should call this function
-/// from a `main()` function.
+/// received. This is mainly useful for quickly testing plugin GUIs. In order to use this, you will
+/// first need to make your plugin's main struct `pub` and expose a `lib` artifact in addition to
+/// your plugin's `cdylib`:
+///
+/// ```toml
+/// # Cargo.toml
+///
+/// [lib]
+/// # The `lib` artifact is needed for the standalone target
+/// crate-type = ["cdylib", "lib"]
+/// ```
+///
+/// You can then create a `src/main.rs` file that calls this function:
+///
+/// ```ignore
+/// // src/main.rs
+///
+/// use plugin_name::prelude::*;
+///
+/// use plugin_name::PluginName;
+///
+/// fn main() {
+///     nih_export_standalone::<PluginName>();
+/// }
+/// ```
 ///
 /// By default this will connect to the 'default' audio and MIDI ports. Use the command line options
 /// to change this. `--help` lists all available options.
