@@ -130,10 +130,10 @@ pub trait Plugin: Default + Send + Sync + 'static {
     /// TODO: Create an example plugin that uses block-based processing
     fn process(&mut self, buffer: &mut Buffer, context: &mut impl ProcessContext) -> ProcessStatus;
 
-    /// Convenience function to allocate memory for block-based smoothing. Since this allocates
-    /// memory, this should be called in [`initialize()`][Self::initialize()]. If you are going to
-    /// use [`Buffer::iter_blocks()`] and want to use parameter smoothing in those blocks, then call
-    /// this function with the same maximum block size first before calling
+    /// Convenience function provided to allocate memory for block-based smoothing for this plugin.
+    /// Since this allocates memory, this should be called in [`initialize()`][Self::initialize()].
+    /// If you are going to use [`Buffer::iter_blocks()`] and want to use parameter smoothing in
+    /// those blocks, then call this function with the same maximum block size first before calling
     /// [`Smoother::next_block()`][crate::prelude::Smoother::next_block()].
     fn initialize_block_smoothers(&mut self, max_block_size: usize) {
         for (_, mut param, _) in self.params().param_map() {
