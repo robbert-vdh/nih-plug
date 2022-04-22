@@ -14,7 +14,7 @@ use super::context::{WrapperGuiContext, WrapperProcessContext};
 use crate::context::Transport;
 use crate::param::internals::{ParamPtr, Params};
 use crate::param::ParamFlags;
-use crate::plugin::{BufferConfig, BusConfig, Editor, ParentWindowHandle, Plugin};
+use crate::plugin::{BufferConfig, BusConfig, Editor, ParentWindowHandle, Plugin, ProcessStatus};
 
 /// How many parameter changes we can store in our unprocessed parameter change queue. Storing more
 /// than this many parmaeters at a time will cause changes to get lost.
@@ -287,18 +287,37 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
     /// The audio thread. This should be called from another thread, and it will run until
     /// `should_terminate` is `true`.
     fn run_audio_thread(self: Arc<Self>, should_terminate: Arc<AtomicBool>) {
+        // TODO: We should add a way to pull the transport information from the JACK backend
+        let mut num_processed_samples = 0;
+
         self.clone().backend.borrow_mut().run(move |buffer| {
             if should_terminate.load(Ordering::SeqCst) {
                 return false;
             }
 
             // TODO: Process incoming events
-            // TODO: Process audio
-            // TODO: Handle parameter chagnes
+
+            let sample_rate = self.buffer_config.sample_rate;
+            let mut transport = Transport::new(sample_rate);
+            transport.pos_samples = Some(num_processed_samples);
+            transport.tempo = Some(self.config.tempo as f64);
+            transport.time_sig_numerator = Some(self.config.timesig_num as i32);
+            transport.time_sig_denominator = Some(self.config.timesig_denom as i32);
+            transport.playing = true;
+
+            if let ProcessStatus::Error(err) = self
+                .plugin
+                .write()
+                .process(buffer, &mut self.make_process_context(transport))
+            {
+                eprintln!("The plugin returned an error while processing:");
+                eprintln!("{}", err);
+
+                return false;
+            }
 
             // We'll always write these events to the first sample, so even when we add note output we
             // shouldn't have to think about interleaving events here
-            let sample_rate = self.buffer_config.sample_rate;
             let mut parameter_values_changed = false;
             while let Some((param_ptr, normalized_value)) = self.unprocessed_param_changes.pop() {
                 unsafe { param_ptr.set_normalized_value(normalized_value) };
@@ -316,6 +335,8 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
 
             // TODO: MIDI output
             // TODO: Handle state restore
+
+            num_processed_samples += buffer.len() as i64;
 
             true
         });
