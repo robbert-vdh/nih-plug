@@ -1,8 +1,11 @@
+use atomic_refcell::AtomicRefCell;
 use baseview::{EventStatus, Window, WindowHandler, WindowOpenOptions};
 use parking_lot::{Mutex, RwLock};
 use raw_window_handle::HasRawWindowHandle;
 use std::any::Any;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::thread;
 
 use super::backend::Backend;
 use super::context::{WrapperGuiContext, WrapperProcessContext};
@@ -36,7 +39,7 @@ pub struct WrapperConfig {
 }
 
 pub struct Wrapper<P: Plugin, B: Backend> {
-    backend: B,
+    backend: AtomicRefCell<B>,
 
     /// The wrapped plugin instance.
     plugin: RwLock<P>,
@@ -98,7 +101,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
         let editor = plugin.editor().map(Arc::from);
 
         let wrapper = Arc::new(Wrapper {
-            backend,
+            backend: AtomicRefCell::new(backend),
 
             plugin: RwLock::new(plugin),
             editor,
@@ -140,7 +143,24 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
     /// Will return an error if the plugin threw an error during audio processing or if the editor
     /// could not be opened.
     pub fn run(self: Arc<Self>) -> Result<(), WrapperError> {
-        // TODO: Do IO things, kinda important
+        // We'll spawn a separate thread to handle IO and to process audio. This audio thread should
+        // terminate together with this function.
+        let terminate_audio_thread = Arc::new(AtomicBool::new(false));
+        let audio_thread = {
+            let terminate_audio_thread = terminate_audio_thread.clone();
+            let this = self.clone();
+            thread::spawn(move || {
+                this.backend.borrow_mut().run(move |buffer| {
+                    if terminate_audio_thread.load(Ordering::SeqCst) {
+                        return false;
+                    }
+
+                    // TODO: Process audio
+
+                    true
+                });
+            })
+        };
 
         match self.editor.clone() {
             Some(editor) => {
@@ -194,6 +214,9 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
                 todo!("Support standalone plugins without editors");
             }
         }
+
+        terminate_audio_thread.store(true, Ordering::SeqCst);
+        audio_thread.join();
 
         Ok(())
     }
