@@ -1,9 +1,12 @@
+use baseview::{EventStatus, Window, WindowHandler, WindowOpenOptions};
 use parking_lot::RwLock;
+use raw_window_handle::HasRawWindowHandle;
+use std::any::Any;
 use std::sync::Arc;
 
-use super::context::WrapperProcessContext;
+use super::context::{WrapperGuiContext, WrapperProcessContext};
 use crate::context::Transport;
-use crate::plugin::{BufferConfig, BusConfig, Editor, Plugin};
+use crate::plugin::{BufferConfig, BusConfig, Editor, ParentWindowHandle, Plugin};
 
 /// Configuration for a standalone plugin that would normally be provided by the DAW.
 #[derive(Debug, Clone)]
@@ -16,6 +19,12 @@ pub struct WrapperConfig {
     pub sample_rate: f32,
     /// The audio backend's period size.
     pub period_size: u32,
+
+    /// The editor's DPI scaling factor. Currently baseview has no way to report this to us, so
+    /// we'll expose it as a command line option instead.
+    ///
+    /// This option is ignored on macOS.
+    pub dpi_scale: f32,
 
     /// The current tempo.
     pub tempo: f32,
@@ -31,7 +40,7 @@ pub struct Wrapper<P: Plugin> {
     /// The plugin's editor, if it has one. This object does not do anything on its own, but we need
     /// to instantiate this in advance so we don't need to lock the entire [`Plugin`] object when
     /// creating an editor.
-    editor: Option<Box<dyn Editor>>,
+    editor: Option<Arc<dyn Editor>>,
 
     config: WrapperConfig,
 
@@ -49,12 +58,28 @@ pub enum WrapperError {
     InitializationFailed,
 }
 
+/// We need a window handler for baseview, but since we only create a window to report the plugin in
+/// this won't do much.
+struct WrapperWindowHandler {
+    /// The editor handle for the plugin's open editor. The editor should clean itself up when it
+    /// gets dropped.
+    _editor_handle: Box<dyn Any>,
+}
+
+impl WindowHandler for WrapperWindowHandler {
+    fn on_frame(&mut self, _window: &mut Window) {}
+
+    fn on_event(&mut self, _window: &mut Window, _event: baseview::Event) -> EventStatus {
+        EventStatus::Ignored
+    }
+}
+
 impl<P: Plugin> Wrapper<P> {
     /// Instantiate a new instance of the standalone wrapper. Returns an error if the plugin does
     /// not accept the IO configuration from the wrapper config.
     pub fn new(config: WrapperConfig) -> Result<Arc<Self>, WrapperError> {
         let plugin = P::default();
-        let editor = plugin.editor();
+        let editor = plugin.editor().map(Arc::from);
 
         let wrapper = Arc::new(Wrapper {
             plugin: RwLock::new(plugin),
@@ -97,11 +122,61 @@ impl<P: Plugin> Wrapper<P> {
     /// Will return an error if the plugin threw an error during audio processing or if the editor
     /// could not be opened.
     pub fn run(self: Arc<Self>) -> Result<(), WrapperError> {
-        // TODO: Open the editor and block until it is closed
-        // TODO: Do IO things
-        // TODO: Block until SIGINT is received if the plugin does not have an editor
+        // TODO: Do IO things, kinda important
+
+        match self.editor.clone() {
+            Some(editor) => {
+                let context = self.clone().make_gui_context();
+                let (width, height) = editor.size();
+
+                // DPI scaling should not be used on macOS since the OS handles it there
+                #[cfg(target_os = "macos")]
+                let scaling_policy = baseview::WindowScalePolicy::SystemScaleFactor;
+                #[cfg(not(target_os = "macos"))]
+                let scaling_policy = {
+                    editor.set_scale_factor(self.config.dpi_scale);
+                    baseview::WindowScalePolicy::ScaleFactor(self.config.dpi_scale as f64)
+                };
+
+                Window::open_blocking(
+                    WindowOpenOptions {
+                        title: String::from(P::NAME),
+                        size: baseview::Size {
+                            width: width as f64,
+                            height: height as f64,
+                        },
+                        scale: scaling_policy,
+                        gl_config: None,
+                    },
+                    move |window| {
+                        // TODO: This spawn function should be able to fail and return an error, but
+                        //       baseview does not support this yet. Once this is added, we should
+                        //       immediately close the parent window when this happens so the loop
+                        //       can exit.
+                        let editor_handle = editor.spawn(
+                            ParentWindowHandle {
+                                handle: window.raw_window_handle(),
+                            },
+                            context,
+                        );
+
+                        WrapperWindowHandler {
+                            _editor_handle: editor_handle,
+                        }
+                    },
+                )
+            }
+            None => {
+                // TODO: Block until SIGINT is received if the plugin does not have an editor
+                todo!("Support standalone plugins without editors");
+            }
+        }
 
         Ok(())
+    }
+
+    fn make_gui_context(self: Arc<Self>) -> Arc<WrapperGuiContext<P>> {
+        Arc::new(WrapperGuiContext { wrapper: self })
     }
 
     fn make_process_context(&self, transport: Transport) -> WrapperProcessContext<'_, P> {

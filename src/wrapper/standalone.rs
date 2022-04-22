@@ -65,6 +65,9 @@ pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = Stri
         sample_rate: 44100.0,
         period_size: 512,
 
+        // TODO: When adding command line options, ignore this option on macOS
+        dpi_scale: 1.0,
+
         tempo: 120.0,
         timesig_num: 4,
         timesig_denom: 4,
