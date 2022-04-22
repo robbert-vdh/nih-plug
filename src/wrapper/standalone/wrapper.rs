@@ -202,42 +202,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
         let audio_thread = {
             let terminate_audio_thread = terminate_audio_thread.clone();
             let this = self.clone();
-            thread::spawn(move || {
-                this.clone().backend.borrow_mut().run(move |buffer| {
-                    if terminate_audio_thread.load(Ordering::SeqCst) {
-                        return false;
-                    }
-
-                    // TODO: Process incoming events
-                    // TODO: Process audio
-                    // TODO: Handle parameter chagnes
-
-                    // We'll always write these events to the first sample, so even when we add note output we
-                    // shouldn't have to think about interleaving events here
-                    let sample_rate = this.buffer_config.sample_rate;
-                    let mut parameter_values_changed = false;
-                    while let Some((param_ptr, normalized_value)) =
-                        this.unprocessed_param_changes.pop()
-                    {
-                        unsafe { param_ptr.set_normalized_value(normalized_value) };
-                        unsafe { param_ptr.update_smoother(sample_rate, false) };
-                        parameter_values_changed = true;
-                    }
-
-                    // Allow the editor to react to the new parameter values if the editor uses a reactive data
-                    // binding model
-                    if parameter_values_changed {
-                        if let Some(editor) = &this.editor {
-                            editor.param_values_changed();
-                        }
-                    }
-
-                    // TODO: MIDI output
-                    // TODO: Handle state restore
-
-                    true
-                });
-            })
+            thread::spawn(move || this.run_audio_thread(terminate_audio_thread))
         };
 
         match self.editor.clone() {
@@ -317,6 +282,43 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
         nih_debug_assert!(push_succesful, "The parmaeter change queue was full");
 
         push_succesful
+    }
+
+    /// The audio thread. This should be called from another thread, and it will run until
+    /// `should_terminate` is `true`.
+    fn run_audio_thread(self: Arc<Self>, should_terminate: Arc<AtomicBool>) {
+        self.clone().backend.borrow_mut().run(move |buffer| {
+            if should_terminate.load(Ordering::SeqCst) {
+                return false;
+            }
+
+            // TODO: Process incoming events
+            // TODO: Process audio
+            // TODO: Handle parameter chagnes
+
+            // We'll always write these events to the first sample, so even when we add note output we
+            // shouldn't have to think about interleaving events here
+            let sample_rate = self.buffer_config.sample_rate;
+            let mut parameter_values_changed = false;
+            while let Some((param_ptr, normalized_value)) = self.unprocessed_param_changes.pop() {
+                unsafe { param_ptr.set_normalized_value(normalized_value) };
+                unsafe { param_ptr.update_smoother(sample_rate, false) };
+                parameter_values_changed = true;
+            }
+
+            // Allow the editor to react to the new parameter values if the editor uses a reactive data
+            // binding model
+            if parameter_values_changed {
+                if let Some(editor) = &self.editor {
+                    editor.param_values_changed();
+                }
+            }
+
+            // TODO: MIDI output
+            // TODO: Handle state restore
+
+            true
+        });
     }
 
     fn make_gui_context(
