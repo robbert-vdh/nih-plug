@@ -1,7 +1,8 @@
 use atomic_refcell::AtomicRefCell;
 use baseview::{EventStatus, Window, WindowHandler, WindowOpenOptions};
+use crossbeam::channel;
 use crossbeam::queue::ArrayQueue;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use raw_window_handle::HasRawWindowHandle;
 use std::any::Any;
 use std::collections::HashSet;
@@ -90,21 +91,34 @@ struct WrapperWindowHandler {
     /// gets dropped.
     _editor_handle: Box<dyn Any>,
 
-    /// If contains a value, then the GUI will be resized at the start of the next frame. This is
-    /// set from [`WrapperGuiContext::request_resize()`].
-    new_window_size: Arc<Mutex<Option<(u32, u32)>>>,
+    /// This is used to communicate with the wrapper from the audio thread and from within the
+    /// baseview window handler on the GUI thread.
+    gui_task_receiver: channel::Receiver<GuiTask>,
+}
+
+/// A message sent to the GUI thread.
+pub enum GuiTask {
+    /// Resize the window to the following physical size.
+    Resize(u32, u32),
+    /// The close window. This will cause the application to terminate.
+    Close,
 }
 
 impl WindowHandler for WrapperWindowHandler {
     fn on_frame(&mut self, window: &mut Window) {
-        if let Some((new_width, new_height)) = self.new_window_size.lock().take() {
-            // Window resizing in baseview has only been implemented on Linux
-            #[cfg(target_os = "linux")]
-            {
-                window.resize(baseview::Size {
-                    width: new_width as f64,
-                    height: new_height as f64,
-                });
+        while let Ok(task) = self.gui_task_receiver.try_recv() {
+            match task {
+                GuiTask::Resize(new_width, new_height) => {
+                    // Window resizing in baseview has only been implemented on Linux
+                    #[cfg(target_os = "linux")]
+                    {
+                        window.resize(baseview::Size {
+                            width: new_width as f64,
+                            height: new_height as f64,
+                        });
+                    }
+                }
+                GuiTask::Close => window.close(),
             }
         }
     }
@@ -196,22 +210,21 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
     /// Will return an error if the plugin threw an error during audio processing or if the editor
     /// could not be opened.
     pub fn run(self: Arc<Self>) -> Result<(), WrapperError> {
+        let (gui_task_sender, gui_task_receiver) = channel::bounded(512);
+
         // We'll spawn a separate thread to handle IO and to process audio. This audio thread should
         // terminate together with this function.
         let terminate_audio_thread = Arc::new(AtomicBool::new(false));
         let audio_thread = {
-            let terminate_audio_thread = terminate_audio_thread.clone();
             let this = self.clone();
-            thread::spawn(move || this.run_audio_thread(terminate_audio_thread))
+            let terminate_audio_thread = terminate_audio_thread.clone();
+            let gui_task_sender = gui_task_sender.clone();
+            thread::spawn(move || this.run_audio_thread(terminate_audio_thread, gui_task_sender))
         };
 
         match self.editor.clone() {
             Some(editor) => {
-                // We'll use this mutex to communicate window size changes. If we need to send a lot
-                // more information to the window handler at some point, then consider replacing
-                // this with a channel.
-                let new_window_size = Arc::new(Mutex::new(None));
-                let context = self.clone().make_gui_context(new_window_size.clone());
+                let context = self.clone().make_gui_context(gui_task_sender);
 
                 // DPI scaling should not be used on macOS since the OS handles it there
                 #[cfg(target_os = "macos")]
@@ -247,13 +260,14 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
 
                         WrapperWindowHandler {
                             _editor_handle: editor_handle,
-                            new_window_size,
+                            gui_task_receiver,
                         }
                     },
                 )
             }
             None => {
                 // TODO: Block until SIGINT is received if the plugin does not have an editor
+                // TODO: Make sure to handle `GuiTask::Close` here as well
                 todo!("Support standalone plugins without editors");
             }
         }
@@ -284,9 +298,22 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
         push_succesful
     }
 
+    /// The DPI scale factor for this standalone application
+    pub fn dpi_scale(&self) -> f32 {
+        // DPI scaling should be ignored on macOS since the OS already handles this
+        #[cfg(target_os = "macos")]
+        return 1.0;
+        #[cfg(not(target_os = "macos"))]
+        return self.config.dpi_scale;
+    }
+
     /// The audio thread. This should be called from another thread, and it will run until
     /// `should_terminate` is `true`.
-    fn run_audio_thread(self: Arc<Self>, should_terminate: Arc<AtomicBool>) {
+    fn run_audio_thread(
+        self: Arc<Self>,
+        should_terminate: Arc<AtomicBool>,
+        gui_task_sender: channel::Sender<GuiTask>,
+    ) {
         // TODO: We should add a way to pull the transport information from the JACK backend
         let mut num_processed_samples = 0;
 
@@ -312,6 +339,12 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
             {
                 eprintln!("The plugin returned an error while processing:");
                 eprintln!("{}", err);
+
+                let push_successful = gui_task_sender.send(GuiTask::Close).is_ok();
+                nih_debug_assert!(
+                    push_successful,
+                    "Could not queue window close, the editor will remain open"
+                );
 
                 return false;
             }
@@ -344,11 +377,11 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
 
     fn make_gui_context(
         self: Arc<Self>,
-        new_window_size: Arc<Mutex<Option<(u32, u32)>>>,
+        gui_task_sender: channel::Sender<GuiTask>,
     ) -> Arc<WrapperGuiContext<P, B>> {
         Arc::new(WrapperGuiContext {
             wrapper: self,
-            new_window_size,
+            gui_task_sender,
         })
     }
 

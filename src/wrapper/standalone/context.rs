@@ -1,8 +1,8 @@
-use parking_lot::Mutex;
+use crossbeam::channel;
 use std::sync::Arc;
 
 use super::backend::Backend;
-use super::wrapper::Wrapper;
+use super::wrapper::{GuiTask, Wrapper};
 use crate::context::{GuiContext, PluginApi, ProcessContext, Transport};
 use crate::midi::NoteEvent;
 use crate::param::internals::ParamPtr;
@@ -14,9 +14,9 @@ use crate::plugin::Plugin;
 pub(crate) struct WrapperGuiContext<P: Plugin, B: Backend> {
     pub(super) wrapper: Arc<Wrapper<P, B>>,
 
-    /// If the widnow should be resized, then we will write the size here. This will be set on the
-    /// window at the start of the next frame.
-    pub(super) new_window_size: Arc<Mutex<Option<(u32, u32)>>>,
+    /// This allows us to send tasks to the parent view that will be handled at the start of its
+    /// next frame.
+    pub(super) gui_task_sender: channel::Sender<GuiTask>,
 }
 
 /// A [`ProcessContext`] implementation for the standalone wrapper. This is a separate object so it
@@ -36,11 +36,18 @@ impl<P: Plugin, B: Backend> GuiContext for WrapperGuiContext<P, B> {
     }
 
     fn request_resize(&self) -> bool {
-        let new_size = self.wrapper.editor.as_ref().unwrap().size();
+        let (unscaled_width, unscaled_height) = self.wrapper.editor.as_ref().unwrap().size();
 
-        // This will cause the editor to be resized at the start of the next frame. If we need to do
-        // more of these things, then we should consider using a channel instead.
-        *self.new_window_size.lock() = Some(new_size);
+        // This will cause the editor to be resized at the start of the next frame
+        let dpi_scale = self.wrapper.dpi_scale();
+        let push_successful = self
+            .gui_task_sender
+            .send(GuiTask::Resize(
+                (unscaled_width as f32 * dpi_scale).round() as u32,
+                (unscaled_height as f32 * dpi_scale).round() as u32,
+            ))
+            .is_ok();
+        nih_debug_assert!(push_successful, "Could not queue window resize");
 
         true
     }
