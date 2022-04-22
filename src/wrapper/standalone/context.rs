@@ -1,3 +1,4 @@
+use parking_lot::Mutex;
 use std::sync::Arc;
 
 use super::wrapper::Wrapper;
@@ -11,6 +12,10 @@ use crate::plugin::Plugin;
 /// with the host for things like setting parameters.
 pub(crate) struct WrapperGuiContext<P: Plugin> {
     pub(super) wrapper: Arc<Wrapper<P>>,
+
+    /// If the widnow should be resized, then we will write the size here. This will be set on the
+    /// window at the start of the next frame.
+    pub(super) new_window_size: Arc<Mutex<Option<(u32, u32)>>>,
 }
 
 /// A [`ProcessContext`] implementation for the standalone wrapper. This is a separate object so it
@@ -30,7 +35,11 @@ impl<P: Plugin> GuiContext for WrapperGuiContext<P> {
     }
 
     fn request_resize(&self) -> bool {
-        nih_debug_assert_failure!("TODO: WrapperGuiContext::request_resize()");
+        let new_size = self.wrapper.editor.as_ref().unwrap().size();
+
+        // This will cause the editor to be resized at the start of the next frame. If we need to do
+        // more of these things, then we should consider using a channel instead.
+        *self.new_window_size.lock() = Some(new_size);
 
         true
     }

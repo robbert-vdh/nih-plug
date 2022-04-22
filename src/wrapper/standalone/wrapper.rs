@@ -1,5 +1,5 @@
 use baseview::{EventStatus, Window, WindowHandler, WindowOpenOptions};
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use raw_window_handle::HasRawWindowHandle;
 use std::any::Any;
 use std::sync::Arc;
@@ -40,7 +40,7 @@ pub struct Wrapper<P: Plugin> {
     /// The plugin's editor, if it has one. This object does not do anything on its own, but we need
     /// to instantiate this in advance so we don't need to lock the entire [`Plugin`] object when
     /// creating an editor.
-    editor: Option<Arc<dyn Editor>>,
+    pub editor: Option<Arc<dyn Editor>>,
 
     config: WrapperConfig,
 
@@ -58,16 +58,29 @@ pub enum WrapperError {
     InitializationFailed,
 }
 
-/// We need a window handler for baseview, but since we only create a window to report the plugin in
-/// this won't do much.
 struct WrapperWindowHandler {
     /// The editor handle for the plugin's open editor. The editor should clean itself up when it
     /// gets dropped.
     _editor_handle: Box<dyn Any>,
+
+    /// If contains a value, then the GUI will be resized at the start of the next frame. This is
+    /// set from [`WrapperGuiContext::request_resize()`].
+    new_window_size: Arc<Mutex<Option<(u32, u32)>>>,
 }
 
 impl WindowHandler for WrapperWindowHandler {
-    fn on_frame(&mut self, _window: &mut Window) {}
+    fn on_frame(&mut self, window: &mut Window) {
+        if let Some((new_width, new_height)) = self.new_window_size.lock().take() {
+            // Window resizing in baseview has only been implemented on Linux
+            #[cfg(target_os = "linux")]
+            {
+                window.resize(baseview::Size {
+                    width: new_width as f64,
+                    height: new_height as f64,
+                });
+            }
+        }
+    }
 
     fn on_event(&mut self, _window: &mut Window, _event: baseview::Event) -> EventStatus {
         EventStatus::Ignored
@@ -126,8 +139,11 @@ impl<P: Plugin> Wrapper<P> {
 
         match self.editor.clone() {
             Some(editor) => {
-                let context = self.clone().make_gui_context();
-                let (width, height) = editor.size();
+                // We'll use this mutex to communicate window size changes. If we need to send a lot
+                // more information to the window handler at some point, then consider replacing
+                // this with a channel.
+                let new_window_size = Arc::new(Mutex::new(None));
+                let context = self.clone().make_gui_context(new_window_size.clone());
 
                 // DPI scaling should not be used on macOS since the OS handles it there
                 #[cfg(target_os = "macos")]
@@ -138,6 +154,7 @@ impl<P: Plugin> Wrapper<P> {
                     baseview::WindowScalePolicy::ScaleFactor(self.config.dpi_scale as f64)
                 };
 
+                let (width, height) = editor.size();
                 Window::open_blocking(
                     WindowOpenOptions {
                         title: String::from(P::NAME),
@@ -162,6 +179,7 @@ impl<P: Plugin> Wrapper<P> {
 
                         WrapperWindowHandler {
                             _editor_handle: editor_handle,
+                            new_window_size,
                         }
                     },
                 )
@@ -175,8 +193,14 @@ impl<P: Plugin> Wrapper<P> {
         Ok(())
     }
 
-    fn make_gui_context(self: Arc<Self>) -> Arc<WrapperGuiContext<P>> {
-        Arc::new(WrapperGuiContext { wrapper: self })
+    fn make_gui_context(
+        self: Arc<Self>,
+        new_window_size: Arc<Mutex<Option<(u32, u32)>>>,
+    ) -> Arc<WrapperGuiContext<P>> {
+        Arc::new(WrapperGuiContext {
+            wrapper: self,
+            new_window_size,
+        })
     }
 
     fn make_process_context(&self, transport: Transport) -> WrapperProcessContext<'_, P> {
