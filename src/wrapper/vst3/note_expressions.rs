@@ -40,6 +40,23 @@ pub struct NoteExpressionController {
 }
 
 impl NoteExpressionController {
+    /// Returns `true` if the VST3 expression type ID is one of the predefiend types we support.
+    /// This is only needed as a workaround for a Bitwig bug where it only sends us note expressions
+    /// if we explicitly return `kResultOk` on
+    /// `INoteExpressionController::get_note_expression_info()` with malformed expression index
+    /// arguments.
+    pub const fn known_expression_type_id(type_id: u32) -> bool {
+        match type_id {
+            VOLUME_EXPRESSION_ID
+            | PAN_EXPRESSION_ID
+            | TUNING_EXPRESSION_ID
+            | VIBRATO_EXPRESSION_ID
+            | EXPRESSION_EXPRESSION_ID
+            | BRIGHTNESS_EXPRESSION_ID => true,
+            _ => false,
+        }
+    }
+
     /// Register the note ID from a note on event so it can later be retrieved when handling a note
     /// expression value event.
     pub fn register_note(&mut self, event: &NoteOnEvent) {

@@ -9,8 +9,9 @@ use vst3_sys::base::{IBStream, IPluginBase};
 use vst3_sys::utils::SharedVstPtr;
 use vst3_sys::vst::{
     kNoProgramListId, kRootUnitId, Event, EventTypes, IAudioProcessor, IComponent, IEditController,
-    IEventList, IMidiMapping, IParamValueQueue, IParameterChanges, IUnitInfo, LegacyMidiCCOutEvent,
-    NoteOffEvent, NoteOnEvent, ParameterFlags, PolyPressureEvent, ProgramListInfo, TChar, UnitInfo,
+    IEventList, IMidiMapping, INoteExpressionController, IParamValueQueue, IParameterChanges,
+    IUnitInfo, LegacyMidiCCOutEvent, NoteExpressionTypeInfo, NoteOffEvent, NoteOnEvent,
+    ParameterFlags, PolyPressureEvent, ProgramListInfo, TChar, UnitInfo,
 };
 use vst3_sys::VST3;
 use widestring::U16CStr;
@@ -34,7 +35,14 @@ use crate::wrapper::vst3::util::{VST3_MIDI_CHANNELS, VST3_MIDI_PARAMS_END};
 // Alias needed for the VST3 attribute macro
 use vst3_sys as vst3_com;
 
-#[VST3(implements(IComponent, IEditController, IAudioProcessor, IMidiMapping, IUnitInfo))]
+#[VST3(implements(
+    IComponent,
+    IEditController,
+    IAudioProcessor,
+    IMidiMapping,
+    IUnitInfo,
+    INoteExpressionController
+))]
 pub(crate) struct Wrapper<P: Vst3Plugin> {
     inner: Arc<WrapperInner<P>>,
 }
@@ -1397,5 +1405,64 @@ impl<P: Vst3Plugin> IUnitInfo for Wrapper<P> {
         _data: SharedVstPtr<dyn IBStream>,
     ) -> tresult {
         kInvalidArgument
+    }
+}
+
+impl<P: Vst3Plugin> INoteExpressionController for Wrapper<P> {
+    unsafe fn get_note_expression_count(&self, bus_idx: i32, _channel: i16) -> i32 {
+        // NOTE: We don't have any custom note expressions. But Bitwig won't send us the predefined
+        //       note expressions unless we pretend we do.
+        if P::MIDI_INPUT >= MidiConfig::Basic && bus_idx == 0 {
+            1
+        } else {
+            0
+        }
+    }
+
+    unsafe fn get_note_expression_info(
+        &self,
+        bus_idx: i32,
+        _channel: i16,
+        note_expression_idx: i32,
+        info: *mut NoteExpressionTypeInfo,
+    ) -> tresult {
+        if P::MIDI_INPUT < MidiConfig::Basic || bus_idx != 0 {
+            return kInvalidArgument;
+        }
+
+        check_null_ptr!(info);
+
+        // NOTE: As mentioned above, this is only a workaround for a Bitwig bug. We don't have any
+        //       custom note expressions, and the IDs passed to this function are the type IDs which
+        //       is incorrect. We won't even bother filling in the information. This argument is of
+        //       course also incorrect, as these expression indices are supposed to be linear
+        //       indices starting at 0, while Bitwig queries this with 0, 1, 2, and 5.
+        if NoteExpressionController::known_expression_type_id(note_expression_idx as u32) {
+            kResultOk
+        } else {
+            kResultFalse
+        }
+    }
+
+    unsafe fn get_note_expression_string_by_value(
+        &self,
+        _bus_idx: i32,
+        _channel: i16,
+        _id: u32,
+        _value: f64,
+        _string: *mut TChar,
+    ) -> tresult {
+        kResultFalse
+    }
+
+    unsafe fn get_note_expression_value_by_string(
+        &self,
+        _bus_idx: i32,
+        _channel: i16,
+        _id: u32,
+        _string: *const TChar,
+        _value: *mut f64,
+    ) -> tresult {
+        kResultFalse
     }
 }
