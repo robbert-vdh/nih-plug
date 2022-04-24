@@ -36,7 +36,9 @@ members = [
 [features]
 default = ["vst3"]
 # Enabling this feature will cause the plugin to terminate when allocations
-# occur in the processing function while compiling in debug mode.
+# occur in the processing function while compiling in debug mode. Keep in mind
+# that most panic handlers will also allocate, so temporarily disabling this
+# feature may be necessary when debugging panics in DSP code.
 assert_process_allocs = ["dep:assert_no_alloc"]
 # Enables the `nih_export_vst3()` macro. Enabled by default. This feature exists
 # mostly for GPL-compliance reasons, since even if you don't use the VST3
