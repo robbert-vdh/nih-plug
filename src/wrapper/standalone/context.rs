@@ -64,11 +64,11 @@ impl<P: Plugin, B: Backend> GuiContext for WrapperGuiContext<P, B> {
     unsafe fn raw_end_set_parameter(&self, _param: ParamPtr) {}
 
     fn get_state(&self) -> crate::wrapper::state::PluginState {
-        todo!("WrapperGuiContext::get_state()");
+        self.wrapper.get_state_object()
     }
 
-    fn set_state(&self, __state: crate::wrapper::state::PluginState) {
-        nih_debug_assert_failure!("TODO: WrapperGuiContext::set_state()");
+    fn set_state(&self, state: crate::wrapper::state::PluginState) {
+        self.wrapper.set_state_object(state)
     }
 }
 

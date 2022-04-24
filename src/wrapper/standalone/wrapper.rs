@@ -5,7 +5,7 @@ use crossbeam::queue::ArrayQueue;
 use parking_lot::RwLock;
 use raw_window_handle::HasRawWindowHandle;
 use std::any::Any;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
@@ -16,6 +16,8 @@ use crate::context::Transport;
 use crate::param::internals::{ParamPtr, Params};
 use crate::param::ParamFlags;
 use crate::plugin::{BufferConfig, BusConfig, Editor, ParentWindowHandle, Plugin, ProcessStatus};
+use crate::util::permit_alloc;
+use crate::wrapper::state::{self, PluginState};
 
 /// How many parameter changes we can store in our unprocessed parameter change queue. Storing more
 /// than this many parameters at a time will cause changes to get lost.
@@ -55,7 +57,13 @@ pub struct Wrapper<P: Plugin, B: Backend> {
     /// The plugin's parameters. These are fetched once during initialization. That way the
     /// `ParamPtr`s are guaranteed to live at least as long as this object and we can interact with
     /// the `Params` object without having to acquire a lock on `plugin`.
-    _params: Arc<dyn Params>,
+    params: Arc<dyn Params>,
+    /// The set of parameter pointers in `params`. This is technically not necessary, but for
+    /// consistency with the plugin wrappers we'll check whether the `ParamPtr` for an incoming
+    /// parameter change actually belongs to a registered parameter.
+    known_parameters: HashSet<ParamPtr>,
+    /// A mapping from parameter string IDs to parameter pointers.
+    param_map: HashMap<String, ParamPtr>,
     /// The plugin's editor, if it has one. This object does not do anything on its own, but we need
     /// to instantiate this in advance so we don't need to lock the entire [`Plugin`] object when
     /// creating an editor.
@@ -67,14 +75,21 @@ pub struct Wrapper<P: Plugin, B: Backend> {
     bus_config: BusConfig,
     buffer_config: BufferConfig,
 
-    /// The set of parameter pointers in `params`. This is technically not necessary, but for
-    /// consistency with the plugin wrappers we'll check whether the `ParamPtr` for an incoming
-    /// parameter change actually belongs to a registered parameter.
-    known_parameters: HashSet<ParamPtr>,
     /// Parameter changes that have been output by the GUI that have not yet been set in the plugin.
     /// This queue will be flushed at the end of every processing cycle, just like in the plugin
     /// versions.
     unprocessed_param_changes: ArrayQueue<(ParamPtr, f32)>,
+    /// The plugin is able to restore state through a method on the `GuiContext`. To avoid changing
+    /// parameters mid-processing and running into garbled data if the host also tries to load state
+    /// at the same time the restoring happens at the end of each processing call. If this zero
+    /// capacity channel contains state data at that point, then the audio thread will take the
+    /// state out of the channel, restore the state, and then send it back through the same channel.
+    /// In other words, the GUI thread acts as a sender and then as a receiver, while the audio
+    /// thread acts as a receiver and then as a sender. That way deallocation can happen on the GUI
+    /// thread. All of this happens without any blocking on the audio thread.
+    updated_state_sender: channel::Sender<PluginState>,
+    /// The receiver belonging to [`new_state_sender`][Self::new_state_sender].
+    updated_state_receiver: channel::Receiver<PluginState>,
 }
 
 /// Errors that may arise while initializing the wrapped plugins.
@@ -136,6 +151,10 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
         let params = plugin.params();
         let editor = plugin.editor().map(Arc::from);
 
+        // This is used to allow the plugin to restore preset data from its editor, see the comment
+        // on `Self::updated_state_sender`
+        let (updated_state_sender, updated_state_receiver) = channel::bounded(0);
+
         // For consistency's sake we'll include the same assertions as the other backends
         // TODO: Move these common checks to a function instead of repeating them in every wrapper
         let param_map = params.param_map();
@@ -167,7 +186,12 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
             backend: AtomicRefCell::new(backend),
 
             plugin: RwLock::new(plugin),
-            _params: params,
+            params,
+            known_parameters: param_map.iter().map(|(_, ptr, _)| *ptr).collect(),
+            param_map: param_map
+                .into_iter()
+                .map(|(param_id, param_ptr, _)| (param_id, param_ptr))
+                .collect(),
             editor,
 
             bus_config: BusConfig {
@@ -180,8 +204,9 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
             },
             config,
 
-            known_parameters: param_map.into_iter().map(|(_, ptr, _)| ptr).collect(),
             unprocessed_param_changes: ArrayQueue::new(EVENT_QUEUE_CAPACITY),
+            updated_state_sender,
+            updated_state_receiver,
         });
 
         // Right now the IO configuration is fixed in the standalone target, so if the plugin cannot
@@ -293,7 +318,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
             .unprocessed_param_changes
             .push((param, normalized))
             .is_ok();
-        nih_debug_assert!(push_succesful, "The parmaeter change queue was full");
+        nih_debug_assert!(push_succesful, "The parameter change queue was full");
 
         push_succesful
     }
@@ -305,6 +330,40 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
         return 1.0;
         #[cfg(not(target_os = "macos"))]
         return self.config.dpi_scale;
+    }
+
+    /// Get the plugin's state object, may be called by the plugin's GUI as part of its own preset
+    /// management. The wrapper doesn't use these functions and serializes and deserializes directly
+    /// the JSON in the relevant plugin API methods instead.
+    pub fn get_state_object(&self) -> PluginState {
+        unsafe {
+            state::serialize_object(
+                self.params.clone(),
+                self.param_map
+                    .iter()
+                    .map(|(param_id, param_ptr)| (param_id, *param_ptr)),
+            )
+        }
+    }
+
+    /// Update the plugin's internal state, called by the plugin itself from the GUI thread. To
+    /// prevent corrupting data and changing parameters during processing the actual state is only
+    /// updated at the end of the audio processing cycle.
+    pub fn set_state_object(&self, state: PluginState) {
+        match self.updated_state_sender.send(state) {
+            Ok(_) => {
+                // As mentioned above, the state object will be passed back to this thread
+                // so we can deallocate it without blocking.
+                let state = self.updated_state_receiver.recv();
+                drop(state);
+            }
+            Err(err) => {
+                nih_debug_assert_failure!(
+                    "Could not send new state to the audio thread: {:?}",
+                    err
+                );
+            }
+        }
     }
 
     /// The audio thread. This should be called from another thread, and it will run until
@@ -361,18 +420,55 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
             // Allow the editor to react to the new parameter values if the editor uses a reactive data
             // binding model
             if parameter_values_changed {
-                if let Some(editor) = &self.editor {
-                    editor.param_values_changed();
-                }
+                self.notify_param_values_changed();
             }
 
             // TODO: MIDI output
-            // TODO: Handle state restore
+
+            // After processing audio, we'll check if the editor has sent us updated plugin state.
+            // We'll restore that here on the audio thread to prevent changing the values during the
+            // process call and also to prevent inconsistent state when the host also wants to load
+            // plugin state.
+            // FIXME: Zero capacity channels allocate on receiving, find a better alternative that
+            //        doesn't do that
+            let updated_state = permit_alloc(|| self.updated_state_receiver.try_recv());
+            if let Ok(state) = updated_state {
+                unsafe {
+                    state::deserialize_object(
+                        &state,
+                        self.params.clone(),
+                        |param_id| self.param_map.get(param_id).copied(),
+                        Some(&self.buffer_config),
+                    );
+                }
+
+                self.notify_param_values_changed();
+
+                // TODO: Normally we'd also call initialize after deserializing state, but that's
+                //       not guaranteed to be realtime safe. Should we do it anyways?
+                self.plugin.write().reset();
+
+                // We'll pass the state object back to the GUI thread so deallocation can happen
+                // there without potentially blocking the audio thread
+                if let Err(err) = self.updated_state_sender.send(state) {
+                    nih_debug_assert_failure!(
+                        "Failed to send state object back to GUI thread: {}",
+                        err
+                    );
+                };
+            }
 
             num_processed_samples += buffer.len() as i64;
 
             true
         });
+    }
+
+    /// Tell the editor that the parameter values have changed, if the plugin has an editor.
+    fn notify_param_values_changed(&self) {
+        if let Some(editor) = &self.editor {
+            editor.param_values_changed();
+        }
     }
 
     fn make_gui_context(
