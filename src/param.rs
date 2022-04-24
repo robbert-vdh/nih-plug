@@ -1,6 +1,6 @@
 //! NIH-plug can handle floating point, integer, boolean, and enum parameters. Parameters are
 //! managed by creating a struct deriving the [`Params`][internals::Params] trait containing fields
-//! for those parmaeter types, and then returning a reference to that object from your
+//! for those parameter types, and then returning a reference to that object from your
 //! [`Plugin::params()`][crate::prelude::Plugin::params()] method. See the `Params` trait for more
 //! information.
 

@@ -25,7 +25,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
 
     // We only care about fields with `id`, `persist`, and `nested` attributes. For the `id` fields
     // we'll build a mapping function that creates a hashmap containing pointers to those
-    // parmaeters. For the `persist` function we'll create functions that serialize and deserialize
+    // parameters. For the `persist` function we'll create functions that serialize and deserialize
     // those fields individually (so they can be added and removed independently of eachother) using
     // JSON. The `nested` fields should also implement the `Params` trait and their fields will be
     // inherited and added to this field's lists.

@@ -12,7 +12,7 @@ use crate::param::internals::Params;
 /// Basic functionality that needs to be implemented by a plugin. The wrappers will use this to
 /// expose the plugin in a particular plugin format.
 ///
-/// The main thing you need to do is define a `[Params]` struct containing all of your parmaeters.
+/// The main thing you need to do is define a `[Params]` struct containing all of your parameters.
 /// See the trait's documentation for more information on how to do that, or check out the examples.
 ///
 /// This is super basic, and lots of things I didn't need or want to use yet haven't been

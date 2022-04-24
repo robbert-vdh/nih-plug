@@ -1,7 +1,7 @@
 //! Parameter hierarchies in VST3 requires you to define units, which are linearly indexed logical
 //! units that have a name, a parent, and then a whole bunch of other data like note numbers and
 //! MIDI program state. We'll need to implement some of that to conver our list of slash-separated
-//! parmaeter group paths to units.
+//! parameter group paths to units.
 //!
 //! <https://steinbergmedia.github.io/vst3_doc/vstinterfaces/classSteinberg_1_1Vst_1_1IUnitInfo.html>
 

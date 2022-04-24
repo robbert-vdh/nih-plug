@@ -18,7 +18,7 @@ use crate::param::ParamFlags;
 use crate::plugin::{BufferConfig, BusConfig, Editor, ParentWindowHandle, Plugin, ProcessStatus};
 
 /// How many parameter changes we can store in our unprocessed parameter change queue. Storing more
-/// than this many parmaeters at a time will cause changes to get lost.
+/// than this many parameters at a time will cause changes to get lost.
 const EVENT_QUEUE_CAPACITY: usize = 2048;
 
 /// Configuration for a standalone plugin that would normally be provided by the DAW.

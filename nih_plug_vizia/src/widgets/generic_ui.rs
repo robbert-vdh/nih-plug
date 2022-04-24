@@ -9,7 +9,7 @@ use super::{ParamSlider, ParamSliderExt, ParamSliderStyle};
 
 /// Shows a generic UI for a [`Params`] object. For additional flexibility you can either use the
 /// [`new()`][`Self::new()`] method to have the generic UI decide which widget to use for your
-/// parmaeters, or you can use the [`new_custom()`][`Self::new_custom()`] method to determine this
+/// parameters, or you can use the [`new_custom()`][`Self::new_custom()`] method to determine this
 /// yourself.
 pub struct GenericUi;
 

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use super::internals::ParamPtr;
 use super::{Param, ParamFlags};
 
-/// A simple boolean parmaeter.
+/// A simple boolean parameter.
 #[repr(C, align(4))]
 pub struct BoolParam {
     /// The field's current value. Should be initialized with the default value.
@@ -183,7 +183,7 @@ impl BoolParam {
     }
 
     /// Mark this parameter as a bypass parameter. Plugin hosts can integrate this parameter into
-    /// their UI. Only a single [`BoolParam`] can be a bypass parmaeter, and NIH-plug will add one
+    /// their UI. Only a single [`BoolParam`] can be a bypass parameter, and NIH-plug will add one
     /// if you don't create one yourself. You will need to implement this yourself if your plugin
     /// introduces latency.
     pub fn make_bypass(mut self) -> Self {

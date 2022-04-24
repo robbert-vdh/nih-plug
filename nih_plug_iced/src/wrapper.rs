@@ -22,7 +22,7 @@ pub(crate) struct IcedEditorWrapperApplication<E: IcedEditor> {
     parameter_updates_receiver: Arc<channel::Receiver<crate::ParameterUpdate>>,
 }
 
-/// This wraps around `E::Message` to add a parmaeter update message which can be handled directly
+/// This wraps around `E::Message` to add a parameter update message which can be handled directly
 /// by this wrapper. That parameter update message simply forces a redraw of the GUI whenever there
 /// is a parameter update.
 pub enum Message<E: IcedEditor> {

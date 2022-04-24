@@ -27,7 +27,7 @@ pub enum ParamValue {
 pub struct PluginState {
     /// The plugin's parameter values. These are stored unnormalized. This mean sthe old values will
     /// be recalled when when the parameter's range gets increased. Doing so may still mess with
-    /// parmaeter automation though, depending on how the host impelments that.
+    /// parameter automation though, depending on how the host impelments that.
     pub params: HashMap<String, ParamValue>,
     /// Arbitrary fields that should be persisted together with the plugin's parameters. Any field
     /// on the [`Params`][crate::param::internals::Params] struct that's annotated with `#[persist =
@@ -45,7 +45,7 @@ pub(crate) unsafe fn serialize_object(
     param_by_hash: &HashMap<u32, ParamPtr>,
     param_id_to_hash: &HashMap<String, u32>,
 ) -> PluginState {
-    // We'll serialize parmaeter values as a simple `string_param_id: display_value` map.
+    // We'll serialize parameter values as a simple `string_param_id: display_value` map.
     let params: HashMap<_, _> = param_id_to_hash
         .iter()
         .filter_map(|(param_id_str, hash)| {

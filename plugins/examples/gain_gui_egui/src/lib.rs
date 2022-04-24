@@ -99,7 +99,7 @@ impl Plugin for Gain {
                         "Also gain, but with a lame widget. Can't even render the value correctly!",
                     );
                     // This is a simple naieve version of a parameter slider that's not aware of how
-                    // the parmaeters work
+                    // the parameters work
                     ui.add(
                         egui::widgets::Slider::from_get_set(-30.0..=30.0, |new_value| {
                             match new_value {

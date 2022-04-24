@@ -38,7 +38,7 @@ pub struct IntParam {
     /// called multiple times in rapid succession.
     ///
     /// To use this, you'll probably want to store an `Arc<Atomic*>` alongside the parmater in the
-    /// parmaeters struct, move a clone of that `Arc` into this closure, and then modify that.
+    /// parameters struct, move a clone of that `Arc` into this closure, and then modify that.
     ///
     /// TODO: We probably also want to pass the old value to this function.
     pub value_changed: Option<Arc<dyn Fn(i32) + Send + Sync>>,

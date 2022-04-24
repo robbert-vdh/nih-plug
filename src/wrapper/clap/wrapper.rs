@@ -86,7 +86,7 @@ use crate::wrapper::state::{self, PluginState};
 use crate::wrapper::util::{hash_param_id, process_wrapper, strlcpy};
 
 /// How many output parameter changes we can store in our output parameter change queue. Storing
-/// more than this many parmaeters at a time will cause changes to get lost.
+/// more than this many parameters at a time will cause changes to get lost.
 const OUTPUT_EVENT_QUEUE_CAPACITY: usize = 2048;
 
 #[repr(C)]
@@ -208,7 +208,7 @@ pub struct Wrapper<P: ClapPlugin> {
     /// A queue of parameter changes and gestures that should be output in either the next process
     /// call or in the next parameter flush.
     ///
-    /// XXX: There's no guarentee that a single parmaeter doesn't occur twice in this queue, but
+    /// XXX: There's no guarentee that a single parameter doesn't occur twice in this queue, but
     ///      even if it does then that should still not be a problem because the host also reads it
     ///      in the same order, right?
     output_parameter_events: ArrayQueue<OutputParamEvent>,
@@ -260,7 +260,7 @@ pub enum ClapParamUpdate {
 pub enum OutputParamEvent {
     /// Begin an automation gesture. This must always be sent before sending [`SetValue`].
     BeginGesture { param_hash: u32 },
-    /// Change the value of a parmaeter using a plain CLAP value, aka the normalized value
+    /// Change the value of a parameter using a plain CLAP value, aka the normalized value
     /// multiplied by the number of steps.
     SetValue {
         /// The internal hash for the parameter.

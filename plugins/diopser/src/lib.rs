@@ -37,7 +37,7 @@ mod spectrum;
 /// How many all-pass filters we can have in series at most. The filter stages parameter determines
 /// how many filters are actually active.
 const MAX_NUM_FILTERS: usize = 512;
-/// The minimum step size for smoothing the filter parmaeters.
+/// The minimum step size for smoothing the filter parameters.
 const MIN_AUTOMATION_STEP_SIZE: u32 = 1;
 /// The maximum step size for smoothing the filter parameters. Updating these parameters can be
 /// expensive, so updating them in larger steps can be useful.

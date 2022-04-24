@@ -923,7 +923,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                 normalized_value,
                             } => {
                                 // If this parameter change happens after the start of this block, then
-                                // we'll split the block here and handle this parmaeter change after
+                                // we'll split the block here and handle this parameter change after
                                 // we've processed this block
                                 if timing != block_start as u32 {
                                     event_start_idx = event_idx;

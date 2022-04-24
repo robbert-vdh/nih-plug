@@ -9,7 +9,7 @@ struct Gain {
 /// The [`Params`] derive macro gathers all of the information needed for the wrapepr to know about
 /// the plugin's parameters, persistent serializable fields, and nested parameter groups. You can
 /// aslo easily implement [`Params`] by hand if you want to, for instance, have multiple instances
-/// of a parmaeters struct for multiple identical oscillators/filters/envelopes.
+/// of a parameters struct for multiple identical oscillators/filters/envelopes.
 #[derive(Params)]
 struct GainParams {
     /// The parameter's ID is used to identify the parameter in the wrappred plugin API. As long as
