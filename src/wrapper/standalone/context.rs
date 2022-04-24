@@ -23,6 +23,7 @@ pub(crate) struct WrapperGuiContext<P: Plugin, B: Backend> {
 /// can hold on to lock guards for event queues. Otherwise reading these events would require
 /// constant unnecessary atomic operations to lock the uncontested RwLocks.
 pub(crate) struct WrapperProcessContext<'a, P: Plugin, B: Backend> {
+    #[allow(dead_code)]
     pub(super) wrapper: &'a Wrapper<P, B>,
     // TODO: Events
     // pub(super) input_events_guard: AtomicRefMut<'a, VecDeque<NoteEvent>>,
@@ -66,7 +67,7 @@ impl<P: Plugin, B: Backend> GuiContext for WrapperGuiContext<P, B> {
         todo!("WrapperGuiContext::get_state()");
     }
 
-    fn set_state(&self, state: crate::wrapper::state::PluginState) {
+    fn set_state(&self, __state: crate::wrapper::state::PluginState) {
         nih_debug_assert_failure!("TODO: WrapperGuiContext::set_state()");
     }
 }
@@ -87,13 +88,13 @@ impl<P: Plugin, B: Backend> ProcessContext for WrapperProcessContext<'_, P, B> {
         None
     }
 
-    fn send_event(&mut self, event: NoteEvent) {
+    fn send_event(&mut self, _event: NoteEvent) {
         nih_debug_assert_failure!("TODO: WrapperProcessContext::send_event()");
 
         // self.output_events_guard.push_back(event);
     }
 
-    fn set_latency_samples(&self, samples: u32) {
+    fn set_latency_samples(&self, _samples: u32) {
         nih_debug_assert_failure!("TODO: WrapperProcessContext::set_latency_samples()");
     }
 }

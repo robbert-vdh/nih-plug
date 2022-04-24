@@ -56,7 +56,7 @@ pub fn nih_export_standalone<P: Plugin>() -> bool {
 /// The same as [`nih_export_standalone()`], but with the arguments taken from an iterator instead
 /// of using [`std::env::args()`].
 pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = String>>(
-    args: Args,
+    _args: Args,
 ) -> bool {
     setup_logger();
 
