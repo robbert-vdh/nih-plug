@@ -60,11 +60,14 @@ cfg-if = "1.0"
 clap-sys = { git = "https://github.com/robbert-vdh/clap-sys", branch = "update/clap-0.24" }
 crossbeam = "0.8"
 lazy_static = "1.4"
+log = { version = "0.4", features = ["std", "release_max_level_info"] }
+log-panics = "2.0"
 midi-consts = "0.1"
 parking_lot = "0.12"
 raw-window-handle = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+simplelog = "0.12"
 vst3-sys = { git = "https://github.com/robbert-vdh/vst3-sys.git", branch = "fix/note-off-event", optional = true }
 widestring = "1.0.0-beta.1"
 
@@ -72,6 +75,11 @@ assert_no_alloc = { version = "1.1", optional = true }
 
 [target.'cfg(all(target_family = "unix", not(target_os = "macos")))'.dependencies]
 libc = "0.2.124"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+# STDIO isn't reliable on Windows, so when hosting plugins in a DAW it may be
+# useful to log using `OutputDebugString()` instead
+win_dbg_logger = "0.1"
 
 [target.'cfg(target_os = "windows")'.dependencies.windows]
 version = "0.32"
