@@ -35,70 +35,69 @@ impl View for ResizeHandle {
     }
 
     fn event(&mut self, cx: &mut Context, event: &mut Event) {
-        if let Some(window_event) = event.message.downcast() {
-            match *window_event {
-                WindowEvent::MouseDown(MouseButton::Left) => {
-                    // The handle is a triangle, so we should also interac twith it as if it was a
-                    // triangle
-                    if intersects_triangle(
-                        cx.cache.get_bounds(cx.current),
-                        (cx.mouse.cursorx, cx.mouse.cursory),
-                    ) {
-                        cx.capture();
-                        cx.current.set_active(cx, true);
+        event.map(|window_event, meta| match *window_event {
+            WindowEvent::MouseDown(MouseButton::Left) => {
+                // The handle is a triangle, so we should also interac twith it as if it was a
+                // triangle
+                if intersects_triangle(
+                    cx.cache.get_bounds(cx.current),
+                    (cx.mouse.cursorx, cx.mouse.cursory),
+                ) {
+                    cx.capture();
+                    cx.current.set_active(cx, true);
 
-                        self.drag_active = true;
-                        self.start_scale_factor = cx.user_scale_factor;
-                        self.start_physical_coordinates = (
-                            cx.mouse.cursorx * cx.style.dpi_factor as f32,
-                            cx.mouse.cursory * cx.style.dpi_factor as f32,
-                        );
-
-                        event.consume();
-                    } else {
-                        // TODO: The click should be forwarded to the element behind the triangle
-                    }
-                }
-                WindowEvent::MouseUp(MouseButton::Left) => {
-                    if self.drag_active {
-                        cx.release();
-                        cx.current.set_active(cx, false);
-
-                        self.drag_active = false;
-                    }
-                }
-                WindowEvent::MouseMove(x, y) => {
-                    cx.current.set_hover(
-                        cx,
-                        intersects_triangle(cx.cache.get_bounds(cx.current), (x, y)),
+                    self.drag_active = true;
+                    self.start_scale_factor = cx.user_scale_factor;
+                    self.start_physical_coordinates = (
+                        cx.mouse.cursorx * cx.style.dpi_factor as f32,
+                        cx.mouse.cursory * cx.style.dpi_factor as f32,
                     );
 
-                    if self.drag_active {
-                        // We need to convert our measurements into physical pixels relative to the
-                        // initial drag to be able to keep a consistent ratio. This 'relative to the
-                        // start' bit is important because otherwise we would be comparing the
-                        // position to the same absoltue screen spotion.
-                        // TODO: This may start doing fun things when the window grows so large that
-                        //       it gets pushed upwards or leftwards
-                        let (compensated_physical_x, compensated_physical_y) = (
-                            x * self.start_scale_factor as f32,
-                            y * self.start_scale_factor as f32,
-                        );
-                        let (start_physical_x, start_physical_y) = self.start_physical_coordinates;
-                        let new_scale_factor = (self.start_scale_factor
-                            * (compensated_physical_x / start_physical_x)
-                                .max(compensated_physical_y / start_physical_y)
-                                as f64)
-                            // Prevent approaching zero here because uh
-                            .max(0.25);
-
-                        // If this is different then the window will automatically be resized at the end of the frame
-                        cx.user_scale_factor = new_scale_factor;
-                    }
+                    meta.consume();
+                } else {
+                    // TODO: The click should be forwarded to the element behind the triangle
                 }
-                _ => {}
             }
-        }
+            WindowEvent::MouseUp(MouseButton::Left) => {
+                if self.drag_active {
+                    cx.release();
+                    cx.current.set_active(cx, false);
+
+                    self.drag_active = false;
+                }
+            }
+            WindowEvent::MouseMove(x, y) => {
+                cx.current.set_hover(
+                    cx,
+                    intersects_triangle(cx.cache.get_bounds(cx.current), (x, y)),
+                );
+
+                if self.drag_active {
+                    // We need to convert our measurements into physical pixels relative to the
+                    // initial drag to be able to keep a consistent ratio. This 'relative to the
+                    // start' bit is important because otherwise we would be comparing the position
+                    // to the same absoltue screen spotion.
+                    // TODO: This may start doing fun things when the window grows so large that it
+                    //       gets pushed upwards or leftwards
+                    let (compensated_physical_x, compensated_physical_y) = (
+                        x * self.start_scale_factor as f32,
+                        y * self.start_scale_factor as f32,
+                    );
+                    let (start_physical_x, start_physical_y) = self.start_physical_coordinates;
+                    let new_scale_factor = (self.start_scale_factor
+                        * (compensated_physical_x / start_physical_x)
+                            .max(compensated_physical_y / start_physical_y)
+                            as f64)
+                        // Prevent approaching zero here because uh
+                        .max(0.25);
+
+                    // If this is different then the window will automatically be resized at the end
+                    // of the frame
+                    cx.user_scale_factor = new_scale_factor;
+                }
+            }
+            _ => {}
+        });
     }
 
     fn draw(&self, cx: &mut DrawContext, canvas: &mut Canvas) {

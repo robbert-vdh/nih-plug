@@ -78,16 +78,16 @@ enum ParamSliderInternalEvent {
 
 impl Model for ParamSliderInternal {
     fn event(&mut self, _cx: &mut Context, event: &mut Event) {
-        if let Some(param_slider_internal_event) = event.message.downcast() {
-            match param_slider_internal_event {
+        event.map(
+            |param_slider_internal_event, _| match param_slider_internal_event {
                 ParamSliderInternalEvent::SetStyle(style) => self.style = *style,
                 ParamSliderInternalEvent::SetTextInputActive(active) => {
                     // When this gets set to `true` the textbox widget will be created, and when it
                     // gets created we'll focus it and select all text
                     self.text_input_active = *active;
                 }
-            }
-        }
+            },
+        );
     }
 }
 
@@ -350,128 +350,123 @@ impl View for ParamSlider {
     }
 
     fn event(&mut self, cx: &mut Context, event: &mut Event) {
-        if let Some(param_slider_event) = event.message.downcast() {
-            match param_slider_event {
-                ParamSliderEvent::CancelTextInput => {
-                    cx.emit(ParamSliderInternalEvent::SetTextInputActive(false));
-                    cx.current.set_active(cx, false);
-                }
-                ParamSliderEvent::TextInput(string) => {
-                    if let Some(normalized_value) =
-                        unsafe { self.param_ptr.string_to_normalized_value(string) }
-                    {
-                        cx.emit(RawParamEvent::BeginSetParameter(self.param_ptr));
-                        self.set_normalized_value(cx, normalized_value);
-                        cx.emit(RawParamEvent::EndSetParameter(self.param_ptr));
-                    }
-
-                    cx.emit(ParamSliderInternalEvent::SetTextInputActive(false));
-                }
+        event.map(|param_slider_event, _| match param_slider_event {
+            ParamSliderEvent::CancelTextInput => {
+                cx.emit(ParamSliderInternalEvent::SetTextInputActive(false));
+                cx.current.set_active(cx, false);
             }
-        }
+            ParamSliderEvent::TextInput(string) => {
+                if let Some(normalized_value) =
+                    unsafe { self.param_ptr.string_to_normalized_value(string) }
+                {
+                    cx.emit(RawParamEvent::BeginSetParameter(self.param_ptr));
+                    self.set_normalized_value(cx, normalized_value);
+                    cx.emit(RawParamEvent::EndSetParameter(self.param_ptr));
+                }
 
-        if let Some(window_event) = event.message.downcast() {
-            match window_event {
-                WindowEvent::MouseDown(MouseButton::Left) => {
-                    if cx.modifiers.alt() {
-                        // ALt+Click brings up a text entry dialog
-                        cx.emit(ParamSliderInternalEvent::SetTextInputActive(true));
-                        cx.current.set_active(cx, true);
-                    } else if cx.modifiers.command() || self.is_double_click {
-                        // Ctrl+Click and double click should reset the parameter instead of initiating
-                        // a drag operation
-                        cx.emit(RawParamEvent::BeginSetParameter(self.param_ptr));
-                        cx.emit(RawParamEvent::SetParameterNormalized(
-                            self.param_ptr,
-                            unsafe { self.param_ptr.default_normalized_value() },
-                        ));
-                        cx.emit(RawParamEvent::EndSetParameter(self.param_ptr));
+                cx.emit(ParamSliderInternalEvent::SetTextInputActive(false));
+            }
+        });
+
+        event.map(|window_event, _| match window_event {
+            WindowEvent::MouseDown(MouseButton::Left) => {
+                if cx.modifiers.alt() {
+                    // ALt+Click brings up a text entry dialog
+                    cx.emit(ParamSliderInternalEvent::SetTextInputActive(true));
+                    cx.current.set_active(cx, true);
+                } else if cx.modifiers.command() || self.is_double_click {
+                    // Ctrl+Click and double click should reset the parameter instead of initiating
+                    // a drag operation
+                    cx.emit(RawParamEvent::BeginSetParameter(self.param_ptr));
+                    cx.emit(RawParamEvent::SetParameterNormalized(
+                        self.param_ptr,
+                        unsafe { self.param_ptr.default_normalized_value() },
+                    ));
+                    cx.emit(RawParamEvent::EndSetParameter(self.param_ptr));
+                } else {
+                    self.drag_active = true;
+                    cx.capture();
+                    // NOTE: Otherwise we don't get key up events
+                    cx.focused = cx.current;
+                    cx.current.set_active(cx, true);
+
+                    // When holding down shift while clicking on a parameter we want to granuarly
+                    // edit the parameter without jumping to a new value
+                    cx.emit(RawParamEvent::BeginSetParameter(self.param_ptr));
+                    if cx.modifiers.shift() {
+                        self.granular_drag_start_x_value = Some((cx.mouse.cursorx, unsafe {
+                            self.param_ptr.normalized_value()
+                        }));
                     } else {
-                        self.drag_active = true;
-                        cx.capture();
-                        // NOTE: Otherwise we don't get key up events
-                        cx.focused = cx.current;
-                        cx.current.set_active(cx, true);
-
-                        // When holding down shift while clicking on a parameter we want to
-                        // granuarly edit the parameter without jumping to a new value
-                        cx.emit(RawParamEvent::BeginSetParameter(self.param_ptr));
-                        if cx.modifiers.shift() {
-                            self.granular_drag_start_x_value = Some((cx.mouse.cursorx, unsafe {
-                                self.param_ptr.normalized_value()
-                            }));
-                        } else {
-                            self.granular_drag_start_x_value = None;
-                            self.set_normalized_value_drag(
-                                cx,
-                                util::remap_current_entity_x_coordinate(cx, cx.mouse.cursorx),
-                            );
-                        }
-                    }
-
-                    // We'll set this here because weird things like Alt+double click should not
-                    // cause the next click to become a reset
-                    self.is_double_click = false;
-                }
-                WindowEvent::MouseDoubleClick(MouseButton::Left) => {
-                    // Vizia will send a regular mouse down after this, so we'll handle the reset
-                    // there
-                    self.is_double_click = true;
-                }
-                WindowEvent::MouseUp(MouseButton::Left) => {
-                    if self.drag_active {
-                        self.drag_active = false;
-                        cx.release();
-                        cx.current.set_active(cx, false);
-
-                        cx.emit(RawParamEvent::EndSetParameter(self.param_ptr));
-                    }
-                }
-                WindowEvent::MouseMove(x, _y) => {
-                    if self.drag_active {
-                        // If shift is being held then the drag should be more granular instead of
-                        // absolute
-                        if cx.modifiers.shift() {
-                            let (drag_start_x, drag_start_value) =
-                                *self.granular_drag_start_x_value.get_or_insert_with(|| {
-                                    (cx.mouse.cursorx, unsafe {
-                                        self.param_ptr.normalized_value()
-                                    })
-                                });
-
-                            self.set_normalized_value_drag(
-                                cx,
-                                util::remap_current_entity_x_coordinate(
-                                    cx,
-                                    // This can be optimized a bit
-                                    util::remap_current_entity_x_t(cx, drag_start_value)
-                                        + (*x - drag_start_x) * GRANULAR_DRAG_MULTIPLIER,
-                                ),
-                            );
-                        } else {
-                            self.granular_drag_start_x_value = None;
-
-                            self.set_normalized_value_drag(
-                                cx,
-                                util::remap_current_entity_x_coordinate(cx, *x),
-                            );
-                        }
-                    }
-                }
-                WindowEvent::KeyUp(_, Some(Key::Shift)) => {
-                    // If this happens while dragging, snap back to reality uh I mean the current screen
-                    // position
-                    if self.drag_active && self.granular_drag_start_x_value.is_some() {
                         self.granular_drag_start_x_value = None;
-                        self.set_normalized_value(
+                        self.set_normalized_value_drag(
                             cx,
                             util::remap_current_entity_x_coordinate(cx, cx.mouse.cursorx),
                         );
                     }
                 }
-                _ => {}
+
+                // We'll set this here because weird things like Alt+double click should not cause
+                // the next click to become a reset
+                self.is_double_click = false;
             }
-        }
+            WindowEvent::MouseDoubleClick(MouseButton::Left) => {
+                // Vizia will send a regular mouse down after this, so we'll handle the reset there
+                self.is_double_click = true;
+            }
+            WindowEvent::MouseUp(MouseButton::Left) => {
+                if self.drag_active {
+                    self.drag_active = false;
+                    cx.release();
+                    cx.current.set_active(cx, false);
+
+                    cx.emit(RawParamEvent::EndSetParameter(self.param_ptr));
+                }
+            }
+            WindowEvent::MouseMove(x, _y) => {
+                if self.drag_active {
+                    // If shift is being held then the drag should be more granular instead of
+                    // absolute
+                    if cx.modifiers.shift() {
+                        let (drag_start_x, drag_start_value) =
+                            *self.granular_drag_start_x_value.get_or_insert_with(|| {
+                                (cx.mouse.cursorx, unsafe {
+                                    self.param_ptr.normalized_value()
+                                })
+                            });
+
+                        self.set_normalized_value_drag(
+                            cx,
+                            util::remap_current_entity_x_coordinate(
+                                cx,
+                                // This can be optimized a bit
+                                util::remap_current_entity_x_t(cx, drag_start_value)
+                                    + (*x - drag_start_x) * GRANULAR_DRAG_MULTIPLIER,
+                            ),
+                        );
+                    } else {
+                        self.granular_drag_start_x_value = None;
+
+                        self.set_normalized_value_drag(
+                            cx,
+                            util::remap_current_entity_x_coordinate(cx, *x),
+                        );
+                    }
+                }
+            }
+            WindowEvent::KeyUp(_, Some(Key::Shift)) => {
+                // If this happens while dragging, snap back to reality uh I mean the current screen
+                // position
+                if self.drag_active && self.granular_drag_start_x_value.is_some() {
+                    self.granular_drag_start_x_value = None;
+                    self.set_normalized_value(
+                        cx,
+                        util::remap_current_entity_x_coordinate(cx, cx.mouse.cursorx),
+                    );
+                }
+            }
+            _ => {}
+        });
     }
 }
 
