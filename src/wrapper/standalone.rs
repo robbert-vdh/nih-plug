@@ -2,6 +2,7 @@
 //! of relying on a plugin host. This is mostly useful for quickly testing GUI changes.
 
 use self::wrapper::{Wrapper, WrapperConfig, WrapperError};
+use super::util::setup_logger;
 use crate::plugin::Plugin;
 
 mod backend;
@@ -57,6 +58,8 @@ pub fn nih_export_standalone<P: Plugin>() -> bool {
 pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = String>>(
     args: Args,
 ) -> bool {
+    setup_logger();
+
     // TODO: Do something with the arguments
 
     // FIXME: The configuration should be set based on the command line arguments
@@ -74,7 +77,7 @@ pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = Stri
         timesig_denom: 4,
     };
 
-    eprintln!(
+    nih_log!(
         "Audio and MIDI IO has not yet been implemented in the standalone targets. So if you're \
          not hearing anything, then that's correct!"
     );
