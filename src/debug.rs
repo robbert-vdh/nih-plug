@@ -20,7 +20,7 @@ macro_rules! nih_log {
 #[macro_export]
 macro_rules! nih_trace {
     ($($args:tt)*) => (
-        $crate::log::trace!($($args)*)
+        $crate::util::permit_alloc(|| $crate::log::trace!($($args)*))
     );
 }
 
@@ -32,12 +32,12 @@ macro_rules! nih_trace {
 macro_rules! nih_debug_assert {
     ($cond:expr $(,)?) => (
         if cfg!(debug_assertions) && !$cond {
-            $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($cond)));
+            $crate::util::permit_alloc(|| $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($cond))));
         }
     );
     ($cond:expr, $format:expr $(, $($args:tt)*)?) => (
         if cfg!(debug_assertions) && !$cond {
-            $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($cond), ", ", $format), $($($args)*)?);
+            $crate::util::permit_alloc(|| $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($cond), ", ", $format), $($($args)*)?));
         }
     );
 }
@@ -48,12 +48,12 @@ macro_rules! nih_debug_assert {
 macro_rules! nih_debug_assert_failure {
     () => (
         if cfg!(debug_assertions) {
-            $crate::log::debug!("Debug assertion failed");
+            $crate::util::permit_alloc(|| $crate::log::debug!("Debug assertion failed"));
         }
     );
     ($format:expr $(, $($args:tt)*)?) => (
         if cfg!(debug_assertions) {
-            $crate::log::debug!(concat!("Debug assertion failed: ", $format), $($($args)*)?);
+            $crate::util::permit_alloc(|| $crate::log::debug!(concat!("Debug assertion failed: ", $format), $($($args)*)?));
         }
     );
 }
@@ -64,12 +64,12 @@ macro_rules! nih_debug_assert_failure {
 macro_rules! nih_debug_assert_eq {
     ($left:expr, $right:expr $(,)?) => (
         if cfg!(debug_assertions) && $left != $right {
-            $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($left), " != ", stringify!($right)));
+            $crate::util::permit_alloc(|| $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($left), " != ", stringify!($right))));
         }
     );
     ($left:expr, $right:expr, $format:expr $(, $($args:tt)*)?) => (
         if cfg!(debug_assertions) && $left != $right  {
-            $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($left), " != ", stringify!($right), ", ", $format), $($($args)*)?);
+            $crate::util::permit_alloc(|| $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($left), " != ", stringify!($right), ", ", $format), $($($args)*)?));
         }
     );
 }
@@ -80,12 +80,12 @@ macro_rules! nih_debug_assert_eq {
 macro_rules! nih_debug_assert_ne {
     ($left:expr, $right:expr $(,)?) => (
         if cfg!(debug_assertions) && $left == $right {
-            $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($left), " == ", stringify!($right)));
+            $crate::util::permit_alloc(|| $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($left), " == ", stringify!($right))));
         }
     );
     ($left:expr, $right:expr, $format:expr $(, $($args:tt)*)?) => (
         if cfg!(debug_assertions) && $left == $right  {
-            $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($left), " == ", stringify!($right), ", ", $format), $($($args)*)?);
+            $crate::util::permit_alloc(|| $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($left), " == ", stringify!($right), ", ", $format), $($($args)*)?));
         }
     );
 }
