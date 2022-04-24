@@ -7,6 +7,9 @@
 #[macro_use]
 mod debug;
 
+/// A re-export of the `log` crate for use in the debug macros. This should not be used directly.
+pub use log;
+
 /// Everything you'll need to use NIH-plug. Import this with `use nih_plug::prelude::*;`.
 pub mod prelude;
 

@@ -1,13 +1,17 @@
-/// Write something to the STDERR stream.
+/// Write something to the logger. This defaults to STDERR unless the user is running Windows and a
+/// debugger has been attached, in which case `OutputDebugString()` will be used instead.
 ///
-/// XXX: I don't think we need all of the log crate just for some simple logging, but maybe consider
-///      integrating some other crate with this function if we need to log to some other place than
-///      STDERR or if it needs to be done in release builds and we should thus try to avoid
-///      allocations.
+/// The logger's behavior can be controlled by setting the `NIH_LOG` environment variable to:
+///
+/// - `stderr`, in which case the log output always gets written to STDERR.
+/// - `windbg` (only on Windows), in which case the output always gets logged using
+///   `OutputDebugString()`.
+/// - A file path, in which case the output gets appended to the end of that file which will be
+///   created if necessary.
 #[macro_export]
 macro_rules! nih_log {
-    ($format:expr $(, $($args:tt)*)?) => (
-        eprintln!(concat!("[", file!(), ":", line!(), "] ", $format), $($($args)*)?)
+    ($($args:tt)*) => (
+        $crate::log::info!($($args)*)
     );
 }
 
@@ -19,12 +23,12 @@ macro_rules! nih_log {
 macro_rules! nih_debug_assert {
     ($cond:expr $(,)?) => (
         if cfg!(debug_assertions) && !$cond {
-            $crate::nih_log!(concat!("Debug assertion failed: ", stringify!($cond)));
+            $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($cond)));
         }
     );
     ($cond:expr, $format:expr $(, $($args:tt)*)?) => (
         if cfg!(debug_assertions) && !$cond {
-            $crate::nih_log!(concat!("Debug assertion failed: ", stringify!($cond), ", ", $format), $($($args)*)?);
+            $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($cond), ", ", $format), $($($args)*)?);
         }
     );
 }
@@ -35,12 +39,12 @@ macro_rules! nih_debug_assert {
 macro_rules! nih_debug_assert_failure {
     () => (
         if cfg!(debug_assertions) {
-            $crate::nih_log!("Debug assertion failed");
+            $crate::log::debug!("Debug assertion failed");
         }
     );
     ($format:expr $(, $($args:tt)*)?) => (
         if cfg!(debug_assertions) {
-            $crate::nih_log!(concat!("Debug assertion failed: ", $format), $($($args)*)?);
+            $crate::log::debug!(concat!("Debug assertion failed: ", $format), $($($args)*)?);
         }
     );
 }
@@ -51,12 +55,12 @@ macro_rules! nih_debug_assert_failure {
 macro_rules! nih_debug_assert_eq {
     ($left:expr, $right:expr $(,)?) => (
         if cfg!(debug_assertions) && $left != $right {
-            $crate::nih_log!(concat!("Debug assertion failed: ", stringify!($left), " != ", stringify!($right)));
+            $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($left), " != ", stringify!($right)));
         }
     );
     ($left:expr, $right:expr, $format:expr $(, $($args:tt)*)?) => (
         if cfg!(debug_assertions) && $left != $right  {
-            $crate::nih_log!(concat!("Debug assertion failed: ", stringify!($left), " != ", stringify!($right), ", ", $format), $($($args)*)?);
+            $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($left), " != ", stringify!($right), ", ", $format), $($($args)*)?);
         }
     );
 }
@@ -67,12 +71,12 @@ macro_rules! nih_debug_assert_eq {
 macro_rules! nih_debug_assert_ne {
     ($left:expr, $right:expr $(,)?) => (
         if cfg!(debug_assertions) && $left == $right {
-            $crate::nih_log!(concat!("Debug assertion failed: ", stringify!($left), " == ", stringify!($right)));
+            $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($left), " == ", stringify!($right)));
         }
     );
     ($left:expr, $right:expr, $format:expr $(, $($args:tt)*)?) => (
         if cfg!(debug_assertions) && $left == $right  {
-            $crate::nih_log!(concat!("Debug assertion failed: ", stringify!($left), " == ", stringify!($right), ", ", $format), $($($args)*)?);
+            $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($left), " == ", stringify!($right), ", ", $format), $($($args)*)?);
         }
     );
 }
