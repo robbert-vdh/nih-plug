@@ -1358,8 +1358,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         unsafe {
             state::serialize_object(
                 self.params.clone(),
-                &self.param_by_hash,
-                &self.param_id_to_hash,
+                state::make_params_iter(&self.param_by_hash, &self.param_id_to_hash),
             )
         }
     }
@@ -1404,8 +1403,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                     state::deserialize_object(
                         &state,
                         self.params.clone(),
-                        &self.param_by_hash,
-                        &self.param_id_to_hash,
+                        state::make_params_getter(&self.param_by_hash, &self.param_id_to_hash),
                         self.current_buffer_config.load().as_ref(),
                     );
                 }
@@ -1788,8 +1786,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 state::deserialize_object(
                     &state,
                     wrapper.params.clone(),
-                    &wrapper.param_by_hash,
-                    &wrapper.param_id_to_hash,
+                    state::make_params_getter(&wrapper.param_by_hash, &wrapper.param_id_to_hash),
                     wrapper.current_buffer_config.load().as_ref(),
                 );
 
@@ -2540,8 +2537,7 @@ impl<P: ClapPlugin> Wrapper<P> {
 
         let serialized = state::serialize_json(
             wrapper.params.clone(),
-            &wrapper.param_by_hash,
-            &wrapper.param_id_to_hash,
+            state::make_params_iter(&wrapper.param_by_hash, &wrapper.param_id_to_hash),
         );
         match serialized {
             Ok(serialized) => {
@@ -2600,8 +2596,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         let success = state::deserialize_json(
             &read_buffer,
             wrapper.params.clone(),
-            &wrapper.param_by_hash,
-            &wrapper.param_id_to_hash,
+            state::make_params_getter(&wrapper.param_by_hash, &wrapper.param_id_to_hash),
             wrapper.current_buffer_config.load().as_ref(),
         );
         if !success {

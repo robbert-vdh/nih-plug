@@ -278,8 +278,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
         let success = state::deserialize_json(
             &read_buffer,
             self.inner.params.clone(),
-            &self.inner.param_by_hash,
-            &self.inner.param_id_to_hash,
+            state::make_params_getter(&self.inner.param_by_hash, &self.inner.param_id_to_hash),
             self.inner.current_buffer_config.load().as_ref(),
         );
         if !success {
@@ -312,8 +311,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
 
         let serialized = state::serialize_json(
             self.inner.params.clone(),
-            &self.inner.param_by_hash,
-            &self.inner.param_id_to_hash,
+            state::make_params_iter(&self.inner.param_by_hash, &self.inner.param_id_to_hash),
         );
         match serialized {
             Ok(serialized) => {
@@ -1243,8 +1241,10 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                 state::deserialize_object(
                     &state,
                     self.inner.params.clone(),
-                    &self.inner.param_by_hash,
-                    &self.inner.param_id_to_hash,
+                    state::make_params_getter(
+                        &self.inner.param_by_hash,
+                        &self.inner.param_id_to_hash,
+                    ),
                     self.inner.current_buffer_config.load().as_ref(),
                 );
 

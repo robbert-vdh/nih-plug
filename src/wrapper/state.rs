@@ -38,37 +38,51 @@ pub struct PluginState {
     pub fields: HashMap<String, String>,
 }
 
+/// Create a parameters iterator from the hashtables stored in the plugin wrappers. This avoids
+/// having to call `.param_map()` again, which may include expensive user written code.
+pub(crate) fn make_params_iter<'a>(
+    param_by_hash: &'a HashMap<u32, ParamPtr>,
+    param_id_to_hash: &'a HashMap<String, u32>,
+) -> impl IntoIterator<Item = (&'a String, ParamPtr)> {
+    param_id_to_hash.iter().filter_map(|(param_id_str, hash)| {
+        let param_ptr = param_by_hash.get(hash)?;
+        Some((param_id_str, *param_ptr))
+    })
+}
+
+/// Create a getter function that gets a parameter from the hashtables stored in the plugin by
+/// string ID.
+pub(crate) fn make_params_getter<'a>(
+    param_by_hash: &'a HashMap<u32, ParamPtr>,
+    param_id_to_hash: &'a HashMap<String, u32>,
+) -> impl for<'b> Fn(&'b str) -> Option<ParamPtr> + 'a {
+    |param_id_str| {
+        param_id_to_hash
+            .get(param_id_str)
+            .and_then(|hash| param_by_hash.get(hash))
+            .copied()
+    }
+}
+
 /// Serialize a plugin's state to a state object. This is separate from [`serialize_json()`] to
-/// allow passing the raw object directly to the plugin.
-pub(crate) unsafe fn serialize_object(
+/// allow passing the raw object directly to the plugin. The parameters are not pulled directly from
+/// `plugin_params` by default to avoid unnecessary allocations in the `.param_map()` method, as the
+/// plugin wrappers will already have a list of parameters handy. See [`make_params_iter()`].
+pub(crate) unsafe fn serialize_object<'a>(
     plugin_params: Arc<dyn Params>,
-    param_by_hash: &HashMap<u32, ParamPtr>,
-    param_id_to_hash: &HashMap<String, u32>,
+    params_iter: impl IntoIterator<Item = (&'a String, ParamPtr)>,
 ) -> PluginState {
     // We'll serialize parameter values as a simple `string_param_id: display_value` map.
-    let params: HashMap<_, _> = param_id_to_hash
-        .iter()
-        .filter_map(|(param_id_str, hash)| {
-            let param_ptr = param_by_hash.get(hash)?;
-            Some((param_id_str, param_ptr))
-        })
-        .map(|(param_id_str, &param_ptr)| match param_ptr {
-            ParamPtr::FloatParam(p) => (
-                param_id_str.to_string(),
-                ParamValue::F32((*p).plain_value()),
-            ),
-            ParamPtr::IntParam(p) => (
-                param_id_str.to_string(),
-                ParamValue::I32((*p).plain_value()),
-            ),
-            ParamPtr::BoolParam(p) => (
-                param_id_str.to_string(),
-                ParamValue::Bool((*p).plain_value()),
-            ),
+    let params: HashMap<_, _> = params_iter
+        .into_iter()
+        .map(|(param_id_str, param_ptr)| match param_ptr {
+            ParamPtr::FloatParam(p) => (param_id_str.clone(), ParamValue::F32((*p).plain_value())),
+            ParamPtr::IntParam(p) => (param_id_str.clone(), ParamValue::I32((*p).plain_value())),
+            ParamPtr::BoolParam(p) => (param_id_str.clone(), ParamValue::Bool((*p).plain_value())),
             ParamPtr::EnumParam(p) => (
                 // Enums are serialized based on the active variant's index (which may not be
                 // the same as the discriminator)
-                param_id_str.to_string(),
+                param_id_str.clone(),
                 ParamValue::I32((*p).plain_value()),
             ),
         })
@@ -83,12 +97,11 @@ pub(crate) unsafe fn serialize_object(
 
 /// Serialize a plugin's state to a vector containing JSON data. This can (and should) be shared
 /// across plugin formats.
-pub(crate) unsafe fn serialize_json(
+pub(crate) unsafe fn serialize_json<'a>(
     plugin_params: Arc<dyn Params>,
-    param_by_hash: &HashMap<u32, ParamPtr>,
-    param_id_to_hash: &HashMap<String, u32>,
+    params_iter: impl IntoIterator<Item = (&'a String, ParamPtr)>,
 ) -> serde_json::Result<Vec<u8>> {
-    let plugin_state = serialize_object(plugin_params, param_by_hash, param_id_to_hash);
+    let plugin_state = serialize_object(plugin_params, params_iter);
     serde_json::to_vec(&plugin_state)
 }
 
@@ -96,21 +109,20 @@ pub(crate) unsafe fn serialize_json(
 /// do its own internal preset management. Returns `false` and logs an error if the state could not
 /// be deserialized.
 ///
+/// This uses a parameter getter function to avoid having to rebuild the parameter map, which may
+/// include expensive user written code. See [`make_params_getter()`].
+///
 /// Make sure to reinitialize plugin after deserializing the state so it can react to the new
 /// parameter values. The smoothers have already been reset by this function.
 pub(crate) unsafe fn deserialize_object(
     state: &PluginState,
     plugin_params: Arc<dyn Params>,
-    param_by_hash: &HashMap<u32, ParamPtr>,
-    param_id_to_hash: &HashMap<String, u32>,
+    params_getter: impl for<'a> Fn(&'a str) -> Option<ParamPtr>,
     current_buffer_config: Option<&BufferConfig>,
 ) -> bool {
     let sample_rate = current_buffer_config.map(|c| c.sample_rate);
     for (param_id_str, param_value) in &state.params {
-        let param_ptr = match param_id_to_hash
-            .get(param_id_str.as_str())
-            .and_then(|hash| param_by_hash.get(hash))
-        {
+        let param_ptr = match params_getter(param_id_str.as_str()) {
             Some(ptr) => ptr,
             None => {
                 nih_debug_assert_failure!("Unknown parameter: {}", param_id_str);
@@ -119,13 +131,13 @@ pub(crate) unsafe fn deserialize_object(
         };
 
         match (param_ptr, param_value) {
-            (ParamPtr::FloatParam(p), ParamValue::F32(v)) => (**p).set_plain_value(*v),
-            (ParamPtr::IntParam(p), ParamValue::I32(v)) => (**p).set_plain_value(*v),
-            (ParamPtr::BoolParam(p), ParamValue::Bool(v)) => (**p).set_plain_value(*v),
+            (ParamPtr::FloatParam(p), ParamValue::F32(v)) => (*p).set_plain_value(*v),
+            (ParamPtr::IntParam(p), ParamValue::I32(v)) => (*p).set_plain_value(*v),
+            (ParamPtr::BoolParam(p), ParamValue::Bool(v)) => (*p).set_plain_value(*v),
             // Enums are serialized based on the active variant's index (which may not be the same
             // as the discriminator)
             (ParamPtr::EnumParam(p), ParamValue::I32(variant_idx)) => {
-                (**p).set_plain_value(*variant_idx)
+                (*p).set_plain_value(*variant_idx)
             }
             (param_ptr, param_value) => {
                 nih_debug_assert_failure!(
@@ -158,8 +170,7 @@ pub(crate) unsafe fn deserialize_object(
 pub(crate) unsafe fn deserialize_json(
     state: &[u8],
     plugin_params: Arc<dyn Params>,
-    param_by_hash: &HashMap<u32, ParamPtr>,
-    param_id_to_hash: &HashMap<String, u32>,
+    params_getter: impl for<'a> Fn(&'a str) -> Option<ParamPtr>,
     current_buffer_config: Option<&BufferConfig>,
 ) -> bool {
     let state: PluginState = match serde_json::from_slice(state) {
@@ -170,11 +181,5 @@ pub(crate) unsafe fn deserialize_json(
         }
     };
 
-    deserialize_object(
-        &state,
-        plugin_params,
-        param_by_hash,
-        param_id_to_hash,
-        current_buffer_config,
-    )
+    deserialize_object(&state, plugin_params, params_getter, current_buffer_config)
 }

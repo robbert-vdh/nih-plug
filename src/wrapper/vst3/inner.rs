@@ -391,8 +391,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         unsafe {
             state::serialize_object(
                 self.params.clone(),
-                &self.param_by_hash,
-                &self.param_id_to_hash,
+                state::make_params_iter(&self.param_by_hash, &self.param_id_to_hash),
             )
         }
     }
@@ -437,8 +436,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
                     state::deserialize_object(
                         &state,
                         self.params.clone(),
-                        &self.param_by_hash,
-                        &self.param_id_to_hash,
+                        state::make_params_getter(&self.param_by_hash, &self.param_id_to_hash),
                         self.current_buffer_config.load().as_ref(),
                     );
                 }
