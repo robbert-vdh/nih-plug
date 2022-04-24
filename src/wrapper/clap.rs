@@ -29,8 +29,8 @@ macro_rules! nih_export_clap {
                 static ref FACTORY: ::nih_plug::wrapper::clap::Factory<$plugin_ty> = ::nih_plug::wrapper::clap::Factory::default();
             }
 
-            // We don't need any special initialization or deinitialization handling
             pub extern "C" fn init(_plugin_path: *const ::std::os::raw::c_char) -> bool {
+                ::nih_plug::wrapper::setup_logger();
                 true
             }
 

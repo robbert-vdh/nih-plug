@@ -23,15 +23,13 @@ macro_rules! nih_export_vst3 {
             Box::into_raw(factory) as *mut ::std::ffi::c_void
         }
 
-        // We don't need any special initialization logic, so all of these module entry point
-        // functions just return true all the time
-
         // These two entry points are used on Linux, and they would theoretically also be used on
         // the BSDs:
         // https://github.com/steinbergmedia/vst3_public_sdk/blob/c3948deb407bdbff89de8fb6ab8500ea4df9d6d9/source/main/linuxmain.cpp#L47-L52
         #[no_mangle]
         #[cfg(all(target_family = "unix", not(target_os = "macos")))]
         pub extern "C" fn ModuleEntry(_lib_handle: *mut ::std::ffi::c_void) -> bool {
+            ::nih_plug::wrapper::setup_logger();
             true
         }
 
@@ -46,6 +44,7 @@ macro_rules! nih_export_vst3 {
         #[no_mangle]
         #[cfg(target_os = "macos")]
         pub extern "C" fn bundleEntry(_lib_handle: *mut ::std::ffi::c_void) -> bool {
+            ::nih_plug::wrapper::setup_logger();
             true
         }
 
@@ -60,6 +59,7 @@ macro_rules! nih_export_vst3 {
         #[no_mangle]
         #[cfg(target_os = "windows")]
         pub extern "system" fn InitDll() -> bool {
+            ::nih_plug::wrapper::setup_logger();
             true
         }
 

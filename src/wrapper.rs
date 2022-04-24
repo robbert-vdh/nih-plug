@@ -7,3 +7,6 @@ pub(crate) mod util;
 
 #[cfg(feature = "vst3")]
 pub mod vst3;
+
+// This is used by the wrappers.
+pub use util::setup_logger;

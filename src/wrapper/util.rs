@@ -56,10 +56,6 @@ pub fn strlcpy(dest: &mut [c_char], src: &str) {
 ///   `OutputDebugString()`.
 /// - A file path, in which case the output gets appended to the end of that file which will be
 ///   created if necessary.
-///
-/// # TODO
-///
-/// Document `NIH_LOG` in an easier to find place.
 pub fn setup_logger() {
     // `win_dbg_logger` has no way to let us know that the logger has already been set up, so we'll
     // need to do it this way
