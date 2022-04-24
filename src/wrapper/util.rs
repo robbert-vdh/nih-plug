@@ -82,12 +82,17 @@ pub fn setup_logger() {
     }
 
     // If opening the file fails, then we'll log to STDERR anyways, hence this closure
+    let log_level = if cfg!(debug_assertions) {
+        simplelog::LevelFilter::Trace
+    } else {
+        simplelog::LevelFilter::Info
+    };
     let logger_config = simplelog::ConfigBuilder::new()
         .set_thread_mode(simplelog::ThreadLogMode::Both)
         .build();
     let init_stderr_logger = || {
         simplelog::TermLogger::init(
-            simplelog::LevelFilter::Trace,
+            log_level,
             logger_config.clone(),
             simplelog::TerminalMode::Stderr,
             simplelog::ColorChoice::Auto,
@@ -105,11 +110,7 @@ pub fn setup_logger() {
             .open(nih_log_env_str);
         match file {
             Ok(file) => {
-                let _ = simplelog::WriteLogger::init(
-                    simplelog::LevelFilter::Trace,
-                    logger_config,
-                    file,
-                );
+                let _ = simplelog::WriteLogger::init(log_level, logger_config, file);
             }
             Err(err) => {
                 let _ = init_stderr_logger();
