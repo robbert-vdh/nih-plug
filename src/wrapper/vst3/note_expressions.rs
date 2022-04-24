@@ -46,15 +46,15 @@ impl NoteExpressionController {
     /// `INoteExpressionController::get_note_expression_info()` with malformed expression index
     /// arguments.
     pub const fn known_expression_type_id(type_id: u32) -> bool {
-        match type_id {
+        matches!(
+            type_id,
             VOLUME_EXPRESSION_ID
-            | PAN_EXPRESSION_ID
-            | TUNING_EXPRESSION_ID
-            | VIBRATO_EXPRESSION_ID
-            | EXPRESSION_EXPRESSION_ID
-            | BRIGHTNESS_EXPRESSION_ID => true,
-            _ => false,
-        }
+                | PAN_EXPRESSION_ID
+                | TUNING_EXPRESSION_ID
+                | VIBRATO_EXPRESSION_ID
+                | EXPRESSION_EXPRESSION_ID
+                | BRIGHTNESS_EXPRESSION_ID
+        )
     }
 
     /// Register the note ID from a note on event so it can later be retrieved when handling a note
