@@ -55,7 +55,7 @@ pub(crate) fn make_params_iter<'a>(
 pub(crate) fn make_params_getter<'a>(
     param_by_hash: &'a HashMap<u32, ParamPtr>,
     param_id_to_hash: &'a HashMap<String, u32>,
-) -> impl for<'b> Fn(&'b str) -> Option<ParamPtr> + 'a {
+) -> impl Fn(&str) -> Option<ParamPtr> + 'a {
     |param_id_str| {
         param_id_to_hash
             .get(param_id_str)
@@ -117,7 +117,7 @@ pub(crate) unsafe fn serialize_json<'a>(
 pub(crate) unsafe fn deserialize_object(
     state: &PluginState,
     plugin_params: Arc<dyn Params>,
-    params_getter: impl for<'a> Fn(&'a str) -> Option<ParamPtr>,
+    params_getter: impl Fn(&str) -> Option<ParamPtr>,
     current_buffer_config: Option<&BufferConfig>,
 ) -> bool {
     let sample_rate = current_buffer_config.map(|c| c.sample_rate);
@@ -170,7 +170,7 @@ pub(crate) unsafe fn deserialize_object(
 pub(crate) unsafe fn deserialize_json(
     state: &[u8],
     plugin_params: Arc<dyn Params>,
-    params_getter: impl for<'a> Fn(&'a str) -> Option<ParamPtr>,
+    params_getter: impl Fn(&str) -> Option<ParamPtr>,
     current_buffer_config: Option<&BufferConfig>,
 ) -> bool {
     let state: PluginState = match serde_json::from_slice(state) {
