@@ -85,6 +85,7 @@ pub fn setup_logger() {
     };
     let logger_config = simplelog::ConfigBuilder::new()
         .set_thread_mode(simplelog::ThreadLogMode::Both)
+        .set_location_level(simplelog::LevelFilter::Debug)
         .build();
     let init_stderr_logger = || {
         simplelog::TermLogger::init(
