@@ -15,6 +15,15 @@ macro_rules! nih_log {
     );
 }
 
+/// The same as `nih_log!()`, but with source and thread information. Like the
+/// `nih_debug_assert*!()` macros, this is only shown when compiling in debug mode.
+#[macro_export]
+macro_rules! nih_trace {
+    ($($args:tt)*) => (
+        $crate::log::trace!($($args)*)
+    );
+}
+
 /// A `debug_assert!()` analogue that prints the error with line number information instead of
 /// panicking.
 ///

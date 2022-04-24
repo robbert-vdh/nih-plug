@@ -5,6 +5,7 @@ pub use crate::nih_debug_assert_failure;
 pub use crate::nih_debug_assert_ne;
 pub use crate::nih_export_clap;
 pub use crate::nih_log;
+pub use crate::nih_trace;
 
 #[cfg(feature = "vst3")]
 pub use crate::nih_export_vst3;
