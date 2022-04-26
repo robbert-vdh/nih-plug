@@ -77,3 +77,8 @@ jobs:
         with:
           branch: gh-pages
           folder: target/doc
+
+          # Having the gh-pages branch on this repository adds a whole bunch of
+          # noise to the GitHub feed if you follow this repo
+          repository-name: robbert-vdh/nih-plug-docs
+          ssh-key: ${{ secrets.DOCS_DEPLOY_KEY }}
