@@ -1478,8 +1478,8 @@ impl<P: ClapPlugin> Wrapper<P> {
             &buffer_config,
             &mut wrapper.make_process_context(Transport::new(buffer_config.sample_rate)),
         ) {
-            // As per-the trait docs we'll always call this after the initialization function
-            process_wrapper(|| plugin.reset());
+            // NOTE: `Plugin::reset()` is called in `clap_plugin::start_processing()` instead of in
+            //       this function
 
             // Preallocate enough room in the output slices vector so we can convert a `*mut *mut
             // f32` to a `&mut [&mut f32]` in the process call
@@ -1512,6 +1512,10 @@ impl<P: ClapPlugin> Wrapper<P> {
         // Always reset the processing status when the plugin gets activated or deactivated
         wrapper.last_process_status.store(ProcessStatus::Normal);
         wrapper.is_processing.store(true, Ordering::SeqCst);
+
+        // To be consistent with the VST3 wrapper, we'll also reset the buffers here in addition to
+        // the dedicated `reset()` function.
+        process_wrapper(|| wrapper.plugin.write().reset());
 
         true
     }
