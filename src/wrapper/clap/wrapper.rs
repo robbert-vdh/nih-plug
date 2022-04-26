@@ -1509,6 +1509,8 @@ impl<P: ClapPlugin> Wrapper<P> {
         check_null_ptr!(false, plugin);
         let wrapper = &*(plugin as *const Self);
 
+        // Always reset the processing status when the plugin gets activated or deactivated
+        wrapper.last_process_status.store(ProcessStatus::Normal);
         wrapper.is_processing.store(true, Ordering::SeqCst);
 
         true
