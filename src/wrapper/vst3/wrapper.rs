@@ -658,8 +658,9 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                 .inner
                 .make_process_context(Transport::new(buffer_config.sample_rate)),
         ) {
-            // As per-the trait docs we'll always call this after the initialization function
-            process_wrapper(|| plugin.reset());
+            // NOTE: We don't call `Plugin::reset()` here. The call is done in `set_process()`
+            //       instead. Otherwise we would call the function twice, and `set_process()` needs
+            //       to be called after this function before the plugin may process audio again.
 
             // Preallocate enough room in the output slices vector so we can convert a `*mut *mut
             // f32` to a `&mut [&mut f32]` in the process call
@@ -680,9 +681,17 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
     }
 
     unsafe fn set_processing(&self, state: TBool) -> tresult {
+        let state = state != 0;
+
         // Always reset the processing status when the plugin gets activated or deactivated
         self.inner.last_process_status.store(ProcessStatus::Normal);
-        self.inner.is_processing.store(state != 0, Ordering::SeqCst);
+        self.inner.is_processing.store(state, Ordering::SeqCst);
+
+        // This function is also used to reset buffers on the plugin, so we should do the same
+        // thing. We don't call `reset()` in `setup_processing()` for that same reason.
+        if state {
+            process_wrapper(|| self.inner.plugin.write().reset());
+        }
 
         // We don't have any special handling for suspending and resuming plugins, yet
         kResultOk
