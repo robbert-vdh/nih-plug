@@ -102,7 +102,7 @@ pub trait Plugin: Default + Send + Sync + 'static {
     }
 
     /// Clear internal state such as filters and envelopes. This is always called after
-    /// [`initialize()`][Self::initialize(0)], and it may also be called at any other time from the
+    /// [`initialize()`][Self::initialize()], and it may also be called at any other time from the
     /// audio thread. You should thus not do any allocations in this function.
     fn reset(&mut self) {}
 
