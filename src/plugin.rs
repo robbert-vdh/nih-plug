@@ -234,7 +234,7 @@ pub trait Editor: Send + Sync {
         context: Arc<dyn GuiContext>,
     ) -> Box<dyn Any + Send + Sync>;
 
-    /// Return the (currnent) size of the editor in pixels as a `(width, height)` pair. This size
+    /// Returns the (currnent) size of the editor in pixels as a `(width, height)` pair. This size
     /// must be reported in _logical pixels_, i.e. the size before being multiplied by the DPI
     /// scaling factor to get the actual physical screen pixels.
     fn size(&self) -> (u32, u32);

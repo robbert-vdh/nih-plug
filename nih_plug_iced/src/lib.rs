@@ -158,7 +158,7 @@ pub trait IcedEditor: 'static + Send + Sync + Sized {
         context: Arc<dyn GuiContext>,
     ) -> (Self, Command<Self::Message>);
 
-    /// Return a reference to the GUI context.
+    /// Returns a reference to the GUI context.
     /// [`handle_param_message()`][Self::handle_param_message()] uses this to interact with the
     /// parameters.
     fn context(&self) -> &dyn GuiContext;
@@ -240,7 +240,7 @@ impl IcedState {
         })
     }
 
-    /// Return a `(width, height)` pair for the current size of the GUI in logical pixels.
+    /// Returns a `(width, height)` pair for the current size of the GUI in logical pixels.
     pub fn size(&self) -> (u32, u32) {
         self.size.load()
     }

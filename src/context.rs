@@ -24,7 +24,7 @@ pub trait ProcessContext {
     /// Get information about the current transport position and status.
     fn transport(&self) -> &Transport;
 
-    /// Return the next note event, if there is one. Use [`NoteEvent::timing()`] to get the event's
+    /// Returns the next note event, if there is one. Use [`NoteEvent::timing()`] to get the event's
     /// timing within the buffer. Only available when
     /// [`Plugin::MIDI_INPUT`][crate::prelude::Plugin::MIDI_INPUT] is set.
     ///

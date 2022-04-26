@@ -131,7 +131,7 @@ impl<'slice, 'sample> Block<'slice, 'sample> {
         self.current_block_end - self.current_block_start
     }
 
-    /// Return the numer of channels in this buffer.
+    /// Returns the numer of channels in this buffer.
     #[inline]
     pub fn channels(&self) -> usize {
         unsafe { (*self.buffers).len() }

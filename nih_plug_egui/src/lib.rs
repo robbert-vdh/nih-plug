@@ -65,7 +65,7 @@ impl EguiState {
         })
     }
 
-    /// Return a `(width, height)` pair for the current size of the GUI in logical pixels.
+    /// Returns a `(width, height)` pair for the current size of the GUI in logical pixels.
     pub fn size(&self) -> (u32, u32) {
         self.size.load()
     }

@@ -95,7 +95,7 @@ impl ViziaState {
         })
     }
 
-    /// Return a `(width, height)` pair for the current size of the GUI in logical pixels, after
+    /// Returns a `(width, height)` pair for the current size of the GUI in logical pixels, after
     /// applying the user scale factor.
     pub fn scaled_logical_size(&self) -> (u32, u32) {
         let (logical_width, logical_height) = self.size.load();
@@ -107,7 +107,7 @@ impl ViziaState {
         )
     }
 
-    /// Return a `(width, height)` pair for the current size of the GUI in logical pixels before
+    /// Returns a `(width, height)` pair for the current size of the GUI in logical pixels before
     /// applying the user scale factor.
     pub fn inner_logical_size(&self) -> (u32, u32) {
         self.size.load()

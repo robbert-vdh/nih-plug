@@ -28,7 +28,7 @@ pub struct Buffer<'a> {
 }
 
 impl<'a> Buffer<'a> {
-    /// Return the numer of samples in this buffer.
+    /// Returns the numer of samples in this buffer.
     #[inline]
     pub fn len(&self) -> usize {
         if self.output_slices.is_empty() {
@@ -38,7 +38,7 @@ impl<'a> Buffer<'a> {
         }
     }
 
-    /// Return the numer of channels in this buffer.
+    /// Returns the numer of channels in this buffer.
     #[inline]
     pub fn channels(&self) -> usize {
         self.output_slices.len()

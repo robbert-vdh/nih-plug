@@ -166,7 +166,7 @@ pub enum NoteEvent {
 }
 
 impl NoteEvent {
-    /// Return the sample within the current buffer this event belongs to.
+    /// Returns the sample within the current buffer this event belongs to.
     pub fn timing(&self) -> u32 {
         match &self {
             NoteEvent::NoteOn { timing, .. } => *timing,

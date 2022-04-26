@@ -72,13 +72,13 @@ pub trait Param: Display {
     /// UI.
     fn step_count(&self) -> Option<usize>;
 
-    /// Return the previous step from a specific value for this parameter. This can be the same as
+    /// Returns the previous step from a specific value for this parameter. This can be the same as
     /// `from` if the value is at the start of its range. This is mainly used for scroll wheel
     /// interaction in plugin GUIs. When the parameter is not discrete then a step should cover one
     /// hundredth of the normalized range instead.
     fn previous_step(&self, from: Self::Plain) -> Self::Plain;
 
-    /// Return the next step from a specific value for this parameter. This can be the same as
+    /// Returns the next step from a specific value for this parameter. This can be the same as
     /// `from` if the value is at the end of its range. This is mainly used for scroll wheel
     /// interaction in plugin GUIs. When the parameter is not discrete then a step should cover one
     /// hundredth of the normalized range instead.
