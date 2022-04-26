@@ -1,4 +1,5 @@
 // Re-export the macros, derive macros are already re-exported ferom their respectivem odules
+pub use crate::nih_dbg;
 pub use crate::nih_debug_assert;
 pub use crate::nih_debug_assert_eq;
 pub use crate::nih_debug_assert_failure;

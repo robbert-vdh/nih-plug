@@ -24,6 +24,27 @@ macro_rules! nih_trace {
     );
 }
 
+/// Analogues to the `dbg!()` macro, but respecting the `NIH_LOG` environment variable and with all
+/// of the same logging features as the other `nih_*!()` macros. Like the `nih_debug_assert*!()`
+/// macros, this is only shown when compiling in debug mode, but the macro will still return the
+/// value in non-debug modes.
+#[macro_export]
+macro_rules! nih_dbg {
+    () => {
+        $crate::util::permit_alloc(|| $crate::log::debug!(""));
+    };
+    ($val:expr $(,)?) => {
+        // Match here acts as a let-binding: https://stackoverflow.com/questions/48732263/why-is-rusts-assert-eq-implemented-using-a-match/48732525#48732525
+        match $val {
+            tmp => {
+                $crate::util::permit_alloc(|| $crate::log::debug!("{} = {:#?}", stringify!($val), &tmp));
+                tmp
+            }
+        }
+    };
+    ($($val:expr),+ $(,)?) => { ($($crate::nih_dbg!($val)),+,) };
+}
+
 /// A `debug_assert!()` analogue that prints the error with line number information instead of
 /// panicking.
 ///
