@@ -2620,6 +2620,9 @@ impl<P: ClapPlugin> Wrapper<P> {
                 &buffer_config,
                 &mut wrapper.make_process_context(Transport::new(buffer_config.sample_rate)),
             );
+            // TODO: This also goes for the VST3 version, but should we call reset here? Won't the
+            //       host always restart playback? Check this with a couple of hosts and remove the
+            //       duplicate reset if it's not needed.
             process_wrapper(|| plugin.reset());
         }
 
