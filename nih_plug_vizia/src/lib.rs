@@ -5,7 +5,7 @@ use crossbeam::atomic::AtomicCell;
 use nih_plug::prelude::{Editor, GuiContext, ParentWindowHandle};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use vizia::{Application, Color, Context, Entity, Model, PropSet, WindowDescription};
+use vizia::{Application, Color, Context, Entity, Model, PropSet};
 
 // Re-export for convenience
 pub use vizia;
@@ -153,11 +153,8 @@ impl Editor for ViziaEditor {
         let (unscaled_width, unscaled_height) = vizia_state.inner_logical_size();
         let system_scaling_factor = self.scaling_factor.load();
         let user_scale_factor = vizia_state.user_scale_factor();
-        let window_description = WindowDescription::new()
-            .with_inner_size(unscaled_width, unscaled_height)
-            .with_scale_factor(user_scale_factor);
 
-        let window = Application::new(window_description, move |cx| {
+        let window = Application::new(move |cx| {
             // Set some default styles to match the iced integration
             if apply_theming {
                 // NOTE: vizia's font rendering looks way too dark and thick. Going one font weight
@@ -199,6 +196,8 @@ impl Editor for ViziaEditor {
                 .map(|factor| WindowScalePolicy::ScaleFactor(factor as f64))
                 .unwrap_or(WindowScalePolicy::SystemScaleFactor),
         )
+        .inner_size((unscaled_width, unscaled_height))
+        .user_scale_factor(user_scale_factor)
         .open_parented(&parent);
 
         self.vizia_state.open.store(true, Ordering::Release);
