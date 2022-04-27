@@ -81,7 +81,9 @@ widestring = "1.0.0-beta.1"
 assert_no_alloc = { version = "1.1", optional = true }
 
 # Used for the `standalone` feature
-baseview = { git = "https://github.com/robbert-vdh/baseview.git", branch = "feature/resize", optional = true }
+# NOTE: OpenGL support is not needed here, but rust-analyzer gets confused when
+#       some crates do use it and others don't
+baseview = { git = "https://github.com/robbert-vdh/baseview.git", branch = "feature/resize", features = ["opengl"], optional = true }
 
 # Used for the `vst3` feature
 vst3-sys = { git = "https://github.com/robbert-vdh/vst3-sys.git", branch = "fix/note-off-event", optional = true }
