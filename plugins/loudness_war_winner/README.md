@@ -10,10 +10,9 @@ common sense, heart palpitations, heart arrhythmia, heart attack, other Demi
 Lovato songs, rashes, acne, boils, simmers, chronic earwax, acute belly button
 lint, athlete's foot, tennis elbow, couch potato butt, depression, anxiety,
 Scientology, multiple sclerosis, single sclerosis, divorced sclerosis, it's
-complicated sclerosis, paralysis, hyperactivity, TikTokism, time travel,
-Matrixism, Marxism, sudden clarity and awareness of your surroundings and
-situation, existential dread, suicide, and enlarged earlobes. Ask your doctor if
-Loudness War Winner is right for you._
+complicated sclerosis, paralysis, hyperactivity, TikTokism, time travel, sudden
+clarity and awareness of your surroundings and situation, existential dread, and
+enlarged earlobes. Ask your doctor if Loudness War Winner is right for you._
 
 ## Download
 
