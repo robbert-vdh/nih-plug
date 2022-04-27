@@ -30,6 +30,7 @@ members = [
 
   "plugins/crisp",
   "plugins/diopser",
+  "plugins/loudness_war_winner",
   "plugins/puberty_simulator",
 ]
 

@@ -39,6 +39,9 @@ for download links.
   Useful for oomphing up kickdrums and basses, transforming synths into their
   evil phase-y cousin, and making everything sound like a cheap Sci-Fi laser
   beam.
+- [**Loudness War Winner**](plugins/loudness_war_winner) does what it says on
+  the tin. Have you ever wanted to show off your dominance by winning the
+  loudness war? Neither have I. Dissatisfaction guaranteed.
 - [**Puberty Simulator**](plugins/puberty_simulator) is that patent pending One
   Weird Plugin that simulates the male voice change during puberty! If it was
   not already obvious from that sentence, this plugin is a joke, but it might

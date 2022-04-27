@@ -1823,6 +1823,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "loudness_war_winner"
+version = "0.1.0"
+dependencies = [
+ "nih_plug",
+]
+
+[[package]]
 name = "lru"
 version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
