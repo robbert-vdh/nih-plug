@@ -179,6 +179,14 @@ impl Smoother<f32> {
         self.next_step(1)
     }
 
+    /// Get previous value returned by this smoother. This may be useful to save some boilerplate
+    /// when [`is_smoothing()`][Self::is_smoothing()] is used to determine whether an expensive
+    /// calculation should take place, and [`next()`][Self::next()] gets called as part of that
+    /// calculation.
+    pub fn previous_value(&self) -> f32 {
+        self.current.load(Ordering::Relaxed)
+    }
+
     /// Produce smoothed values for an entire block of audio. Used in conjunction with
     /// [`Buffer::iter_blocks()`][crate::prelude::Buffer::iter_blocks()]. Make sure to call
     /// [`Plugin::initialize_block_smoothers()`][crate::prelude::Plugin::initialize_block_smoothers()] with
@@ -283,11 +291,19 @@ impl Smoother<i32> {
     }
 
     /// Get the next value from this smoother. The value will be equal to the previous value once
-    // the smoothing period is over. This should be called exactly once per sample.
+    /// the smoothing period is over. This should be called exactly once per sample.
     // Yes, Clippy, like I said, this was intentional
     #[allow(clippy::should_implement_trait)]
     pub fn next(&self) -> i32 {
         self.next_step(1)
+    }
+
+    /// Get previous value returned by this smoother. This may be useful to save some boilerplate
+    /// when [`is_smoothing()`][Self::is_smoothing()] is used to determine whether an expensive
+    /// calculation should take place, and [`next()`][Self::next()] gets called as part of that
+    /// calculation.
+    pub fn previous_value(&self) -> i32 {
+        self.current.load(Ordering::Relaxed).round() as i32
     }
 
     /// Produce smoothed values for an entire block of audio. Used in conjunction with
