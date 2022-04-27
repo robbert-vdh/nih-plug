@@ -17,8 +17,25 @@
 use nih_plug::prelude::*;
 use std::sync::Arc;
 
+/// The length of silence after which the signal should start fading out into silence. This is to
+/// avoid outputting a constant DC signal.
+const SILENCE_FADEOUT_START_MS: f32 = 1000.0;
+/// The time it takes after `SILENCE_FADEOUT_START_MS` to fade from a full scale DC signal to silence.
+const SILENCE_FADEOUT_END_MS: f32 = SILENCE_FADEOUT_START_MS + 1000.0;
+
 struct LoudnessWarWinner {
     params: Arc<LoudnessWarWinnerParams>,
+
+    /// The number of samples since the last non-zero sample. This is used to fade into silence when
+    /// the input has also been silent for a while instead of outputting a constant DC signal. All
+    /// channels need to be silent for a signal to be considered silent.
+    num_silent_samples: u32,
+    /// `SILENCE_FADEOUT_START_MS` converted to samples.
+    silence_fadeout_start_samples: u32,
+    /// `SILENCE_FADEOUT_END_MS` converted to samples.
+    silence_fadeout_end_samples: u32,
+    /// The length of the fadeout, in samples.
+    silence_fadeout_length_samples: u32,
 }
 
 #[derive(Params)]
@@ -32,6 +49,11 @@ impl Default for LoudnessWarWinner {
     fn default() -> Self {
         Self {
             params: Arc::new(LoudnessWarWinnerParams::default()),
+
+            num_silent_samples: 0,
+            silence_fadeout_start_samples: 0,
+            silence_fadeout_end_samples: 0,
+            silence_fadeout_length_samples: 0,
         }
     }
 }
@@ -76,8 +98,26 @@ impl Plugin for LoudnessWarWinner {
         config.num_input_channels == config.num_output_channels && config.num_input_channels > 0
     }
 
+    fn initialize(
+        &mut self,
+        _bus_config: &BusConfig,
+        buffer_config: &BufferConfig,
+        _context: &mut impl ProcessContext,
+    ) -> bool {
+        self.silence_fadeout_start_samples =
+            (SILENCE_FADEOUT_START_MS / 1000.0 * buffer_config.sample_rate).round() as u32;
+        self.silence_fadeout_end_samples =
+            (SILENCE_FADEOUT_END_MS / 1000.0 * buffer_config.sample_rate).round() as u32;
+        self.silence_fadeout_length_samples =
+            self.silence_fadeout_end_samples - self.silence_fadeout_start_samples;
+
+        true
+    }
+
     fn reset(&mut self) {
-        // TODO: Keep track of silence samples and reset it here to avoid a DC offset
+        // Start with silence, so we don't immediately output a DC signal if the plugin is inserted
+        // on a silent channel
+        self.num_silent_samples = self.silence_fadeout_end_samples;
     }
 
     fn process(
@@ -85,15 +125,37 @@ impl Plugin for LoudnessWarWinner {
         buffer: &mut Buffer,
         _context: &mut impl ProcessContext,
     ) -> ProcessStatus {
-        for channel_samples in buffer.iter_samples() {
+        for mut channel_samples in buffer.iter_samples() {
             let output_gain = self.params.output_gain.smoothed.next();
 
-            // TODO: Slowly fade back to zero after a period of uninterrupted silence so this
-            //       doesn't output a constant DC signal even when the input is silent
             // TODO: Add a second parameter called "WIN HARDER" that bandpasses the signal around 5
             //       kHz
-            for sample in channel_samples {
+            let mut is_silent = true;
+            for sample in channel_samples.iter_mut() {
+                is_silent &= *sample == 0.0;
                 *sample = if *sample >= 0.0 { 1.0 } else { -1.0 } * output_gain;
+            }
+
+            // To avoid outputting a constant DC signal even when there's no input we'll slowly fade
+            // into silence
+            if is_silent {
+                self.num_silent_samples += 1;
+
+                if self.num_silent_samples >= self.silence_fadeout_end_samples {
+                    for sample in channel_samples {
+                        *sample = 0.0;
+                    }
+                } else if self.num_silent_samples >= self.silence_fadeout_start_samples {
+                    let fadeout_gain = 1.0
+                        - ((self.num_silent_samples - self.silence_fadeout_start_samples) as f32
+                            / self.silence_fadeout_length_samples as f32);
+
+                    for sample in channel_samples {
+                        *sample *= fadeout_gain;
+                    }
+                }
+            } else {
+                self.num_silent_samples = 0;
             }
         }
 
