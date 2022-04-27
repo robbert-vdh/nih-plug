@@ -30,8 +30,8 @@ on macOS.
 
 ### Building
 
-After installing [Rust](https://rustup.rs/), you can compile Puberty Simulator
-as follows:
+After installing [Rust](https://rustup.rs/), you can compile the Loudness War
+Winner as follows:
 
 ```shell
 cargo xtask bundle loudness_war_winner --release
