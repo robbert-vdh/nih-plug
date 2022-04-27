@@ -280,15 +280,8 @@ impl Default for CrispParams {
             )
             .with_smoother(SmoothingStyle::Logarithmic(10.0))
             .with_unit(" dB")
-            .with_value_to_string(Arc::new(|value| format!("{:.2}", util::gain_to_db(value))))
-            .with_string_to_value(Arc::new(|string| {
-                string
-                    .trim()
-                    .trim_end_matches(" dB")
-                    .parse()
-                    .ok()
-                    .map(util::db_to_gain)
-            })),
+            .with_value_to_string(formatters::v2s_f32_gain_to_db(2))
+            .with_string_to_value(formatters::s2v_f32_gain_to_db()),
             wet_only: BoolParam::new("Wet Only", false),
         }
     }
