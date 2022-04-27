@@ -132,7 +132,13 @@ pub fn create_iced_editor<E: IcedEditor>(
         iced_state,
         initialization_flags,
 
+        // TODO: We can't get the size of the window when baseview does its own scaling, so if the
+        //       host does not set a scale factor on Windows or Linux we should just use a factor of
+        //       1. That may make the GUI tiny but it also prevents it from getting cut off.
+        #[cfg(target_os = "macos")]
         scaling_factor: AtomicCell::new(None),
+        #[cfg(not(target_os = "macos"))]
+        scaling_factor: AtomicCell::new(Some(1.0)),
 
         parameter_updates_sender,
         parameter_updates_receiver: Arc::new(parameter_updates_receiver),
