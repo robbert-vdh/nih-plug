@@ -169,7 +169,7 @@ pub trait Vst3Plugin: Plugin {
     ///
     /// This will be shuffled into a different byte order on Windows for project-compatibility.
     const VST3_CLASS_ID: [u8; 16];
-    /// One or more categories, separated by pipe characters (`|), up to 127 characters. Anything
+    /// One or more categories, separated by pipe characters (`|`), up to 127 characters. Anything
     /// logner than that will be truncated. See the VST3 SDK for examples of common categories:
     /// <https://github.com/steinbergmedia/vst3_pluginterfaces/blob/2ad397ade5b51007860bedb3b01b8afd2c5f6fba/vst/ivstaudioprocessor.h#L49-L90>
     const VST3_CATEGORIES: &'static str;
