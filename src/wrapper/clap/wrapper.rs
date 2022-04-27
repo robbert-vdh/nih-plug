@@ -1606,8 +1606,14 @@ impl<P: ClapPlugin> Wrapper<P> {
                         let num_output_channels = audio_outputs.channel_count as usize;
                         nih_debug_assert_eq!(num_output_channels, output_slices.len());
 
-                        for (output_channel_idx, output_channel_slice) in
-                            output_slices.iter_mut().enumerate()
+                        // NOTE: This `.take()` should not be necessary, but we'll do it as a safe
+                        //       guard. Apparently Ableton Live implements parameter flushes wrong
+                        //       for VST3 plugins, so if they ever add CLAP support they'll probably
+                        //       do it wrong here as well.
+                        for (output_channel_idx, output_channel_slice) in output_slices
+                            .iter_mut()
+                            .take(num_output_channels)
+                            .enumerate()
                         {
                             // If `P::SAMPLE_ACCURATE_AUTOMATION` is set, then we may be iterating over
                             // the buffer in smaller sections.
