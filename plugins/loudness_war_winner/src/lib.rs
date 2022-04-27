@@ -14,8 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+#[macro_use]
+extern crate nih_plug;
+
 use nih_plug::prelude::*;
 use std::sync::Arc;
+
+mod filter;
 
 /// The length of silence after which the signal should start fading out into silence. This is to
 /// avoid outputting a constant DC signal.
@@ -23,8 +28,16 @@ const SILENCE_FADEOUT_START_MS: f32 = 1000.0;
 /// The time it takes after `SILENCE_FADEOUT_START_MS` to fade from a full scale DC signal to silence.
 const SILENCE_FADEOUT_END_MS: f32 = SILENCE_FADEOUT_START_MS + 1000.0;
 
+/// The center frequency for our optional bandpass filter, in Hertz.
+const BP_FREQUENCY: f32 = 5500.0;
+
 struct LoudnessWarWinner {
     params: Arc<LoudnessWarWinnerParams>,
+
+    sample_rate: f32,
+    /// To win even harder we'll band-pass the signal around 5.5 kHz when the `WIN HARDER` parameter
+    /// is enabled. And we'll cascade four of these filters while we're at it.
+    bp_filters: Vec<[filter::Biquad<f32>; 4]>,
 
     /// The number of samples since the last non-zero sample. This is used to fade into silence when
     /// the input has also been silent for a while instead of outputting a constant DC signal. All
@@ -43,12 +56,21 @@ struct LoudnessWarWinnerParams {
     /// The output gain, set to -24 dB by default because oof ouchie.
     #[id = "output"]
     output_gain: FloatParam,
+
+    /// When non-zero, this engages a bandpass filter around 5.5 kHz to help with the LUFS
+    /// K-Weighting. This is a fraction in `[0, 1]`. [`LoudnessWarWinner::update_bp_filters()`]
+    /// calculates the filter's Q value basedo n this.
+    #[id = "powah"]
+    win_harder_factor: FloatParam,
 }
 
 impl Default for LoudnessWarWinner {
     fn default() -> Self {
         Self {
             params: Arc::new(LoudnessWarWinnerParams::default()),
+
+            sample_rate: 1.0,
+            bp_filters: Vec::new(),
 
             num_silent_samples: 0,
             silence_fadeout_start_samples: 0,
@@ -74,6 +96,21 @@ impl Default for LoudnessWarWinnerParams {
             .with_unit(" dB")
             .with_value_to_string(formatters::v2s_f32_gain_to_db(2))
             .with_string_to_value(formatters::s2v_f32_gain_to_db()),
+            win_harder_factor: FloatParam::new(
+                "WIN HARDER",
+                0.0,
+                // This ramps up hard, so we'll make sure the 'usable' (for a lack of a better word)
+                // value range is larger
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: FloatRange::skew_factor(-2.0),
+                },
+            )
+            .with_smoother(SmoothingStyle::Linear(30.0))
+            .with_unit("%")
+            .with_value_to_string(formatters::v2s_f32_percentage(0))
+            .with_string_to_value(formatters::s2v_f32_percentage()),
         }
     }
 }
@@ -100,10 +137,18 @@ impl Plugin for LoudnessWarWinner {
 
     fn initialize(
         &mut self,
-        _bus_config: &BusConfig,
+        bus_config: &BusConfig,
         buffer_config: &BufferConfig,
         _context: &mut impl ProcessContext,
     ) -> bool {
+        self.sample_rate = buffer_config.sample_rate;
+
+        self.bp_filters.resize(
+            bus_config.num_output_channels as usize,
+            [filter::Biquad::default(); 4],
+        );
+        self.update_bp_filters();
+
         self.silence_fadeout_start_samples =
             (SILENCE_FADEOUT_START_MS / 1000.0 * buffer_config.sample_rate).round() as u32;
         self.silence_fadeout_end_samples =
@@ -115,6 +160,12 @@ impl Plugin for LoudnessWarWinner {
     }
 
     fn reset(&mut self) {
+        for filters in &mut self.bp_filters {
+            for filter in filters {
+                filter.reset();
+            }
+        }
+
         // Start with silence, so we don't immediately output a DC signal if the plugin is inserted
         // on a silent channel
         self.num_silent_samples = self.silence_fadeout_end_samples;
@@ -128,11 +179,24 @@ impl Plugin for LoudnessWarWinner {
         for mut channel_samples in buffer.iter_samples() {
             let output_gain = self.params.output_gain.smoothed.next();
 
-            // TODO: Add a second parameter called "WIN HARDER" that bandpasses the signal around 5
-            //       kHz
+            // When the `WIN_HARDER` parameter is engaged, we'll band-pass the signal around 5 kHz
+            if self.params.win_harder_factor.smoothed.is_smoothing() {
+                self.update_bp_filters();
+            }
+            let apply_bp_filters = self.params.win_harder_factor.smoothed.previous_value() > 0.0;
+
             let mut is_silent = true;
-            for sample in channel_samples.iter_mut() {
+            for (sample, bp_filters) in channel_samples.iter_mut().zip(&mut self.bp_filters) {
                 is_silent &= *sample == 0.0;
+
+                // For better performance we can move this conditional to an outer loop, but right
+                // now it shouldn't be too bad
+                if apply_bp_filters {
+                    for filter in bp_filters {
+                        *sample = filter.process(*sample);
+                    }
+                }
+
                 *sample = if *sample >= 0.0 { 1.0 } else { -1.0 } * output_gain;
             }
 
@@ -160,6 +224,22 @@ impl Plugin for LoudnessWarWinner {
         }
 
         ProcessStatus::Normal
+    }
+}
+
+impl LoudnessWarWinner {
+    /// Update the band-pass filters. This should only be called during processing if
+    /// `self.params.win_harder_factor.smoothed.is_smoothing()`.
+    fn update_bp_filters(&mut self) {
+        let q = 0.00001 + (self.params.win_harder_factor.smoothed.next() * 30.0);
+
+        let biquad_coefficients =
+            filter::BiquadCoefficients::bandpass(self.sample_rate, BP_FREQUENCY, q);
+        for filters in &mut self.bp_filters {
+            for filter in filters {
+                filter.coefficients = biquad_coefficients;
+            }
+        }
     }
 }
 
