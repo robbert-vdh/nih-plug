@@ -975,8 +975,12 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                         let num_output_channels = (*data.outputs).num_channels as usize;
                         nih_debug_assert_eq!(num_output_channels, output_slices.len());
 
-                        for (output_channel_idx, output_channel_slice) in
-                            output_slices.iter_mut().enumerate()
+                        // In case the host does provide fewer output channels than we expect, we
+                        // should still try to handle that gracefully
+                        for (output_channel_idx, output_channel_slice) in output_slices
+                            .iter_mut()
+                            .take(num_output_channels)
+                            .enumerate()
                         {
                             // If `P::SAMPLE_ACCURATE_AUTOMATION` is set, then we may be iterating
                             // over the buffer in smaller sections.
