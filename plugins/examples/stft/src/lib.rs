@@ -12,7 +12,7 @@ struct Stft {
 
     /// An adapter that performs most of the overlap-add algorithm for us.
     stft: util::StftHelper,
-    /// A Hann window function, passed to the overlap-add helper.
+    /// A Hann window function, applied after the IDFT operation to minimize time domain aliasing.
     window_function: Vec<f32>,
 
     /// The FFT of a simple low-pass FIR filter.
@@ -126,11 +126,8 @@ impl Plugin for Stft {
         // IDFT operation
         const GAIN_COMPENSATION: f32 = f32::consts::E / OVERLAP_TIMES as f32 / WINDOW_SIZE as f32;
 
-        self.stft.process_overlap_add(
-            buffer,
-            &self.window_function,
-            OVERLAP_TIMES,
-            |_channel_idx, real_fft_buffer| {
+        self.stft
+            .process_overlap_add(buffer, OVERLAP_TIMES, |_channel_idx, real_fft_buffer| {
                 // Forward FFT, the helper has already applied window function
                 self.r2c_plan
                     .process_with_scratch(real_fft_buffer, &mut self.complex_fft_buffer, &mut [])
@@ -151,8 +148,10 @@ impl Plugin for Stft {
                 self.c2r_plan
                     .process_with_scratch(&mut self.complex_fft_buffer, real_fft_buffer, &mut [])
                     .unwrap();
-            },
-        );
+
+                // Apply the window function. We can do this either before the DFT or after the IDFT
+                util::window::multiply_with_window(real_fft_buffer, &self.window_function);
+            });
 
         ProcessStatus::Normal
     }

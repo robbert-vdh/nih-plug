@@ -1,6 +1,5 @@
 //! Utilities for buffering audio, likely used as part of a short-term Fourier transform.
 
-use super::window::multiply_with_window;
 use crate::buffer::{Block, Buffer};
 
 /// Some buffer that can be used with the [`StftHelper`].
@@ -30,6 +29,7 @@ pub trait StftInputMut: StftInput {
 /// the same number of channels as the main input.
 ///
 /// TODO: Better name?
+/// TODO: This needs an option that adds padding to the `real_fft_window`
 /// TODO: We may need something like this purely for analysis, e.g. for showing spectrums in a GUI.
 ///       Figure out the cleanest way to adapt this for the non-processing use case.
 pub struct StftHelper<const NUM_SIDECHAIN_INPUTS: usize = 0> {
@@ -232,7 +232,8 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
 
     /// Process the audio in `main_buffer` in small overlapping blocks with a window function
     /// applied, adding up the results for the main buffer so they can be written back to the host.
-    /// The window overlap amount is compensated automatically when adding up these samples.
+    /// Since there are a couple ways to do it, the window function needs to be applied in the
+    /// process callbacks. Check the [`nih_plug::util::window`] module for more information.
     /// Whenever a new block is available, `process_cb()` gets called with a new audio block of the
     /// specified size with the windowing function already applied. The summed reults will then be
     /// written back to `main_buffer` exactly one block later, which means that this function will
@@ -252,8 +253,8 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
     /// # Panics
     ///
     /// Panics if `main_buffer` or the buffers in `sidechain_buffers` do not have the same number of
-    /// channels as this [`StftHelper`], if the sidechain buffers do not contain the same number of
-    /// samples as the main buffer, or if the window function does not match the block size.
+    /// channels as this [`StftHelper`], or if the sidechain buffers do not contain the same number of
+    /// samples as the main buffer.
     ///
     /// TODO: Add more useful ways to do STFT and other buffered operations. I just went with this
     ///       approach because it's what I needed myself, but generic combinators like this could
@@ -261,7 +262,6 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
     pub fn process_overlap_add<M, F>(
         &mut self,
         main_buffer: &mut M,
-        window_function: &[f32],
         overlap_times: usize,
         mut process_cb: F,
     ) where
@@ -271,7 +271,6 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
         self.process_overlap_add_sidechain(
             main_buffer,
             [&NoSidechain; NUM_SIDECHAIN_INPUTS],
-            window_function,
             overlap_times,
             |channel_idx, sidechain_idx, real_fft_scratch_buffer| {
                 if sidechain_idx.is_none() {
@@ -290,7 +289,6 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
         &mut self,
         main_buffer: &mut M,
         sidechain_buffers: [&S; NUM_SIDECHAIN_INPUTS],
-        window_function: &[f32],
         overlap_times: usize,
         mut process_cb: F,
     ) where
@@ -302,7 +300,6 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
             main_buffer.num_channels(),
             self.main_input_ring_buffers.len()
         );
-        assert_eq!(window_function.len(), self.main_input_ring_buffers[0].len());
         assert!(overlap_times > 0);
 
         // We'll copy samples from `*_buffer` into `*_ring_buffers` while simultaneously copying
@@ -395,7 +392,6 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
                             self.current_pos,
                             sidechain_ring_buffer,
                         );
-                        multiply_with_window(&mut self.scratch_buffer, window_function);
                         process_cb(channel_idx, Some(sidechain_idx), &mut self.scratch_buffer);
                     }
                 }
@@ -411,11 +407,9 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
                         self.current_pos,
                         input_ring_buffer,
                     );
-                    multiply_with_window(&mut self.scratch_buffer, window_function);
                     process_cb(channel_idx, None, &mut self.scratch_buffer);
 
                     // The actual overlap-add part of the equation
-                    multiply_with_window(&mut self.scratch_buffer, window_function);
                     add_scratch_to_ring_buffer(
                         &self.scratch_buffer,
                         self.current_pos,
@@ -433,7 +427,6 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
     pub fn process_analyze_only<B, F>(
         &mut self,
         buffer: &B,
-        window_function: &[f32],
         overlap_times: usize,
         mut analyze_cb: F,
     ) where
@@ -441,7 +434,6 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
         F: FnMut(usize, &mut [f32]),
     {
         assert_eq!(buffer.num_channels(), self.main_input_ring_buffers.len());
-        assert_eq!(window_function.len(), self.main_input_ring_buffers[0].len());
         assert!(overlap_times > 0);
 
         // See `process_overlap_add_sidechain` for an annotated version
@@ -486,7 +478,6 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
                         self.current_pos,
                         input_ring_buffer,
                     );
-                    multiply_with_window(&mut self.scratch_buffer, window_function);
                     analyze_cb(channel_idx, &mut self.scratch_buffer);
                 }
             }

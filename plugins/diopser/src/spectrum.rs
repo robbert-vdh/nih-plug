@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use nih_plug::prelude::*;
+use nih_plug::util::window::multiply_with_window;
 use realfft::num_complex::Complex32;
 use realfft::{RealFftPlanner, RealToComplex};
 use std::f32;
@@ -81,9 +82,10 @@ impl SpectrumInput {
     pub fn compute(&mut self, buffer: &Buffer) {
         self.stft.process_analyze_only(
             buffer,
-            &self.compensated_window_function,
             SPECTRUM_WINDOW_OVERLAP,
             |channel_idx, real_fft_scratch_buffer| {
+                multiply_with_window(real_fft_scratch_buffer, &self.compensated_window_function);
+
                 // Forward FFT, the helper has already applied window function
                 self.plan
                     .process_with_scratch(

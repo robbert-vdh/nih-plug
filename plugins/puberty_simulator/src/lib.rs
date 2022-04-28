@@ -205,7 +205,8 @@ impl Plugin for PubertySimulator {
         let window_size = self.window_size();
         let overlap_times = self.overlap_times();
         let sample_rate = context.transport().sample_rate;
-        let gain_compensation: f32 = 1.0 / (overlap_times as f32).log2() / window_size as f32;
+        let gain_compensation: f32 =
+            (overlap_times as f32 / 2.0).sqrt().recip() / window_size as f32;
 
         // If the window size has changed since the last process call, reset the buffers and chance
         // our latency. All of these buffers already have enough capacity
@@ -221,11 +222,8 @@ impl Plugin for PubertySimulator {
             [self.params.window_size_order.value as usize - MIN_WINDOW_ORDER];
 
         let mut smoothed_pitch_value = 0.0;
-        self.stft.process_overlap_add(
-            buffer,
-            &self.window_function,
-            overlap_times,
-            |channel_idx, real_fft_buffer| {
+        self.stft
+            .process_overlap_add(buffer, overlap_times, |channel_idx, real_fft_buffer| {
                 // This loop runs whenever there's a block ready, so we can't easily do any post- or
                 // pre-processing without muddying up the interface. But if this is channel 0, then
                 // we're dealing with a new block. We'll use this for our parameter smoothing.
@@ -298,8 +296,10 @@ impl Plugin for PubertySimulator {
                     .c2r_plan
                     .process_with_scratch(&mut self.complex_fft_buffer, real_fft_buffer, &mut [])
                     .unwrap();
-            },
-        );
+
+                // Apply the window function. We can do this either before the DFT or after the IDFT
+                util::window::multiply_with_window(real_fft_buffer, &self.window_function);
+            });
 
         ProcessStatus::Normal
     }
