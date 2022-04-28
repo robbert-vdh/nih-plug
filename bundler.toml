@@ -10,5 +10,8 @@ name = "Crisp"
 [diopser]
 name = "Diopser"
 
+[loudness_war_winner]
+name = "Loudness War Winner"
+
 [puberty_simulator]
 name = "Puberty Simulator"
