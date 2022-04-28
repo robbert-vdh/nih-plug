@@ -124,7 +124,7 @@ impl Plugin for Stft {
     ) -> ProcessStatus {
         // Compensate for the window function, the overlap, and the extra gain introduced by the
         // IDFT operation
-        const GAIN_COMPENSATION: f32 = f32::consts::E / OVERLAP_TIMES as f32 / WINDOW_SIZE as f32;
+        const GAIN_COMPENSATION: f32 = 1.0 / (OVERLAP_TIMES as f32 / 2.0) / WINDOW_SIZE as f32;
 
         self.stft
             .process_overlap_add(buffer, OVERLAP_TIMES, |_channel_idx, real_fft_buffer| {
