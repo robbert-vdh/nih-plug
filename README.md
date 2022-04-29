@@ -2,7 +2,7 @@
 
 [![Automated builds](https://github.com/robbert-vdh/nih-plug/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/robbert-vdh/nih-plug/actions/workflows/build.yml?query=branch%3Amaster)
 [![Tests](https://github.com/robbert-vdh/nih-plug/actions/workflows/test.yml/badge.svg?branch=master)](https://github.com/robbert-vdh/nih-plug/actions/workflows/test.yml?query=branch%3Amaster)
-[![Docs](https://github.com/robbert-vdh/nih-plug/actions/workflows/docs.yml/badge.svg?branch=master)](https://robbert-vdh.github.io/nih-plug)
+[![Docs](https://github.com/robbert-vdh/nih-plug/actions/workflows/docs.yml/badge.svg?branch=master)](https://nih-plug.robbertvanderhelm.nl/)
 
 This is a work in progress API-agnostic audio plugin framework written in Rust
 to do some experiments with, as well as a small collection of plugins. The idea
@@ -15,7 +15,7 @@ features](#current-features) section for more information on the project's
 current status.
 
 Come join us on the [Rust Audio Discord](https://discord.gg/ykxU3rt4Cb), or
-check out the [documentation](https://robbert-vdh.github.io/nih-plug) (work in
+check out the [documentation](https://nih-plug.robbertvanderhelm.nl/) (work in
 progress).
 
 ### Table of contents
