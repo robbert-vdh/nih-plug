@@ -1,7 +1,7 @@
-To install the VST3 plugins, copy the .vst3 _directories_ to:
+To install the VST3 plugins, copy the .vst3 bundles to:
 ~/Library/Audio/Plug-Ins/VST3
 
-To install the CLAP plugins, copy the .clap files to:
+To install the CLAP plugins, copy the .clap bundles to:
 ~/Library/Audio/Plug-Ins/CLAP
 
 You will need to create these directories yourself it they do not yet exist.
