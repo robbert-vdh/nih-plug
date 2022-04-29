@@ -75,6 +75,8 @@ jobs:
           # GitHub Action strips the top level directory, great, have another one
           mkdir -p "$ARCHIVE_NAME/$ARCHIVE_NAME"
           mv target/bundled/* "$ARCHIVE_NAME/$ARCHIVE_NAME"
+      - name: Add an OS-specific readme file with installation instructions
+        run: cp ".github/workflows/readme-${{ runner.os }}.txt" "$ARCHIVE_NAME/$ARCHIVE_NAME/README.txt"
       - uses: actions/upload-artifact@v2
         with:
           name: ${{ env.ARCHIVE_NAME }}
