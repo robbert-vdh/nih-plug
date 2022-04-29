@@ -976,7 +976,9 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                         nih_debug_assert_eq!(num_output_channels, output_slices.len());
 
                         // In case the host does provide fewer output channels than we expect, we
-                        // should still try to handle that gracefully
+                        // should still try to handle that gracefully. This happens when the plugin
+                        // is bypassed in Ableton Live and a parameter is modified. In that case the
+                        // above assertion will still trigger.
                         for (output_channel_idx, output_channel_slice) in output_slices
                             .iter_mut()
                             .take(num_output_channels)
