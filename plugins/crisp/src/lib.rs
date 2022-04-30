@@ -14,9 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#[macro_use]
-extern crate nih_plug;
-
 use nih_plug::prelude::*;
 use nih_plug_vizia::ViziaState;
 use pcg::Pcg32iState;

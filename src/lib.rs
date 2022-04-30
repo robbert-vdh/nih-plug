@@ -4,8 +4,10 @@
 #![cfg_attr(feature = "docs", feature(doc_auto_cfg))]
 #![cfg_attr(feature = "simd", feature(portable_simd))]
 
+// These macros are also in the crate root and in the prelude, but having the module itself be pub
+// as well makes it easy to import _just_ the macros without using `#[macro_use] extern crate nih_plug;`
 #[macro_use]
-mod debug;
+pub mod debug;
 
 /// A re-export of the `log` crate for use in the debug macros. This should not be used directly.
 pub use log;

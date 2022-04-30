@@ -1,13 +1,7 @@
 // Re-export the macros, derive macros are already re-exported ferom their respectivem odules
-pub use crate::nih_dbg;
-pub use crate::nih_debug_assert;
-pub use crate::nih_debug_assert_eq;
-pub use crate::nih_debug_assert_failure;
-pub use crate::nih_debug_assert_ne;
-pub use crate::nih_export_clap;
-pub use crate::nih_log;
-pub use crate::nih_trace;
+pub use crate::debug::*;
 
+pub use crate::nih_export_clap;
 #[cfg(feature = "vst3")]
 pub use crate::nih_export_vst3;
 #[cfg(feature = "standalone")]

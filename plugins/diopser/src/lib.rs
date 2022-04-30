@@ -19,9 +19,6 @@
 #[cfg(not(feature = "simd"))]
 compile_error!("Compiling without SIMD support is currently not supported");
 
-#[macro_use]
-extern crate nih_plug;
-
 use nih_plug::prelude::*;
 use nih_plug_vizia::ViziaState;
 use std::simd::f32x2;

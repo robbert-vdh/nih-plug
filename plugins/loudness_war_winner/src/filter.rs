@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use nih_plug::debug::*;
 use std::f32::consts;
 use std::ops::{Add, Mul, Sub};
 

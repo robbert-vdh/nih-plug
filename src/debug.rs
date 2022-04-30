@@ -1,3 +1,8 @@
+// NOTE: Exporting macros in Rust is a bit weird. `#[macro_export]` causes them to be exported to
+//       the crate root, but that makes it difficult to include just the macros without using
+//       `#[macro_use] extern crate nih_plug;`. That's why the macros are also re-exported from this
+//       module.
+
 /// Write something to the logger. This defaults to STDERR unless the user is running Windows and a
 /// debugger has been attached, in which case `OutputDebugString()` will be used instead.
 ///
@@ -14,6 +19,7 @@ macro_rules! nih_log {
         $crate::log::info!($($args)*)
     );
 }
+pub use nih_log;
 
 /// The same as `nih_log!()`, but with source and thread information. Like the
 /// `nih_debug_assert*!()` macros, this is only shown when compiling in debug mode.
@@ -23,6 +29,7 @@ macro_rules! nih_trace {
         $crate::util::permit_alloc(|| $crate::log::trace!($($args)*))
     );
 }
+pub use nih_trace;
 
 /// Analogues to the `dbg!()` macro, but respecting the `NIH_LOG` environment variable and with all
 /// of the same logging features as the other `nih_*!()` macros. Like the `nih_debug_assert*!()`
@@ -44,6 +51,7 @@ macro_rules! nih_dbg {
     };
     ($($val:expr),+ $(,)?) => { ($($crate::nih_dbg!($val)),+,) };
 }
+pub use nih_dbg;
 
 /// A `debug_assert!()` analogue that prints the error with line number information instead of
 /// panicking.
@@ -62,6 +70,7 @@ macro_rules! nih_debug_assert {
         }
     );
 }
+pub use nih_debug_assert;
 
 /// An unconditional debug assertion failure, for if the condition has already been checked
 /// elsewhere.
@@ -78,6 +87,7 @@ macro_rules! nih_debug_assert_failure {
         }
     );
 }
+pub use nih_debug_assert_failure;
 
 /// A `debug_assert_eq!()` analogue that prints the error with line number information instead of
 /// panicking.
@@ -94,6 +104,7 @@ macro_rules! nih_debug_assert_eq {
         }
     );
 }
+pub use nih_debug_assert_eq;
 
 /// A `debug_assert_ne!()` analogue that prints the error with line number information instead of
 /// panicking.
@@ -110,3 +121,4 @@ macro_rules! nih_debug_assert_ne {
         }
     );
 }
+pub use nih_debug_assert_ne;
