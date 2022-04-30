@@ -1593,17 +1593,21 @@ impl<P: ClapPlugin> Wrapper<P> {
 
                 // Right now we don't handle any auxiliary outputs
                 // This vector has been preallocated to contain enough slices as there are output
-                // channels
+                // channels. If the host does not provide outputs or if it does not provide the
+                // required number of channels (should not happen, but Ableton Live does this for
+                // bypassed VST3 plugins) then we'll skip audio processing .
                 // TODO: The audio buffers have a latency field, should we use those?
                 // TODO: Like with VST3, should we expose some way to access or set the silence/constant
                 //       flags?
                 let mut output_buffer = wrapper.output_buffer.borrow_mut();
+                let mut buffer_is_valid = false;
                 output_buffer.with_raw_vec(|output_slices| {
                     if !process.audio_outputs.is_null()
                         && !(*process.audio_outputs).data32.is_null()
                     {
                         let audio_outputs = &*process.audio_outputs;
                         let num_output_channels = audio_outputs.channel_count as usize;
+                        buffer_is_valid = num_output_channels == output_slices.len();
                         nih_debug_assert_eq!(num_output_channels, output_slices.len());
 
                         // NOTE: This `.take()` should not be necessary, but we'll do it as a safe
@@ -1752,12 +1756,14 @@ impl<P: ClapPlugin> Wrapper<P> {
                     }
                 }
 
-                let result = {
+                let result = if buffer_is_valid {
                     let mut plugin = wrapper.plugin.write();
                     let mut context = wrapper.make_process_context(transport);
                     let result = plugin.process(&mut output_buffer, &mut context);
                     wrapper.last_process_status.store(result);
                     result
+                } else {
+                    ProcessStatus::Normal
                 };
 
                 let clap_result = match result {
