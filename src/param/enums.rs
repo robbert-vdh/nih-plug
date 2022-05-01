@@ -65,27 +65,6 @@ pub struct EnumParamInner {
     variants: &'static [&'static str],
 }
 
-impl<T: Enum + PartialEq + Default> Default for EnumParam<T> {
-    fn default() -> Self {
-        let variants = T::variants();
-
-        Self {
-            inner: EnumParamInner {
-                inner: IntParam::new(
-                    "",
-                    T::default().to_index() as i32,
-                    IntRange::Linear {
-                        min: 0,
-                        max: variants.len() as i32 - 1,
-                    },
-                ),
-                variants,
-            },
-            _marker: PhantomData,
-        }
-    }
-}
-
 impl<T: Enum + PartialEq> Display for EnumParam<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.inner.fmt(f)

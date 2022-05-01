@@ -34,22 +34,6 @@ pub struct BoolParam {
     string_to_value: Option<Arc<dyn Fn(&str) -> Option<bool> + Send + Sync>>,
 }
 
-#[allow(clippy::derivable_impls)]
-impl Default for BoolParam {
-    fn default() -> Self {
-        Self {
-            value: false,
-            normalized_value: 0.0,
-            default: false,
-            flags: ParamFlags::default(),
-            value_changed: None,
-            name: String::new(),
-            value_to_string: None,
-            string_to_value: None,
-        }
-    }
-}
-
 impl Display for BoolParam {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match (self.value, &self.value_to_string) {
@@ -165,9 +149,15 @@ impl BoolParam {
     pub fn new(name: impl Into<String>, default: bool) -> Self {
         Self {
             value: default,
+            normalized_value: if default { 1.0 } else { 0.0 },
             default,
+
+            flags: ParamFlags::default(),
+            value_changed: None,
+
             name: name.into(),
-            ..Default::default()
+            value_to_string: None,
+            string_to_value: None,
         }
     }
 

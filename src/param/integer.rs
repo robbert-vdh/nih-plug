@@ -61,24 +61,6 @@ pub struct IntParam {
     string_to_value: Option<Arc<dyn Fn(&str) -> Option<i32> + Send + Sync>>,
 }
 
-impl Default for IntParam {
-    fn default() -> Self {
-        Self {
-            value: 0,
-            normalized_value: 0.0,
-            default: 0,
-            smoothed: Smoother::none(),
-            flags: ParamFlags::default(),
-            value_changed: None,
-            range: IntRange::default(),
-            name: String::new(),
-            unit: "",
-            value_to_string: None,
-            string_to_value: None,
-        }
-    }
-}
-
 impl Display for IntParam {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.value_to_string {
@@ -199,9 +181,16 @@ impl IntParam {
             value: default,
             normalized_value: range.normalize(default),
             default,
+            smoothed: Smoother::none(),
+
+            flags: ParamFlags::default(),
+            value_changed: None,
+
             range,
             name: name.into(),
-            ..Default::default()
+            unit: "",
+            value_to_string: None,
+            string_to_value: None,
         }
     }
 
