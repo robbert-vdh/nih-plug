@@ -60,6 +60,7 @@ impl Param for BoolParam {
         self.value
     }
 
+    #[inline]
     fn normalized_value(&self) -> f32 {
         self.normalized_value
     }
