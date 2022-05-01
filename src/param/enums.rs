@@ -246,6 +246,10 @@ impl<T: Enum + PartialEq> ParamMut for EnumParam<T> {
         self.inner.set_normalized_value(normalized)
     }
 
+    fn modulate_value(&mut self, modulation_offset: f32) {
+        self.inner.modulate_value(modulation_offset)
+    }
+
     fn update_smoother(&mut self, sample_rate: f32, reset: bool) {
         self.inner.update_smoother(sample_rate, reset)
     }
@@ -258,6 +262,10 @@ impl ParamMut for EnumParamInner {
 
     fn set_normalized_value(&mut self, normalized: f32) {
         self.inner.set_normalized_value(normalized)
+    }
+
+    fn modulate_value(&mut self, modulation_offset: f32) {
+        self.inner.modulate_value(modulation_offset)
     }
 
     fn update_smoother(&mut self, sample_rate: f32, reset: bool) {

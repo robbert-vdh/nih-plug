@@ -186,6 +186,15 @@ impl ParamMut for IntParam {
         }
     }
 
+    fn modulate_value(&mut self, modulation_offset: f32) {
+        self.normalized_value =
+            (self.unmodulated_normalized_value + modulation_offset).clamp(0.0, 1.0);
+        self.value = self.preview_plain(self.normalized_value);
+        if let Some(f) = &self.value_changed {
+            f(self.value);
+        }
+    }
+
     fn update_smoother(&mut self, sample_rate: f32, reset: bool) {
         if reset {
             self.smoothed.reset(self.value);

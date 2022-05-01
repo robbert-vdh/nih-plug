@@ -161,6 +161,15 @@ impl ParamMut for BoolParam {
         }
     }
 
+    fn modulate_value(&mut self, modulation_offset: f32) {
+        self.normalized_value =
+            (self.unmodulated_normalized_value + modulation_offset).clamp(0.0, 1.0);
+        self.value = self.preview_plain(self.normalized_value);
+        if let Some(f) = &self.value_changed {
+            f(self.value);
+        }
+    }
+
     fn update_smoother(&mut self, _sample_rate: f32, _init: bool) {
         // Can't really smooth a binary parameter now can you
     }

@@ -160,6 +160,7 @@ impl ParamPtr {
     param_ptr_forward!(pub unsafe fn flags(&self) -> ParamFlags);
 
     param_ptr_forward!(pub(crate) unsafe fn set_normalized_value(&self, normalized: f32));
+    param_ptr_forward!(pub(crate) unsafe fn modulate_value(&self, modulation_offset: f32));
     param_ptr_forward!(pub(crate) unsafe fn update_smoother(&self, sample_rate: f32, reset: bool));
 
     // These functions involve casts since the plugin formats only do floating point types, so we
