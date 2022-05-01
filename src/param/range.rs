@@ -31,18 +31,6 @@ pub enum IntRange {
     Linear { min: i32, max: i32 },
 }
 
-impl Default for FloatRange {
-    fn default() -> Self {
-        Self::Linear { min: 0.0, max: 1.0 }
-    }
-}
-
-impl Default for IntRange {
-    fn default() -> Self {
-        Self::Linear { min: 0, max: 1 }
-    }
-}
-
 impl FloatRange {
     /// Calculate a skew factor for [`FloatRange::Skewed`] and [`FloatRange::SymmetricalSkewed`].
     /// Positive values make the end of the range wider while negative make the start of the range
