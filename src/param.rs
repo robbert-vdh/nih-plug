@@ -41,7 +41,11 @@ bitflags::bitflags! {
     }
 }
 
-/// Describes a single parameter of any type.
+/// Describes a single parameter of any type. Most parameter implementations also have a field
+/// called `value` that and a field called `smoothed`. The former stores the latest unsmoothed
+/// value, and the latter can be used to access the smoother. These two fields should be used in DSP
+/// code to either get the parameter's current (smoothed) value. In UI code the getters from this
+/// trait should be used instead.
 pub trait Param: Display {
     /// The plain parameter type.
     type Plain: PartialEq;
