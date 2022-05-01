@@ -26,13 +26,13 @@ pub struct IntParam {
     /// locality, but it does allow for a much nicer declarative API.
     pub value: i32,
     /// The field's default plain, unnormalized value.
-    pub default: i32,
+    pub(crate) default: i32,
     /// An optional smoother that will automatically interpolate between the new automation values
     /// set by the host.
     pub smoothed: Smoother<i32>,
 
     /// Flags to control the parameter's behavior. See [`ParamFlags`].
-    pub flags: ParamFlags,
+    pub(crate) flags: ParamFlags,
     /// Optional callback for listening to value changes. The argument passed to this function is
     /// the parameter's new **plain** value. This should not do anything expensive as it may be
     /// called multiple times in rapid succession.
@@ -41,24 +41,24 @@ pub struct IntParam {
     /// parameters struct, move a clone of that `Arc` into this closure, and then modify that.
     ///
     /// TODO: We probably also want to pass the old value to this function.
-    pub value_changed: Option<Arc<dyn Fn(i32) + Send + Sync>>,
+    pub(crate) value_changed: Option<Arc<dyn Fn(i32) + Send + Sync>>,
 
     /// The distribution of the parameter's values.
-    pub range: IntRange,
+    pub(crate) range: IntRange,
     /// The parameter's human readable display name.
-    pub name: String,
+    pub(crate) name: String,
     /// The parameter value's unit, added after `value_to_string` if that is set. NIH-plug will not
     /// automatically add a space before the unit.
-    pub unit: &'static str,
+    pub(crate) unit: &'static str,
     /// Optional custom conversion function from a plain **unnormalized** value to a string.
-    pub value_to_string: Option<Arc<dyn Fn(i32) -> String + Send + Sync>>,
+    pub(crate) value_to_string: Option<Arc<dyn Fn(i32) -> String + Send + Sync>>,
     /// Optional custom conversion function from a string to a plain **unnormalized** value. If the
     /// string cannot be parsed, then this should return a `None`. If this happens while the
     /// parameter is being updated then the update will be canceled.
     ///
     /// The input string may or may not contain the unit, so you will need to be able to handle
     /// that.
-    pub string_to_value: Option<Arc<dyn Fn(&str) -> Option<i32> + Send + Sync>>,
+    pub(crate) string_to_value: Option<Arc<dyn Fn(&str) -> Option<i32> + Send + Sync>>,
 }
 
 impl Default for IntParam {

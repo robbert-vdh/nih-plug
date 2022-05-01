@@ -12,24 +12,24 @@ pub struct BoolParam {
     /// The field's current value. Should be initialized with the default value.
     pub value: bool,
     /// The field's default value.
-    pub default: bool,
+    default: bool,
 
     /// Flags to control the parameter's behavior. See [`ParamFlags`].
-    pub flags: ParamFlags,
+    flags: ParamFlags,
     /// Optional callback for listening to value changes. The argument passed to this function is
     /// the parameter's new value. This should not do anything expensive as it may be called
     /// multiple times in rapid succession, and it can be run from both the GUI and the audio
     /// thread.
-    pub value_changed: Option<Arc<dyn Fn(bool) + Send + Sync>>,
+    value_changed: Option<Arc<dyn Fn(bool) + Send + Sync>>,
 
     /// The parameter's human readable display name.
-    pub name: String,
+    name: String,
     /// Optional custom conversion function from a boolean value to a string.
-    pub value_to_string: Option<Arc<dyn Fn(bool) -> String + Send + Sync>>,
+    value_to_string: Option<Arc<dyn Fn(bool) -> String + Send + Sync>>,
     /// Optional custom conversion function from a string to a boolean value. If the string cannot
     /// be parsed, then this should return a `None`. If this happens while the parameter is being
     /// updated then the update will be canceled.
-    pub string_to_value: Option<Arc<dyn Fn(&str) -> Option<bool> + Send + Sync>>,
+    string_to_value: Option<Arc<dyn Fn(&str) -> Option<bool> + Send + Sync>>,
 }
 
 #[allow(clippy::derivable_impls)]
