@@ -107,10 +107,12 @@ impl Param for FloatParam {
         self.unit
     }
 
+    #[inline]
     fn plain_value(&self) -> Self::Plain {
         self.value
     }
 
+    #[inline]
     fn default_plain_value(&self) -> Self::Plain {
         self.default
     }

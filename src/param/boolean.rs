@@ -68,10 +68,12 @@ impl Param for BoolParam {
         ""
     }
 
+    #[inline]
     fn plain_value(&self) -> Self::Plain {
         self.value
     }
 
+    #[inline]
     fn default_plain_value(&self) -> Self::Plain {
         self.default
     }
