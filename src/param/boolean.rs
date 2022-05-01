@@ -9,8 +9,10 @@ use super::{Param, ParamFlags};
 /// A simple boolean parameter.
 #[repr(C, align(4))]
 pub struct BoolParam {
-    /// The field's current value. Should be initialized with the default value.
+    /// The field's current value.
     pub value: bool,
+    /// The field's current value normalized to the `[0, 1]` range.
+    normalized_value: f32,
     /// The field's default value.
     default: bool,
 
@@ -37,6 +39,7 @@ impl Default for BoolParam {
     fn default() -> Self {
         Self {
             value: false,
+            normalized_value: 0.0,
             default: false,
             flags: ParamFlags::default(),
             value_changed: None,
@@ -73,6 +76,10 @@ impl Param for BoolParam {
         self.value
     }
 
+    fn normalized_value(&self) -> f32 {
+        self.normalized_value
+    }
+
     #[inline]
     fn default_plain_value(&self) -> Self::Plain {
         self.default
@@ -92,8 +99,17 @@ impl Param for BoolParam {
 
     fn set_plain_value(&mut self, plain: Self::Plain) {
         self.value = plain;
+        self.normalized_value = self.preview_normalized(plain);
         if let Some(f) = &self.value_changed {
-            f(plain);
+            f(self.value);
+        }
+    }
+
+    fn set_normalized_value(&mut self, normalized: f32) {
+        self.value = self.preview_plain(normalized);
+        self.normalized_value = normalized;
+        if let Some(f) = &self.value_changed {
+            f(self.value);
         }
     }
 

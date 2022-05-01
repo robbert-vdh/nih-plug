@@ -21,18 +21,18 @@ use super::{Param, ParamFlags};
 //      a partially written to value here. We should probably reconsider this at some point though.
 #[repr(C, align(4))]
 pub struct IntParam {
-    /// The field's current plain, unnormalized value. Should be initialized with the default value.
-    /// Storing parameter values like this instead of in a single contiguous array is bad for cache
-    /// locality, but it does allow for a much nicer declarative API.
+    /// The field's current plain, unnormalized value.
     pub value: i32,
+    /// The field's current value normalized to the `[0, 1]` range.
+    normalized_value: f32,
     /// The field's default plain, unnormalized value.
-    pub(crate) default: i32,
+    default: i32,
     /// An optional smoother that will automatically interpolate between the new automation values
     /// set by the host.
     pub smoothed: Smoother<i32>,
 
     /// Flags to control the parameter's behavior. See [`ParamFlags`].
-    pub(crate) flags: ParamFlags,
+    flags: ParamFlags,
     /// Optional callback for listening to value changes. The argument passed to this function is
     /// the parameter's new **plain** value. This should not do anything expensive as it may be
     /// called multiple times in rapid succession.
@@ -41,30 +41,31 @@ pub struct IntParam {
     /// parameters struct, move a clone of that `Arc` into this closure, and then modify that.
     ///
     /// TODO: We probably also want to pass the old value to this function.
-    pub(crate) value_changed: Option<Arc<dyn Fn(i32) + Send + Sync>>,
+    value_changed: Option<Arc<dyn Fn(i32) + Send + Sync>>,
 
     /// The distribution of the parameter's values.
-    pub(crate) range: IntRange,
+    range: IntRange,
     /// The parameter's human readable display name.
-    pub(crate) name: String,
+    name: String,
     /// The parameter value's unit, added after `value_to_string` if that is set. NIH-plug will not
     /// automatically add a space before the unit.
-    pub(crate) unit: &'static str,
+    unit: &'static str,
     /// Optional custom conversion function from a plain **unnormalized** value to a string.
-    pub(crate) value_to_string: Option<Arc<dyn Fn(i32) -> String + Send + Sync>>,
+    value_to_string: Option<Arc<dyn Fn(i32) -> String + Send + Sync>>,
     /// Optional custom conversion function from a string to a plain **unnormalized** value. If the
     /// string cannot be parsed, then this should return a `None`. If this happens while the
     /// parameter is being updated then the update will be canceled.
     ///
     /// The input string may or may not contain the unit, so you will need to be able to handle
     /// that.
-    pub(crate) string_to_value: Option<Arc<dyn Fn(&str) -> Option<i32> + Send + Sync>>,
+    string_to_value: Option<Arc<dyn Fn(&str) -> Option<i32> + Send + Sync>>,
 }
 
 impl Default for IntParam {
     fn default() -> Self {
         Self {
             value: 0,
+            normalized_value: 0.0,
             default: 0,
             smoothed: Smoother::none(),
             flags: ParamFlags::default(),
@@ -98,10 +99,17 @@ impl Param for IntParam {
         self.unit
     }
 
+    #[inline]
     fn plain_value(&self) -> Self::Plain {
         self.value
     }
 
+    #[inline]
+    fn normalized_value(&self) -> f32 {
+        self.normalized_value
+    }
+
+    #[inline]
     fn default_plain_value(&self) -> Self::Plain {
         self.default
     }
@@ -120,8 +128,17 @@ impl Param for IntParam {
 
     fn set_plain_value(&mut self, plain: Self::Plain) {
         self.value = plain;
+        self.normalized_value = self.preview_normalized(plain);
         if let Some(f) = &self.value_changed {
-            f(plain);
+            f(self.value);
+        }
+    }
+
+    fn set_normalized_value(&mut self, normalized: f32) {
+        self.value = self.preview_plain(normalized);
+        self.normalized_value = normalized;
+        if let Some(f) = &self.value_changed {
+            f(self.value);
         }
     }
 
@@ -180,6 +197,7 @@ impl IntParam {
     pub fn new(name: impl Into<String>, default: i32, range: IntRange) -> Self {
         Self {
             value: default,
+            normalized_value: range.normalize(default),
             default,
             range,
             name: name.into(),

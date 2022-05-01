@@ -21,10 +21,10 @@ use super::{Param, ParamFlags};
 //      a partially written to value here. We should probably reconsider this at some point though.
 #[repr(C, align(4))]
 pub struct FloatParam {
-    /// The field's current plain, unnormalized value. Should be initialized with the default value.
-    /// Storing parameter values like this instead of in a single contiguous array is bad for cache
-    /// locality, but it does allow for a much nicer declarative API.
+    /// The field's current plain, unnormalized value.
     pub value: f32,
+    /// The field's current value normalized to the `[0, 1]` range.
+    normalized_value: f32,
     /// The field's default plain, unnormalized value.
     default: f32,
     /// An optional smoother that will automatically interpolate between the new automation values
@@ -69,6 +69,7 @@ impl Default for FloatParam {
     fn default() -> Self {
         Self {
             value: 0.0,
+            normalized_value: 0.0,
             default: 0.0,
             smoothed: Smoother::none(),
             flags: ParamFlags::default(),
@@ -113,6 +114,11 @@ impl Param for FloatParam {
     }
 
     #[inline]
+    fn normalized_value(&self) -> Self::Plain {
+        self.normalized_value
+    }
+
+    #[inline]
     fn default_plain_value(&self) -> Self::Plain {
         self.default
     }
@@ -146,8 +152,17 @@ impl Param for FloatParam {
 
     fn set_plain_value(&mut self, plain: Self::Plain) {
         self.value = plain;
+        self.normalized_value = self.preview_normalized(plain);
         if let Some(f) = &self.value_changed {
-            f(plain);
+            f(self.value);
+        }
+    }
+
+    fn set_normalized_value(&mut self, normalized: f32) {
+        self.value = self.preview_plain(normalized);
+        self.normalized_value = normalized;
+        if let Some(f) = &self.value_changed {
+            f(self.value);
         }
     }
 
@@ -218,6 +233,7 @@ impl FloatParam {
     pub fn new(name: impl Into<String>, default: f32, range: FloatRange) -> Self {
         Self {
             value: default,
+            normalized_value: range.normalize(default),
             default,
             range,
             name: name.into(),

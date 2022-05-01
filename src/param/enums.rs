@@ -71,15 +71,14 @@ impl<T: Enum + PartialEq + Default> Default for EnumParam<T> {
 
         Self {
             inner: EnumParamInner {
-                inner: IntParam {
-                    value: T::default().to_index() as i32,
-                    default: T::default().to_index() as i32,
-                    range: IntRange::Linear {
+                inner: IntParam::new(
+                    "",
+                    T::default().to_index() as i32,
+                    IntRange::Linear {
                         min: 0,
                         max: variants.len() as i32 - 1,
                     },
-                    ..Default::default()
-                },
+                ),
                 variants,
             },
             _marker: PhantomData,
@@ -116,6 +115,11 @@ impl<T: Enum + PartialEq> Param for EnumParam<T> {
     }
 
     #[inline]
+    fn normalized_value(&self) -> f32 {
+        self.inner.normalized_value()
+    }
+
+    #[inline]
     fn default_plain_value(&self) -> Self::Plain {
         T::from_index(self.inner.default_plain_value() as usize)
     }
@@ -134,6 +138,10 @@ impl<T: Enum + PartialEq> Param for EnumParam<T> {
 
     fn set_plain_value(&mut self, plain: Self::Plain) {
         self.inner.set_plain_value(T::to_index(plain) as i32)
+    }
+
+    fn set_normalized_value(&mut self, normalized: f32) {
+        self.inner.set_normalized_value(normalized)
     }
 
     fn normalized_value_to_string(&self, normalized: f32, include_unit: bool) -> String {
@@ -174,7 +182,7 @@ impl Param for EnumParamInner {
     type Plain = i32;
 
     fn name(&self) -> &str {
-        &self.inner.name
+        self.inner.name()
     }
 
     fn unit(&self) -> &'static str {
@@ -184,6 +192,11 @@ impl Param for EnumParamInner {
     #[inline]
     fn plain_value(&self) -> Self::Plain {
         self.inner.plain_value()
+    }
+
+    #[inline]
+    fn normalized_value(&self) -> f32 {
+        self.inner.normalized_value()
     }
 
     #[inline]
@@ -205,6 +218,10 @@ impl Param for EnumParamInner {
 
     fn set_plain_value(&mut self, plain: Self::Plain) {
         self.inner.set_plain_value(plain)
+    }
+
+    fn set_normalized_value(&mut self, normalized: f32) {
+        self.inner.set_normalized_value(normalized)
     }
 
     fn normalized_value_to_string(&self, normalized: f32, _include_unit: bool) -> String {
@@ -253,15 +270,14 @@ impl<T: Enum + PartialEq + 'static> EnumParam<T> {
 
         Self {
             inner: EnumParamInner {
-                inner: IntParam {
-                    value: T::to_index(default) as i32,
-                    range: IntRange::Linear {
+                inner: IntParam::new(
+                    name,
+                    T::to_index(default) as i32,
+                    IntRange::Linear {
                         min: 0,
                         max: variants.len() as i32 - 1,
                     },
-                    name: name.into(),
-                    ..Default::default()
-                },
+                ),
                 variants,
             },
             _marker: PhantomData,
@@ -273,7 +289,7 @@ impl<T: Enum + PartialEq + 'static> EnumParam<T> {
     /// multiple times in rapid succession, and it can be run from both the GUI and the audio
     /// thread.
     pub fn with_callback(mut self, callback: Arc<dyn Fn(T) + Send + Sync>) -> Self {
-        self.inner.inner.value_changed = Some(Arc::new(move |value| {
+        self.inner.inner = self.inner.inner.with_callback(Arc::new(move |value| {
             callback(T::from_index(value as usize))
         }));
         self

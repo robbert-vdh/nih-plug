@@ -60,10 +60,7 @@ pub trait Param: Display {
     fn plain_value(&self) -> Self::Plain;
 
     /// Get the normalized `[0, 1]` value for this parameter.
-    #[inline]
-    fn normalized_value(&self) -> f32 {
-        self.preview_normalized(self.plain_value())
-    }
+    fn normalized_value(&self) -> f32;
 
     /// Get the unnormalized default value for this parameter.
     fn default_plain_value(&self) -> Self::Plain;
@@ -112,9 +109,7 @@ pub trait Param: Display {
     /// continuous parameters (i.e. [`FloatParam`]).
     ///
     /// This does **not** update the smoother.
-    fn set_normalized_value(&mut self, normalized: f32) {
-        self.set_plain_value(self.preview_plain(normalized))
-    }
+    fn set_normalized_value(&mut self, normalized: f32);
 
     /// Get the string representation for a normalized value. Used as part of the wrappers. Most
     /// plugin formats already have support for units, in which case it shouldn't be part of this
