@@ -6,13 +6,13 @@ use atomic_float::AtomicF32;
 use atomic_refcell::{AtomicRefCell, AtomicRefMut};
 use clap_sys::events::{
     clap_event_header, clap_event_midi, clap_event_note, clap_event_note_expression,
-    clap_event_param_gesture, clap_event_param_value, clap_event_type, clap_input_events,
-    clap_output_events, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_IS_LIVE, CLAP_EVENT_MIDI,
-    CLAP_EVENT_NOTE_EXPRESSION, CLAP_EVENT_NOTE_OFF, CLAP_EVENT_NOTE_ON,
-    CLAP_EVENT_PARAM_GESTURE_BEGIN, CLAP_EVENT_PARAM_GESTURE_END, CLAP_EVENT_PARAM_VALUE,
-    CLAP_NOTE_EXPRESSION_BRIGHTNESS, CLAP_NOTE_EXPRESSION_EXPRESSION, CLAP_NOTE_EXPRESSION_PAN,
-    CLAP_NOTE_EXPRESSION_PRESSURE, CLAP_NOTE_EXPRESSION_TUNING, CLAP_NOTE_EXPRESSION_VIBRATO,
-    CLAP_NOTE_EXPRESSION_VOLUME, CLAP_TRANSPORT_HAS_BEATS_TIMELINE,
+    clap_event_param_gesture, clap_event_param_mod, clap_event_param_value, clap_event_type,
+    clap_input_events, clap_output_events, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_IS_LIVE,
+    CLAP_EVENT_MIDI, CLAP_EVENT_NOTE_EXPRESSION, CLAP_EVENT_NOTE_OFF, CLAP_EVENT_NOTE_ON,
+    CLAP_EVENT_PARAM_GESTURE_BEGIN, CLAP_EVENT_PARAM_GESTURE_END, CLAP_EVENT_PARAM_MOD,
+    CLAP_EVENT_PARAM_VALUE, CLAP_NOTE_EXPRESSION_BRIGHTNESS, CLAP_NOTE_EXPRESSION_EXPRESSION,
+    CLAP_NOTE_EXPRESSION_PAN, CLAP_NOTE_EXPRESSION_PRESSURE, CLAP_NOTE_EXPRESSION_TUNING,
+    CLAP_NOTE_EXPRESSION_VIBRATO, CLAP_NOTE_EXPRESSION_VOLUME, CLAP_TRANSPORT_HAS_BEATS_TIMELINE,
     CLAP_TRANSPORT_HAS_SECONDS_TIMELINE, CLAP_TRANSPORT_HAS_TEMPO,
     CLAP_TRANSPORT_HAS_TIME_SIGNATURE, CLAP_TRANSPORT_IS_LOOP_ACTIVE, CLAP_TRANSPORT_IS_PLAYING,
     CLAP_TRANSPORT_IS_RECORDING, CLAP_TRANSPORT_IS_WITHIN_PRE_ROLL,
@@ -248,10 +248,10 @@ pub enum ClapParamUpdate {
     /// Set the parameter to this plain value. In our wrapper the plain values are the normalized
     /// values multiplied by the step count for discrete parameters.
     PlainValueSet(f64),
-    // TODO: Modulation would need special handling as it's an absolute offset for the current
-    //       value.
-    // /// Add a delta to the parameter's current plain value (so again, multiplied by the step size).
-    // PlainValueMod(f64),
+    /// Set a normalized offset for the parameter's plain value. A `PlainValueSet` clears out any
+    /// modulation, and subsequent modulation events replace the previous one. In other words, this
+    /// is not additive. These values should also be divided by the step size.
+    PlainValueMod(f64),
 }
 
 /// A parameter event that should be output by the plugin, stored in a queue on the wrapper and
@@ -653,28 +653,43 @@ impl<P: ClapPlugin> Wrapper<P> {
     pub fn update_plain_value_by_hash(
         &self,
         hash: u32,
-        update: ClapParamUpdate,
+        update_type: ClapParamUpdate,
         sample_rate: Option<f32>,
     ) -> bool {
         match self.param_by_hash.get(&hash) {
             Some(param_ptr) => {
-                let normalized_value = match update {
+                match update_type {
                     ClapParamUpdate::PlainValueSet(clap_plain_value) => {
-                        clap_plain_value as f32
-                            / unsafe { param_ptr.step_count() }.unwrap_or(1) as f32
+                        let normalized_value = clap_plain_value as f32
+                            / unsafe { param_ptr.step_count() }.unwrap_or(1) as f32;
+
+                        // Also update the parameter's smoothing if applicable
+                        match sample_rate {
+                            Some(sample_rate) => unsafe {
+                                param_ptr.set_normalized_value(normalized_value);
+                                param_ptr.update_smoother(sample_rate, false);
+                            },
+                            None => unsafe { param_ptr.set_normalized_value(normalized_value) },
+                        }
+
+                        true
                     }
-                };
+                    ClapParamUpdate::PlainValueMod(clap_plain_delta) => {
+                        let normalized_delta = clap_plain_delta as f32
+                            / unsafe { param_ptr.step_count() }.unwrap_or(1) as f32;
 
-                // Also update the parameter's smoothing if applicable
-                match (param_ptr, sample_rate) {
-                    (_, Some(sample_rate)) => unsafe {
-                        param_ptr.set_normalized_value(normalized_value);
-                        param_ptr.update_smoother(sample_rate, false);
-                    },
-                    _ => unsafe { param_ptr.set_normalized_value(normalized_value) },
+                        // Also update the parameter's smoothing if applicable
+                        match sample_rate {
+                            Some(sample_rate) => unsafe {
+                                param_ptr.modulate_value(normalized_delta);
+                                param_ptr.update_smoother(sample_rate, false);
+                            },
+                            None => unsafe { param_ptr.set_normalized_value(normalized_delta) },
+                        }
+
+                        true
+                    }
                 }
-
-                true
             }
             _ => false,
         }
@@ -731,8 +746,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             let next_event: *const clap_event_header = ((*in_).get)(&*in_, next_event_idx);
             match ((*next_event).space_id, (*next_event).type_) {
                 (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_VALUE)
-                // TODO: Once we add modulation support, don't forget this here
-                // | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_MOD)
+                | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_MOD)
                     if (*next_event).time > current_sample_idx as u32 =>
                 {
                     return Some(((*next_event).time as usize, next_event_idx as usize));
@@ -1161,18 +1175,16 @@ impl<P: ClapPlugin> Wrapper<P> {
 
                 true
             }
-            // TODO: At some point we might be able to handle modulation, but that acts as an
-            //       absolute offset for the current value and not just a random relative adjustment
-            // (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_MOD) => {
-            //     let event = &*(event as *const clap_event_param_mod);
-            //     self.update_plain_value_by_hash(
-            //         event.param_id,
-            //         ClapParamUpdate::PlainValueMod(event.amount),
-            //         self.current_buffer_config.load().map(|c| c.sample_rate),
-            //     );
+            (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_MOD) => {
+                let event = &*(event as *const clap_event_param_mod);
+                self.update_plain_value_by_hash(
+                    event.param_id,
+                    ClapParamUpdate::PlainValueMod(event.amount),
+                    self.current_buffer_config.load().map(|c| c.sample_rate),
+                );
 
-            //     true
-            // }
+                true
+            }
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_ON) => {
                 if P::MIDI_INPUT >= MidiConfig::Basic {
                     let event = &*(event as *const clap_event_note);
@@ -2069,7 +2081,8 @@ impl<P: ClapPlugin> Wrapper<P> {
         event_type: clap_event_type,
     ) -> bool {
         match (space_id, event_type) {
-            (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_VALUE) => true,
+            (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_VALUE)
+            | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_MOD) => true,
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_ON)
             | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_OFF)
             | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_EXPRESSION)
@@ -2425,7 +2438,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         //       hashmap lookup, but for now we'll stay consistent with the VST3 implementation.
         let param_info = &mut *param_info;
         param_info.id = *param_hash;
-        // TODO: Somehow expose modulation and per note/channel/port variations
+        // TODO: Somehow expose per note/channel/port modulation
         param_info.flags = if automatable {
             CLAP_PARAM_IS_AUTOMATABLE
         } else {
