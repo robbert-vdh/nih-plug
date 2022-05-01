@@ -4,7 +4,7 @@ use std::fmt::Display;
 use std::sync::Arc;
 
 use super::internals::ParamPtr;
-use super::{Param, ParamFlags};
+use super::{Param, ParamFlags, ParamMut};
 
 /// A simple boolean parameter.
 #[repr(C, align(4))]
@@ -98,26 +98,6 @@ impl Param for BoolParam {
         true
     }
 
-    fn set_plain_value(&mut self, plain: Self::Plain) {
-        self.unmodulated_value = plain;
-        self.unmodulated_normalized_value = self.preview_normalized(plain);
-        self.value = self.unmodulated_value;
-        self.normalized_value = self.unmodulated_normalized_value;
-        if let Some(f) = &self.value_changed {
-            f(self.value);
-        }
-    }
-
-    fn set_normalized_value(&mut self, normalized: f32) {
-        self.unmodulated_value = self.preview_plain(normalized);
-        self.unmodulated_normalized_value = normalized;
-        self.value = self.unmodulated_value;
-        self.normalized_value = self.unmodulated_normalized_value;
-        if let Some(f) = &self.value_changed {
-            f(self.value);
-        }
-    }
-
     fn normalized_value_to_string(&self, normalized: f32, _include_unit: bool) -> String {
         let value = self.preview_plain(normalized);
         match (value, &self.value_to_string) {
@@ -149,10 +129,6 @@ impl Param for BoolParam {
         normalized > 0.5
     }
 
-    fn update_smoother(&mut self, _sample_rate: f32, _init: bool) {
-        // Can't really smooth a binary parameter now can you
-    }
-
     fn initialize_block_smoother(&mut self, _max_block_size: usize) {}
 
     fn flags(&self) -> ParamFlags {
@@ -161,6 +137,32 @@ impl Param for BoolParam {
 
     fn as_ptr(&self) -> ParamPtr {
         ParamPtr::BoolParam(self as *const BoolParam as *mut BoolParam)
+    }
+}
+
+impl ParamMut for BoolParam {
+    fn set_plain_value(&mut self, plain: Self::Plain) {
+        self.unmodulated_value = plain;
+        self.unmodulated_normalized_value = self.preview_normalized(plain);
+        self.value = self.unmodulated_value;
+        self.normalized_value = self.unmodulated_normalized_value;
+        if let Some(f) = &self.value_changed {
+            f(self.value);
+        }
+    }
+
+    fn set_normalized_value(&mut self, normalized: f32) {
+        self.unmodulated_value = self.preview_plain(normalized);
+        self.unmodulated_normalized_value = normalized;
+        self.value = self.unmodulated_value;
+        self.normalized_value = self.unmodulated_normalized_value;
+        if let Some(f) = &self.value_changed {
+            f(self.value);
+        }
+    }
+
+    fn update_smoother(&mut self, _sample_rate: f32, _init: bool) {
+        // Can't really smooth a binary parameter now can you
     }
 }
 

@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use super::internals::ParamPtr;
 use super::range::IntRange;
-use super::{IntParam, Param, ParamFlags};
+use super::{IntParam, Param, ParamFlags, ParamMut};
 
 // Re-export the derive macro
 pub use nih_plug_derive::Enum;
@@ -125,14 +125,6 @@ impl<T: Enum + PartialEq> Param for EnumParam<T> {
         T::from_index(self.inner.next_step(T::to_index(from) as i32) as usize)
     }
 
-    fn set_plain_value(&mut self, plain: Self::Plain) {
-        self.inner.set_plain_value(T::to_index(plain) as i32)
-    }
-
-    fn set_normalized_value(&mut self, normalized: f32) {
-        self.inner.set_normalized_value(normalized)
-    }
-
     fn normalized_value_to_string(&self, normalized: f32, include_unit: bool) -> String {
         self.inner
             .normalized_value_to_string(normalized, include_unit)
@@ -148,10 +140,6 @@ impl<T: Enum + PartialEq> Param for EnumParam<T> {
 
     fn preview_plain(&self, normalized: f32) -> Self::Plain {
         T::from_index(self.inner.preview_plain(normalized) as usize)
-    }
-
-    fn update_smoother(&mut self, sample_rate: f32, reset: bool) {
-        self.inner.update_smoother(sample_rate, reset)
     }
 
     fn initialize_block_smoother(&mut self, max_block_size: usize) {
@@ -215,14 +203,6 @@ impl Param for EnumParamInner {
         self.inner.next_step(from)
     }
 
-    fn set_plain_value(&mut self, plain: Self::Plain) {
-        self.inner.set_plain_value(plain)
-    }
-
-    fn set_normalized_value(&mut self, normalized: f32) {
-        self.inner.set_normalized_value(normalized)
-    }
-
     fn normalized_value_to_string(&self, normalized: f32, _include_unit: bool) -> String {
         let index = self.preview_plain(normalized);
         self.variants[index as usize].to_string()
@@ -244,10 +224,6 @@ impl Param for EnumParamInner {
         self.inner.preview_plain(normalized)
     }
 
-    fn update_smoother(&mut self, sample_rate: f32, reset: bool) {
-        self.inner.update_smoother(sample_rate, reset)
-    }
-
     fn initialize_block_smoother(&mut self, max_block_size: usize) {
         self.inner.initialize_block_smoother(max_block_size)
     }
@@ -258,6 +234,34 @@ impl Param for EnumParamInner {
 
     fn as_ptr(&self) -> ParamPtr {
         ParamPtr::EnumParam(self as *const EnumParamInner as *mut EnumParamInner)
+    }
+}
+
+impl<T: Enum + PartialEq> ParamMut for EnumParam<T> {
+    fn set_plain_value(&mut self, plain: Self::Plain) {
+        self.inner.set_plain_value(T::to_index(plain) as i32)
+    }
+
+    fn set_normalized_value(&mut self, normalized: f32) {
+        self.inner.set_normalized_value(normalized)
+    }
+
+    fn update_smoother(&mut self, sample_rate: f32, reset: bool) {
+        self.inner.update_smoother(sample_rate, reset)
+    }
+}
+
+impl ParamMut for EnumParamInner {
+    fn set_plain_value(&mut self, plain: Self::Plain) {
+        self.inner.set_plain_value(plain)
+    }
+
+    fn set_normalized_value(&mut self, normalized: f32) {
+        self.inner.set_normalized_value(normalized)
+    }
+
+    fn update_smoother(&mut self, sample_rate: f32, reset: bool) {
+        self.inner.update_smoother(sample_rate, reset)
     }
 }
 

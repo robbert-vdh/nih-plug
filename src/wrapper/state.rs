@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::param::internals::{ParamPtr, Params};
-use crate::param::Param;
+use crate::param::{Param, ParamMut};
 use crate::plugin::BufferConfig;
 
 // These state objects are also exposed directly to the plugin so it can do its own internal preset

@@ -113,18 +113,6 @@ pub trait Param: Display {
         self.preview_normalized(self.next_step(self.preview_plain(from)))
     }
 
-    /// Set this parameter based on a plain, unnormalized value. This does **not** snap to step
-    /// sizes for continuous parameters (i.e. [`FloatParam`]).
-    ///
-    /// This does **not** update the smoother.
-    fn set_plain_value(&mut self, plain: Self::Plain);
-
-    /// Set this parameter based on a normalized value. This **does** snap to step sizes for
-    /// continuous parameters (i.e. [`FloatParam`]).
-    ///
-    /// This does **not** update the smoother.
-    fn set_normalized_value(&mut self, normalized: f32);
-
     /// Get the string representation for a normalized value. Used as part of the wrappers. Most
     /// plugin formats already have support for units, in which case it shouldn't be part of this
     /// string or some DAWs may show duplicate units.
@@ -141,11 +129,6 @@ pub trait Param: Display {
     /// wrappers. This **does** snap to step sizes for continuous parameters (i.e. [`FloatParam`]).
     fn preview_plain(&self, normalized: f32) -> Self::Plain;
 
-    /// Update the smoother state to point to the current value. Also used when initializing and
-    /// restoring a plugin so everything is in sync. In that case the smoother should completely
-    /// reset to the current value.
-    fn update_smoother(&mut self, sample_rate: f32, reset: bool);
-
     /// Allocate memory for block-based smoothing. The
     /// [`Plugin::initialize_block_smoothers()`][crate::prelude::Plugin::initialize_block_smoothers()] method
     /// will do this for every smoother.
@@ -157,4 +140,24 @@ pub trait Param: Display {
     /// Internal implementation detail for implementing [`Params`][internals::Params]. This should
     /// not be used directly.
     fn as_ptr(&self) -> internals::ParamPtr;
+}
+
+/// Contains the setters for parameters. These should not be exposed to plugins to avoid confusion.
+pub(crate) trait ParamMut: Param {
+    /// Set this parameter based on a plain, unnormalized value. This does **not** snap to step
+    /// sizes for continuous parameters (i.e. [`FloatParam`]).
+    ///
+    /// This does **not** update the smoother.
+    fn set_plain_value(&mut self, plain: Self::Plain);
+
+    /// Set this parameter based on a normalized value. This **does** snap to step sizes for
+    /// continuous parameters (i.e. [`FloatParam`]).
+    ///
+    /// This does **not** update the smoother.
+    fn set_normalized_value(&mut self, normalized: f32);
+
+    /// Update the smoother state to point to the current value. Also used when initializing and
+    /// restoring a plugin so everything is in sync. In that case the smoother should completely
+    /// reset to the current value.
+    fn update_smoother(&mut self, sample_rate: f32, reset: bool);
 }

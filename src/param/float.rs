@@ -6,7 +6,7 @@ use std::sync::Arc;
 use super::internals::ParamPtr;
 use super::range::FloatRange;
 use super::smoothing::{Smoother, SmoothingStyle};
-use super::{Param, ParamFlags};
+use super::{Param, ParamFlags, ParamMut};
 
 /// A floating point parameter that's stored unnormalized. The range is used for the normalization
 /// process.
@@ -147,26 +147,6 @@ impl Param for FloatParam {
         .clamp(self.range.min(), self.range.max())
     }
 
-    fn set_plain_value(&mut self, plain: Self::Plain) {
-        self.unmodulated_value = plain;
-        self.unmodulated_normalized_value = self.preview_normalized(plain);
-        self.value = self.unmodulated_value;
-        self.normalized_value = self.unmodulated_normalized_value;
-        if let Some(f) = &self.value_changed {
-            f(self.value);
-        }
-    }
-
-    fn set_normalized_value(&mut self, normalized: f32) {
-        self.unmodulated_value = self.preview_plain(normalized);
-        self.unmodulated_normalized_value = normalized;
-        self.value = self.unmodulated_value;
-        self.normalized_value = self.unmodulated_normalized_value;
-        if let Some(f) = &self.value_changed {
-            f(self.value);
-        }
-    }
-
     fn normalized_value_to_string(&self, normalized: f32, include_unit: bool) -> String {
         let value = self.preview_plain(normalized);
         match (&self.value_to_string, &self.step_size, include_unit) {
@@ -207,14 +187,6 @@ impl Param for FloatParam {
         }
     }
 
-    fn update_smoother(&mut self, sample_rate: f32, reset: bool) {
-        if reset {
-            self.smoothed.reset(self.value);
-        } else {
-            self.smoothed.set_target(sample_rate, self.value);
-        }
-    }
-
     fn initialize_block_smoother(&mut self, max_block_size: usize) {
         self.smoothed.initialize_block_smoother(max_block_size);
     }
@@ -225,6 +197,36 @@ impl Param for FloatParam {
 
     fn as_ptr(&self) -> ParamPtr {
         ParamPtr::FloatParam(self as *const _ as *mut _)
+    }
+}
+
+impl ParamMut for FloatParam {
+    fn set_plain_value(&mut self, plain: Self::Plain) {
+        self.unmodulated_value = plain;
+        self.unmodulated_normalized_value = self.preview_normalized(plain);
+        self.value = self.unmodulated_value;
+        self.normalized_value = self.unmodulated_normalized_value;
+        if let Some(f) = &self.value_changed {
+            f(self.value);
+        }
+    }
+
+    fn set_normalized_value(&mut self, normalized: f32) {
+        self.unmodulated_value = self.preview_plain(normalized);
+        self.unmodulated_normalized_value = normalized;
+        self.value = self.unmodulated_value;
+        self.normalized_value = self.unmodulated_normalized_value;
+        if let Some(f) = &self.value_changed {
+            f(self.value);
+        }
+    }
+
+    fn update_smoother(&mut self, sample_rate: f32, reset: bool) {
+        if reset {
+            self.smoothed.reset(self.value);
+        } else {
+            self.smoothed.set_target(sample_rate, self.value);
+        }
     }
 }
 

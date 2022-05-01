@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use super::{Param, ParamFlags};
+use super::{Param, ParamFlags, ParamMut};
 
 pub use nih_plug_derive::Params;
 /// Re-export for use in the [`Params`] proc-macro.
@@ -109,14 +109,14 @@ where
 /// can't have an `.as_param()` function since the return type would differ depending on the
 /// underlying parameter type, so instead we need to type erase all of the functions individually.
 macro_rules! param_ptr_forward(
-    (pub unsafe fn $method:ident(&self $(, $arg_name:ident: $arg_ty:ty)*) $(-> $ret:ty)?) => {
+    ($vis:vis unsafe fn $method:ident(&self $(, $arg_name:ident: $arg_ty:ty)*) $(-> $ret:ty)?) => {
         /// Calls the corresponding method on the underlying [`Param`] object.
         ///
         /// # Safety
         ///
         /// Calling this function is only safe as long as the object this [`ParamPtr`] was created
         /// for is still alive.
-        pub unsafe fn $method(&self $(, $arg_name: $arg_ty)*) $(-> $ret)? {
+        $vis unsafe fn $method(&self $(, $arg_name: $arg_ty)*) $(-> $ret)? {
             match &self {
                 ParamPtr::FloatParam(p) => (**p).$method($($arg_name),*),
                 ParamPtr::IntParam(p) => (**p).$method($($arg_name),*),
@@ -127,14 +127,14 @@ macro_rules! param_ptr_forward(
     };
     // XXX: Is there a way to combine these two? Hygienic macros don't let you call `&self` without
     //      it being defined in the macro.
-    (pub unsafe fn $method:ident(&mut self $(, $arg_name:ident: $arg_ty:ty)*) $(-> $ret:ty)?) => {
+    ($vis:vis unsafe fn $method:ident(&mut self $(, $arg_name:ident: $arg_ty:ty)*) $(-> $ret:ty)?) => {
         /// Calls the corresponding method on the underlying [`Param`] object.
         ///
         /// # Safety
         ///
         /// Calling this function is only safe as long as the object this [`ParamPtr`] was created
         /// for is still alive.
-        pub unsafe fn $method(&mut self $(, $arg_name: $arg_ty)*) $(-> $ret)? {
+        $vis unsafe fn $method(&mut self $(, $arg_name: $arg_ty)*) $(-> $ret)? {
             match &self {
                 ParamPtr::FloatParam(p) => (**p).$method($($arg_name),*),
                 ParamPtr::IntParam(p) => (**p).$method($($arg_name),*),
@@ -154,12 +154,13 @@ impl ParamPtr {
     param_ptr_forward!(pub unsafe fn step_count(&self) -> Option<usize>);
     param_ptr_forward!(pub unsafe fn previous_normalized_step(&self, from: f32) -> f32);
     param_ptr_forward!(pub unsafe fn next_normalized_step(&self, from: f32) -> f32);
-    param_ptr_forward!(pub unsafe fn set_normalized_value(&self, normalized: f32));
-    param_ptr_forward!(pub unsafe fn update_smoother(&self, sample_rate: f32, reset: bool));
     param_ptr_forward!(pub unsafe fn initialize_block_smoother(&mut self, max_block_size: usize));
     param_ptr_forward!(pub unsafe fn normalized_value_to_string(&self, normalized: f32, include_unit: bool) -> String);
     param_ptr_forward!(pub unsafe fn string_to_normalized_value(&self, string: &str) -> Option<f32>);
     param_ptr_forward!(pub unsafe fn flags(&self) -> ParamFlags);
+
+    param_ptr_forward!(pub(crate) unsafe fn set_normalized_value(&self, normalized: f32));
+    param_ptr_forward!(pub(crate) unsafe fn update_smoother(&self, sample_rate: f32, reset: bool));
 
     // These functions involve casts since the plugin formats only do floating point types, so we
     // can't generate them with the macro:
