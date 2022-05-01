@@ -73,17 +73,28 @@ pub(crate) unsafe fn serialize_object<'a>(
     params_iter: impl IntoIterator<Item = (&'a String, ParamPtr)>,
 ) -> PluginState {
     // We'll serialize parameter values as a simple `string_param_id: display_value` map.
+    // NOTE: If the plugin is being modulated (and the plugin is a CLAP plugin in Bitwig Studio),
+    //       then this should save the values without any modulation applied to it
     let params: HashMap<_, _> = params_iter
         .into_iter()
         .map(|(param_id_str, param_ptr)| match param_ptr {
-            ParamPtr::FloatParam(p) => (param_id_str.clone(), ParamValue::F32((*p).plain_value())),
-            ParamPtr::IntParam(p) => (param_id_str.clone(), ParamValue::I32((*p).plain_value())),
-            ParamPtr::BoolParam(p) => (param_id_str.clone(), ParamValue::Bool((*p).plain_value())),
+            ParamPtr::FloatParam(p) => (
+                param_id_str.clone(),
+                ParamValue::F32((*p).unmodulated_plain_value()),
+            ),
+            ParamPtr::IntParam(p) => (
+                param_id_str.clone(),
+                ParamValue::I32((*p).unmodulated_plain_value()),
+            ),
+            ParamPtr::BoolParam(p) => (
+                param_id_str.clone(),
+                ParamValue::Bool((*p).unmodulated_plain_value()),
+            ),
             ParamPtr::EnumParam(p) => (
                 // Enums are serialized based on the active variant's index (which may not be
                 // the same as the discriminator)
                 param_id_str.clone(),
-                ParamValue::I32((*p).plain_value()),
+                ParamValue::I32((*p).unmodulated_plain_value()),
             ),
         })
         .collect();

@@ -99,6 +99,16 @@ impl<T: Enum + PartialEq> Param for EnumParam<T> {
     }
 
     #[inline]
+    fn unmodulated_plain_value(&self) -> Self::Plain {
+        T::from_index(self.inner.unmodulated_plain_value() as usize)
+    }
+
+    #[inline]
+    fn unmodulated_normalized_value(&self) -> f32 {
+        self.inner.unmodulated_normalized_value()
+    }
+
+    #[inline]
     fn default_plain_value(&self) -> Self::Plain {
         T::from_index(self.inner.default_plain_value() as usize)
     }
@@ -181,6 +191,16 @@ impl Param for EnumParamInner {
     #[inline]
     fn default_plain_value(&self) -> Self::Plain {
         self.inner.default_plain_value()
+    }
+
+    #[inline]
+    fn unmodulated_plain_value(&self) -> Self::Plain {
+        self.inner.unmodulated_plain_value()
+    }
+
+    #[inline]
+    fn unmodulated_normalized_value(&self) -> f32 {
+        self.inner.unmodulated_normalized_value()
     }
 
     fn step_count(&self) -> Option<usize> {

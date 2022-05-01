@@ -149,6 +149,7 @@ impl ParamPtr {
     param_ptr_forward!(pub unsafe fn name(&self) -> &str);
     param_ptr_forward!(pub unsafe fn unit(&self) -> &'static str);
     param_ptr_forward!(pub unsafe fn normalized_value(&self) -> f32);
+    param_ptr_forward!(pub unsafe fn unmodulated_normalized_value(&self) -> f32);
     param_ptr_forward!(pub unsafe fn default_normalized_value(&self) -> f32);
     param_ptr_forward!(pub unsafe fn step_count(&self) -> Option<usize>);
     param_ptr_forward!(pub unsafe fn previous_normalized_step(&self, from: f32) -> f32);
@@ -178,6 +179,28 @@ impl ParamPtr {
             ParamPtr::IntParam(p) => (**p).plain_value() as f32,
             ParamPtr::BoolParam(p) => (**p).normalized_value(),
             ParamPtr::EnumParam(p) => (**p).plain_value() as f32,
+        }
+    }
+
+    /// Get the parameter's plain, unnormalized value, converted to a float, before any monophonic
+    /// host modulation has been applied. This is useful for handling modulated parameters for CLAP
+    /// plugins in Bitwig in a way where the actual parameter does not move in the GUI while the
+    /// parameter is being modulated. You can also use this to show the difference between the
+    /// unmodulated value and the current value. Useful in conjunction with
+    /// [`preview_plain()`][Self::preview_plain()] to compare a snapped discrete value to a
+    /// parameter's current snapped value without having to do a back and forth conversion using
+    /// normalized values.
+    ///
+    /// # Safety
+    ///
+    /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
+    /// still alive.
+    pub unsafe fn unmodulated_plain_value(&self) -> f32 {
+        match &self {
+            ParamPtr::FloatParam(p) => (**p).unmodulated_plain_value(),
+            ParamPtr::IntParam(p) => (**p).unmodulated_plain_value() as f32,
+            ParamPtr::BoolParam(p) => (**p).unmodulated_normalized_value(),
+            ParamPtr::EnumParam(p) => (**p).unmodulated_plain_value() as f32,
         }
     }
 

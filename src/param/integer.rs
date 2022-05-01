@@ -25,6 +25,12 @@ pub struct IntParam {
     pub value: i32,
     /// The field's current value normalized to the `[0, 1]` range.
     normalized_value: f32,
+    /// The field's plain, unnormalized value before any monophonic automation coming from the host
+    /// has been applied. This will always be the same as `value` for VST3 plugins.
+    unmodulated_value: i32,
+    /// The field's value normalized to the `[0, 1]` range before any monophonic automation coming
+    /// from the host has been applied. This will always be the same as `value` for VST3 plugins.
+    unmodulated_normalized_value: f32,
     /// The field's default plain, unnormalized value.
     default: i32,
     /// An optional smoother that will automatically interpolate between the new automation values
@@ -92,6 +98,16 @@ impl Param for IntParam {
     }
 
     #[inline]
+    fn unmodulated_plain_value(&self) -> Self::Plain {
+        self.unmodulated_value
+    }
+
+    #[inline]
+    fn unmodulated_normalized_value(&self) -> f32 {
+        self.unmodulated_normalized_value
+    }
+
+    #[inline]
     fn default_plain_value(&self) -> Self::Plain {
         self.default
     }
@@ -109,16 +125,20 @@ impl Param for IntParam {
     }
 
     fn set_plain_value(&mut self, plain: Self::Plain) {
-        self.value = plain;
-        self.normalized_value = self.preview_normalized(plain);
+        self.unmodulated_value = plain;
+        self.unmodulated_normalized_value = self.preview_normalized(plain);
+        self.value = self.unmodulated_value;
+        self.normalized_value = self.unmodulated_normalized_value;
         if let Some(f) = &self.value_changed {
             f(self.value);
         }
     }
 
     fn set_normalized_value(&mut self, normalized: f32) {
-        self.value = self.preview_plain(normalized);
-        self.normalized_value = normalized;
+        self.unmodulated_value = self.preview_plain(normalized);
+        self.unmodulated_normalized_value = normalized;
+        self.value = self.unmodulated_value;
+        self.normalized_value = self.unmodulated_normalized_value;
         if let Some(f) = &self.value_changed {
             f(self.value);
         }
@@ -180,6 +200,8 @@ impl IntParam {
         Self {
             value: default,
             normalized_value: range.normalize(default),
+            unmodulated_value: default,
+            unmodulated_normalized_value: range.normalize(default),
             default,
             smoothed: Smoother::none(),
 
