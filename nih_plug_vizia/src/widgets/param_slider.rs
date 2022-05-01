@@ -150,16 +150,92 @@ impl ParamSlider {
                     cx,
                     ParamSliderInternal::text_input_active,
                     move |cx, text_input_active| {
-                        let param_display_value_lens =
-                            params.map(move |params| params_to_param(params).to_string());
+                        // Can't use `.to_string()` here as that would include the modulation.
+                        let param_display_value_lens = params.map(move |params| {
+                            let param = params_to_param(params);
+                            param.normalized_value_to_string(
+                                param.unmodulated_normalized_value(),
+                                true,
+                            )
+                        });
                         let param_preview_display_value_lens = |normalized_value| {
                             params.map(move |params| {
                                 params_to_param(params)
                                     .normalized_value_to_string(normalized_value, true)
                             })
                         };
-                        let normalized_param_value_lens =
-                            params.map(move |params| params_to_param(params).normalized_value());
+                        let unmodulated_normalized_param_value_lens = params.map(move |params| {
+                            params_to_param(params).unmodulated_normalized_value()
+                        });
+
+                        // The resulting tuple `(start_t, delta)` corresponds to the start and the
+                        // signed width of the bar. `start_t` is in `[0, 1]`, and `delta` is in
+                        // `[-1, 1]`.
+                        let fill_start_delta_lens =
+                            unmodulated_normalized_param_value_lens.map(move |current_value| {
+                                match style {
+                                    ParamSliderStyle::Centered if draw_fill_from_default => {
+                                        let delta = (default_value - current_value).abs();
+                                        (
+                                            default_value.min(*current_value),
+                                            // Don't draw the filled portion at all if it
+                                            // could have been a rounding error since those
+                                            // slivers just look weird
+                                            if delta >= 1e-3 { delta } else { 0.0 },
+                                        )
+                                    }
+                                    ParamSliderStyle::Centered | ParamSliderStyle::FromLeft => {
+                                        (0.0, *current_value)
+                                    }
+                                    ParamSliderStyle::CurrentStep { even: true }
+                                    | ParamSliderStyle::CurrentStepLabeled { even: true }
+                                        if step_count.is_some() =>
+                                    {
+                                        // Assume the normalized value is distributed evenly
+                                        // across the range.
+                                        let step_count = step_count.unwrap() as f32;
+                                        let discrete_values = step_count + 1.0;
+                                        let previous_step =
+                                            (current_value * step_count) / discrete_values;
+                                        (previous_step, discrete_values.recip())
+                                    }
+                                    ParamSliderStyle::CurrentStep { .. }
+                                    | ParamSliderStyle::CurrentStepLabeled { .. } => {
+                                        let previous_step = unsafe {
+                                            param_ptr.previous_normalized_step(*current_value)
+                                        };
+                                        let next_step = unsafe {
+                                            param_ptr.next_normalized_step(*current_value)
+                                        };
+                                        (
+                                            (previous_step + current_value) / 2.0,
+                                            ((next_step - current_value)
+                                                + (current_value - previous_step))
+                                                / 2.0,
+                                        )
+                                    }
+                                }
+                            });
+                        // If the parameter is being modulated by the host (this only works for CLAP
+                        // plugins with hosts that support this), then this is the difference
+                        // between the 'true' value and the current value after modulation has been
+                        // applied.
+                        let modulation_start_delta_lens = params.map(move |params| {
+                            match style {
+                                // Don't show modulation for stepped parameters since it wouldn't
+                                // make a lot of sense visually
+                                ParamSliderStyle::CurrentStep { .. }
+                                | ParamSliderStyle::CurrentStepLabeled { .. } => (0.0, 0.0),
+                                ParamSliderStyle::Centered | ParamSliderStyle::FromLeft => {
+                                    let param = params_to_param(params);
+                                    let modulation_start = param.unmodulated_normalized_value();
+                                    (
+                                        modulation_start,
+                                        param.normalized_value() - modulation_start,
+                                    )
+                                }
+                            }
+                        });
 
                         if text_input_active.get(cx) {
                             Textbox::new(cx, param_display_value_lens)
@@ -188,59 +264,48 @@ impl ParamSlider {
                                 Element::new(cx)
                                     .class("fill")
                                     .height(Stretch(1.0))
-                                    .bind(normalized_param_value_lens, move |handle, value| {
-                                        let current_value = value.get(handle.cx);
-                                        let (start_t, delta) = match style {
-                                            ParamSliderStyle::Centered
-                                                if draw_fill_from_default =>
-                                            {
-                                                let delta = (default_value - current_value).abs();
-                                                (
-                                                    default_value.min(current_value),
-                                                    // Don't draw the filled portion at all if it
-                                                    // could have been a rounding error since those
-                                                    // slivers just look weird
-                                                    if delta >= 1e-3 { delta } else { 0.0 },
-                                                )
-                                            }
-                                            ParamSliderStyle::Centered
-                                            | ParamSliderStyle::FromLeft => (0.0, current_value),
-                                            ParamSliderStyle::CurrentStep { even: true }
-                                            | ParamSliderStyle::CurrentStepLabeled { even: true }
-                                                if step_count.is_some() =>
-                                            {
-                                                // Assume the normalized value is distributed evenly
-                                                // across the range.
-                                                let step_count = step_count.unwrap() as f32;
-                                                let discrete_values = step_count + 1.0;
-                                                let previous_step =
-                                                    (current_value * step_count) / discrete_values;
-                                                (previous_step, discrete_values.recip())
-                                            }
-                                            ParamSliderStyle::CurrentStep { .. }
-                                            | ParamSliderStyle::CurrentStepLabeled { .. } => {
-                                                let previous_step = unsafe {
-                                                    param_ptr
-                                                        .previous_normalized_step(current_value)
-                                                };
-                                                let next_step = unsafe {
-                                                    param_ptr.next_normalized_step(current_value)
-                                                };
-                                                (
-                                                    (previous_step + current_value) / 2.0,
-                                                    ((next_step - current_value)
-                                                        + (current_value - previous_step))
-                                                        / 2.0,
-                                                )
-                                            }
-                                        };
-
-                                        handle
-                                            .left(Percentage(start_t * 100.0))
-                                            .width(Percentage(delta * 100.0));
-                                    })
+                                    .left(
+                                        fill_start_delta_lens
+                                            .clone()
+                                            .map(|(start_t, _)| Percentage(start_t * 100.0)),
+                                    )
+                                    .width(
+                                        fill_start_delta_lens
+                                            .clone()
+                                            .map(|(_, delta)| Percentage(delta * 100.0)),
+                                    )
                                     // Hovering is handled on the param slider as a whole, this
                                     // should not affect that
+                                    .hoverable(false);
+
+                                // If the parameter is being modulated, then we'll display anoter
+                                // filled bar showing the current modulation delta
+                                // VIZIA's bindings make this a bit, uh, difficult to read
+                                Element::new(cx)
+                                    .class("fill")
+                                    .class("fill--modulation")
+                                    .height(Stretch(1.0))
+                                    .visibility(
+                                        modulation_start_delta_lens
+                                            .clone()
+                                            .map(|(_, delta)| *delta != 0.0),
+                                    )
+                                    // Widths cannot be negative, so we need to compensate the start
+                                    // position if the width does happen to be negative
+                                    .width(
+                                        modulation_start_delta_lens
+                                            .clone()
+                                            .map(|(_, delta)| Percentage(delta.abs() * 100.0)),
+                                    )
+                                    .left(modulation_start_delta_lens.clone().map(
+                                        |(start_t, delta)| {
+                                            if *delta < 0.0 {
+                                                Percentage((start_t + delta) * 100.0)
+                                            } else {
+                                                Percentage(start_t * 100.0)
+                                            }
+                                        },
+                                    ))
                                     .hoverable(false);
 
                                 // Either display the current value, or display all values over the
@@ -305,7 +370,7 @@ impl ParamSlider {
         //       avoid this normalized->plain->normalized conversion for parameters that don't need
         //       it
         let plain_value = unsafe { self.param_ptr.preview_plain(normalized_value) };
-        let current_plain_value = unsafe { self.param_ptr.plain_value() };
+        let current_plain_value = unsafe { self.param_ptr.unmodulated_plain_value() };
         if plain_value != current_plain_value {
             // For the aforementioned snapping
             let normalized_plain_value = unsafe { self.param_ptr.preview_normalized(plain_value) };
@@ -395,7 +460,7 @@ impl View for ParamSlider {
                     cx.emit(RawParamEvent::BeginSetParameter(self.param_ptr));
                     if cx.modifiers.shift() {
                         self.granular_drag_start_x_value = Some((cx.mouse.cursorx, unsafe {
-                            self.param_ptr.normalized_value()
+                            self.param_ptr.unmodulated_normalized_value()
                         }));
                     } else {
                         self.granular_drag_start_x_value = None;
@@ -431,7 +496,7 @@ impl View for ParamSlider {
                         let (drag_start_x, drag_start_value) =
                             *self.granular_drag_start_x_value.get_or_insert_with(|| {
                                 (cx.mouse.cursorx, unsafe {
-                                    self.param_ptr.normalized_value()
+                                    self.param_ptr.unmodulated_normalized_value()
                                 })
                             });
 
