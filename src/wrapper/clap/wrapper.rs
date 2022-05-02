@@ -36,8 +36,9 @@ use clap_sys::ext::note_ports::{
 };
 use clap_sys::ext::params::{
     clap_host_params, clap_param_info, clap_plugin_params, CLAP_EXT_PARAMS,
-    CLAP_PARAM_IS_AUTOMATABLE, CLAP_PARAM_IS_BYPASS, CLAP_PARAM_IS_HIDDEN, CLAP_PARAM_IS_READONLY,
-    CLAP_PARAM_IS_STEPPED, CLAP_PARAM_RESCAN_VALUES,
+    CLAP_PARAM_IS_AUTOMATABLE, CLAP_PARAM_IS_BYPASS, CLAP_PARAM_IS_HIDDEN,
+    CLAP_PARAM_IS_MODULATABLE, CLAP_PARAM_IS_READONLY, CLAP_PARAM_IS_STEPPED,
+    CLAP_PARAM_RESCAN_VALUES,
 };
 use clap_sys::ext::state::{clap_plugin_state, CLAP_EXT_STATE};
 use clap_sys::ext::tail::{clap_plugin_tail, CLAP_EXT_TAIL};
@@ -2440,7 +2441,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         param_info.id = *param_hash;
         // TODO: Somehow expose per note/channel/port modulation
         param_info.flags = if automatable {
-            CLAP_PARAM_IS_AUTOMATABLE
+            CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_MODULATABLE
         } else {
             CLAP_PARAM_IS_HIDDEN | CLAP_PARAM_IS_READONLY
         };
