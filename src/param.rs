@@ -145,20 +145,25 @@ pub trait Param: Display {
 /// Contains the setters for parameters. These should not be exposed to plugins to avoid confusion.
 pub(crate) trait ParamMut: Param {
     /// Set this parameter based on a plain, unnormalized value. This does not snap to step sizes
-    /// for continuous parameters (i.e. [`FloatParam`]).
+    /// for continuous parameters (i.e. [`FloatParam`]). If
+    /// [`modulate_value()`][Self::modulate_value()] has previously been called with a non zero
+    /// value then this offset is taken into account to form the effective value.
     ///
     /// This does **not** update the smoother.
     fn set_plain_value(&mut self, plain: Self::Plain);
 
     /// Set this parameter based on a normalized value. The normalized value will be snapped to the
-    /// step size for continuous parameters (i.e. [`FloatParam`]).
+    /// step size for continuous parameters (i.e. [`FloatParam`]). If
+    /// [`modulate_value()`][Self::modulate_value()] has previously been called with a non zero
+    /// value then this offset is taken into account to form the effective value.
     ///
     /// This does **not** update the smoother.
     fn set_normalized_value(&mut self, normalized: f32);
 
-    /// Add a modulation offset to the value's unmodulated value. Out of bound values will be
-    /// clamped to the parameter's range. The normalized value will be snapped to the step size for
-    /// continuous parameters (i.e. [`FloatParam`]).
+    /// Add a modulation offset to the value's unmodulated value. This value sticks until this
+    /// function is called again with a 0.0 value. Out of bound values will be clamped to the
+    /// parameter's range. The normalized value will be snapped to the step size for continuous
+    /// parameters (i.e. [`FloatParam`]).
     ///
     /// This does **not** update the smoother.
     fn modulate_value(&mut self, modulation_offset: f32);

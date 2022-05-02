@@ -249,9 +249,9 @@ pub enum ClapParamUpdate {
     /// Set the parameter to this plain value. In our wrapper the plain values are the normalized
     /// values multiplied by the step count for discrete parameters.
     PlainValueSet(f64),
-    /// Set a normalized offset for the parameter's plain value. A `PlainValueSet` clears out any
-    /// modulation, and subsequent modulation events replace the previous one. In other words, this
-    /// is not additive. These values should also be divided by the step size.
+    /// Set a normalized offset for the parameter's plain value. Subsequent modulation events
+    /// override the previous one, but `PlainValueSet`s do not override the existing modulation.
+    /// These values should also be divided by the step size.
     PlainValueMod(f64),
 }
 

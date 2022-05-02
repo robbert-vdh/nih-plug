@@ -31,6 +31,10 @@ pub struct FloatParam {
     /// The field's value normalized to the `[0, 1]` range before any monophonic automation coming
     /// from the host has been applied. This will always be the same as `value` for VST3 plugins.
     unmodulated_normalized_value: f32,
+    /// A value in `[-1, 1]` indicating the amount of modulation applied to
+    /// `unmodulated_normalized_`. This needs to be stored separately since the normalied values are
+    /// clamped, and this value persists after new automation events.
+    modulation_offset: f32,
     /// The field's default plain, unnormalized value.
     default: f32,
     /// An optional smoother that will automatically interpolate between the new automation values
@@ -204,8 +208,14 @@ impl ParamMut for FloatParam {
     fn set_plain_value(&mut self, plain: Self::Plain) {
         self.unmodulated_value = plain;
         self.unmodulated_normalized_value = self.preview_normalized(plain);
-        self.value = self.unmodulated_value;
-        self.normalized_value = self.unmodulated_normalized_value;
+        if self.modulation_offset == 0.0 {
+            self.value = self.unmodulated_value;
+            self.normalized_value = self.unmodulated_normalized_value;
+        } else {
+            self.normalized_value =
+                (self.unmodulated_normalized_value + self.modulation_offset).clamp(0.0, 1.0);
+            self.value = self.preview_plain(self.normalized_value);
+        }
         if let Some(f) = &self.value_changed {
             f(self.value);
         }
@@ -214,20 +224,22 @@ impl ParamMut for FloatParam {
     fn set_normalized_value(&mut self, normalized: f32) {
         self.unmodulated_value = self.preview_plain(normalized);
         self.unmodulated_normalized_value = normalized;
-        self.value = self.unmodulated_value;
-        self.normalized_value = self.unmodulated_normalized_value;
+        if self.modulation_offset == 0.0 {
+            self.value = self.unmodulated_value;
+            self.normalized_value = self.unmodulated_normalized_value;
+        } else {
+            self.normalized_value =
+                (self.unmodulated_normalized_value + self.modulation_offset).clamp(0.0, 1.0);
+            self.value = self.preview_plain(self.normalized_value);
+        }
         if let Some(f) = &self.value_changed {
             f(self.value);
         }
     }
 
     fn modulate_value(&mut self, modulation_offset: f32) {
-        self.normalized_value =
-            (self.unmodulated_normalized_value + modulation_offset).clamp(0.0, 1.0);
-        self.value = self.preview_plain(self.normalized_value);
-        if let Some(f) = &self.value_changed {
-            f(self.value);
-        }
+        self.modulation_offset = modulation_offset;
+        self.set_normalized_value(self.unmodulated_normalized_value);
     }
 
     fn update_smoother(&mut self, sample_rate: f32, reset: bool) {
@@ -248,6 +260,7 @@ impl FloatParam {
             normalized_value: range.normalize(default),
             unmodulated_value: default,
             unmodulated_normalized_value: range.normalize(default),
+            modulation_offset: 0.0,
             default,
             smoothed: Smoother::none(),
 
