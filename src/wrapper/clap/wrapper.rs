@@ -6,13 +6,14 @@ use atomic_float::AtomicF32;
 use atomic_refcell::{AtomicRefCell, AtomicRefMut};
 use clap_sys::events::{
     clap_event_header, clap_event_midi, clap_event_note, clap_event_note_expression,
-    clap_event_param_gesture, clap_event_param_mod, clap_event_param_value, clap_event_type,
-    clap_input_events, clap_output_events, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_IS_LIVE,
-    CLAP_EVENT_MIDI, CLAP_EVENT_NOTE_EXPRESSION, CLAP_EVENT_NOTE_OFF, CLAP_EVENT_NOTE_ON,
-    CLAP_EVENT_PARAM_GESTURE_BEGIN, CLAP_EVENT_PARAM_GESTURE_END, CLAP_EVENT_PARAM_MOD,
-    CLAP_EVENT_PARAM_VALUE, CLAP_NOTE_EXPRESSION_BRIGHTNESS, CLAP_NOTE_EXPRESSION_EXPRESSION,
-    CLAP_NOTE_EXPRESSION_PAN, CLAP_NOTE_EXPRESSION_PRESSURE, CLAP_NOTE_EXPRESSION_TUNING,
-    CLAP_NOTE_EXPRESSION_VIBRATO, CLAP_NOTE_EXPRESSION_VOLUME, CLAP_TRANSPORT_HAS_BEATS_TIMELINE,
+    clap_event_param_gesture, clap_event_param_mod, clap_event_param_value, clap_event_transport,
+    clap_event_type, clap_input_events, clap_output_events, CLAP_CORE_EVENT_SPACE_ID,
+    CLAP_EVENT_IS_LIVE, CLAP_EVENT_MIDI, CLAP_EVENT_NOTE_EXPRESSION, CLAP_EVENT_NOTE_OFF,
+    CLAP_EVENT_NOTE_ON, CLAP_EVENT_PARAM_GESTURE_BEGIN, CLAP_EVENT_PARAM_GESTURE_END,
+    CLAP_EVENT_PARAM_MOD, CLAP_EVENT_PARAM_VALUE, CLAP_EVENT_TRANSPORT,
+    CLAP_NOTE_EXPRESSION_BRIGHTNESS, CLAP_NOTE_EXPRESSION_EXPRESSION, CLAP_NOTE_EXPRESSION_PAN,
+    CLAP_NOTE_EXPRESSION_PRESSURE, CLAP_NOTE_EXPRESSION_TUNING, CLAP_NOTE_EXPRESSION_VIBRATO,
+    CLAP_NOTE_EXPRESSION_VOLUME, CLAP_TRANSPORT_HAS_BEATS_TIMELINE,
     CLAP_TRANSPORT_HAS_SECONDS_TIMELINE, CLAP_TRANSPORT_HAS_TEMPO,
     CLAP_TRANSPORT_HAS_TIME_SIGNATURE, CLAP_TRANSPORT_IS_LOOP_ACTIVE, CLAP_TRANSPORT_IS_PLAYING,
     CLAP_TRANSPORT_IS_RECORDING, CLAP_TRANSPORT_IS_WITHIN_PRE_ROLL,
@@ -706,7 +707,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         for event_idx in 0..num_events {
             let event = ((*in_).get)(&*in_, event_idx);
             parameter_values_changed |=
-                self.handle_in_event(event, &mut input_events, current_sample_idx);
+                self.handle_in_event(event, &mut input_events, None, current_sample_idx);
         }
 
         // Allow the GUI to react to any parameter values that might have been changed
@@ -715,17 +716,22 @@ impl<P: ClapPlugin> Wrapper<P> {
         }
     }
 
-    /// Similar to [`handle_in_events()`][Self::handle_in_events()], but will stop just before the
-    /// next parameter change event with `raw_event.time > current_sample_idx` and return the
-    /// **absolute** (relative to the entire buffer that's being split) sample index of that event
-    /// along with the its index in the event queue as a `(sample_idx, event_idx)` tuple. This
-    /// allows for splitting the audio buffer into segments with distinct sample values to enable
-    /// sample accurate automation without modifcations to the wrapped plugin.
-    pub unsafe fn handle_in_events_until_next_param_change(
+    /// Similar to [`handle_in_events()`][Self::handle_in_events()], but will stop just before an
+    /// event if the preducate returns true for that events. This predicate is only called for
+    /// events that occur after `current_sample_idx`. This is used to stop before a tempo or time
+    /// signature change, or before next parameter change event with `raw_event.time >
+    /// current_sample_idx` and return the **absolute** (relative to the entire buffer that's being
+    /// split) sample index of that event along with the its index in the event queue as a
+    /// `(sample_idx, event_idx)` tuple. This allows for splitting the audio buffer into segments
+    /// with distinct sample values to enable sample accurate automation without modifcations to the
+    /// wrapped plugin.
+    pub unsafe fn handle_in_events_until(
         &self,
         in_: &clap_input_events,
+        transport_info: &mut *const clap_event_transport,
         current_sample_idx: usize,
         resume_from_event_idx: usize,
+        stop_predicate: impl Fn(*const clap_event_header) -> bool,
     ) -> Option<(usize, usize)> {
         let mut input_events = self.input_events.borrow_mut();
         input_events.clear();
@@ -740,27 +746,30 @@ impl<P: ClapPlugin> Wrapper<P> {
         let mut event: *const clap_event_header = ((*in_).get)(&*in_, start_idx);
         let mut parameter_values_changed = false;
         for next_event_idx in (start_idx + 1)..num_events {
-            parameter_values_changed |=
-                self.handle_in_event(event, &mut input_events, current_sample_idx);
+            parameter_values_changed |= self.handle_in_event(
+                event,
+                &mut input_events,
+                Some(transport_info),
+                current_sample_idx,
+            );
 
-            // Stop just before the next parameter change event at a sample after the current sample
+            // Stop just before the next parameter change or transport information event at a sample
+            // after the current sample
             let next_event: *const clap_event_header = ((*in_).get)(&*in_, next_event_idx);
-            match ((*next_event).space_id, (*next_event).type_) {
-                (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_VALUE)
-                | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_MOD)
-                    if (*next_event).time > current_sample_idx as u32 =>
-                {
-                    return Some(((*next_event).time as usize, next_event_idx as usize));
-                }
-                _ => (),
+            if (*next_event).time > current_sample_idx as u32 && stop_predicate(next_event) {
+                return Some(((*next_event).time as usize, next_event_idx as usize));
             }
 
             event = next_event;
         }
 
         // Don't forget about the last event
-        parameter_values_changed |=
-            self.handle_in_event(event, &mut input_events, current_sample_idx);
+        parameter_values_changed |= self.handle_in_event(
+            event,
+            &mut input_events,
+            Some(transport_info),
+            current_sample_idx,
+        );
 
         // NOTE: We explicitly did not do this on a block split because that seems a bit excessive.
         //       When we're performing a block split we're guarenteed that there's still at least one more
@@ -1154,6 +1163,9 @@ impl<P: ClapPlugin> Wrapper<P> {
     /// To save on mutex operations when handing MIDI events, the lock guard for the input events
     /// need to be passed into this function.
     ///
+    /// If the event was a transport event and the `transport_info` argument is not `None`, then the
+    /// pointer will be changed to point to the transport information from this event.
+    ///
     /// The return value indicates whether this was a parameter event. If it is a parameter event,
     /// then [`notify_param_values_changed()`][Self::notify_param_values_changed()] should be called
     /// once all of these events have been processed.
@@ -1162,6 +1174,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         &self,
         event: *const clap_event_header,
         input_events: &mut AtomicRefMut<VecDeque<NoteEvent>>,
+        transport_info: Option<&mut *const clap_event_transport>,
         current_sample_idx: usize,
     ) -> bool {
         let raw_event = &*event;
@@ -1185,6 +1198,14 @@ impl<P: ClapPlugin> Wrapper<P> {
                 );
 
                 true
+            }
+            (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_TRANSPORT) => {
+                let event = &*(event as *const clap_event_transport);
+                if let Some(transport_info) = transport_info {
+                    *transport_info = event;
+                }
+
+                false
             }
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_ON) => {
                 if P::MIDI_INPUT >= MidiConfig::Basic {
@@ -1567,27 +1588,49 @@ impl<P: ClapPlugin> Wrapper<P> {
             let mut block_start = 0;
             let mut block_end = process.frames_count as usize;
             let mut event_start_idx = 0;
+
+            // The host may send new transport information as an event. In that case we'll also
+            // split the buffer.
+            let mut transport_info = process.transport;
+
             let result = loop {
                 if !process.in_events.is_null() {
-                    if P::SAMPLE_ACCURATE_AUTOMATION {
-                        let split_result = wrapper.handle_in_events_until_next_param_change(
-                            &*process.in_events,
-                            block_start,
-                            event_start_idx,
-                        );
-
-                        // If there are any parameter changes after `block_start`, then we'll do a
-                        // new block just after that. Otherwise we can process all audio until the
-                        // end of the buffer.
-                        match split_result {
-                            Some((next_param_change_sample_idx, next_param_change_event_idx)) => {
-                                block_end = next_param_change_sample_idx as usize;
-                                event_start_idx = next_param_change_event_idx as usize;
+                    let split_result = wrapper.handle_in_events_until(
+                        &*process.in_events,
+                        &mut transport_info,
+                        block_start,
+                        event_start_idx,
+                        |next_event| {
+                            // Always split the buffer on transport information changes (tempo, time
+                            // signature, or position changes), and also split on parameter value
+                            // changes after the current sample if sample accurate automation is
+                            // enabled
+                            if P::SAMPLE_ACCURATE_AUTOMATION {
+                                matches!(
+                                    ((*next_event).space_id, (*next_event).type_,),
+                                    (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_VALUE)
+                                        | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_MOD)
+                                        | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_TRANSPORT)
+                                )
+                            } else {
+                                matches!(
+                                    ((*next_event).space_id, (*next_event).type_,),
+                                    (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_TRANSPORT)
+                                )
                             }
-                            None => block_end = process.frames_count as usize,
+                        },
+                    );
+
+                    // If there are any parameter changes after `block_start` and sample
+                    // accurate automatoin is enabled or the host sends new transport
+                    // inforamtion, then we'll process a new block just after that. Otherwise we can
+                    // process all audio until the end of the buffer.
+                    match split_result {
+                        Some((next_param_change_sample_idx, next_param_change_event_idx)) => {
+                            block_end = next_param_change_sample_idx as usize;
+                            event_start_idx = next_param_change_event_idx as usize;
                         }
-                    } else {
-                        wrapper.handle_in_events(&*process.in_events, block_start);
+                        None => block_end = process.frames_count as usize,
                     }
                 }
 
@@ -1686,8 +1729,8 @@ impl<P: ClapPlugin> Wrapper<P> {
                     .expect("Process call without prior initialization call")
                     .sample_rate;
                 let mut transport = Transport::new(sample_rate);
-                if !process.transport.is_null() {
-                    let context = &*process.transport;
+                if !transport_info.is_null() {
+                    let context = &*transport_info;
 
                     transport.playing = context.flags & CLAP_TRANSPORT_IS_PLAYING != 0;
                     transport.recording = context.flags & CLAP_TRANSPORT_IS_RECORDING != 0;
@@ -2083,7 +2126,8 @@ impl<P: ClapPlugin> Wrapper<P> {
     ) -> bool {
         match (space_id, event_type) {
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_VALUE)
-            | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_MOD) => true,
+            | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_MOD)
+            | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_TRANSPORT) => true,
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_ON)
             | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_OFF)
             | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_EXPRESSION)
