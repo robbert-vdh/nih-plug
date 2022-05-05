@@ -25,6 +25,42 @@ pub const EXPRESSION_EXPRESSION_ID: u32 = 4;
 /// `kBrightnessTypeID`
 pub const BRIGHTNESS_EXPRESSION_ID: u32 = 5;
 
+/// The note expressions we support. It's completely undocumented, but apparently VST3 plugins need
+/// to specifically define a custom note expression for the predefined note expressiosn for them to
+/// work.
+pub const KNOWN_NOTE_EXPRESSIONS: [NoteExpressionInfo; 6] = [
+    NoteExpressionInfo {
+        type_id: VOLUME_EXPRESSION_ID,
+        title: "Volume",
+        unit: "dB",
+    },
+    NoteExpressionInfo {
+        type_id: PAN_EXPRESSION_ID,
+        title: "Pan",
+        unit: "",
+    },
+    NoteExpressionInfo {
+        type_id: TUNING_EXPRESSION_ID,
+        title: "Tuning",
+        unit: "semitones",
+    },
+    NoteExpressionInfo {
+        type_id: VIBRATO_EXPRESSION_ID,
+        title: "Vibrato",
+        unit: "",
+    },
+    NoteExpressionInfo {
+        type_id: EXPRESSION_EXPRESSION_ID,
+        title: "Expression",
+        unit: "",
+    },
+    NoteExpressionInfo {
+        type_id: BRIGHTNESS_EXPRESSION_ID,
+        title: "Brightness",
+        unit: "",
+    },
+];
+
 /// VST3 has predefined note expressions just like CLAP, but unlike the other note events these
 /// expressions are identified only with a note ID. To account for that, we'll keep track of the
 /// most recent note IDs we've encountered so we can later map those IDs back to a note and channel
@@ -39,24 +75,21 @@ pub struct NoteExpressionController {
     note_ids_idx: usize,
 }
 
-impl NoteExpressionController {
-    /// Returns `true` if the VST3 expression type ID is one of the predefiend types we support.
-    /// This is only needed as a workaround for a Bitwig bug where it only sends us note expressions
-    /// if we explicitly return `kResultOk` on
-    /// `INoteExpressionController::get_note_expression_info()` with malformed expression index
-    /// arguments.
-    pub const fn known_expression_type_id(type_id: u32) -> bool {
-        matches!(
-            type_id,
-            VOLUME_EXPRESSION_ID
-                | PAN_EXPRESSION_ID
-                | TUNING_EXPRESSION_ID
-                | VIBRATO_EXPRESSION_ID
-                | EXPRESSION_EXPRESSION_ID
-                | BRIGHTNESS_EXPRESSION_ID
-        )
-    }
+/// This is used to register a (predefined) note expression in the `INoteExpressionController`. The
+/// data is kept in this module to keep everything related to VST3 note expressions in one place.
+///
+/// This does not contain value descriptions because those are also predefined as normalized `[0,
+/// 1]` values.
+pub struct NoteExpressionInfo {
+    /// The predefined VST3 note expression type ID for this note expression.
+    pub type_id: u32,
+    /// The title for the note expression. Also used for the short title because why not.
+    pub title: &'static str,
+    /// The unit for the note expression.
+    pub unit: &'static str,
+}
 
+impl NoteExpressionController {
     /// Register the note ID from a note on event so it can later be retrieved when handling a note
     /// expression value event.
     pub fn register_note(&mut self, event: &NoteOnEvent) {
