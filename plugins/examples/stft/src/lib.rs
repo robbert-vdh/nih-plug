@@ -57,7 +57,7 @@ impl Default for Stft {
         Self {
             params: Arc::new(StftParams::default()),
 
-            stft: util::StftHelper::new(2, WINDOW_SIZE),
+            stft: util::StftHelper::new(2, WINDOW_SIZE, 0),
             window_function: util::window::hann(WINDOW_SIZE),
 
             lp_filter_kernel: complex_fft_buffer.clone(),

@@ -60,7 +60,7 @@ impl SpectrumInput {
             TripleBuffer::new(&[0.0; SPECTRUM_WINDOW_SIZE / 2]).split();
 
         let input = Self {
-            stft: util::StftHelper::new(num_channels, SPECTRUM_WINDOW_SIZE),
+            stft: util::StftHelper::new(num_channels, SPECTRUM_WINDOW_SIZE, 0),
             num_channels,
 
             triple_buffer_input,

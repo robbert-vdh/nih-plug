@@ -83,7 +83,7 @@ impl Default for PubertySimulator {
         Self {
             params: Arc::new(PubertySimulatorParams::default()),
 
-            stft: util::StftHelper::new(2, MAX_WINDOW_SIZE),
+            stft: util::StftHelper::new(2, MAX_WINDOW_SIZE, 0),
             window_function: Vec::with_capacity(MAX_WINDOW_SIZE),
 
             plan_for_order: None,

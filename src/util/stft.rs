@@ -1,5 +1,7 @@
 //! Utilities for buffering audio, likely used as part of a short-term Fourier transform.
 
+use std::cmp;
+
 use crate::buffer::{Block, Buffer};
 
 /// Some buffer that can be used with the [`StftHelper`].
@@ -29,7 +31,6 @@ pub trait StftInputMut: StftInput {
 /// the same number of channels as the main input.
 ///
 /// TODO: Better name?
-/// TODO: This needs an option that adds padding to the `real_fft_window`
 /// TODO: We may need something like this purely for analysis, e.g. for showing spectrums in a GUI.
 ///       Figure out the cleanest way to adapt this for the non-processing use case.
 pub struct StftHelper<const NUM_SIDECHAIN_INPUTS: usize = 0> {
@@ -44,10 +45,16 @@ pub struct StftHelper<const NUM_SIDECHAIN_INPUTS: usize = 0> {
     /// Results from the ring buffers are copied to this scratch buffer before being passed to the
     /// plugin. Needed to handle overlap.
     scratch_buffer: Vec<f32>,
+    /// If padding is used, then this will contain the previous iteration's values from the padding
+    /// values in `scratch_buffer` (`scratch_buffer[(scratch_buffer.len() - padding -
+    /// 1)..scratch_buffer.len()]`). This is then added to the ring buffer in the next iteration.
+    padding_buffers: Vec<Vec<f32>>,
 
     /// The current position in our ring buffers. Whenever this wraps around to 0, we'll process
     /// a block.
     current_pos: usize,
+    /// If padding is used, then this much extra capacity has been added to the buffers.
+    padding: usize,
 }
 
 /// Marker struct for the version wtihout sidechaining.
@@ -173,13 +180,17 @@ impl StftInput for NoSidechain {
 
 impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
     /// Initialize the [`StftHelper`] for [`Buffer`]s with the specified number of channels and the
-    /// given maximum block size. Call [`set_block_size()`][`Self::set_block_size()`] afterwards if
-    /// you do not need the full capacity upfront.
+    /// given maximum block size. When the option is set, then every yielded sample buffer will have
+    /// this many zero samples appended at the end of the block. Call
+    /// [`set_block_size()`][`Self::set_block_size()`] afterwards if you do not need the full
+    /// capacity upfront. If the padding option is non zero, then all yielded blocks will have that
+    /// many zeroes added to the end of it and the results stored in the padding area will be added
+    /// to the outputs in the next iteration(s).
     ///
     /// # Panics
     ///
     /// Panics if `num_channels == 0 || max_block_size == 0`.
-    pub fn new(num_channels: usize, max_block_size: usize) -> Self {
+    pub fn new(num_channels: usize, max_block_size: usize, padding: usize) -> Self {
         assert_ne!(num_channels, 0);
         assert_ne!(max_block_size, 0);
 
@@ -190,9 +201,13 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
             sidechain_ring_buffers: [(); NUM_SIDECHAIN_INPUTS]
                 .map(|_| vec![vec![0.0; max_block_size]; num_channels]),
 
-            scratch_buffer: vec![0.0; max_block_size],
+            // When padding is used this scratch buffer will have a bunch of zeroes added to it
+            // after copying a block of audio to it
+            scratch_buffer: vec![0.0; max_block_size + padding],
+            padding_buffers: vec![vec![0.0; padding]; num_channels],
 
             current_pos: 0,
+            padding,
         }
     }
 
@@ -213,13 +228,18 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
             main_ring_buffer.resize(block_size, 0.0);
             main_ring_buffer.fill(0.0);
         }
-        self.scratch_buffer.resize(block_size, 0.0);
-        self.scratch_buffer.fill(0.0);
         for sidechain_ring_buffers in &mut self.sidechain_ring_buffers {
             for sidechain_ring_buffer in sidechain_ring_buffers {
                 sidechain_ring_buffer.resize(block_size, 0.0);
                 sidechain_ring_buffer.fill(0.0);
             }
+        }
+        self.scratch_buffer.resize(block_size + self.padding, 0.0);
+        self.scratch_buffer.fill(0.0);
+
+        // For consistency's sake we'll also clear this here
+        for padding_buffer in &mut self.padding_buffers {
+            padding_buffer.fill(0.0);
         }
 
         self.current_pos = 0;
@@ -230,19 +250,19 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
         self.main_input_ring_buffers[0].len() as u32
     }
 
-    /// Process the audio in `main_buffer` in small overlapping blocks with a window function
-    /// applied, adding up the results for the main buffer so they can be written back to the host.
-    /// Since there are a couple ways to do it, the window function needs to be applied in the
-    /// process callbacks. Check the [`nih_plug::util::window`] module for more information.
-    /// Whenever a new block is available, `process_cb()` gets called with a new audio block of the
-    /// specified size with the windowing function already applied. The summed reults will then be
-    /// written back to `main_buffer` exactly one block later, which means that this function will
-    /// introduce one block of latency. This can be compensated by calling
+    /// Process the audio in `main_buffer` in small overlapping blocks, adding up the results for
+    /// the main buffer so they can eventually be written back to the host one block later. This
+    /// means that this function will introduce one block of latency. This can be compensated by
+    /// calling
     /// [`ProcessContext::set_latency()`][`crate::prelude::ProcessContext::set_latency_samples()`]
     /// in your plugin's initialization function.
     ///
-    /// This function does not apply any gain compensation for the windowing. You will need to do
-    /// that yoruself depending on your window function and the amount of overlap.
+    /// If a padding value was specified in [`new()`][Self::new()], then the yielded blocks will
+    /// have that many zeroes appended at the end of them. The padding values will be added to the
+    /// next block before `process_cb()` is called.
+    ///
+    /// Since there are a couple different ways to do it, any window functions needs to be applied
+    /// in the callbacks. Check the [`nih_plug::util::window`] module for more information.
     ///
     /// For efficiency's sake this function will reuse the same vector for all calls to
     /// `process_cb`. This means you can only access a single channel's worth of windowed data at a
@@ -392,14 +412,19 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
                             self.current_pos,
                             sidechain_ring_buffer,
                         );
+                        if self.padding > 0 {
+                            self.scratch_buffer[block_size..].fill(0.0);
+                        }
+
                         process_cb(channel_idx, Some(sidechain_idx), &mut self.scratch_buffer);
                     }
                 }
 
-                for (channel_idx, (input_ring_buffer, output_ring_buffer)) in self
+                for (channel_idx, ((input_ring_buffer, output_ring_buffer), padding_buffer)) in self
                     .main_input_ring_buffers
                     .iter()
                     .zip(self.main_output_ring_buffers.iter_mut())
+                    .zip(self.padding_buffers.iter_mut())
                     .enumerate()
                 {
                     copy_ring_to_scratch_buffer(
@@ -407,7 +432,34 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
                         self.current_pos,
                         input_ring_buffer,
                     );
+                    if self.padding > 0 {
+                        self.scratch_buffer[block_size..].fill(0.0);
+                    }
+
                     process_cb(channel_idx, None, &mut self.scratch_buffer);
+
+                    // Add the padding from the last iteration (for this channel) to the scratch
+                    // buffer before it is copied to the output ring buffer. In case the padding is
+                    // longer than the block size, then this will cause everything else to be
+                    // shifted to the left so it can be added in the iteration after this.
+                    if self.padding > 0 {
+                        let padding_to_copy = cmp::min(self.padding, block_size);
+                        for (scratch_sample, padding_sample) in self.scratch_buffer
+                            [..padding_to_copy]
+                            .iter_mut()
+                            .zip(&mut padding_buffer[..padding_to_copy])
+                        {
+                            *scratch_sample += *padding_sample;
+                        }
+
+                        let remaining_padding = padding_to_copy - self.padding;
+                        if remaining_padding > 0 {
+                            padding_buffer.copy_within(..padding_to_copy, 0);
+                        }
+
+                        // And we obviously don't want this to feedback
+                        padding_buffer[remaining_padding..].fill(0.0);
+                    }
 
                     // The actual overlap-add part of the equation
                     add_scratch_to_ring_buffer(
@@ -415,6 +467,18 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
                         self.current_pos,
                         output_ring_buffer,
                     );
+
+                    // And the data from the padding area should be saved so it can be added to next
+                    // iteration's scratch buffer. Like mentioned above, the padding can be larger
+                    // than the block size so we also need to do overlap-add here.
+                    if self.padding > 0 {
+                        for (padding_sample, scratch_sample) in padding_buffer
+                            .iter_mut()
+                            .zip(&mut self.scratch_buffer[block_size..])
+                        {
+                            *padding_sample += *scratch_sample;
+                        }
+                    }
                 }
             }
         }
@@ -478,6 +542,10 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
                         self.current_pos,
                         input_ring_buffer,
                     );
+                    if self.padding > 0 {
+                        self.scratch_buffer[block_size..].fill(0.0);
+                    }
+
                     analyze_cb(channel_idx, &mut self.scratch_buffer);
                 }
             }
