@@ -4,15 +4,16 @@ use std::mem::{self, MaybeUninit};
 use std::ptr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use vst3_com::vst::IProcessContextRequirementsFlags;
 use vst3_sys::base::{kInvalidArgument, kNoInterface, kResultFalse, kResultOk, tresult, TBool};
 use vst3_sys::base::{IBStream, IPluginBase};
 use vst3_sys::utils::SharedVstPtr;
 use vst3_sys::vst::{
     kNoParamId, kNoParentUnitId, kNoProgramListId, kRootUnitId, Event, EventTypes, IAudioProcessor,
     IComponent, IEditController, IEventList, IMidiMapping, INoteExpressionController,
-    IParamValueQueue, IParameterChanges, IUnitInfo, LegacyMidiCCOutEvent, NoteExpressionTypeInfo,
-    NoteExpressionValueDescription, NoteOffEvent, NoteOnEvent, ParameterFlags, PolyPressureEvent,
-    ProgramListInfo, TChar, UnitInfo,
+    IParamValueQueue, IParameterChanges, IProcessContextRequirements, IUnitInfo,
+    LegacyMidiCCOutEvent, NoteExpressionTypeInfo, NoteExpressionValueDescription, NoteOffEvent,
+    NoteOnEvent, ParameterFlags, PolyPressureEvent, ProgramListInfo, TChar, UnitInfo,
 };
 use vst3_sys::VST3;
 use widestring::U16CStr;
@@ -42,6 +43,7 @@ use vst3_sys as vst3_com;
     IAudioProcessor,
     IMidiMapping,
     INoteExpressionController,
+    IProcessContextRequirements,
     IUnitInfo
 ))]
 pub(crate) struct Wrapper<P: Vst3Plugin> {
@@ -1403,6 +1405,17 @@ impl<P: Vst3Plugin> INoteExpressionController for Wrapper<P> {
         _value: *mut f64,
     ) -> tresult {
         kResultFalse
+    }
+}
+
+impl<P: Vst3Plugin> IProcessContextRequirements for Wrapper<P> {
+    unsafe fn get_process_context_requirements(&self) -> u32 {
+        IProcessContextRequirementsFlags::kNeedProjectTimeMusic
+            | IProcessContextRequirementsFlags::kNeedBarPositionMusic
+            | IProcessContextRequirementsFlags::kNeedCycleMusic
+            | IProcessContextRequirementsFlags::kNeedTimeSignature
+            | IProcessContextRequirementsFlags::kNeedTempo
+            | IProcessContextRequirementsFlags::kNeedTransportState
     }
 }
 
