@@ -2,6 +2,29 @@
 
 use std::f32;
 
+/// A Blackman window function with the 'standard' coefficients.
+///
+/// <https://en.wikipedia.org/wiki/Window_function#Blackman_window>
+pub fn blackman(size: usize) -> Vec<f32> {
+    let mut window = vec![0.0; size];
+    blackman_in_place(&mut window);
+
+    window
+}
+
+/// The same as [`blackman()`], but filling an existing slice instead.
+pub fn blackman_in_place(window: &mut [f32]) {
+    let size = window.len();
+
+    let scale_1 = (2.0 * f32::consts::PI) / (size - 1) as f32;
+    let scale_2 = scale_1 * 2.0;
+    for (i, sample) in window.iter_mut().enumerate() {
+        let cos_1 = (scale_1 * i as f32).cos();
+        let cos_2 = (scale_2 * i as f32).cos();
+        *sample = 0.42 - (0.5 * cos_1) + (0.08 * cos_2);
+    }
+}
+
 /// A Hann window function.
 ///
 /// <https://en.wikipedia.org/wiki/Hann_function>
