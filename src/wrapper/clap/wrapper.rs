@@ -828,8 +828,9 @@ impl<P: ClapPlugin> Wrapper<P> {
                         param_id: param_hash,
                         cookie: ptr::null_mut(),
                         port_index: -1,
-                        key: -1,
+                        note_id: -1,
                         channel: -1,
+                        key: -1,
                         value: clap_plain_value,
                     };
 
@@ -881,9 +882,10 @@ impl<P: ClapPlugin> Wrapper<P> {
                             // We don't have a way to denote live events
                             flags: 0,
                         },
+                        note_id: -1,
                         port_index: 0,
-                        key: note as i16,
                         channel: channel as i16,
+                        key: note as i16,
                         velocity: velocity as f64,
                     };
 
@@ -903,9 +905,10 @@ impl<P: ClapPlugin> Wrapper<P> {
                             type_: CLAP_EVENT_NOTE_OFF,
                             flags: 0,
                         },
+                        note_id: -1,
                         port_index: 0,
-                        key: note as i16,
                         channel: channel as i16,
+                        key: note as i16,
                         velocity: velocity as f64,
                     };
 
@@ -926,9 +929,10 @@ impl<P: ClapPlugin> Wrapper<P> {
                             flags: 0,
                         },
                         expression_id: CLAP_NOTE_EXPRESSION_PRESSURE,
+                        note_id: -1,
                         port_index: 0,
-                        key: note as i16,
                         channel: channel as i16,
+                        key: note as i16,
                         value: pressure as f64,
                     };
 
@@ -949,9 +953,10 @@ impl<P: ClapPlugin> Wrapper<P> {
                             flags: 0,
                         },
                         expression_id: CLAP_NOTE_EXPRESSION_VOLUME,
+                        note_id: -1,
                         port_index: 0,
-                        key: note as i16,
                         channel: channel as i16,
+                        key: note as i16,
                         value: gain as f64,
                     };
 
@@ -972,9 +977,10 @@ impl<P: ClapPlugin> Wrapper<P> {
                             flags: 0,
                         },
                         expression_id: CLAP_NOTE_EXPRESSION_PAN,
+                        note_id: -1,
                         port_index: 0,
-                        key: note as i16,
                         channel: channel as i16,
+                        key: note as i16,
                         value: (pan as f64 + 1.0) / 2.0,
                     };
 
@@ -995,9 +1001,10 @@ impl<P: ClapPlugin> Wrapper<P> {
                             flags: 0,
                         },
                         expression_id: CLAP_NOTE_EXPRESSION_TUNING,
+                        note_id: -1,
                         port_index: 0,
-                        key: note as i16,
                         channel: channel as i16,
+                        key: note as i16,
                         value: tuning as f64,
                     };
 
@@ -1018,9 +1025,10 @@ impl<P: ClapPlugin> Wrapper<P> {
                             flags: 0,
                         },
                         expression_id: CLAP_NOTE_EXPRESSION_VIBRATO,
+                        note_id: -1,
                         port_index: 0,
-                        key: note as i16,
                         channel: channel as i16,
+                        key: note as i16,
                         value: vibrato as f64,
                     };
 
@@ -1041,9 +1049,10 @@ impl<P: ClapPlugin> Wrapper<P> {
                             flags: 0,
                         },
                         expression_id: CLAP_NOTE_EXPRESSION_EXPRESSION,
+                        note_id: -1,
                         port_index: 0,
-                        key: note as i16,
                         channel: channel as i16,
+                        key: note as i16,
                         value: expression as f64,
                     };
 
@@ -1064,9 +1073,10 @@ impl<P: ClapPlugin> Wrapper<P> {
                             flags: 0,
                         },
                         expression_id: CLAP_NOTE_EXPRESSION_BRIGHTNESS,
+                        note_id: -1,
                         port_index: 0,
-                        key: note as i16,
                         channel: channel as i16,
+                        key: note as i16,
                         value: brightness as f64,
                     };
 
@@ -1988,10 +1998,10 @@ impl<P: ClapPlugin> Wrapper<P> {
                 } else {
                     0
                 };
-                config.has_main_input_channel = bus_config.num_output_channels > 0;
+                config.has_main_input = bus_config.num_output_channels > 0;
                 config.main_input_channel_count = bus_config.num_output_channels;
                 config.main_input_port_type = input_port_type;
-                config.has_main_output_channel = bus_config.num_output_channels > 0;
+                config.has_main_output = bus_config.num_output_channels > 0;
                 config.main_output_channel_count = bus_config.num_output_channels;
                 config.main_output_port_type = output_port_type;
 
