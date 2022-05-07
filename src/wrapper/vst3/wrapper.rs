@@ -41,8 +41,8 @@ use vst3_sys as vst3_com;
     IEditController,
     IAudioProcessor,
     IMidiMapping,
-    IUnitInfo,
-    INoteExpressionController
+    INoteExpressionController,
+    IUnitInfo
 ))]
 pub(crate) struct Wrapper<P: Vst3Plugin> {
     inner: Arc<WrapperInner<P>>,
@@ -1332,6 +1332,80 @@ impl<P: Vst3Plugin> IMidiMapping for Wrapper<P> {
     }
 }
 
+impl<P: Vst3Plugin> INoteExpressionController for Wrapper<P> {
+    unsafe fn get_note_expression_count(&self, bus_idx: i32, _channel: i16) -> i32 {
+        // Apparently you need to define the predefined note expressions. Thanks VST3.
+        if P::MIDI_INPUT >= MidiConfig::Basic && bus_idx == 0 {
+            note_expressions::KNOWN_NOTE_EXPRESSIONS.len() as i32
+        } else {
+            0
+        }
+    }
+
+    unsafe fn get_note_expression_info(
+        &self,
+        bus_idx: i32,
+        _channel: i16,
+        note_expression_idx: i32,
+        info: *mut NoteExpressionTypeInfo,
+    ) -> tresult {
+        if P::MIDI_INPUT < MidiConfig::Basic
+            || bus_idx != 0
+            || !(0..note_expressions::KNOWN_NOTE_EXPRESSIONS.len() as i32)
+                .contains(&note_expression_idx)
+        {
+            return kInvalidArgument;
+        }
+
+        check_null_ptr!(info);
+
+        *info = mem::zeroed();
+
+        let info = &mut *info;
+        let note_expression_info =
+            &note_expressions::KNOWN_NOTE_EXPRESSIONS[note_expression_idx as usize];
+        info.type_id = note_expression_info.type_id;
+        u16strlcpy(&mut info.title, note_expression_info.title);
+        u16strlcpy(&mut info.short_title, note_expression_info.title);
+        u16strlcpy(&mut info.units, note_expression_info.unit);
+        info.unit_id = kNoParentUnitId;
+        // This should not be needed since they're predefined, but then again you'd think you also
+        // wouldn't need to define predefined note expressions now do you?
+        info.value_desc = NoteExpressionValueDescription {
+            default_value: 0.5,
+            min: 0.0,
+            max: 1.0,
+            step_count: 0,
+        };
+        info.id = kNoParamId;
+        info.flags = 1 << 2; // kIsAbsolute
+
+        kResultOk
+    }
+
+    unsafe fn get_note_expression_string_by_value(
+        &self,
+        _bus_idx: i32,
+        _channel: i16,
+        _id: u32,
+        _value: f64,
+        _string: *mut TChar,
+    ) -> tresult {
+        kResultFalse
+    }
+
+    unsafe fn get_note_expression_value_by_string(
+        &self,
+        _bus_idx: i32,
+        _channel: i16,
+        _id: u32,
+        _string: *const TChar,
+        _value: *mut f64,
+    ) -> tresult {
+        kResultFalse
+    }
+}
+
 impl<P: Vst3Plugin> IUnitInfo for Wrapper<P> {
     unsafe fn get_unit_count(&self) -> i32 {
         self.inner.param_units.len() as i32
@@ -1431,79 +1505,5 @@ impl<P: Vst3Plugin> IUnitInfo for Wrapper<P> {
         _data: SharedVstPtr<dyn IBStream>,
     ) -> tresult {
         kInvalidArgument
-    }
-}
-
-impl<P: Vst3Plugin> INoteExpressionController for Wrapper<P> {
-    unsafe fn get_note_expression_count(&self, bus_idx: i32, _channel: i16) -> i32 {
-        // Apparently you need to define the predefined note expressions. Thanks VST3.
-        if P::MIDI_INPUT >= MidiConfig::Basic && bus_idx == 0 {
-            note_expressions::KNOWN_NOTE_EXPRESSIONS.len() as i32
-        } else {
-            0
-        }
-    }
-
-    unsafe fn get_note_expression_info(
-        &self,
-        bus_idx: i32,
-        _channel: i16,
-        note_expression_idx: i32,
-        info: *mut NoteExpressionTypeInfo,
-    ) -> tresult {
-        if P::MIDI_INPUT < MidiConfig::Basic
-            || bus_idx != 0
-            || !(0..note_expressions::KNOWN_NOTE_EXPRESSIONS.len() as i32)
-                .contains(&note_expression_idx)
-        {
-            return kInvalidArgument;
-        }
-
-        check_null_ptr!(info);
-
-        *info = mem::zeroed();
-
-        let info = &mut *info;
-        let note_expression_info =
-            &note_expressions::KNOWN_NOTE_EXPRESSIONS[note_expression_idx as usize];
-        info.type_id = note_expression_info.type_id;
-        u16strlcpy(&mut info.title, note_expression_info.title);
-        u16strlcpy(&mut info.short_title, note_expression_info.title);
-        u16strlcpy(&mut info.units, note_expression_info.unit);
-        info.unit_id = kNoParentUnitId;
-        // This should not be needed since they're predefined, but then again you'd think you also
-        // wouldn't need to define predefined note expressions now do you?
-        info.value_desc = NoteExpressionValueDescription {
-            default_value: 0.5,
-            min: 0.0,
-            max: 1.0,
-            step_count: 0,
-        };
-        info.id = kNoParamId;
-        info.flags = 1 << 2; // kIsAbsolute
-
-        kResultOk
-    }
-
-    unsafe fn get_note_expression_string_by_value(
-        &self,
-        _bus_idx: i32,
-        _channel: i16,
-        _id: u32,
-        _value: f64,
-        _string: *mut TChar,
-    ) -> tresult {
-        kResultFalse
-    }
-
-    unsafe fn get_note_expression_value_by_string(
-        &self,
-        _bus_idx: i32,
-        _channel: i16,
-        _id: u32,
-        _string: *const TChar,
-        _value: *mut f64,
-    ) -> tresult {
-        kResultFalse
     }
 }
