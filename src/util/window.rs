@@ -6,15 +6,10 @@ use std::f32;
 ///
 /// <https://en.wikipedia.org/wiki/Hann_function>
 pub fn hann(size: usize) -> Vec<f32> {
-    // We want to scale `[0, size - 1]` to `[0, pi]`.
-    // XXX: The `sin^2()` version results in weird rounding errors that cause spectral leakeage
-    let scale = (size as f32 - 1.0).recip() * f32::consts::TAU;
-    (0..size)
-        .map(|i| {
-            let cos = (i as f32 * scale).cos();
-            0.5 - (0.5 * cos)
-        })
-        .collect()
+    let mut window = vec![0.0; size];
+    hann_in_place(&mut window);
+
+    window
 }
 
 /// The same as [`hann()`], but filling an existing slice instead.
@@ -22,6 +17,7 @@ pub fn hann_in_place(window: &mut [f32]) {
     let size = window.len();
 
     // We want to scale `[0, size - 1]` to `[0, pi]`.
+    // XXX: The `sin^2()` version results in weird rounding errors that cause spectral leakeage
     let scale = (size as f32 - 1.0).recip() * f32::consts::TAU;
     for (i, sample) in window.iter_mut().enumerate() {
         let cos = (i as f32 * scale).cos();
