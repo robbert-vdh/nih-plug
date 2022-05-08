@@ -236,7 +236,6 @@ impl Plugin for PubertySimulator {
                 // Negated because pitching down should cause us to take values from higher frequency bins
                 let frequency_multiplier = 2.0f32.powf(-smoothed_pitch_value);
 
-                // Forward FFT, the helper has already applied window function
                 // RustFFT doesn't actually need a scratch buffer here, so we'll pass an empty
                 // buffer instead
                 fft_plan

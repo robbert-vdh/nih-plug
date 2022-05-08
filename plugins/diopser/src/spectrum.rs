@@ -86,7 +86,6 @@ impl SpectrumInput {
             |channel_idx, real_fft_scratch_buffer| {
                 multiply_with_window(real_fft_scratch_buffer, &self.compensated_window_function);
 
-                // Forward FFT, the helper has already applied window function
                 self.plan
                     .process_with_scratch(
                         real_fft_scratch_buffer,
