@@ -111,7 +111,10 @@ impl Plugin for Stft {
         _buffer_config: &BufferConfig,
         context: &mut impl ProcessContext,
     ) -> bool {
-        context.set_latency_samples(self.stft.latency_samples());
+        // The plugin's latency consists of the block size from the overlap-add procedure and half
+        // of the filter kernel's size (since we're using a linear phase/symmetrical convolution
+        // kernel)
+        context.set_latency_samples(self.stft.latency_samples() + (FILTER_WINDOW_SIZE as u32 / 2));
 
         true
     }
