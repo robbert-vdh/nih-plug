@@ -13,7 +13,7 @@ const FILTER_WINDOW_SIZE: usize = 33;
 const FFT_WINDOW_SIZE: usize = WINDOW_SIZE + FILTER_WINDOW_SIZE - 1;
 
 /// The gain compensation we need to apply for the STFT process.
-const GAIN_COMPENSATION: f32 = 1.0 / WINDOW_SIZE as f32;
+const GAIN_COMPENSATION: f32 = 1.0 / FFT_WINDOW_SIZE as f32;
 
 struct Stft {
     params: Arc<StftParams>,
