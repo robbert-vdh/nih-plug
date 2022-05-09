@@ -87,7 +87,11 @@ enum PitchShiftingMode {
     /// Directly linearly interpolate sine and cosine waves from different bins. This obviously
     /// sounds very bad, but it also sounds kind of hilarious.
     #[name = "Very broken"]
-    VeryBroken,
+    InterpolateRectangular,
+    /// The same as `InterpolateRectangular`, but interpolating the polar forms instead. This sounds
+    /// slightly better, which actually ends up making it sound a lot worse.
+    #[name = "Also very broken"]
+    InterpolatePolar,
 }
 
 impl Default for PubertySimulator {
@@ -146,7 +150,7 @@ impl Default for PubertySimulatorParams {
             )
             .with_value_to_string(power_of_two_val2str)
             .with_string_to_value(power_of_two_str2val),
-            mode: EnumParam::new("Mode", PitchShiftingMode::VeryBroken),
+            mode: EnumParam::new("Mode", PitchShiftingMode::InterpolateRectangular),
         }
     }
 }
@@ -263,46 +267,102 @@ impl Plugin for PubertySimulator {
                     .process_with_scratch(real_fft_buffer, &mut self.complex_fft_buffer, &mut [])
                     .unwrap();
 
-                // This simply interpolates between the complex sinusoids from the frequency bins
-                // for this bin's frequency scaled by the octave pitch multiplies. The iteration
-                // order dependson the pitch shifting direction since we're doing it in place.
+                // TODO: Move this to helper functions. These functions capture a lot of variables
+                //       here so that might require some work. And branch preductors are probably
+                //       good enough to be able to put the match inside of the `process_bin`
+                //       function, but it seems preferable to have it outside of the loop.
                 let num_bins = self.complex_fft_buffer.len();
-                let mut process_bin = match self.params.mode.value() {
-                    PitchShiftingMode::VeryBroken => |bin_idx| {
-                        let frequency = bin_idx as f32 / window_size as f32 * sample_rate;
-                        let target_frequency = frequency * frequency_multiplier;
+                match self.params.mode.value() {
+                    PitchShiftingMode::InterpolateRectangular => {
+                        // This simply interpolates the sine and cosine waves composing the complex
+                        // sinusoids from the frequency bins to neighbouring frequency bins scaled
+                        // by the octave pitch multiplies. The iteration order dependson the pitch
+                        // shifting direction since we're doing it in place.
+                        let mut process_bin = |bin_idx| {
+                            let frequency = bin_idx as f32 / window_size as f32 * sample_rate;
+                            let target_frequency = frequency * frequency_multiplier;
 
-                        // Simple linear interpolation
-                        let target_bin = target_frequency / sample_rate * window_size as f32;
-                        let target_bin_low = target_bin.floor() as usize;
-                        let target_bin_high = target_bin.ceil() as usize;
-                        let target_low_t = target_bin % 1.0;
-                        let target_high_t = 1.0 - target_low_t;
-                        let target_low = self
-                            .complex_fft_buffer
-                            .get(target_bin_low)
-                            .copied()
-                            .unwrap_or_default();
-                        let target_high = self
-                            .complex_fft_buffer
-                            .get(target_bin_high)
-                            .copied()
-                            .unwrap_or_default();
+                            // Simple linear interpolation
+                            let target_bin = target_frequency / sample_rate * window_size as f32;
+                            let target_bin_floor = target_bin.floor() as usize;
+                            let target_bin_ceil = target_bin.ceil() as usize;
+                            let target_floor_t = target_bin % 1.0;
+                            let target_ceil_t = 1.0 - target_floor_t;
+                            let target_floor = self
+                                .complex_fft_buffer
+                                .get(target_bin_floor)
+                                .copied()
+                                .unwrap_or_default();
+                            let target_ceil = self
+                                .complex_fft_buffer
+                                .get(target_bin_ceil)
+                                .copied()
+                                .unwrap_or_default();
 
-                        self.complex_fft_buffer[bin_idx] = (target_low * target_low_t
-                        + target_high * target_high_t)
-                        * 3.0 // Random extra gain, not sure
-                        * gain_compensation;
-                    },
-                };
+                            self.complex_fft_buffer[bin_idx] = (target_floor * target_floor_t
+                                + target_ceil * target_ceil_t)
+                                * 3.0 // Random extra gain, not sure
+                                * gain_compensation;
+                        };
 
-                if frequency_multiplier >= 1.0 {
-                    for bin_idx in 0..num_bins {
-                        process_bin(bin_idx);
+                        if frequency_multiplier >= 1.0 {
+                            for bin_idx in 0..num_bins {
+                                process_bin(bin_idx);
+                            }
+                        } else {
+                            for bin_idx in (0..num_bins).rev() {
+                                process_bin(bin_idx);
+                            }
+                        }
                     }
-                } else {
-                    for bin_idx in (0..num_bins).rev() {
-                        process_bin(bin_idx);
+                    PitchShiftingMode::InterpolatePolar => {
+                        // Same as the above, but interpolating in the polar form instead. While
+                        // this does sound more correct it doesn't sound nearly as hilarious, and it
+                        // just sounds bad at this point. But maybe there's some use for this.
+                        let mut process_bin = |bin_idx| {
+                            let frequency = bin_idx as f32 / window_size as f32 * sample_rate;
+                            let target_frequency = frequency * frequency_multiplier;
+
+                            // Simple linear interpolation
+                            let target_bin = target_frequency / sample_rate * window_size as f32;
+                            let target_bin_floor = target_bin.floor() as usize;
+                            let target_bin_ceil = target_bin.ceil() as usize;
+                            let target_floor_t = target_bin % 1.0;
+                            let target_ceil_t = 1.0 - target_floor_t;
+                            let target_floor = self
+                                .complex_fft_buffer
+                                .get(target_bin_floor)
+                                .copied()
+                                .unwrap_or_default();
+                            let target_ceil = self
+                                .complex_fft_buffer
+                                .get(target_bin_ceil)
+                                .copied()
+                                .unwrap_or_default();
+
+                            let target_floor_magnitude = target_floor.norm();
+                            let target_floor_phase = target_floor.arg();
+                            let target_ceil_magnitude = target_ceil.norm();
+                            let target_ceil_phase = target_ceil.arg();
+
+                            self.complex_fft_buffer[bin_idx] = Complex32::from_polar(
+                                (target_floor_magnitude * target_floor_t)
+                                    + (target_ceil_magnitude * target_ceil_t),
+                                (target_floor_phase * target_floor_t)
+                                    + (target_ceil_phase * target_ceil_t),
+                            ) * 3.0 // Random extra gain, not sure
+                                * gain_compensation;
+                        };
+
+                        if frequency_multiplier >= 1.0 {
+                            for bin_idx in 0..num_bins {
+                                process_bin(bin_idx);
+                            }
+                        } else {
+                            for bin_idx in (0..num_bins).rev() {
+                                process_bin(bin_idx);
+                            }
+                        }
                     }
                 }
 
