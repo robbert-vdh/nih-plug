@@ -29,9 +29,9 @@ const DEFAULT_WINDOW_SIZE: usize = 1 << DEFAULT_WINDOW_ORDER; // 1024
 const MAX_WINDOW_ORDER: usize = 15;
 const MAX_WINDOW_SIZE: usize = 1 << MAX_WINDOW_ORDER; // 32768
 
-const MIN_OVERLAP_ORDER: usize = 1;
+const MIN_OVERLAP_ORDER: usize = 2;
 #[allow(dead_code)]
-const MIN_OVERLAP_TIMES: usize = 1 << MIN_OVERLAP_ORDER; // 2
+const MIN_OVERLAP_TIMES: usize = 2 << MIN_OVERLAP_ORDER; // 4
 const DEFAULT_OVERLAP_ORDER: usize = 3;
 #[allow(dead_code)]
 const DEFAULT_OVERLAP_TIMES: usize = 1 << DEFAULT_OVERLAP_ORDER; // 4
@@ -205,7 +205,11 @@ impl Plugin for PubertySimulator {
         let window_size = self.window_size();
         let overlap_times = self.overlap_times();
         let sample_rate = context.transport().sample_rate;
-        let gain_compensation: f32 = (overlap_times as f32 / 2.0).recip() / window_size as f32;
+        // The overlap gain compensation is based on a squared Hann window, which will sum perfectly
+        // at four times overlap or higher. We'll apply a regular Hann window before the analysis
+        // and after the synthesis.
+        let gain_compensation: f32 =
+            ((overlap_times as f32 / 4.0) * 1.5).recip() / window_size as f32;
 
         // If the window size has changed since the last process call, reset the buffers and chance
         // our latency. All of these buffers already have enough capacity
@@ -235,6 +239,9 @@ impl Plugin for PubertySimulator {
                 }
                 // Negated because pitching down should cause us to take values from higher frequency bins
                 let frequency_multiplier = 2.0f32.powf(-smoothed_pitch_value);
+
+                // We'll window the input with a Hann function to avoid spectral leakage
+                util::window::multiply_with_window(real_fft_buffer, &self.window_function);
 
                 // RustFFT doesn't actually need a scratch buffer here, so we'll pass an empty
                 // buffer instead
@@ -295,7 +302,9 @@ impl Plugin for PubertySimulator {
                     .process_with_scratch(&mut self.complex_fft_buffer, real_fft_buffer, &mut [])
                     .unwrap();
 
-                // Apply the window function. We can do this either before the DFT or after the IDFT
+                // Apply the window function once more to reduce time domain aliasing. The gain
+                // compensation compensates for the squared Hann window that would be applied if we
+                // didn't do any processing at all.
                 util::window::multiply_with_window(real_fft_buffer, &self.window_function);
             });
 
