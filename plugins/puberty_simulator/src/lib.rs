@@ -76,6 +76,18 @@ struct PubertySimulatorParams {
     /// prevent invalid inputs).
     #[id = "ovrlap"]
     overlap_times_order: IntParam,
+
+    /// The type of broken pitch shifting to apply.
+    #[id = "mode"]
+    mode: EnumParam<PitchShiftingMode>,
+}
+
+#[derive(Enum, Debug, PartialEq)]
+enum PitchShiftingMode {
+    /// Directly linearly interpolate sine and cosine waves from different bins. This obviously
+    /// sounds very bad, but it also sounds kind of hilarious.
+    #[name = "Very broken"]
+    VeryBroken,
 }
 
 impl Default for PubertySimulator {
@@ -134,6 +146,7 @@ impl Default for PubertySimulatorParams {
             )
             .with_value_to_string(power_of_two_val2str)
             .with_string_to_value(power_of_two_str2val),
+            mode: EnumParam::new("Mode", PitchShiftingMode::VeryBroken),
         }
     }
 }
@@ -254,31 +267,33 @@ impl Plugin for PubertySimulator {
                 // for this bin's frequency scaled by the octave pitch multiplies. The iteration
                 // order dependson the pitch shifting direction since we're doing it in place.
                 let num_bins = self.complex_fft_buffer.len();
-                let mut process_bin = |bin_idx| {
-                    let frequency = bin_idx as f32 / window_size as f32 * sample_rate;
-                    let target_frequency = frequency * frequency_multiplier;
+                let mut process_bin = match self.params.mode.value() {
+                    PitchShiftingMode::VeryBroken => |bin_idx| {
+                        let frequency = bin_idx as f32 / window_size as f32 * sample_rate;
+                        let target_frequency = frequency * frequency_multiplier;
 
-                    // Simple linear interpolation
-                    let target_bin = target_frequency / sample_rate * window_size as f32;
-                    let target_bin_low = target_bin.floor() as usize;
-                    let target_bin_high = target_bin.ceil() as usize;
-                    let target_low_t = target_bin % 1.0;
-                    let target_high_t = 1.0 - target_low_t;
-                    let target_low = self
-                        .complex_fft_buffer
-                        .get(target_bin_low)
-                        .copied()
-                        .unwrap_or_default();
-                    let target_high = self
-                        .complex_fft_buffer
-                        .get(target_bin_high)
-                        .copied()
-                        .unwrap_or_default();
+                        // Simple linear interpolation
+                        let target_bin = target_frequency / sample_rate * window_size as f32;
+                        let target_bin_low = target_bin.floor() as usize;
+                        let target_bin_high = target_bin.ceil() as usize;
+                        let target_low_t = target_bin % 1.0;
+                        let target_high_t = 1.0 - target_low_t;
+                        let target_low = self
+                            .complex_fft_buffer
+                            .get(target_bin_low)
+                            .copied()
+                            .unwrap_or_default();
+                        let target_high = self
+                            .complex_fft_buffer
+                            .get(target_bin_high)
+                            .copied()
+                            .unwrap_or_default();
 
-                    self.complex_fft_buffer[bin_idx] = (target_low * target_low_t
+                        self.complex_fft_buffer[bin_idx] = (target_low * target_low_t
                         + target_high * target_high_t)
                         * 3.0 // Random extra gain, not sure
                         * gain_compensation;
+                    },
                 };
 
                 if frequency_multiplier >= 1.0 {
