@@ -7,6 +7,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 /// The environment variable for controlling the logging behavior.
 const NIH_LOG_ENV: &str = "NIH_LOG";
 
+/// The bit that controls flush-to-zero behavior for denormals in 32 and 64-bit floating point
+/// numbers on AArch64.
+///
+/// <https://developer.arm.com/documentation/ddi0595/2021-06/AArch64-Registers/FPCR--Floating-point-Control-Register>
+#[cfg(target_arch = "aarch64")]
+const AARCH64_FTZ_BIT: u64 = 1 << 24;
+
 #[cfg(all(debug_assertions, feature = "assert_process_allocs"))]
 #[global_allocator]
 static A: assert_no_alloc::AllocDisabler = assert_no_alloc::AllocDisabler;
@@ -148,22 +155,33 @@ struct ScopedFtz {
 
 impl ScopedFtz {
     fn enable() -> Self {
-        // TODO: Implement this for AArch64/neon
         cfg_if::cfg_if! {
             if #[cfg(target_feature = "sse")] {
                 let mode = unsafe { std::arch::x86_64::_MM_GET_FLUSH_ZERO_MODE() };
-                if mode != std::arch::x86_64::_MM_FLUSH_ZERO_ON {
+                let should_disable_again = mode != std::arch::x86_64::_MM_FLUSH_ZERO_ON;
+                if should_disable_again {
                     unsafe { std::arch::x86_64::_MM_SET_FLUSH_ZERO_MODE(std::arch::x86_64::_MM_FLUSH_ZERO_ON) };
+                }
 
-                    Self {
-                        should_disable_again: true,
-                        _send_sync_marker: PhantomData,
-                    }
-                } else {
-                    Self {
-                        should_disable_again: false,
-                        _send_sync_marker: PhantomData,
-                    }
+                Self {
+                    should_disable_again,
+                    _send_sync_marker: PhantomData,
+                }
+            } else if #[cfg(target_arch = "aarch64")] {
+                // There are no convient intrinsics to change the FTZ settings on AArch64, so this
+                // requires inline assembly:
+                // https://developer.arm.com/documentation/ddi0595/2021-06/AArch64-Registers/FPCR--Floating-point-Control-Register
+                let mut fpcr: u64;
+                unsafe { std::arch::asm!("mrs {}, fpcr", out(reg) fpcr) };
+
+                let should_disable_again = fpcr & AARCH64_FTZ_BIT == 0;
+                if should_disable_again {
+                    unsafe { std::arch::asm!("msr fpcr, {}", in(reg) fpcr | AARCH64_FTZ_BIT) };
+                }
+
+                Self {
+                    should_disable_again,
+                    _send_sync_marker: PhantomData,
                 }
             } else {
                 Self {
@@ -181,6 +199,10 @@ impl Drop for ScopedFtz {
             cfg_if::cfg_if! {
                 if #[cfg(target_feature = "sse")] {
                     unsafe { std::arch::x86_64::_MM_SET_FLUSH_ZERO_MODE(std::arch::x86_64::_MM_FLUSH_ZERO_OFF) };
+                } else if #[cfg(target_arch = "aarch64")] {
+                    let mut fpcr: u64;
+                    unsafe { std::arch::asm!("mrs {}, fpcr", out(reg) fpcr) };
+                    unsafe { std::arch::asm!("msr fpcr, {}", in(reg) fpcr & !AARCH64_FTZ_BIT) };
                 }
             };
         }
