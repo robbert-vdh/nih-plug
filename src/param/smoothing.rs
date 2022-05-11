@@ -274,16 +274,10 @@ impl Smoother<f32> {
                     SmoothingStyle::Linear(_) => current + (self.step_size * steps as f32),
                     SmoothingStyle::Logarithmic(_) => current * (self.step_size.powi(steps as i32)),
                     SmoothingStyle::ExponentialIIR(_) => {
-                        // TODO: Is there a way to avoid the loop here?
-                        let mut current = current;
-                        // TODO: We could store this `1.0 - self.step_size` on the struct, but until
-                        //       a profiler tells me that's needed this is probably fine
-                        let target_step_size = 1.0 - self.step_size;
-                        for _ in 0..steps {
-                            current = current * self.step_size + (self.target * target_step_size)
-                        }
-
-                        current
+                        // This is the same as calculating `current = (current * step_size) +
+                        // (target * (1 - step_size))` in a loop
+                        let coefficient = self.step_size.powi(steps as i32);
+                        (current * coefficient) + (self.target * (1.0 - coefficient))
                     }
                 }
             };
@@ -404,14 +398,10 @@ impl Smoother<i32> {
                     SmoothingStyle::Linear(_) => current + (self.step_size * steps as f32),
                     SmoothingStyle::Logarithmic(_) => current * self.step_size.powi(steps as i32),
                     SmoothingStyle::ExponentialIIR(_) => {
-                        let target_step_size = 1.0 - self.step_size;
-                        let target = self.target as f32;
-                        let mut current = current;
-                        for _ in 0..steps {
-                            current = current * self.step_size + (target * target_step_size)
-                        }
-
-                        current
+                        // This is the same as calculating `current = (current * step_size) +
+                        // (target * (1 - step_size))` in a loop
+                        let coefficient = self.step_size.powi(steps as i32);
+                        (current * coefficient) + (self.target as f32 * (1.0 - coefficient))
                     }
                 }
             };
