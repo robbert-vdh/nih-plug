@@ -171,13 +171,13 @@ impl<T: Smoothable> Smoother<T> {
                 // We need to solve `current * (step_size ^ steps_left) = target` for
                 // `step_size`
                 nih_debug_assert_ne!(current, 0.0);
-                (self.target.to_f32() / current).powf((steps_left as f32).recip())
+                ((self.target.to_f32() / current) as f64).powf((steps_left as f64).recip()) as f32
             }
             // In this case the step size value is the coefficient the current value will be
             // multiplied by, while the target value is multipled by one minus the coefficient. This
             // reaches 99.99% of the target value after `steps_left`. The smoother will snap to the
             // target value after that point.
-            SmoothingStyle::Exponential(_) => 0.0001f32.powf(1.0 / steps_left as f32),
+            SmoothingStyle::Exponential(_) => 0.0001f64.powf(1.0 / steps_left as f64) as f32,
         };
     }
 
