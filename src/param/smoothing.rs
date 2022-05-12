@@ -69,7 +69,14 @@ pub struct SmootherIter<'a, T> {
     smoother: &'a Smoother<T>,
 }
 
-impl<T: Default> Default for Smoother<T> {
+/// A type that can be smoothed. This exists just to avoid duplicate explicit implementations for
+/// the smoothers.
+pub trait Smoothable: Default + Copy {
+    fn to_f32(self) -> f32;
+    fn from_f32(value: f32) -> Self;
+}
+
+impl<T: Smoothable> Default for Smoother<T> {
     fn default() -> Self {
         Self {
             style: SmoothingStyle::None,
@@ -83,11 +90,8 @@ impl<T: Default> Default for Smoother<T> {
     }
 }
 
-// We don't have a trait describing the smoother's functions so we need to duplicate this
-// TODO: Maybe add a trait at some point so we can deduplicate some of the functions from this file.
-//       Needing a trait like that is not ideal though
-impl Iterator for SmootherIter<'_, f32> {
-    type Item = f32;
+impl<T: Smoothable> Iterator for SmootherIter<'_, T> {
+    type Item = T;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
@@ -95,16 +99,7 @@ impl Iterator for SmootherIter<'_, f32> {
     }
 }
 
-impl Iterator for SmootherIter<'_, i32> {
-    type Item = i32;
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        Some(self.smoother.next())
-    }
-}
-
-impl<T: Default> Smoother<T> {
+impl<T: Smoothable> Smoother<T> {
     /// Use the specified style for the smoothing.
     pub fn new(style: SmoothingStyle) -> Self {
         Self {
@@ -132,6 +127,9 @@ impl<T: Default> Smoother<T> {
         self.steps_left() > 0
     }
 
+    /// Produce an iterator that yields smoothed values. These are not iterators already for the
+    /// sole reason that this will always yield a value, and needing to unwrap all of those options
+    /// is not going to be very fun.
     #[inline]
     pub fn iter(&self) -> SmootherIter<T> {
         SmootherIter { smoother: self }
@@ -145,25 +143,16 @@ impl<T: Default> Smoother<T> {
             .borrow_mut()
             .resize_with(max_block_size, || T::default());
     }
-}
 
-// TODO: Try to merge more of the implementations here. Having entire copy-pasted implementations
-//       just because one version requires conversions to and from integers is a bit much. Instead,
-//       probably to the same thing we're doing with the SIMD filters and just have a trait with the
-//       conversion functions and a single implementation instead.
-
-// These are not iterators for the sole reason that this will always yield a value, and needing to
-// unwrap all of those options is not going to be very fun.
-impl Smoother<f32> {
     /// Reset the smoother the specified value.
-    pub fn reset(&mut self, value: f32) {
+    pub fn reset(&mut self, value: T) {
         self.target = value;
-        self.current.store(value, Ordering::Relaxed);
+        self.current.store(value.to_f32(), Ordering::Relaxed);
         self.steps_left.store(0, Ordering::Relaxed);
     }
 
     /// Set the target value.
-    pub fn set_target(&mut self, sample_rate: f32, target: f32) {
+    pub fn set_target(&mut self, sample_rate: f32, target: T) {
         self.target = target;
 
         let steps_left = match self.style {
@@ -177,12 +166,12 @@ impl Smoother<f32> {
         let current = self.current.load(Ordering::Relaxed);
         self.step_size = match self.style {
             SmoothingStyle::None => 0.0,
-            SmoothingStyle::Linear(_) => (self.target - current) / steps_left as f32,
+            SmoothingStyle::Linear(_) => (self.target.to_f32() - current) / steps_left as f32,
             SmoothingStyle::Logarithmic(_) => {
                 // We need to solve `current * (step_size ^ steps_left) = target` for
                 // `step_size`
                 nih_debug_assert_ne!(current, 0.0);
-                (self.target / current).powf((steps_left as f32).recip())
+                (self.target.to_f32() / current).powf((steps_left as f32).recip())
             }
             // In this case the step size value is the coefficient the current value will be
             // multiplied by, while the target value is multipled by one minus the coefficient. This
@@ -197,16 +186,58 @@ impl Smoother<f32> {
     // Yes, Clippy, like I said, this was intentional
     #[allow(clippy::should_implement_trait)]
     #[inline]
-    pub fn next(&self) -> f32 {
+    pub fn next(&self) -> T {
         self.next_step(1)
+    }
+
+    /// [`next()`][Self::next()], but with the ability to skip forward in the smoother.
+    /// [`next()`][Self::next()] is equivalent to calling this function with a `steps` value of 1.
+    /// Calling this function with a `steps` value of `n` means will cause you to skip the next `n -
+    /// 1` values and return the `n`th value.
+    #[inline]
+    pub fn next_step(&self, steps: u32) -> T {
+        nih_debug_assert_ne!(steps, 0);
+
+        if self.steps_left.load(Ordering::Relaxed) > 0 {
+            let current = self.current.load(Ordering::Relaxed);
+            let target = self.target.to_f32();
+
+            // The number of steps usually won't fit exactly, so make sure we don't end up with
+            // quantization errors on overshoots or undershoots. We also need to account for the
+            // possibility that we only have `n < steps` steps left. This is especially important
+            // for the `Exponential` smoothing style, since that won't reach the target value
+            // exactly.
+            let old_steps_left = self.steps_left.fetch_sub(steps as i32, Ordering::Relaxed);
+            let new = if old_steps_left <= steps as i32 {
+                self.steps_left.store(0, Ordering::Relaxed);
+                target
+            } else {
+                match &self.style {
+                    SmoothingStyle::None => target,
+                    SmoothingStyle::Linear(_) => current + (self.step_size * steps as f32),
+                    SmoothingStyle::Logarithmic(_) => current * (self.step_size.powi(steps as i32)),
+                    SmoothingStyle::Exponential(_) => {
+                        // This is the same as calculating `current = (current * step_size) +
+                        // (target * (1 - step_size))` in a loop since the target value won't change
+                        let coefficient = self.step_size.powi(steps as i32);
+                        (current * coefficient) + (target * (1.0 - coefficient))
+                    }
+                }
+            };
+            self.current.store(new, Ordering::Relaxed);
+
+            T::from_f32(new)
+        } else {
+            self.target
+        }
     }
 
     /// Get previous value returned by this smoother. This may be useful to save some boilerplate
     /// when [`is_smoothing()`][Self::is_smoothing()] is used to determine whether an expensive
     /// calculation should take place, and [`next()`][Self::next()] gets called as part of that
     /// calculation.
-    pub fn previous_value(&self) -> f32 {
-        self.current.load(Ordering::Relaxed)
+    pub fn previous_value(&self) -> T {
+        T::from_f32(self.current.load(Ordering::Relaxed))
     }
 
     /// Produce smoothed values for an entire block of audio. Used in conjunction with
@@ -221,7 +252,7 @@ impl Smoother<f32> {
     /// # Panics
     ///
     /// Panics if this function is called again while another block value slice is still alive.
-    pub fn next_block(&self, block: &Block) -> Option<AtomicRefMut<[f32]>> {
+    pub fn next_block(&self, block: &Block) -> Option<AtomicRefMut<[T]>> {
         self.next_block_mapped(block, |x| x)
     }
 
@@ -230,8 +261,8 @@ impl Smoother<f32> {
     pub fn next_block_mapped(
         &self,
         block: &Block,
-        mut f: impl FnMut(f32) -> f32,
-    ) -> Option<AtomicRefMut<[f32]>> {
+        mut f: impl FnMut(T) -> T,
+    ) -> Option<AtomicRefMut<[T]>> {
         let mut block_values = self.block_values.borrow_mut();
         if block_values.len() < block.len() {
             return None;
@@ -247,170 +278,29 @@ impl Smoother<f32> {
             &mut values[..block.len()]
         }))
     }
+}
 
-    /// [`next()`][Self::next()], but with the ability to skip forward in the smoother.
-    /// [`next()`][Self::next()] is equivalent to calling this function with a `steps` value of 1.
-    /// Calling this function with a `steps` value of `n` means will cause you to skip the next `n -
-    /// 1` values and return the `n`th value.
+impl Smoothable for f32 {
     #[inline]
-    pub fn next_step(&self, steps: u32) -> f32 {
-        nih_debug_assert_ne!(steps, 0);
+    fn to_f32(self) -> f32 {
+        self
+    }
 
-        if self.steps_left.load(Ordering::Relaxed) > 0 {
-            let current = self.current.load(Ordering::Relaxed);
-
-            // The number of steps usually won't fit exactly, so make sure we don't end up with
-            // quantization errors on overshoots or undershoots. We also need to account for the
-            // possibility that we only have `n < steps` steps left. This is especially important
-            // for the `Exponential` smoothing style, since that won't reach the target value
-            // exactly.
-            let old_steps_left = self.steps_left.fetch_sub(steps as i32, Ordering::Relaxed);
-            let new = if old_steps_left <= steps as i32 {
-                self.steps_left.store(0, Ordering::Relaxed);
-                self.target
-            } else {
-                match &self.style {
-                    SmoothingStyle::None => self.target,
-                    SmoothingStyle::Linear(_) => current + (self.step_size * steps as f32),
-                    SmoothingStyle::Logarithmic(_) => current * (self.step_size.powi(steps as i32)),
-                    SmoothingStyle::Exponential(_) => {
-                        // This is the same as calculating `current = (current * step_size) +
-                        // (target * (1 - step_size))` in a loop since the target value won't change
-                        let coefficient = self.step_size.powi(steps as i32);
-                        (current * coefficient) + (self.target * (1.0 - coefficient))
-                    }
-                }
-            };
-            self.current.store(new, Ordering::Relaxed);
-
-            new
-        } else {
-            self.target
-        }
+    #[inline]
+    fn from_f32(value: f32) -> Self {
+        value
     }
 }
 
-impl Smoother<i32> {
-    /// Reset the smoother the specified value.
-    pub fn reset(&mut self, value: i32) {
-        self.target = value;
-        self.current.store(value as f32, Ordering::Relaxed);
-        self.steps_left.store(0, Ordering::Relaxed);
+impl Smoothable for i32 {
+    #[inline]
+    fn to_f32(self) -> f32 {
+        self as f32
     }
 
-    pub fn set_target(&mut self, sample_rate: f32, target: i32) {
-        self.target = target;
-
-        let steps_left = match self.style {
-            SmoothingStyle::None => 1,
-            SmoothingStyle::Linear(time)
-            | SmoothingStyle::Logarithmic(time)
-            | SmoothingStyle::Exponential(time) => (sample_rate * time / 1000.0).round() as i32,
-        };
-        self.steps_left.store(steps_left, Ordering::Relaxed);
-
-        let current = self.current.load(Ordering::Relaxed);
-        self.step_size = match self.style {
-            SmoothingStyle::None => 0.0,
-            SmoothingStyle::Linear(_) => (self.target as f32 - current) / steps_left as f32,
-            SmoothingStyle::Logarithmic(_) => {
-                nih_debug_assert_ne!(current, 0.0);
-                (self.target as f32 / current).powf((steps_left as f32).recip())
-            }
-            SmoothingStyle::Exponential(_) => 0.0001f32.powf(-1.0 / steps_left as f32),
-        };
-    }
-
-    /// Get the next value from this smoother. The value will be equal to the previous value once
-    /// the smoothing period is over. This should be called exactly once per sample.
-    // Yes, Clippy, like I said, this was intentional
-    #[allow(clippy::should_implement_trait)]
-    pub fn next(&self) -> i32 {
-        self.next_step(1)
-    }
-
-    /// Get previous value returned by this smoother. This may be useful to save some boilerplate
-    /// when [`is_smoothing()`][Self::is_smoothing()] is used to determine whether an expensive
-    /// calculation should take place, and [`next()`][Self::next()] gets called as part of that
-    /// calculation.
-    pub fn previous_value(&self) -> i32 {
-        self.current.load(Ordering::Relaxed).round() as i32
-    }
-
-    /// Produce smoothed values for an entire block of audio. Used in conjunction with
-    /// [`Buffer::iter_blocks()`][crate::prelude::Buffer::iter_blocks()]. Make sure to call
-    /// [`Plugin::initialize_block_smoothers()`][crate::prelude::Plugin::initialize_block_smoothers()] with
-    /// the same maximum buffer block size as the one passed to `iter_blocks()` in your
-    /// [`Plugin::initialize()`][crate::prelude::Plugin::initialize()] function first to allocate memory for
-    /// the block smoothing.
-    ///
-    /// Returns a `None` value if the block length exceed's the allocated capacity.
-    ///
-    /// # Panics
-    ///
-    /// Panics if this function is called again while another block value slice is still alive.
-    pub fn next_block(&self, block: &Block) -> Option<AtomicRefMut<[i32]>> {
-        self.next_block_mapped(block, |x| x)
-    }
-
-    /// The same as [`next_block()`][Self::next_block()], but with a function applied to each
-    /// produced value. Useful when applying modulation to a smoothed parameter.
-    pub fn next_block_mapped(
-        &self,
-        block: &Block,
-        mut f: impl FnMut(i32) -> i32,
-    ) -> Option<AtomicRefMut<[i32]>> {
-        let mut block_values = self.block_values.borrow_mut();
-        if block_values.len() < block.len() {
-            return None;
-        }
-
-        // TODO: Might be useful to apply this function before rounding to an integer, but the f32
-        //       version is not available here without some hacks (i.e. grabbing it from
-        //       `self.current`)
-        (&mut block_values[..block.len()]).fill_with(|| f(self.next()));
-
-        Some(AtomicRefMut::map(block_values, |values| {
-            &mut values[..block.len()]
-        }))
-    }
-
-    /// [`next()`][Self::next()], but with the ability to skip forward in the smoother.
-    /// [`next()`][Self::next()] is equivalent to calling this function with a `steps` value of 1.
-    /// Calling this function with a `steps` value of `n` means will cause you to skip the next `n -
-    /// 1` values and return the `n`th value.
-    pub fn next_step(&self, steps: u32) -> i32 {
-        nih_debug_assert_ne!(steps, 0);
-
-        if self.steps_left.load(Ordering::Relaxed) > 0 {
-            let current = self.current.load(Ordering::Relaxed);
-
-            // The number of steps usually won't fit exactly, so make sure we don't end up with
-            // quantization errors on overshoots or undershoots. We also need to account for the
-            // possibility that we only have `n < steps` steps left.
-            let old_steps_left = self.steps_left.fetch_sub(steps as i32, Ordering::Relaxed);
-            let new = if old_steps_left <= steps as i32 {
-                self.steps_left.store(0, Ordering::Relaxed);
-                self.target as f32
-            } else {
-                match &self.style {
-                    SmoothingStyle::None => self.target as f32,
-                    SmoothingStyle::Linear(_) => current + (self.step_size * steps as f32),
-                    SmoothingStyle::Logarithmic(_) => current * self.step_size.powi(steps as i32),
-                    SmoothingStyle::Exponential(_) => {
-                        // This is the same as calculating `current = (current * step_size) +
-                        // (target * (1 - step_size))` in a loop
-                        let coefficient = self.step_size.powi(steps as i32);
-                        (current * coefficient) + (self.target as f32 * (1.0 - coefficient))
-                    }
-                }
-            };
-            self.current.store(new, Ordering::Relaxed);
-
-            new.round() as i32
-        } else {
-            self.target
-        }
+    #[inline]
+    fn from_f32(value: f32) -> Self {
+        value.round() as i32
     }
 }
 
