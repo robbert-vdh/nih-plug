@@ -22,13 +22,13 @@ pub enum SmoothingStyle {
     /// ranges don't include 0.
     Logarithmic(f32),
     /// Smooth parameter changes such that the rate matches the curve of an exponential function,
-    /// starting out fast and then tapering off until the end. This is a one-pole IIR filter under
-    /// the hood. This means that the exact value would never be reached. Instead, this reaches
-    /// 99.97% of the value target value in the specified number of milliseconds, and it then snaps
-    /// to the target value in the last step. This results in a smoother transition, with the caveat
-    /// being that there will be a tiny jump at the end. Unlike the `Logarithmic` option, this does
-    /// support crossing the zero value.
-    ExponentialIIR(f32),
+    /// starting out fast and then tapering off until the end. This is a single-pole IIR filter
+    /// under the hood, while the other smoothing options are FIR filters. This means that the exact
+    /// value would never be reached. Instead, this reaches 99.97% of the value target value in the
+    /// specified number of milliseconds, and it then snaps to the target value in the last step.
+    /// This results in a smoother transition, with the caveat being that there will be a tiny jump
+    /// at the end. Unlike the `Logarithmic` option, this does support crossing the zero value.
+    Exponential(f32),
 }
 
 /// A smoother, providing a smoothed value for each sample.
@@ -47,7 +47,7 @@ pub struct Smoother<T> {
     /// the specified tiem frame. This is also a floating point number to keep the smoothing
     /// uniform.
     ///
-    /// In the case of the `ExponentialIIR` smoothing style this is the coefficient `x` that the
+    /// In the case of the `Exponential` smoothing style this is the coefficient `x` that the
     /// previous sample is multplied by.
     step_size: f32,
     /// The value for the current sample. Always stored as floating point for obvious reasons.
@@ -170,7 +170,7 @@ impl Smoother<f32> {
             SmoothingStyle::None => 1,
             SmoothingStyle::Linear(time)
             | SmoothingStyle::Logarithmic(time)
-            | SmoothingStyle::ExponentialIIR(time) => (sample_rate * time / 1000.0).round() as i32,
+            | SmoothingStyle::Exponential(time) => (sample_rate * time / 1000.0).round() as i32,
         };
         self.steps_left.store(steps_left, Ordering::Relaxed);
 
@@ -188,7 +188,7 @@ impl Smoother<f32> {
             // multiplied by, while the target value is multipled by one minus the coefficient. This
             // reaches 99.97% of the target value after `steps_left`. The smoother will snap to the
             // target value after that point.
-            SmoothingStyle::ExponentialIIR(_) => (-8.0 / steps_left as f32).exp(),
+            SmoothingStyle::Exponential(_) => (-8.0 / steps_left as f32).exp(),
         };
     }
 
@@ -262,7 +262,7 @@ impl Smoother<f32> {
             // The number of steps usually won't fit exactly, so make sure we don't end up with
             // quantization errors on overshoots or undershoots. We also need to account for the
             // possibility that we only have `n < steps` steps left. This is especially important
-            // for the `ExponentialIIR` smoothing style, since that won't reach the target value
+            // for the `Exponential` smoothing style, since that won't reach the target value
             // exactly.
             let old_steps_left = self.steps_left.fetch_sub(steps as i32, Ordering::Relaxed);
             let new = if old_steps_left <= steps as i32 {
@@ -273,7 +273,7 @@ impl Smoother<f32> {
                     SmoothingStyle::None => self.target,
                     SmoothingStyle::Linear(_) => current + (self.step_size * steps as f32),
                     SmoothingStyle::Logarithmic(_) => current * (self.step_size.powi(steps as i32)),
-                    SmoothingStyle::ExponentialIIR(_) => {
+                    SmoothingStyle::Exponential(_) => {
                         // This is the same as calculating `current = (current * step_size) +
                         // (target * (1 - step_size))` in a loop
                         let coefficient = self.step_size.powi(steps as i32);
@@ -305,7 +305,7 @@ impl Smoother<i32> {
             SmoothingStyle::None => 1,
             SmoothingStyle::Linear(time)
             | SmoothingStyle::Logarithmic(time)
-            | SmoothingStyle::ExponentialIIR(time) => (sample_rate * time / 1000.0).round() as i32,
+            | SmoothingStyle::Exponential(time) => (sample_rate * time / 1000.0).round() as i32,
         };
         self.steps_left.store(steps_left, Ordering::Relaxed);
 
@@ -317,7 +317,7 @@ impl Smoother<i32> {
                 nih_debug_assert_ne!(current, 0.0);
                 (self.target as f32 / current).powf((steps_left as f32).recip())
             }
-            SmoothingStyle::ExponentialIIR(_) => (-8.0 / steps_left as f32).exp(),
+            SmoothingStyle::Exponential(_) => (-8.0 / steps_left as f32).exp(),
         };
     }
 
@@ -397,7 +397,7 @@ impl Smoother<i32> {
                     SmoothingStyle::None => self.target as f32,
                     SmoothingStyle::Linear(_) => current + (self.step_size * steps as f32),
                     SmoothingStyle::Logarithmic(_) => current * self.step_size.powi(steps as i32),
-                    SmoothingStyle::ExponentialIIR(_) => {
+                    SmoothingStyle::Exponential(_) => {
                         // This is the same as calculating `current = (current * step_size) +
                         // (target * (1 - step_size))` in a loop
                         let coefficient = self.step_size.powi(steps as i32);
