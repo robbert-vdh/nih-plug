@@ -177,7 +177,7 @@ impl<T: Smoothable> Smoother<T> {
             // multiplied by, while the target value is multipled by one minus the coefficient. This
             // reaches 99.99% of the target value after `steps_left`. The smoother will snap to the
             // target value after that point.
-            SmoothingStyle::Exponential(_) => nih_dbg!(0.0001f32.powf(1.0 / steps_left as f32)),
+            SmoothingStyle::Exponential(_) => 0.0001f32.powf(1.0 / steps_left as f32),
         };
     }
 
