@@ -24,7 +24,7 @@ pub enum SmoothingStyle {
     /// Smooth parameter changes such that the rate matches the curve of an exponential function,
     /// starting out fast and then tapering off until the end. This is a single-pole IIR filter
     /// under the hood, while the other smoothing options are FIR filters. This means that the exact
-    /// value would never be reached. Instead, this reaches 99.97% of the value target value in the
+    /// value would never be reached. Instead, this reaches 99.99% of the value target value in the
     /// specified number of milliseconds, and it then snaps to the target value in the last step.
     /// This results in a smoother transition, with the caveat being that there will be a tiny jump
     /// at the end. Unlike the `Logarithmic` option, this does support crossing the zero value.
@@ -186,9 +186,9 @@ impl Smoother<f32> {
             }
             // In this case the step size value is the coefficient the current value will be
             // multiplied by, while the target value is multipled by one minus the coefficient. This
-            // reaches 99.97% of the target value after `steps_left`. The smoother will snap to the
+            // reaches 99.99% of the target value after `steps_left`. The smoother will snap to the
             // target value after that point.
-            SmoothingStyle::Exponential(_) => (-8.0 / steps_left as f32).exp(),
+            SmoothingStyle::Exponential(_) => 0.0001f32.powf(-1.0 / steps_left as f32),
         };
     }
 
@@ -275,7 +275,7 @@ impl Smoother<f32> {
                     SmoothingStyle::Logarithmic(_) => current * (self.step_size.powi(steps as i32)),
                     SmoothingStyle::Exponential(_) => {
                         // This is the same as calculating `current = (current * step_size) +
-                        // (target * (1 - step_size))` in a loop
+                        // (target * (1 - step_size))` in a loop since the target value won't change
                         let coefficient = self.step_size.powi(steps as i32);
                         (current * coefficient) + (self.target * (1.0 - coefficient))
                     }
@@ -317,7 +317,7 @@ impl Smoother<i32> {
                 nih_debug_assert_ne!(current, 0.0);
                 (self.target as f32 / current).powf((steps_left as f32).recip())
             }
-            SmoothingStyle::Exponential(_) => (-8.0 / steps_left as f32).exp(),
+            SmoothingStyle::Exponential(_) => 0.0001f32.powf(-1.0 / steps_left as f32),
         };
     }
 
