@@ -1876,9 +1876,21 @@ impl<P: ClapPlugin> Wrapper<P> {
 
                 wrapper.notify_param_values_changed();
 
-                // TODO: Normally we'd also call initialize after deserializing state, but that's
-                //       not guaranteed to be realtime safe. Should we do it anyways?
+                let bus_config = wrapper.current_bus_config.load();
+                let buffer_config = wrapper.current_buffer_config.load().unwrap();
                 let mut plugin = wrapper.plugin.write();
+                // FIXME: This is obviously not realtime safe, but loading presets without doing
+                //         this could lead to inconsistencies. It's the plugin's responsibility to
+                //         not perform any realtime-unsafe work when the initialize function is
+                //         called a second time if it supports runtime preset loading.
+                permit_alloc(|| {
+                    plugin.initialize(
+                        &bus_config,
+                        &buffer_config,
+                        &mut wrapper
+                            .make_process_context(Transport::new(buffer_config.sample_rate)),
+                    )
+                });
                 plugin.reset();
 
                 // We'll pass the state object back to the GUI thread so deallocation can happen
