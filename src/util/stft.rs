@@ -262,7 +262,7 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
     /// next block before `process_cb()` is called.
     ///
     /// Since there are a couple different ways to do it, any window functions needs to be applied
-    /// in the callbacks. Check the [`nih_plug::util::window`] module for more information.
+    /// in the callbacks. Check the [`nih_plug::util::window`][crate::util::window] module for more information.
     ///
     /// For efficiency's sake this function will reuse the same vector for all calls to
     /// `process_cb`. This means you can only access a single channel's worth of windowed data at a

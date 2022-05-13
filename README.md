@@ -5,18 +5,18 @@
 [![Docs](https://github.com/robbert-vdh/nih-plug/actions/workflows/docs.yml/badge.svg?branch=master)](https://nih-plug.robbertvanderhelm.nl/)
 
 This is a work in progress API-agnostic audio plugin framework written in Rust
-to do some experiments with, as well as a small collection of plugins. The idea
-is to have a statefull but simple plugin API that gets rid of as much
-unnecessary ceremony wherever possible, while also keeping the amount of magic
-to minimum. Since this is not quite meant for general use just yet, the plugin
-API surface is currently limited to the functionality that I either needed
-myself or that was requested by others. See the [current
-features](#current-features) section for more information on the project's
-current status.
+as well as a small collection of plugins. The idea is to have a statefull but
+simple plugin API that gets rid of as much unnecessary ceremony wherever
+possible, while also keeping the amount of magic to minimum. Since this is not
+quite meant for general use just yet, the plugin API surface is currently
+limited to the functionality that I either needed myself or that was requested
+by others. See the [current features](#current-features) section for more
+information on the project's current status.
 
 Come join us on the [Rust Audio Discord](https://discord.gg/ykxU3rt4Cb), or
-check out the [documentation](https://nih-plug.robbertvanderhelm.nl/) (work in
-progress).
+check out the work in progress
+[documentation](https://nih-plug.robbertvanderhelm.nl/) for some pointers on how
+to get started.
 
 ### Table of contents
 

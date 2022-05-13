@@ -270,8 +270,8 @@ impl IntParam {
     }
 
     /// Display a unit when rendering this parameter to a string. Appended after the
-    /// [`value_to_string`][Self::value_to_string] function if that is also set. NIH-plug will not
-    /// automatically add a space before the unit.
+    /// [`value_to_string`][Self::with_value_to_string()] function if that is also set. NIH-plug
+    /// will not automatically add a space before the unit.
     pub fn with_unit(mut self, unit: &'static str) -> Self {
         self.unit = unit;
         self

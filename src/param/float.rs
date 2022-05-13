@@ -309,16 +309,17 @@ impl FloatParam {
     }
 
     /// Display a unit when rendering this parameter to a string. Appended after the
-    /// [`value_to_string`][Self::value_to_string] function if that is also set. NIH-plug will not
-    /// automatically add a space before the unit.
+    /// [`value_to_string`][Self::with_value_to_string()] function if that is also set. NIH-plug
+    /// will not automatically add a space before the unit.
     pub fn with_unit(mut self, unit: &'static str) -> Self {
         self.unit = unit;
         self
     }
 
     /// Set the distance between steps of a [FloatParam]. Mostly useful for quantizing GUI input. If
-    /// this is set and if [`value_to_string`][Self::value_to_string] is not set, then this is also
-    /// used when formatting the parameter. This must be a positive, nonzero number.
+    /// this is set and a [`value_to_string`][Self::with_value_to_string()] function is not set,
+    /// then this is also used when formatting the parameter. This must be a positive, nonzero
+    /// number.
     pub fn with_step_size(mut self, step_size: f32) -> Self {
         self.step_size = Some(step_size);
         self
