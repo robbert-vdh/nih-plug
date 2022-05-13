@@ -58,7 +58,7 @@ jobs:
           # conflicting iced features. We also don't want to use `--workspace`
           # here because that would also document our plugins and binary crates.
           args: >-
-            --features docs,simd --no-deps
+            --features docs,simd,standalone --no-deps
             -p nih_plug
             -p nih_plug_derive
             -p nih_plug_egui
