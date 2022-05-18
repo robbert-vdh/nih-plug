@@ -243,6 +243,11 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
         // custom channel layout overrides we need to initialize here.
         match (state != 0, self.inner.current_buffer_config.load()) {
             (true, Some(buffer_config)) => {
+                // Befure initializing the plugin, make sure all smoothers are set the the default values
+                for param in self.inner.param_by_hash.values() {
+                    param.update_smoother(buffer_config.sample_rate, true);
+                }
+
                 let bus_config = self.inner.current_bus_config.load();
                 let mut plugin = self.inner.plugin.write();
                 if plugin.initialize(
@@ -265,9 +270,6 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                             output_slices
                                 .resize_with(bus_config.num_output_channels as usize, || &mut [])
                         });
-
-                    // Also store this for later, so we can reinitialize the plugin after restoring state
-                    self.inner.current_buffer_config.store(Some(buffer_config));
 
                     kResultOk
                 } else {
@@ -682,16 +684,11 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
             vst3_sys::vst::SymbolicSampleSizes::kSample32 as i32
         );
 
-        let bus_config = self.inner.current_bus_config.load();
-        let buffer_config = BufferConfig {
+        // This is needed when activating the plugin and when restoring state
+        self.inner.current_buffer_config.store(Some(BufferConfig {
             sample_rate: setup.sample_rate as f32,
             max_buffer_size: setup.max_samples_per_block as u32,
-        };
-
-        // Befure initializing the plugin, make sure all smoothers are set the the default values
-        for param in self.inner.param_by_hash.values() {
-            param.update_smoother(buffer_config.sample_rate, true);
-        }
+        }));
 
         // Initializing the plugin happens in `IAudioProcessor::set_active()` because the host may
         // still change the channel layouts at this point
