@@ -237,9 +237,46 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
         }
     }
 
-    unsafe fn set_active(&self, _state: TBool) -> tresult {
-        // We don't need any special handling here
-        kResultOk
+    unsafe fn set_active(&self, state: TBool) -> tresult {
+        // We could call initialize in `IAudioProcessor::setup_processing()`, but REAPER will set
+        // the bus arrangements between that function and this function. So to be able to handle
+        // custom channel layout overrides we need to initialize here.
+        match (state != 0, self.inner.current_buffer_config.load()) {
+            (true, Some(buffer_config)) => {
+                let bus_config = self.inner.current_bus_config.load();
+                let mut plugin = self.inner.plugin.write();
+                if plugin.initialize(
+                    &bus_config,
+                    &buffer_config,
+                    &mut self
+                        .inner
+                        .make_process_context(Transport::new(buffer_config.sample_rate)),
+                ) {
+                    // NOTE: We don't call `Plugin::reset()` here. The call is done in `set_process()`
+                    //       instead. Otherwise we would call the function twice, and `set_process()` needs
+                    //       to be called after this function before the plugin may process audio again.
+
+                    // Preallocate enough room in the output slices vector so we can convert a `*mut *mut
+                    // f32` to a `&mut [&mut f32]` in the process call
+                    self.inner
+                        .output_buffer
+                        .borrow_mut()
+                        .with_raw_vec(|output_slices| {
+                            output_slices
+                                .resize_with(bus_config.num_output_channels as usize, || &mut [])
+                        });
+
+                    // Also store this for later, so we can reinitialize the plugin after restoring state
+                    self.inner.current_buffer_config.store(Some(buffer_config));
+
+                    kResultOk
+                } else {
+                    kResultFalse
+                }
+            }
+            (true, None) => kResultFalse,
+            (false, _) => kResultOk,
+        }
     }
 
     unsafe fn set_state(&self, state: SharedVstPtr<dyn IBStream>) -> tresult {
@@ -656,34 +693,10 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
             param.update_smoother(buffer_config.sample_rate, true);
         }
 
-        let mut plugin = self.inner.plugin.write();
-        if plugin.initialize(
-            &bus_config,
-            &buffer_config,
-            &mut self
-                .inner
-                .make_process_context(Transport::new(buffer_config.sample_rate)),
-        ) {
-            // NOTE: We don't call `Plugin::reset()` here. The call is done in `set_process()`
-            //       instead. Otherwise we would call the function twice, and `set_process()` needs
-            //       to be called after this function before the plugin may process audio again.
+        // Initializing the plugin happens in `IAudioProcessor::set_active()` because the host may
+        // still change the channel layouts at this point
 
-            // Preallocate enough room in the output slices vector so we can convert a `*mut *mut
-            // f32` to a `&mut [&mut f32]` in the process call
-            self.inner
-                .output_buffer
-                .borrow_mut()
-                .with_raw_vec(|output_slices| {
-                    output_slices.resize_with(bus_config.num_output_channels as usize, || &mut [])
-                });
-
-            // Also store this for later, so we can reinitialize the plugin after restoring state
-            self.inner.current_buffer_config.store(Some(buffer_config));
-
-            kResultOk
-        } else {
-            kResultFalse
-        }
+        kResultOk
     }
 
     unsafe fn set_processing(&self, state: TBool) -> tresult {
