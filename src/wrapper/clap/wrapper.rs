@@ -666,12 +666,9 @@ impl<P: ClapPlugin> Wrapper<P> {
                             / unsafe { param_ptr.step_count() }.unwrap_or(1) as f32;
 
                         // Also update the parameter's smoothing if applicable
-                        match sample_rate {
-                            Some(sample_rate) => unsafe {
-                                param_ptr.set_normalized_value(normalized_value);
-                                param_ptr.update_smoother(sample_rate, false);
-                            },
-                            None => unsafe { param_ptr.set_normalized_value(normalized_value) },
+                        unsafe { param_ptr.set_normalized_value(normalized_value) };
+                        if let Some(sample_rate) = sample_rate {
+                            unsafe { param_ptr.update_smoother(sample_rate, false) };
                         }
 
                         true
@@ -681,12 +678,9 @@ impl<P: ClapPlugin> Wrapper<P> {
                             / unsafe { param_ptr.step_count() }.unwrap_or(1) as f32;
 
                         // Also update the parameter's smoothing if applicable
-                        match sample_rate {
-                            Some(sample_rate) => unsafe {
-                                param_ptr.modulate_value(normalized_delta);
-                                param_ptr.update_smoother(sample_rate, false);
-                            },
-                            None => unsafe { param_ptr.set_normalized_value(normalized_delta) },
+                        unsafe { param_ptr.modulate_value(normalized_delta) };
+                        if let Some(sample_rate) = sample_rate {
+                            unsafe { param_ptr.update_smoother(sample_rate, false) };
                         }
 
                         true
