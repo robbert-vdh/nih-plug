@@ -2636,8 +2636,7 @@ impl<P: ClapPlugin> Wrapper<P> {
     unsafe extern "C" fn ext_render_has_hard_realtime_requirement(
         _plugin: *const clap_plugin,
     ) -> bool {
-        // TODO: Add a constant on the CLapPlugin trait
-        false
+        P::CLAP_HARD_REALTIME
     }
 
     unsafe extern "C" fn ext_render_set(
@@ -2649,6 +2648,7 @@ impl<P: ClapPlugin> Wrapper<P> {
 
         let mode = match mode {
             CLAP_RENDER_REALTIME => ProcessMode::Realtime,
+            // Even if the plugin has a hard realtime requirement, we'll still honor this
             CLAP_RENDER_OFFLINE => ProcessMode::Offline,
             n => {
                 nih_debug_assert_failure!("Unknown rendering mode '{}', defaulting to realtime", n);

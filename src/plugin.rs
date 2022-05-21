@@ -160,6 +160,11 @@ pub trait ClapPlugin: Plugin {
     const CLAP_MANUAL_URL: &'static str;
     /// A URL to the plugin's support page, CLAP does not specify what to do when there is none.
     const CLAP_SUPPORT_URL: &'static str;
+
+    /// If this is set to true, then the plugin will report itself as having a hard realtime
+    /// processing requirement when the host asks for it. Supported hosts will never ask the plugin
+    /// to do offline processing.
+    const CLAP_HARD_REALTIME: bool = false;
 }
 
 /// Provides auxiliary metadata needed for a VST3 plugin.
