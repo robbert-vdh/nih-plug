@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use super::backend::Backend;
 use super::wrapper::{GuiTask, Wrapper};
-use crate::context::{GuiContext, PluginApi, ProcessContext, Transport};
+use crate::context::{GuiContext, PluginApi, ProcessContext, ProcessMode, Transport};
 use crate::midi::NoteEvent;
 use crate::param::internals::ParamPtr;
 use crate::plugin::Plugin;
@@ -79,6 +79,11 @@ impl<P: Plugin, B: Backend> ProcessContext for WrapperProcessContext<'_, P, B> {
 
     fn transport(&self) -> &Transport {
         &self.transport
+    }
+
+    fn process_mode(&self) -> ProcessMode {
+        // TODO: Detect JACK freewheeling and report it here
+        ProcessMode::Realtime
     }
 
     fn next_event(&mut self) -> Option<NoteEvent> {

@@ -4,7 +4,7 @@ use std::mem::{self, MaybeUninit};
 use std::ptr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use vst3_com::vst::IProcessContextRequirementsFlags;
+use vst3_com::vst::{IProcessContextRequirementsFlags, ProcessModes};
 use vst3_sys::base::{kInvalidArgument, kNoInterface, kResultFalse, kResultOk, tresult, TBool};
 use vst3_sys::base::{IBStream, IPluginBase};
 use vst3_sys::utils::SharedVstPtr;
@@ -23,7 +23,7 @@ use super::util::{
     u16strlcpy, VstPtr, VST3_MIDI_CCS, VST3_MIDI_NUM_PARAMS, VST3_MIDI_PARAMS_START,
 };
 use super::view::WrapperView;
-use crate::context::Transport;
+use crate::context::{ProcessMode, Transport};
 use crate::midi::{MidiConfig, NoteEvent};
 use crate::param::ParamFlags;
 use crate::plugin::{BufferConfig, BusConfig, ProcessStatus, Vst3Plugin};
@@ -689,6 +689,17 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
             sample_rate: setup.sample_rate as f32,
             max_buffer_size: setup.max_samples_per_block as u32,
         }));
+
+        let mode = match setup.process_mode {
+            n if n == ProcessModes::kRealtime as i32 => ProcessMode::Realtime,
+            n if n == ProcessModes::kPrefetch as i32 => ProcessMode::Buffered,
+            n if n == ProcessModes::kOffline as i32 => ProcessMode::Offline,
+            n => {
+                nih_debug_assert_failure!("Unknown rendering mode '{}', defaulting to realtime", n);
+                ProcessMode::Realtime
+            }
+        };
+        self.inner.current_process_mode.store(mode);
 
         // Initializing the plugin happens in `IAudioProcessor::set_active()` because the host may
         // still change the channel layouts at this point

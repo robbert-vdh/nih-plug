@@ -16,7 +16,7 @@ use super::param_units::ParamUnits;
 use super::util::{ObjectPtr, VstPtr, VST3_MIDI_PARAMS_END, VST3_MIDI_PARAMS_START};
 use super::view::WrapperView;
 use crate::buffer::Buffer;
-use crate::context::Transport;
+use crate::context::{ProcessMode, Transport};
 use crate::event_loop::{EventLoop, MainThreadExecutor, OsEventLoop};
 use crate::midi::{MidiConfig, NoteEvent};
 use crate::param::internals::{ParamPtr, Params};
@@ -67,6 +67,8 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// The current buffer configuration, containing the sample rate and the maximum block size.
     /// Will be set in `IAudioProcessor::setupProcessing()`.
     pub current_buffer_config: AtomicCell<Option<BufferConfig>>,
+    /// The current audio processing mode. Set in `IAudioProcessor::setup_processing()`.
+    pub current_process_mode: AtomicCell<ProcessMode>,
     /// The last process status returned by the plugin. This is used for tail handling.
     pub last_process_status: AtomicCell<ProcessStatus>,
     /// The current latency in samples, as set by the plugin through the [`ProcessContext`].
@@ -277,6 +279,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
                 num_output_channels: P::DEFAULT_NUM_OUTPUTS,
             }),
             current_buffer_config: AtomicCell::new(None),
+            current_process_mode: AtomicCell::new(ProcessMode::Realtime),
             last_process_status: AtomicCell::new(ProcessStatus::Normal),
             current_latency: AtomicU32::new(0),
             output_buffer: AtomicRefCell::new(Buffer::default()),

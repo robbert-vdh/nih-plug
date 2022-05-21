@@ -41,6 +41,9 @@ use clap_sys::ext::params::{
     CLAP_PARAM_IS_MODULATABLE, CLAP_PARAM_IS_READONLY, CLAP_PARAM_IS_STEPPED,
     CLAP_PARAM_RESCAN_VALUES,
 };
+use clap_sys::ext::render::{
+    clap_plugin_render, clap_plugin_render_mode, CLAP_RENDER_OFFLINE, CLAP_RENDER_REALTIME,
+};
 use clap_sys::ext::state::{clap_plugin_state, CLAP_EXT_STATE};
 use clap_sys::ext::tail::{clap_plugin_tail, CLAP_EXT_TAIL};
 use clap_sys::ext::thread_check::{clap_host_thread_check, CLAP_EXT_THREAD_CHECK};
@@ -75,7 +78,7 @@ use super::context::{WrapperGuiContext, WrapperProcessContext};
 use super::descriptor::PluginDescriptor;
 use super::util::ClapPtr;
 use crate::buffer::Buffer;
-use crate::context::Transport;
+use crate::context::{ProcessMode, Transport};
 use crate::event_loop::{EventLoop, MainThreadExecutor, TASK_QUEUE_CAPACITY};
 use crate::midi::{MidiConfig, NoteEvent};
 use crate::param::internals::{ParamPtr, Params};
@@ -125,6 +128,8 @@ pub struct Wrapper<P: ClapPlugin> {
     /// The current buffer configuration, containing the sample rate and the maximum block size.
     /// Will be set in `clap_plugin::activate()`.
     current_buffer_config: AtomicCell<Option<BufferConfig>>,
+    /// The current audio processing mode. Set through the render extension. Defaults to realtime.
+    pub current_process_mode: AtomicCell<ProcessMode>,
     /// The incoming events for the plugin, if `P::MIDI_INPUT` is set to `MidiConfig::Basic` or
     /// higher.
     ///
@@ -216,6 +221,8 @@ pub struct Wrapper<P: ClapPlugin> {
     output_parameter_events: ArrayQueue<OutputParamEvent>,
 
     host_thread_check: AtomicRefCell<Option<ClapPtr<clap_host_thread_check>>>,
+
+    clap_plugin_render: clap_plugin_render,
 
     clap_plugin_state: clap_plugin_state,
 
@@ -481,6 +488,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 num_output_channels: P::DEFAULT_NUM_OUTPUTS,
             }),
             current_buffer_config: AtomicCell::new(None),
+            current_process_mode: AtomicCell::new(ProcessMode::Realtime),
             input_events: AtomicRefCell::new(VecDeque::with_capacity(512)),
             output_events: AtomicRefCell::new(VecDeque::with_capacity(512)),
             last_process_status: AtomicCell::new(ProcessStatus::Normal),
@@ -555,6 +563,11 @@ impl<P: ClapPlugin> Wrapper<P> {
             output_parameter_events: ArrayQueue::new(OUTPUT_EVENT_QUEUE_CAPACITY),
 
             host_thread_check: AtomicRefCell::new(None),
+
+            clap_plugin_render: clap_plugin_render {
+                has_hard_realtime_requirement: Self::ext_render_has_hard_realtime_requirement,
+                set: Self::ext_render_set,
+            },
 
             clap_plugin_state: clap_plugin_state {
                 save: Self::ext_state_save,
@@ -2618,6 +2631,33 @@ impl<P: ClapPlugin> Wrapper<P> {
         if !out.is_null() {
             wrapper.handle_out_events(&*out, 0);
         }
+    }
+
+    unsafe extern "C" fn ext_render_has_hard_realtime_requirement(
+        _plugin: *const clap_plugin,
+    ) -> bool {
+        // TODO: Add a constant on the CLapPlugin trait
+        false
+    }
+
+    unsafe extern "C" fn ext_render_set(
+        plugin: *const clap_plugin,
+        mode: clap_plugin_render_mode,
+    ) -> bool {
+        check_null_ptr!(false, plugin);
+        let wrapper = &*(plugin as *const Self);
+
+        let mode = match mode {
+            CLAP_RENDER_REALTIME => ProcessMode::Realtime,
+            CLAP_RENDER_OFFLINE => ProcessMode::Offline,
+            n => {
+                nih_debug_assert_failure!("Unknown rendering mode '{}', defaulting to realtime", n);
+                ProcessMode::Realtime
+            }
+        };
+        wrapper.current_process_mode.store(mode);
+
+        true
     }
 
     unsafe extern "C" fn ext_state_save(
