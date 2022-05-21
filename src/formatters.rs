@@ -135,7 +135,7 @@ pub fn s2v_i32_note_formatter() -> Arc<dyn Fn(&str) -> Option<i32> + Send + Sync
     Arc::new(|string| {
         let (note_name, octave) = string
             .trim()
-            .split_once(|c: char| c.is_whitespace() || c.is_digit(10))?;
+            .split_once(|c: char| c.is_whitespace() || c.is_ascii_digit())?;
 
         let note_id = util::NOTES
             .iter()

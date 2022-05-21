@@ -222,7 +222,7 @@ impl<P: Vst3Plugin> RunLoopEventHandler<P> {
     /// Post a task to the tasks queue so it will be run on the host's GUI thread later. Returns the
     /// task if the queue is full and the task could not be posted.
     pub fn post_task(&self, task: Task) -> Result<(), Task> {
-        let () = self.tasks.push(task)?;
+        self.tasks.push(task)?;
 
         // We need to use a Unix domain socket to let the host know to call our event handler. In
         // theory eventfd would be more suitable here, but Ardour does not support that.
