@@ -114,3 +114,4 @@ strip = "symbols"
 [profile.profiling]
 inherits = "release"
 debug = true
+strip = "none"
