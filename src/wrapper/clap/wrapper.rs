@@ -1939,7 +1939,9 @@ impl<P: ClapPlugin> Wrapper<P> {
             &wrapper.clap_plugin_gui as *const _ as *const c_void
         } else if id == CStr::from_ptr(CLAP_EXT_LATENCY) {
             &wrapper.clap_plugin_latency as *const _ as *const c_void
-        } else if id == CStr::from_ptr(CLAP_EXT_NOTE_PORTS) && P::MIDI_INPUT >= MidiConfig::Basic {
+        } else if id == CStr::from_ptr(CLAP_EXT_NOTE_PORTS)
+            && (P::MIDI_INPUT >= MidiConfig::Basic || P::MIDI_OUTPUT >= MidiConfig::Basic)
+        {
             &wrapper.clap_plugin_note_ports as *const _ as *const c_void
         } else if id == CStr::from_ptr(CLAP_EXT_PARAMS) {
             &wrapper.clap_plugin_params as *const _ as *const c_void
