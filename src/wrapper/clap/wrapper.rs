@@ -2435,7 +2435,6 @@ impl<P: ClapPlugin> Wrapper<P> {
     }
 
     unsafe extern "C" fn ext_note_ports_count(_plugin: *const clap_plugin, is_input: bool) -> u32 {
-        // TODO: Outputting notes
         match is_input {
             true if P::MIDI_INPUT >= MidiConfig::Basic => 1,
             false if P::MIDI_OUTPUT >= MidiConfig::Basic => 1,
