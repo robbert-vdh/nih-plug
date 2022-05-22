@@ -200,6 +200,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
             },
             buffer_config: BufferConfig {
                 sample_rate: config.sample_rate,
+                min_buffer_size: None,
                 max_buffer_size: config.period_size,
             },
             config,

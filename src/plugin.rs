@@ -294,8 +294,11 @@ pub struct BusConfig {
 pub struct BufferConfig {
     /// The current sample rate.
     pub sample_rate: f32,
+    /// The minimum buffer size the host will use. This may not be set.
+    pub min_buffer_size: Option<u32>,
     /// The maximum buffer size the host will use. The plugin should be able to accept variable
-    /// sized buffers up to this size.
+    /// sized buffers up to this size, or between the minimum and the maximum buffer size if both
+    /// are set.
     pub max_buffer_size: u32,
 }
 

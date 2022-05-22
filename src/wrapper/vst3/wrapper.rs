@@ -690,6 +690,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
         // This is needed when activating the plugin and when restoring state
         self.inner.current_buffer_config.store(Some(BufferConfig {
             sample_rate: setup.sample_rate as f32,
+            min_buffer_size: None,
             max_buffer_size: setup.max_samples_per_block as u32,
         }));
 

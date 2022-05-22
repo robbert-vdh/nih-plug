@@ -1506,7 +1506,7 @@ impl<P: ClapPlugin> Wrapper<P> {
     unsafe extern "C" fn activate(
         plugin: *const clap_plugin,
         sample_rate: f64,
-        _min_frames_count: u32,
+        min_frames_count: u32,
         max_frames_count: u32,
     ) -> bool {
         check_null_ptr!(false, plugin);
@@ -1515,6 +1515,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         let bus_config = wrapper.current_bus_config.load();
         let buffer_config = BufferConfig {
             sample_rate: sample_rate as f32,
+            min_buffer_size: Some(min_frames_count),
             max_buffer_size: max_frames_count,
         };
 
