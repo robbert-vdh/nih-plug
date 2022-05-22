@@ -156,12 +156,16 @@ pub fn build(packages: &[String], args: &[String]) -> Result<()> {
 /// the binary target has a different name) then this will also be copied into the `bundled`
 /// directory.
 pub fn bundle(package: &str, args: &[String]) -> Result<()> {
-    let mut is_release_build = false;
+    let mut build_type_dir = "debug";
     let mut cross_compile_target: Option<String> = None;
     for arg_idx in (0..args.len()).rev() {
         let arg = &args[arg_idx];
         match arg.as_str() {
-            "--release" => is_release_build = true,
+            "--profile" => {
+                // Since Rust 1.57 you can have custom profiles
+                build_type_dir = args.get(arg_idx + 1).context("Missing profile name")?;
+            }
+            "--release" => build_type_dir = "release",
             "--target" => {
                 // When cross compiling we should generate the correct bundle type
                 cross_compile_target = Some(
@@ -169,6 +173,11 @@ pub fn bundle(package: &str, args: &[String]) -> Result<()> {
                         .context("Missing cross-compile target")?
                         .to_owned(),
                 );
+            }
+            arg if arg.starts_with("--profile=") => {
+                build_type_dir = arg
+                    .strip_prefix("--profile=")
+                    .context("Missing profile name")?;
             }
             arg if arg.starts_with("--target=") => {
                 cross_compile_target = Some(
@@ -184,11 +193,7 @@ pub fn bundle(package: &str, args: &[String]) -> Result<()> {
     // We can bundle both library targets (for plugins) and binary targets (for standalone
     // applications)
     let compilation_target = compilation_target(cross_compile_target.as_deref())?;
-    let target_base = target_base(cross_compile_target.as_deref())?.join(if is_release_build {
-        "release"
-    } else {
-        "debug"
-    });
+    let target_base = target_base(cross_compile_target.as_deref())?.join(build_type_dir);
     let bin_path = target_base.join(binary_basename(package, compilation_target));
     let lib_path = target_base.join(library_basename(package, compilation_target));
     if !bin_path.exists() && !lib_path.exists() {
