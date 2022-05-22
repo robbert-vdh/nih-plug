@@ -80,12 +80,14 @@ pub trait Plugin: Default + Send + Sync + 'static {
             && config.num_output_channels == Self::DEFAULT_NUM_OUTPUTS
     }
 
-    /// Initialize the plugin for the given bus and buffer configurations. If the plugin is being
-    /// restored from an old state, then that state will have already been restored at this point.
-    /// If based on those parameters (or for any reason whatsoever) the plugin needs to introduce
-    /// latency, then you can do so here using the process context. Depending on how the host
-    /// restores plugin state, this function may also be called twice in rapid succession. If the
-    /// plugin fails to inialize for whatever reason, then this should return `false`.
+    /// Initialize the plugin for the given bus and buffer configurations. These configurations will
+    /// not change until this function is called again, so feel free to copy these objects to your
+    /// plugin's object. If the plugin is being restored from an old state, then that state will
+    /// have already been restored at this point. If based on those parameters (or for any reason
+    /// whatsoever) the plugin needs to introduce latency, then you can do so here using the process
+    /// context. Depending on how the host restores plugin state, this function may also be called
+    /// twice in rapid succession. If the plugin fails to inialize for whatever reason, then this
+    /// should return `false`.
     ///
     /// Before this point, the plugin should not have done any expensive initialization. Please
     /// don't be that plugin that takes twenty seconds to scan.
