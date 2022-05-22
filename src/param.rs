@@ -31,13 +31,17 @@ bitflags::bitflags! {
         /// you don't have a bypass parameter, then NIH-plug will add one for you. You will need to
         /// implement this yourself if your plugin introduces latency.
         const BYPASS = 1 << 0;
-        /// The parameter cannot be automated from the host. Setting this flag also prevents it from
-        /// showing up in the host's own generic UI for this plugin. The parameter can still be
-        /// changed from the plugin's editor GUI.
+        /// The parameter cannot be changed from an automation lane. The parameter can however still
+        /// be manually changed by the user from either the plugin's own GUI or from the host's
+        /// generic UI.
         const NON_AUTOMATABLE = 1 << 1;
+        /// Hides the parameter in the host's generic UI for this plugin. This also implies
+        /// `NON_AUTOMATABLE`. Setting this does not prevent you from changing the parameter in the
+        /// plugin's editor GUI.
+        const HIDDEN = 1 << 2;
         /// Don't show this parameter when generating a generic UI for the plugin using one of
         /// NIH-plug's generic UI widgets.
-        const HIDE_IN_GENERIC_UI = 1 << 2;
+        const HIDE_IN_GENERIC_UI = 1 << 3;
     }
 }
 

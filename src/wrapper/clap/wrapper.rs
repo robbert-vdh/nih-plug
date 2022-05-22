@@ -2504,6 +2504,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         let step_count = param_ptr.step_count();
         let flags = param_ptr.flags();
         let automatable = !flags.contains(ParamFlags::NON_AUTOMATABLE);
+        let hidden = flags.contains(ParamFlags::HIDDEN);
         let is_bypass = flags.contains(ParamFlags::BYPASS);
 
         *param_info = std::mem::zeroed();
@@ -2513,11 +2514,13 @@ impl<P: ClapPlugin> Wrapper<P> {
         let param_info = &mut *param_info;
         param_info.id = *param_hash;
         // TODO: Somehow expose per note/channel/port modulation
-        param_info.flags = if automatable {
-            CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_MODULATABLE
-        } else {
-            CLAP_PARAM_IS_HIDDEN | CLAP_PARAM_IS_READONLY
-        };
+        param_info.flags = 0;
+        if automatable && !hidden {
+            param_info.flags |= CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_MODULATABLE;
+        }
+        if hidden {
+            param_info.flags |= CLAP_PARAM_IS_HIDDEN | CLAP_PARAM_IS_READONLY;
+        }
         if is_bypass {
             param_info.flags |= CLAP_PARAM_IS_BYPASS
         }

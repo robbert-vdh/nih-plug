@@ -246,11 +246,19 @@ impl BoolParam {
         self
     }
 
-    /// Mark the paramter as non-automatable. This means that the parameter cannot be automated from
-    /// the host. Setting this flag also prevents it from showing up in the host's own generic UI
-    /// for this plugin. The parameter can still be changed from the plugin's editor GUI.
+    /// Mark the paramter as non-automatable. This means that the parameter cannot be changed from
+    /// an automation lane. The parameter can however still be manually changed by the user from
+    /// either the plugin's own GUI or from the host's generic UI.
     pub fn non_automatable(mut self) -> Self {
         self.flags.insert(ParamFlags::NON_AUTOMATABLE);
+        self
+    }
+
+    /// Hide the parameter in the host's generic UI for this plugin. This also implies
+    /// `NON_AUTOMATABLE`. Setting this does not prevent you from changing the parameter in the
+    /// plugin's editor GUI.
+    pub fn hide(mut self) -> Self {
+        self.flags.insert(ParamFlags::HIDDEN);
         self
     }
 

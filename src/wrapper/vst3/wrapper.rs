@@ -451,6 +451,7 @@ impl<P: Vst3Plugin> IEditController for Wrapper<P> {
             let default_value = param_ptr.default_normalized_value();
             let flags = param_ptr.flags();
             let automatable = !flags.contains(ParamFlags::NON_AUTOMATABLE);
+            let hidden = flags.contains(ParamFlags::HIDDEN);
             let is_bypass = flags.contains(ParamFlags::BYPASS);
 
             info.id = *param_hash;
@@ -460,11 +461,13 @@ impl<P: Vst3Plugin> IEditController for Wrapper<P> {
             info.step_count = param_ptr.step_count().unwrap_or(0) as i32;
             info.default_normalized_value = default_value as f64;
             info.unit_id = *param_unit;
-            info.flags = if automatable {
-                ParameterFlags::kCanAutomate as i32
-            } else {
-                ParameterFlags::kIsReadOnly as i32 | (1 << 4) // kIsHidden
-            };
+            info.flags = 0;
+            if automatable && !hidden {
+                info.flags |= ParameterFlags::kCanAutomate as i32;
+            }
+            if hidden {
+                info.flags |= ParameterFlags::kIsReadOnly as i32 | (1 << 4); // kIsHidden
+            }
             if is_bypass {
                 info.flags |= ParameterFlags::kIsBypass as i32;
             }
