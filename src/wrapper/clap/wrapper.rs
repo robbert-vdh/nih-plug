@@ -1677,6 +1677,9 @@ impl<P: ClapPlugin> Wrapper<P> {
                 let mut output_buffer = wrapper.output_buffer.borrow_mut();
                 let mut buffer_is_valid = false;
                 output_buffer.with_raw_vec(|output_slices| {
+                    // Buffers for zero-channel plugins like note effects should always be allowed
+                    buffer_is_valid = output_slices.is_empty();
+
                     if !process.audio_outputs.is_null()
                         && !(*process.audio_outputs).data32.is_null()
                     {

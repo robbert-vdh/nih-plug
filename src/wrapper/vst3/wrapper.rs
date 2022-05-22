@@ -1003,6 +1003,9 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                 let mut output_buffer = self.inner.output_buffer.borrow_mut();
                 let mut buffer_is_valid = false;
                 output_buffer.with_raw_vec(|output_slices| {
+                    // Buffers for zero-channel plugins like note effects should always be allowed
+                    buffer_is_valid = output_slices.is_empty();
+
                     if !data.outputs.is_null() {
                         let num_output_channels = (*data.outputs).num_channels as usize;
                         buffer_is_valid = num_output_channels == output_slices.len();
