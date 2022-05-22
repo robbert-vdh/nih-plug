@@ -117,10 +117,6 @@ impl<P: Vst3Plugin> ProcessContext for WrapperProcessContext<'_, P> {
         &self.transport
     }
 
-    fn process_mode(&self) -> crate::context::ProcessMode {
-        self.inner.current_process_mode.load()
-    }
-
     fn next_event(&mut self) -> Option<NoteEvent> {
         self.input_events_guard.pop_front()
     }

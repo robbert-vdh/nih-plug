@@ -13,6 +13,11 @@ code then it will not be listed here.
   `param.hide()`, while `param.non_automatable()` simply makes it so that the
   parameter can only be changed manually and not through automation or
   modulation.
+- The current processing mode is now stored in `BufferConfig`. Previously this
+  could be fetched through a function on the `ProcessContext`, but this makes
+  more sense as it remains constant until a plugin is deactivated. The
+  `BufferConfig` now contains a field for the minimum buffer size that may or
+  may not be set depending on the plugin API.
 
 ## ...
 

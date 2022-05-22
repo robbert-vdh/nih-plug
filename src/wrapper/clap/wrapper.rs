@@ -78,13 +78,13 @@ use super::context::{WrapperGuiContext, WrapperProcessContext};
 use super::descriptor::PluginDescriptor;
 use super::util::ClapPtr;
 use crate::buffer::Buffer;
-use crate::context::{ProcessMode, Transport};
+use crate::context::Transport;
 use crate::event_loop::{EventLoop, MainThreadExecutor, TASK_QUEUE_CAPACITY};
 use crate::midi::{MidiConfig, NoteEvent};
 use crate::param::internals::{ParamPtr, Params};
 use crate::param::ParamFlags;
 use crate::plugin::{
-    BufferConfig, BusConfig, ClapPlugin, Editor, ParentWindowHandle, ProcessStatus,
+    BufferConfig, BusConfig, ClapPlugin, Editor, ParentWindowHandle, ProcessMode, ProcessStatus,
 };
 use crate::util::permit_alloc;
 use crate::wrapper::state::{self, PluginState};
@@ -1517,6 +1517,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             sample_rate: sample_rate as f32,
             min_buffer_size: Some(min_frames_count),
             max_buffer_size: max_frames_count,
+            process_mode: wrapper.current_process_mode.load(),
         };
 
         // Befure initializing the plugin, make sure all smoothers are set the the default values

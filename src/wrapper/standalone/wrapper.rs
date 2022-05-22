@@ -15,7 +15,9 @@ use super::context::{WrapperGuiContext, WrapperProcessContext};
 use crate::context::Transport;
 use crate::param::internals::{ParamPtr, Params};
 use crate::param::ParamFlags;
-use crate::plugin::{BufferConfig, BusConfig, Editor, ParentWindowHandle, Plugin, ProcessStatus};
+use crate::plugin::{
+    BufferConfig, BusConfig, Editor, ParentWindowHandle, Plugin, ProcessMode, ProcessStatus,
+};
 use crate::util::permit_alloc;
 use crate::wrapper::state::{self, PluginState};
 
@@ -202,6 +204,8 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
                 sample_rate: config.sample_rate,
                 min_buffer_size: None,
                 max_buffer_size: config.period_size,
+                // TODO: Detect JACK freewheeling and report it here
+                process_mode: ProcessMode::Realtime,
             },
             config,
 

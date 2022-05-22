@@ -23,10 +23,10 @@ use super::util::{
     u16strlcpy, VstPtr, VST3_MIDI_CCS, VST3_MIDI_NUM_PARAMS, VST3_MIDI_PARAMS_START,
 };
 use super::view::WrapperView;
-use crate::context::{ProcessMode, Transport};
+use crate::context::Transport;
 use crate::midi::{MidiConfig, NoteEvent};
 use crate::param::ParamFlags;
-use crate::plugin::{BufferConfig, BusConfig, ProcessStatus, Vst3Plugin};
+use crate::plugin::{BufferConfig, BusConfig, ProcessMode, ProcessStatus, Vst3Plugin};
 use crate::util::permit_alloc;
 use crate::wrapper::state;
 use crate::wrapper::util::process_wrapper;
@@ -692,6 +692,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
             sample_rate: setup.sample_rate as f32,
             min_buffer_size: None,
             max_buffer_size: setup.max_samples_per_block as u32,
+            process_mode: self.inner.current_process_mode.load(),
         }));
 
         let mode = match setup.process_mode {

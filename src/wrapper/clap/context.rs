@@ -4,7 +4,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use super::wrapper::{OutputParamEvent, Task, Wrapper};
-use crate::context::{GuiContext, PluginApi, ProcessContext, ProcessMode, Transport};
+use crate::context::{GuiContext, PluginApi, ProcessContext, Transport};
 use crate::event_loop::EventLoop;
 use crate::midi::NoteEvent;
 use crate::param::internals::ParamPtr;
@@ -102,10 +102,6 @@ impl<P: ClapPlugin> ProcessContext for WrapperProcessContext<'_, P> {
 
     fn transport(&self) -> &Transport {
         &self.transport
-    }
-
-    fn process_mode(&self) -> ProcessMode {
-        self.wrapper.current_process_mode.load()
     }
 
     fn next_event(&mut self) -> Option<NoteEvent> {

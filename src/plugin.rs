@@ -300,6 +300,8 @@ pub struct BufferConfig {
     /// sized buffers up to this size, or between the minimum and the maximum buffer size if both
     /// are set.
     pub max_buffer_size: u32,
+    /// The current processing mode. The host will reinitialize the plugin any time this changes.
+    pub process_mode: ProcessMode,
 }
 
 /// Indicates the current situation after the plugin has processed audio.
@@ -316,4 +318,20 @@ pub enum ProcessStatus {
     /// and should thus not be deactivated by the host. This is essentially the same as having an
     /// infite tail.
     KeepAlive,
+}
+
+/// The plugin's current processing mode. Can be queried through [`ProcessContext::process_mode()`].
+/// The host will reinitialize the plugin whenever this changes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProcessMode {
+    /// The plugin is processing audio in real time at a fixed rate.
+    Realtime,
+    /// The plugin is processing audio at a real time-like pace, but at irregular intervals. The
+    /// host may do this to process audio ahead of time to loosen realtime constraints and to reduce
+    /// the chance of xruns happening. This is only used by VST3.
+    Buffered,
+    /// The plugin is rendering audio offline, potentially faster than realtime ('freewheeling').
+    /// The host will continuously call the process function back to back until all audio has been
+    /// processed.
+    Offline,
 }
