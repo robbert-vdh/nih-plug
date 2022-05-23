@@ -277,6 +277,8 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             current_bus_config: AtomicCell::new(BusConfig {
                 num_input_channels: P::DEFAULT_NUM_INPUTS,
                 num_output_channels: P::DEFAULT_NUM_OUTPUTS,
+                aux_input_busses: P::DEFAULT_AUX_INPUTS.unwrap_or_default(),
+                aux_output_busses: P::DEFAULT_AUX_OUTPUTS.unwrap_or_default(),
             }),
             current_buffer_config: AtomicCell::new(None),
             current_process_mode: AtomicCell::new(ProcessMode::Realtime),

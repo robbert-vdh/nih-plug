@@ -102,6 +102,8 @@ for download links.
 - Full support for receiving and outputting both modern polyphonic note
   expression events as well as MIDI CCs, channel pressure, and pitch bend for
   CLAP and VST3.
+- Support for flexible dynamic buffer configurations, including multiple input
+  and output busses.
 - A plugin bundler accessible through the
   `cargo xtask bundle <package> <build_arguments>` command that automatically
   detects which plugin targets your plugin exposes and creates the correct

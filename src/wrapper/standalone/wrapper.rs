@@ -16,7 +16,8 @@ use crate::context::Transport;
 use crate::param::internals::{ParamPtr, Params};
 use crate::param::ParamFlags;
 use crate::plugin::{
-    BufferConfig, BusConfig, Editor, ParentWindowHandle, Plugin, ProcessMode, ProcessStatus,
+    AuxiliaryIOConfig, BufferConfig, BusConfig, Editor, ParentWindowHandle, Plugin, ProcessMode,
+    ProcessStatus,
 };
 use crate::util::permit_alloc;
 use crate::wrapper::state::{self, PluginState};
@@ -199,6 +200,9 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
             bus_config: BusConfig {
                 num_input_channels: config.input_channels,
                 num_output_channels: config.output_channels,
+                // TODO: Expose additional sidechain IO in the JACK backend
+                aux_input_busses: AuxiliaryIOConfig::default(),
+                aux_output_busses: AuxiliaryIOConfig::default(),
             },
             buffer_config: BufferConfig {
                 sample_rate: config.sample_rate,

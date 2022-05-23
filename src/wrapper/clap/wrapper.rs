@@ -430,12 +430,29 @@ impl<P: ClapPlugin> Wrapper<P> {
         let mut supported_bus_configs = Vec::new();
         for num_output_channels in [1, 2] {
             for num_input_channels in [0, num_output_channels] {
-                let bus_config = BusConfig {
-                    num_input_channels,
-                    num_output_channels,
-                };
-                if plugin.accepts_bus_config(&bus_config) {
-                    supported_bus_configs.push(bus_config);
+                #[allow(clippy::single_element_loop)]
+                for num_aux_channels in [num_output_channels] {
+                    let bus_config = BusConfig {
+                        num_input_channels,
+                        num_output_channels,
+                        // We won't support a variable number of busses until that's required, so
+                        // we'll always use the number of auxiliary busses specified by the plugin
+                        aux_input_busses: P::DEFAULT_AUX_INPUTS
+                            .map(|mut aux| {
+                                aux.num_channels = num_aux_channels;
+                                aux
+                            })
+                            .unwrap_or_default(),
+                        aux_output_busses: P::DEFAULT_AUX_OUTPUTS
+                            .map(|mut aux| {
+                                aux.num_channels = num_aux_channels;
+                                aux
+                            })
+                            .unwrap_or_default(),
+                    };
+                    if plugin.accepts_bus_config(&bus_config) {
+                        supported_bus_configs.push(bus_config);
+                    }
                 }
             }
         }
@@ -445,6 +462,8 @@ impl<P: ClapPlugin> Wrapper<P> {
         let default_bus_config = BusConfig {
             num_input_channels: P::DEFAULT_NUM_INPUTS,
             num_output_channels: P::DEFAULT_NUM_OUTPUTS,
+            aux_input_busses: P::DEFAULT_AUX_INPUTS.unwrap_or_default(),
+            aux_output_busses: P::DEFAULT_AUX_OUTPUTS.unwrap_or_default(),
         };
         if !supported_bus_configs.contains(&default_bus_config)
             && plugin.accepts_bus_config(&default_bus_config)
@@ -486,6 +505,8 @@ impl<P: ClapPlugin> Wrapper<P> {
             current_bus_config: AtomicCell::new(BusConfig {
                 num_input_channels: P::DEFAULT_NUM_INPUTS,
                 num_output_channels: P::DEFAULT_NUM_OUTPUTS,
+                aux_input_busses: P::DEFAULT_AUX_INPUTS.unwrap_or_default(),
+                aux_output_busses: P::DEFAULT_AUX_OUTPUTS.unwrap_or_default(),
             }),
             current_buffer_config: AtomicCell::new(None),
             current_process_mode: AtomicCell::new(ProcessMode::Realtime),
@@ -1543,6 +1564,8 @@ impl<P: ClapPlugin> Wrapper<P> {
                     output_slices.resize_with(bus_config.num_output_channels as usize, || &mut [])
                 });
 
+            // TODO: Allocate auxiliary IO buffers
+
             // Also store this for later, so we can reinitialize the plugin after restoring state
             wrapper.current_buffer_config.store(Some(buffer_config));
 
@@ -1593,6 +1616,8 @@ impl<P: ClapPlugin> Wrapper<P> {
     ) -> clap_process_status {
         check_null_ptr!(CLAP_PROCESS_ERROR, plugin, process);
         let wrapper = &*(plugin as *const Self);
+
+        // TODO: Support auxiliary IO and optional main IO, this is still the old version that assumes main IO and nothing else
 
         // Panic on allocations if the `assert_process_allocs` feature has been enabled, and make
         // sure that FTZ is set up correctly
@@ -1983,18 +2008,23 @@ impl<P: ClapPlugin> Wrapper<P> {
 
         match wrapper.supported_bus_configs.get(index as usize) {
             Some(bus_config) => {
+                // We don't support variable auxiliary IO configs right now, so we don't need to
+                // specify sidechain inputs and aux outputs in these descriptions
                 let name = match bus_config {
                     BusConfig {
                         num_input_channels: _,
                         num_output_channels: 1,
+                        ..
                     } => String::from("Mono"),
                     BusConfig {
                         num_input_channels: _,
                         num_output_channels: 2,
+                        ..
                     } => String::from("Stereo"),
                     BusConfig {
                         num_input_channels,
                         num_output_channels,
+                        ..
                     } => format!("{num_input_channels} inputs, {num_output_channels} outputs"),
                 };
                 let input_port_type = match bus_config.num_input_channels {
@@ -2013,17 +2043,16 @@ impl<P: ClapPlugin> Wrapper<P> {
                 let config = &mut *config;
                 config.id = index;
                 strlcpy(&mut config.name, &name);
-                // TODO: Currently we don't support sidechain inputs or multiple outputs
                 config.input_port_count = if bus_config.num_input_channels > 0 {
                     1
                 } else {
                     0
-                };
+                } + bus_config.aux_input_busses.num_busses;
                 config.output_port_count = if bus_config.num_output_channels > 0 {
                     1
                 } else {
                     0
-                };
+                } + bus_config.aux_output_busses.num_busses;
                 config.has_main_input = bus_config.num_output_channels > 0;
                 config.main_input_channel_count = bus_config.num_output_channels;
                 config.main_input_port_type = input_port_type;
@@ -2070,20 +2099,28 @@ impl<P: ClapPlugin> Wrapper<P> {
     }
 
     unsafe extern "C" fn ext_audio_ports_count(plugin: *const clap_plugin, is_input: bool) -> u32 {
-        // TODO: Implement sidechain nputs and auxiliary outputs
         check_null_ptr!(0, plugin);
         let wrapper = &*(plugin as *const Self);
 
         let bus_config = wrapper.current_bus_config.load();
-        match (
-            is_input,
-            bus_config.num_input_channels,
-            bus_config.num_output_channels,
-        ) {
-            (true, 0, _) => 0,
-            // This should not be possible, however
-            (false, _, 0) => 0,
-            _ => 1,
+        if is_input {
+            let main_busses = if bus_config.num_input_channels > 0 {
+                1
+            } else {
+                0
+            };
+            let aux_busses = bus_config.aux_input_busses.num_busses;
+
+            main_busses + aux_busses
+        } else {
+            let main_busses = if bus_config.num_output_channels > 0 {
+                1
+            } else {
+                0
+            };
+            let aux_busses = bus_config.aux_output_busses.num_busses;
+
+            main_busses + aux_busses
         }
     }
 
@@ -2096,63 +2133,80 @@ impl<P: ClapPlugin> Wrapper<P> {
         check_null_ptr!(false, plugin, info);
         let wrapper = &*(plugin as *const Self);
 
-        const INPUT_ID: u32 = 0;
-        const OUTPUT_ID: u32 = 1;
+        let num_input_ports = Self::ext_audio_ports_count(plugin, true);
+        let num_output_ports = Self::ext_audio_ports_count(plugin, false);
+        if (is_input && index >= num_input_ports) || (!is_input && index >= num_output_ports) {
+            nih_debug_assert_failure!(
+                "Host tried to query information for out of bounds audio port {} (input: {})",
+                index,
+                is_input
+            );
 
-        // Even if we don't report having ports when the number of channels are 0, might as well
-        // handle them here anyways in case we do need to always report them in the future
-        match index {
-            0 => {
-                let current_bus_config = wrapper.current_bus_config.load();
-                let channel_count = if is_input {
-                    current_bus_config.num_input_channels
-                } else {
-                    current_bus_config.num_output_channels
-                };
-
-                // When we add sidechain inputs and auxiliary outputs this would need some changing
-                let stable_id = if is_input { INPUT_ID } else { OUTPUT_ID };
-                let pair_stable_id = if is_input && current_bus_config.num_output_channels > 0 {
-                    OUTPUT_ID
-                } else if !is_input && current_bus_config.num_input_channels > 0 {
-                    INPUT_ID
-                } else {
-                    CLAP_INVALID_ID
-                };
-                let port_type_name = if is_input { "Input" } else { "Output" };
-                let name = match channel_count {
-                    1 => format!("Mono {port_type_name}"),
-                    2 => format!("Stereo {port_type_name}"),
-                    n => format!("{n} channel {port_type_name}"),
-                };
-                let port_type = match channel_count {
-                    1 => CLAP_PORT_MONO,
-                    2 => CLAP_PORT_STEREO,
-                    _ => ptr::null(),
-                };
-
-                *info = std::mem::zeroed();
-
-                let info = &mut *info;
-                info.id = stable_id;
-                strlcpy(&mut info.name, &name);
-                info.flags = CLAP_AUDIO_PORT_IS_MAIN;
-                info.channel_count = channel_count;
-                info.port_type = port_type;
-                info.in_place_pair = pair_stable_id;
-
-                true
-            }
-            _ => {
-                nih_debug_assert_failure!(
-                    "Host tried to query information for out of bounds audio port {} (input: {})",
-                    index,
-                    is_input
-                );
-
-                false
-            }
+            return false;
         }
+
+        let current_bus_config = wrapper.current_bus_config.load();
+        let has_main_input = current_bus_config.num_input_channels > 0;
+        let has_main_output = current_bus_config.num_output_channels > 0;
+
+        // Whether this port is a main port or an auxiliary (sidechain) port
+        let is_main_port =
+            index == 0 && ((is_input && has_main_input) || (!is_input && has_main_output));
+
+        // We'll number the ports in a linear order from `0..num_input_ports` and
+        // `num_input_ports..(num_input_ports + num_output_ports)`
+        let stable_id = if is_input {
+            index
+        } else {
+            index + num_input_ports
+        };
+        let pair_stable_id = match (is_input, is_main_port) {
+            // Ports are named linearly with inputs coming before outputs, so this is the index of
+            // the first output port
+            (true, true) => num_input_ports,
+            (false, true) => 0,
+            (_, false) => CLAP_INVALID_ID,
+        };
+
+        let channel_count = match (is_input, is_main_port) {
+            (true, true) => current_bus_config.num_input_channels,
+            (false, true) => current_bus_config.num_output_channels,
+            (true, false) => current_bus_config.aux_input_busses.num_channels,
+            (false, false) => current_bus_config.aux_output_busses.num_channels,
+        };
+
+        let port_type_name = match (is_input, is_main_port) {
+            (true, true) => "Input",
+            (false, true) => "Output",
+            (true, false) => "Sidechain Input",
+            (false, false) => "Auxiliary Output",
+        };
+        let name = match channel_count {
+            1 => format!("Mono {port_type_name}"),
+            2 => format!("Stereo {port_type_name}"),
+            n => format!("{n} channel {port_type_name}"),
+        };
+        let port_type = match channel_count {
+            1 => CLAP_PORT_MONO,
+            2 => CLAP_PORT_STEREO,
+            _ => ptr::null(),
+        };
+
+        *info = std::mem::zeroed();
+
+        let info = &mut *info;
+        info.id = stable_id;
+        strlcpy(&mut info.name, &name);
+        info.flags = if is_main_port {
+            CLAP_AUDIO_PORT_IS_MAIN
+        } else {
+            0
+        };
+        info.channel_count = channel_count;
+        info.port_type = port_type;
+        info.in_place_pair = pair_stable_id;
+
+        true
     }
 
     unsafe extern "C" fn ext_event_filter_accepts(

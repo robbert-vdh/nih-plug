@@ -26,7 +26,9 @@ use super::view::WrapperView;
 use crate::context::Transport;
 use crate::midi::{MidiConfig, NoteEvent};
 use crate::param::ParamFlags;
-use crate::plugin::{BufferConfig, BusConfig, ProcessMode, ProcessStatus, Vst3Plugin};
+use crate::plugin::{
+    AuxiliaryIOConfig, BufferConfig, BusConfig, ProcessMode, ProcessStatus, Vst3Plugin,
+};
 use crate::util::permit_alloc;
 use crate::wrapper::state;
 use crate::wrapper::util::process_wrapper;
@@ -74,7 +76,8 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
     }
 
     unsafe fn set_io_mode(&self, _mode: vst3_sys::vst::IoMode) -> tresult {
-        // This would need to integrate with the GUI, which we currently don't have
+        // Not quite sure what the point of this is when the processing setup also receives similar
+        // information
         kResultOk
     }
 
@@ -83,9 +86,25 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
         type_: vst3_sys::vst::MediaType,
         dir: vst3_sys::vst::BusDirection,
     ) -> i32 {
-        // All plugins currently only have a single input and a single output bus
+        // A plugin has a main input and output bus if the default number of channels is non-zero,
+        // and a plugin can also have auxiliary input and output busses
         match type_ {
-            x if x == vst3_sys::vst::MediaTypes::kAudio as i32 => 1,
+            x if x == vst3_sys::vst::MediaTypes::kAudio as i32
+                && dir == vst3_sys::vst::BusDirections::kInput as i32 =>
+            {
+                let main_busses = if P::DEFAULT_NUM_INPUTS > 0 { 1 } else { 0 };
+                let aux_busses = P::DEFAULT_AUX_INPUTS.unwrap_or_default().num_busses as i32;
+
+                main_busses + aux_busses
+            }
+            x if x == vst3_sys::vst::MediaTypes::kAudio as i32
+                && dir == vst3_sys::vst::BusDirections::kOutput as i32 =>
+            {
+                let main_busses = if P::DEFAULT_NUM_OUTPUTS > 0 { 1 } else { 0 };
+                let aux_busses = P::DEFAULT_AUX_OUTPUTS.unwrap_or_default().num_busses as i32;
+
+                main_busses + aux_busses
+            }
             x if x == vst3_sys::vst::MediaTypes::kEvent as i32
                 && dir == vst3_sys::vst::BusDirections::kInput as i32
                 && P::MIDI_INPUT >= MidiConfig::Basic =>
@@ -117,26 +136,71 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
 
                 let info = &mut *info;
                 info.media_type = vst3_sys::vst::MediaTypes::kAudio as i32;
-                info.bus_type = vst3_sys::vst::BusTypes::kMain as i32;
+                info.direction = dir;
                 info.flags = vst3_sys::vst::BusFlags::kDefaultActive as u32;
-                match (dir, index) {
-                    (d, 0) if d == vst3_sys::vst::BusDirections::kInput as i32 => {
-                        info.direction = vst3_sys::vst::BusDirections::kInput as i32;
-                        info.channel_count =
-                            self.inner.current_bus_config.load().num_input_channels as i32;
+
+                // This is fun since main IO is optional
+                let bus_config = self.inner.current_bus_config.load();
+                if dir == vst3_sys::vst::BusDirections::kInput as i32 {
+                    let aux_inputs_only =
+                        P::DEFAULT_NUM_INPUTS == 0 && P::DEFAULT_AUX_INPUTS.is_some();
+                    let aux_input_start_idx = if aux_inputs_only { 0 } else { 1 };
+                    if !aux_inputs_only && index == 0 {
+                        info.bus_type = vst3_sys::vst::BusTypes::kMain as i32;
+                        info.channel_count = bus_config.num_input_channels as i32;
                         u16strlcpy(&mut info.name, "Input");
 
                         kResultOk
+                    } else if (aux_input_start_idx
+                        ..(aux_input_start_idx + bus_config.aux_input_busses.num_busses as i32))
+                        .contains(&index)
+                    {
+                        info.bus_type = vst3_sys::vst::BusTypes::kAux as i32;
+                        info.channel_count = bus_config.aux_input_busses.num_channels as i32;
+                        if bus_config.aux_input_busses.num_busses <= 1 {
+                            u16strlcpy(&mut info.name, "Sidechain Input");
+                        } else {
+                            u16strlcpy(
+                                &mut info.name,
+                                &format!("Sidechain Input {}", index - aux_input_start_idx),
+                            );
+                        }
+
+                        kResultOk
+                    } else {
+                        kInvalidArgument
                     }
-                    (d, 0) if d == vst3_sys::vst::BusDirections::kOutput as i32 => {
-                        info.direction = vst3_sys::vst::BusDirections::kOutput as i32;
-                        info.channel_count =
-                            self.inner.current_bus_config.load().num_output_channels as i32;
+                } else if dir == vst3_sys::vst::BusDirections::kOutput as i32 {
+                    let aux_outputs_only =
+                        P::DEFAULT_NUM_OUTPUTS == 0 && P::DEFAULT_AUX_OUTPUTS.is_some();
+                    let aux_output_start_idx = if aux_outputs_only { 0 } else { 1 };
+                    if !aux_outputs_only && index == 0 {
+                        info.bus_type = vst3_sys::vst::BusTypes::kMain as i32;
+                        info.channel_count = bus_config.num_output_channels as i32;
                         u16strlcpy(&mut info.name, "Output");
 
                         kResultOk
+                    } else if (aux_output_start_idx
+                        ..(aux_output_start_idx + bus_config.aux_output_busses.num_busses as i32))
+                        .contains(&index)
+                    {
+                        info.bus_type = vst3_sys::vst::BusTypes::kAux as i32;
+                        info.channel_count = bus_config.aux_output_busses.num_channels as i32;
+                        if bus_config.aux_output_busses.num_busses <= 1 {
+                            u16strlcpy(&mut info.name, "Sidechain Output");
+                        } else {
+                            u16strlcpy(
+                                &mut info.name,
+                                &format!("Sidechain Output {}", index - aux_output_start_idx),
+                            );
+                        }
+
+                        kResultOk
+                    } else {
+                        kInvalidArgument
                     }
-                    _ => kInvalidArgument,
+                } else {
+                    kInvalidArgument
                 }
             }
             (t, d, 0)
@@ -187,7 +251,12 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
         let in_info = &*in_info;
         let out_info = &mut *out_info;
         match (in_info.media_type, in_info.bus_index) {
-            (t, 0) if t == vst3_sys::vst::MediaTypes::kAudio as i32 => {
+            (t, 0)
+                if t == vst3_sys::vst::MediaTypes::kAudio as i32
+                    // We only have an IO pair when the plugin has both a main input and a main output
+                    && P::DEFAULT_NUM_INPUTS > 0
+                    && P::DEFAULT_NUM_OUTPUTS > 0 =>
+            {
                 out_info.media_type = vst3_sys::vst::MediaTypes::kAudio as i32;
                 out_info.bus_index = in_info.bus_index;
                 out_info.channel = in_info.channel;
@@ -205,7 +274,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
 
                 kResultOk
             }
-            _ => kInvalidArgument,
+            _ => kResultFalse,
         }
     }
 
@@ -218,7 +287,32 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
     ) -> tresult {
         // We don't need any special handling here
         match (type_, dir, index) {
-            (t, _, 0) if t == vst3_sys::vst::MediaTypes::kAudio as i32 => kResultOk,
+            (t, d, _)
+                if t == vst3_sys::vst::MediaTypes::kAudio as i32
+                    && d == vst3_sys::vst::BusDirections::kInput as i32 =>
+            {
+                let main_busses = if P::DEFAULT_NUM_INPUTS > 0 { 1 } else { 0 };
+                let aux_busses = P::DEFAULT_AUX_INPUTS.unwrap_or_default().num_busses as i32;
+
+                if (0..main_busses + aux_busses).contains(&index) {
+                    kResultOk
+                } else {
+                    kInvalidArgument
+                }
+            }
+            (t, d, _)
+                if t == vst3_sys::vst::MediaTypes::kAudio as i32
+                    && d == vst3_sys::vst::BusDirections::kOutput as i32 =>
+            {
+                let main_busses = if P::DEFAULT_NUM_OUTPUTS > 0 { 1 } else { 0 };
+                let aux_busses = P::DEFAULT_AUX_OUTPUTS.unwrap_or_default().num_busses as i32;
+
+                if (0..main_busses + aux_busses).contains(&index) {
+                    kResultOk
+                } else {
+                    kInvalidArgument
+                }
+            }
             (t, d, 0)
                 if t == vst3_sys::vst::MediaTypes::kEvent as i32
                     && d == vst3_sys::vst::BusDirections::kInput as i32
@@ -270,6 +364,8 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                             output_slices
                                 .resize_with(bus_config.num_output_channels as usize, || &mut [])
                         });
+
+                    // TODO: Initialize auxiliary IO
 
                     kResultOk
                 } else {
@@ -599,16 +695,72 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
     ) -> tresult {
         check_null_ptr!(inputs, outputs);
 
-        // We currently only do single audio bus IO configurations
-        if num_ins != 1 || num_outs != 1 {
+        // Why are these signed integers again?
+        if num_ins < 0 || num_outs < 0 {
             return kInvalidArgument;
         }
 
-        let input_channel_map = &*inputs;
-        let output_channel_map = &*outputs;
+        // Every auxiliary input or output needs to have the same number of channels. In order to
+        // support plugins with no main IO but with auxiliary IO, we'll need to take that into
+        // account when asserting this. If that's the case, then the first bus for that direction
+        // will have been marked auxiliary.
+        let aux_inputs_only = P::DEFAULT_NUM_INPUTS == 0 && P::DEFAULT_AUX_INPUTS.is_some();
+        let num_input_channels = if aux_inputs_only || num_ins < 1 {
+            0
+        } else {
+            (*inputs).count_ones()
+        };
+
+        let aux_input_start_idx = if aux_inputs_only { 0 } else { 1 };
+        let num_aux_input_busses = (num_ins as u32).saturating_sub(aux_input_start_idx);
+        let num_aux_input_channels = if num_aux_input_busses == 0 {
+            0
+        } else {
+            (*inputs.offset(aux_input_start_idx as isize)).count_ones()
+        };
+        for i in 1..num_aux_input_busses {
+            if (*inputs.offset((aux_input_start_idx + i) as isize)).count_ones()
+                != num_aux_input_channels
+            {
+                nih_debug_assert_failure!("Mismatching auxiliary input bus channels set by host");
+                return kResultFalse;
+            }
+        }
+
+        let aux_outputs_only = P::DEFAULT_NUM_OUTPUTS == 0 && P::DEFAULT_AUX_OUTPUTS.is_some();
+        let num_output_channels = if aux_outputs_only || num_ins < 1 {
+            0
+        } else {
+            (*outputs).count_ones()
+        };
+
+        let aux_output_start_idx = if aux_outputs_only { 0 } else { 1 };
+        let num_aux_output_busses = (num_ins as u32).saturating_sub(aux_output_start_idx);
+        let num_aux_output_channels = if num_aux_output_busses == 0 {
+            0
+        } else {
+            (*outputs.offset(aux_output_start_idx as isize)).count_ones()
+        };
+        for i in 1..num_aux_output_busses {
+            if (*outputs.offset((aux_output_start_idx + i) as isize)).count_ones()
+                != num_aux_output_channels
+            {
+                nih_debug_assert_failure!("Mismatching auxiliary output bus channels set by host");
+                return kResultFalse;
+            }
+        }
+
         let proposed_config = BusConfig {
-            num_input_channels: input_channel_map.count_ones(),
-            num_output_channels: output_channel_map.count_ones(),
+            num_input_channels,
+            num_output_channels,
+            aux_input_busses: AuxiliaryIOConfig {
+                num_busses: num_aux_input_busses,
+                num_channels: num_aux_input_channels,
+            },
+            aux_output_busses: AuxiliaryIOConfig {
+                num_busses: num_aux_output_busses,
+                num_channels: num_aux_output_channels,
+            },
         };
         if self
             .inner
@@ -649,13 +801,35 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
             }
         };
 
-        let config = self.inner.current_bus_config.load();
-        let num_channels = match (dir, index) {
-            (d, 0) if d == vst3_sys::vst::BusDirections::kInput as i32 => config.num_input_channels,
-            (d, 0) if d == vst3_sys::vst::BusDirections::kOutput as i32 => {
-                config.num_output_channels
+        let bus_config = self.inner.current_bus_config.load();
+        let num_channels = if dir == vst3_sys::vst::BusDirections::kInput as i32 {
+            let aux_inputs_only = P::DEFAULT_NUM_INPUTS == 0 && P::DEFAULT_AUX_INPUTS.is_some();
+            let aux_input_start_idx = if aux_inputs_only { 0 } else { 1 };
+            if !aux_inputs_only && index == 0 {
+                bus_config.num_input_channels
+            } else if (aux_input_start_idx
+                ..(aux_input_start_idx + bus_config.aux_input_busses.num_busses as i32))
+                .contains(&index)
+            {
+                bus_config.aux_input_busses.num_channels
+            } else {
+                return kInvalidArgument;
             }
-            _ => return kInvalidArgument,
+        } else if dir == vst3_sys::vst::BusDirections::kOutput as i32 {
+            let aux_outputs_only = P::DEFAULT_NUM_OUTPUTS == 0 && P::DEFAULT_AUX_OUTPUTS.is_some();
+            let aux_output_start_idx = if aux_outputs_only { 0 } else { 1 };
+            if !aux_outputs_only && index == 0 {
+                bus_config.num_output_channels
+            } else if (aux_output_start_idx
+                ..(aux_output_start_idx + bus_config.aux_output_busses.num_busses as i32))
+                .contains(&index)
+            {
+                bus_config.aux_output_busses.num_channels
+            } else {
+                return kInvalidArgument;
+            }
+        } else {
+            return kInvalidArgument;
         };
         let channel_map = channel_count_to_map(num_channels);
 
@@ -733,6 +907,8 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
     #[allow(clippy::mut_range_bound)]
     unsafe fn process(&self, data: *mut vst3_sys::vst::ProcessData) -> tresult {
         check_null_ptr!(data);
+
+        // TODO: Handle auxiliary IO, this still assumes main IO is always present and there's no auxiliary IO
 
         // Panic on allocations if the `assert_process_allocs` feature has been enabled, and make
         // sure that FTZ is set up correctly

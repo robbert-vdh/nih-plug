@@ -18,9 +18,6 @@ use crate::param::internals::Params;
 /// This is super basic, and lots of things I didn't need or want to use yet haven't been
 /// implemented. Notable missing features include:
 ///
-/// - Sidechain inputs
-/// - Multiple output busses
-/// - Special handling for offline processing
 /// - MIDI SysEx and MIDI2 for CLAP, note expressions and MIDI1 are already supported
 #[allow(unused_variables)]
 pub trait Plugin: Default + Send + Sync + 'static {
@@ -33,12 +30,28 @@ pub trait Plugin: Default + Send + Sync + 'static {
     /// but just in case they do this should only contain decimals values and dots.
     const VERSION: &'static str;
 
-    /// The default number of inputs. Some hosts like, like Bitwig and Ardour, use the defaults
-    /// instead of setting up the busses properly.
+    /// The default number of input channels. This merely serves as a default. The host will probe
+    /// the plugin's supported configuration using
+    /// [`accepts_bus_config()`][Self::accepts_bus_config()], and the selected configuration is
+    /// passed to [`initialize()`][Self::initialize()]. Some hosts like, like Bitwig and Ardour, use
+    /// the defaults instead of setting up the busses properly.
+    ///
+    /// Setting this to zero causes the plugin to have no main input bus.
     const DEFAULT_NUM_INPUTS: u32 = 2;
-    /// The default number of inputs. Some hosts like, like Bitwig and Ardour, use the defaults
-    /// instead of setting up the busses properly.
+    /// The default number of output channels. All of the same caveats mentioned for
+    /// `DEFAULT_NUM_INPUTS` apply here.
+    ///
+    /// Setting this to zero causes the plugin to have no main output bus.
     const DEFAULT_NUM_OUTPUTS: u32 = 2;
+
+    /// If set, then the plugin will have this many sidechain input busses with a default number of
+    /// channels. Not all hosts support more than one sidechain input bus. Negotiating the actual
+    /// configuration wroks the same was as with `DEFAULT_NUM_INPUTS`.
+    const DEFAULT_AUX_INPUTS: Option<AuxiliaryIOConfig> = None;
+    /// If set, then the plugin will have this many auxiliary output busses with a default number of
+    /// channels. Negotiating the actual configuration wroks the same was as with
+    /// `DEFAULT_NUM_INPUTS`.
+    const DEFAULT_AUX_OUTPUTS: Option<AuxiliaryIOConfig> = None;
 
     /// Whether the plugin accepts note events, and what which events it wants to receive. If this
     /// is set to [`MidiConfig::None`], then the plugin won't receive any note events.
@@ -282,13 +295,26 @@ unsafe impl HasRawWindowHandle for ParentWindowHandle {
     }
 }
 
-/// We only support a single main input and output bus at the moment.
+/// The plugin's IO configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BusConfig {
     /// The number of input channels for the plugin.
     pub num_input_channels: u32,
     /// The number of output channels for the plugin.
     pub num_output_channels: u32,
+    /// Any additional sidechain inputs.
+    pub aux_input_busses: AuxiliaryIOConfig,
+    /// Any additional outputs.
+    pub aux_output_busses: AuxiliaryIOConfig,
+}
+
+/// Configuration for auxiliary inputs or outputs on [`BusCofnig`].
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct AuxiliaryIOConfig {
+    /// The number of auxiliary input or output busses.
+    pub num_busses: u32,
+    /// The number of channels in each bus.
+    pub num_channels: u32,
 }
 
 /// Configuration for (the host's) audio buffers.
