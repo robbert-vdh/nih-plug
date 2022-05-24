@@ -22,7 +22,7 @@ Then add `nih_plug_xtask` to your new xtask package's dependencies:
 # xtask/Cargo.toml
 
 [dependencies]
-nih_plug_xtask = { git = "https://github.com/robbert-vdh/nih-plug" }
+nih_plug_xtask = { git = "https://github.com/robbert-vdh/nih-plug.git" }
 ```
 
 Call `nih_plug_xtask`'s main function own xtask binary:

@@ -470,7 +470,7 @@ checksum = "17cc5e6b5ab06331c33589842070416baa137e8b0eb912b008cfd4a78ada7919"
 [[package]]
 name = "clap-sys"
 version = "0.25.0"
-source = "git+https://github.com/robbert-vdh/clap-sys?branch=feature/clap-0.25#c8e5011a66377aa14d9f719a52255d30a48232ed"
+source = "git+https://github.com/robbert-vdh/clap-sys.git?branch=feature/clap-0.25#c8e5011a66377aa14d9f719a52255d30a48232ed"
 
 [[package]]
 name = "clipboard-win"
@@ -2813,7 +2813,7 @@ dependencies = [
 [[package]]
 name = "reflink"
 version = "0.1.3"
-source = "git+https://github.com/nicokoch/reflink?rev=e8d93b465f5d9ad340cd052b64bbc77b8ee107e2#e8d93b465f5d9ad340cd052b64bbc77b8ee107e2"
+source = "git+https://github.com/nicokoch/reflink.git?rev=e8d93b465f5d9ad340cd052b64bbc77b8ee107e2#e8d93b465f5d9ad340cd052b64bbc77b8ee107e2"
 dependencies = [
  "libc",
  "winapi",
