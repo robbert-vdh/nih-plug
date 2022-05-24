@@ -19,16 +19,25 @@ use std::sync::Arc;
 
 /// After reaching the threshold, it will take this many milliseconds under that threshold to fade
 /// back to the normal signal. Peaking above the threshold again during this time resets this.
-const MORSE_FADEOUT_MS: f32 = 5000.0;
+const MORSE_FADEOUT_MS: f32 = 2000.0;
+/// The frequency of the sine wave used for the SOS signal.
+const MORSE_FREQUENCY: f32 = 1000.0;
 
 struct SafetyLimiter {
     params: Arc<SafetyLimiterParams>,
 
     buffer_config: BufferConfig,
+
     /// `MORSE_FADEOUT_MS` translated into samples.
     morse_fadeout_samples_total: u32,
     /// The number of samples into the fadeout.
     morse_fadeout_samples_current: u32,
+
+    /// The phase of the Morse code sine oscillator. This runs from zero to `2 * pi` for
+    /// efficiency's sake.
+    osc_phase_tau: f32,
+    /// The phase increment for every sample. This can be precomputed since the frequency is fixed.
+    osc_phase_tau_dt: f32,
 }
 
 #[derive(Params)]
@@ -65,14 +74,19 @@ impl Default for SafetyLimiter {
     fn default() -> Self {
         SafetyLimiter {
             params: Arc::new(SafetyLimiterParams::default()),
+
             buffer_config: BufferConfig {
                 sample_rate: 1.0,
                 min_buffer_size: None,
                 max_buffer_size: 0,
                 process_mode: ProcessMode::Realtime,
             },
+
             morse_fadeout_samples_total: 0,
             morse_fadeout_samples_current: 0,
+
+            osc_phase_tau: 0.0,
+            osc_phase_tau_dt: 0.0,
         }
     }
 }
@@ -105,12 +119,14 @@ impl Plugin for SafetyLimiter {
         self.buffer_config = *buffer_config;
         self.morse_fadeout_samples_total =
             (MORSE_FADEOUT_MS / 1000.0 * buffer_config.sample_rate).round() as u32;
+        self.osc_phase_tau_dt = MORSE_FREQUENCY / buffer_config.sample_rate * std::f32::consts::TAU;
 
         true
     }
 
     fn reset(&mut self) {
         self.morse_fadeout_samples_current = 0;
+        self.reset_morse_signal();
     }
 
     fn process(
@@ -130,20 +146,33 @@ impl Plugin for SafetyLimiter {
             }
 
             // TODO: Do the morse code thing, right now this just fades to silence
-            // TODO: Reset the morse code phase when peaking and `self.morse_fadeout_samples_current
-            //       == self.morse_fadeout_samples_total`
             if is_peaking {
-                for sample in channel_samples {
-                    *sample = 0.0;
+                // We'll continue playback where it was left off when this gets triggered before the
+                // fadeout has finished, but otherwise the sequence should be restarted.
+                if self.morse_fadeout_samples_current >= self.morse_fadeout_samples_total {
+                    self.reset_morse_signal();
                 }
 
                 // This is the number of samples into the fadeout
-                self.morse_fadeout_samples_current = 1;
-            } else if self.morse_fadeout_samples_current < self.morse_fadeout_samples_total {
-                let original_t = self.morse_fadeout_samples_current as f32
-                    / self.morse_fadeout_samples_total as f32;
+                self.morse_fadeout_samples_current = 0;
+            }
+
+            if self.morse_fadeout_samples_current < self.morse_fadeout_samples_total {
+                // This phase runs from 0 to `2 * pi` as an optimization, so we can use it directly.
+                // And the sine wave is scaled down to the threshold minus 12 dB
+                let sine_wave =
+                    self.osc_phase_tau.sin() * (self.params.threshold_gain.value * 0.25);
+                self.osc_phase_tau += self.osc_phase_tau_dt;
+                if self.osc_phase_tau >= std::f32::consts::TAU {
+                    self.osc_phase_tau -= std::f32::consts::TAU;
+                }
+
+                let original_t = (self.morse_fadeout_samples_current as f32
+                    / self.morse_fadeout_samples_total as f32)
+                    .cbrt();
+                let morse_t = 1.0 - original_t;
                 for sample in channel_samples {
-                    *sample *= original_t;
+                    *sample = (sine_wave * morse_t) + (*sample * original_t);
                 }
 
                 self.morse_fadeout_samples_current += 1;
@@ -151,6 +180,13 @@ impl Plugin for SafetyLimiter {
         }
 
         ProcessStatus::Normal
+    }
+}
+
+impl SafetyLimiter {
+    /// Reset the SOS signal to the start.
+    fn reset_morse_signal(&mut self) {
+        self.osc_phase_tau = 0.0;
     }
 }
 
