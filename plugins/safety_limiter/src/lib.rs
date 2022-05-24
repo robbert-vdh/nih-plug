@@ -17,10 +17,18 @@
 use nih_plug::prelude::*;
 use std::sync::Arc;
 
+/// After reaching the threshold, it will take this many milliseconds under that threshold to fade
+/// back to the normal signal. Peaking above the threshold again during this time resets this.
+const MORSE_FADEOUT_MS: f32 = 5000.0;
+
 struct SafetyLimiter {
     params: Arc<SafetyLimiterParams>,
 
     buffer_config: BufferConfig,
+    /// `MORSE_FADEOUT_MS` translated into samples.
+    morse_fadeout_samples_total: u32,
+    /// The number of samples into the fadeout.
+    morse_fadeout_samples_current: u32,
 }
 
 #[derive(Params)]
@@ -58,11 +66,13 @@ impl Default for SafetyLimiter {
         SafetyLimiter {
             params: Arc::new(SafetyLimiterParams::default()),
             buffer_config: BufferConfig {
-                sample_rate: 1,
-                min_buffer_size: 0,
+                sample_rate: 1.0,
+                min_buffer_size: None,
                 max_buffer_size: 0,
                 process_mode: ProcessMode::Realtime,
             },
+            morse_fadeout_samples_total: 0,
+            morse_fadeout_samples_current: 0,
         }
     }
 }
@@ -88,17 +98,19 @@ impl Plugin for SafetyLimiter {
 
     fn initialize(
         &mut self,
-        bus_config: &BusConfig,
+        _bus_config: &BusConfig,
         buffer_config: &BufferConfig,
-        context: &mut impl ProcessContext,
+        _context: &mut impl ProcessContext,
     ) -> bool {
         self.buffer_config = *buffer_config;
+        self.morse_fadeout_samples_total =
+            (MORSE_FADEOUT_MS / 1000.0 * buffer_config.sample_rate).round() as u32;
 
         true
     }
 
     fn reset(&mut self) {
-        // TODO: Reset counters
+        self.morse_fadeout_samples_current = 0;
     }
 
     fn process(
@@ -109,6 +121,33 @@ impl Plugin for SafetyLimiter {
         // Don't do anything when bouncing
         if self.buffer_config.process_mode == ProcessMode::Offline {
             return ProcessStatus::Normal;
+        }
+
+        for mut channel_samples in buffer.iter_samples() {
+            let mut is_peaking = false;
+            for sample in channel_samples.iter_mut() {
+                is_peaking |= sample.abs() > self.params.threshold_gain.value;
+            }
+
+            // TODO: Do the morse code thing, right now this just fades to silence
+            // TODO: Reset the morse code phase when peaking and `self.morse_fadeout_samples_current
+            //       == self.morse_fadeout_samples_total`
+            if is_peaking {
+                for sample in channel_samples {
+                    *sample = 0.0;
+                }
+
+                // This is the number of samples into the fadeout
+                self.morse_fadeout_samples_current = 1;
+            } else if self.morse_fadeout_samples_current < self.morse_fadeout_samples_total {
+                let original_t = self.morse_fadeout_samples_current as f32
+                    / self.morse_fadeout_samples_total as f32;
+                for sample in channel_samples {
+                    *sample *= original_t;
+                }
+
+                self.morse_fadeout_samples_current += 1;
+            }
         }
 
         ProcessStatus::Normal
