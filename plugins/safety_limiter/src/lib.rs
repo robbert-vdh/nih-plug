@@ -19,6 +19,8 @@ use std::sync::Arc;
 
 struct SafetyLimiter {
     params: Arc<SafetyLimiterParams>,
+
+    buffer_config: BufferConfig,
 }
 
 #[derive(Params)]
@@ -55,6 +57,12 @@ impl Default for SafetyLimiter {
     fn default() -> Self {
         SafetyLimiter {
             params: Arc::new(SafetyLimiterParams::default()),
+            buffer_config: BufferConfig {
+                sample_rate: 1,
+                min_buffer_size: 0,
+                max_buffer_size: 0,
+                process_mode: ProcessMode::Realtime,
+            },
         }
     }
 }
@@ -78,6 +86,17 @@ impl Plugin for SafetyLimiter {
         config.num_input_channels == config.num_output_channels
     }
 
+    fn initialize(
+        &mut self,
+        bus_config: &BusConfig,
+        buffer_config: &BufferConfig,
+        context: &mut impl ProcessContext,
+    ) -> bool {
+        self.buffer_config = *buffer_config;
+
+        true
+    }
+
     fn reset(&mut self) {
         // TODO: Reset counters
     }
@@ -87,7 +106,10 @@ impl Plugin for SafetyLimiter {
         buffer: &mut Buffer,
         _context: &mut impl ProcessContext,
     ) -> ProcessStatus {
-        // TODO: Dew it
+        // Don't do anything when bouncing
+        if self.buffer_config.process_mode == ProcessMode::Offline {
+            return ProcessStatus::Normal;
+        }
 
         ProcessStatus::Normal
     }
