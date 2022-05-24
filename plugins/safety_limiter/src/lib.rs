@@ -125,7 +125,7 @@ impl Plugin for SafetyLimiter {
     }
 
     fn reset(&mut self) {
-        self.morse_fadeout_samples_current = 0;
+        self.morse_fadeout_samples_current = self.morse_fadeout_samples_total;
         self.reset_morse_signal();
     }
 
