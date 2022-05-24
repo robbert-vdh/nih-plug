@@ -21,7 +21,7 @@ use std::sync::Arc;
 /// back to the normal signal. Peaking above the threshold again during this time resets this.
 const MORSE_FADEOUT_MS: f32 = 2000.0;
 /// The frequency of the sine wave used for the SOS signal.
-const MORSE_FREQUENCY: f32 = 1000.0;
+const MORSE_FREQUENCY: f32 = 420.0;
 
 struct SafetyLimiter {
     params: Arc<SafetyLimiterParams>,
