@@ -61,8 +61,6 @@ impl Default for SafetyLimiterParams {
                     max: util::db_to_gain(12.0),
                 },
             )
-            // And smoothing is not necessary here since we'll disable automation
-            .non_automatable()
             .with_unit(" dB")
             .with_value_to_string(formatters::v2s_f32_gain_to_db(2))
             .with_string_to_value(formatters::s2v_f32_gain_to_db()),
