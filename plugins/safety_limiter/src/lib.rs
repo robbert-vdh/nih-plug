@@ -17,9 +17,13 @@
 use nih_plug::prelude::*;
 use std::sync::Arc;
 
-/// After reaching the threshold, it will take this many milliseconds under that threshold to fade
-/// back to the normal signal. Peaking above the threshold again during this time resets this.
-const MORSE_FADEOUT_MS: f32 = 2000.0;
+/// After reaching the threshold, it will take this many milliseconds under that threshold to start
+/// fading back to the normal signal. Peaking above the threshold again during this time resets
+/// this. The fadeout doesn't start immediately since that would add some nasty distortion when most
+/// but not all samples pass the threshold.
+const MORSE_FADEOUT_START_MS: f32 = 500.0;
+/// The Morse fadeout ends after this many milliseconds.
+const MORSE_FADEOUT_END_MS: f32 = MORSE_FADEOUT_START_MS + 1500.0;
 /// The frequency of the sine wave used for the SOS signal.
 const MORSE_FREQUENCY: f32 = 420.0;
 
@@ -28,8 +32,10 @@ struct SafetyLimiter {
 
     buffer_config: BufferConfig,
 
-    /// `MORSE_FADEOUT_MS` translated into samples.
-    morse_fadeout_samples_total: u32,
+    /// `MORSE_FADEOUT_START_MS` translated into samples.
+    morse_fadeout_samples_start: u32,
+    /// `MORSE_FADEOUT_END_MS` translated into samples.
+    morse_fadeout_samples_end: u32,
     /// The number of samples into the fadeout.
     morse_fadeout_samples_current: u32,
 
@@ -80,7 +86,8 @@ impl Default for SafetyLimiter {
                 process_mode: ProcessMode::Realtime,
             },
 
-            morse_fadeout_samples_total: 0,
+            morse_fadeout_samples_start: 0,
+            morse_fadeout_samples_end: 0,
             morse_fadeout_samples_current: 0,
 
             osc_phase_tau: 0.0,
@@ -115,15 +122,17 @@ impl Plugin for SafetyLimiter {
         _context: &mut impl ProcessContext,
     ) -> bool {
         self.buffer_config = *buffer_config;
-        self.morse_fadeout_samples_total =
-            (MORSE_FADEOUT_MS / 1000.0 * buffer_config.sample_rate).round() as u32;
+        self.morse_fadeout_samples_start =
+            (MORSE_FADEOUT_START_MS / 1000.0 * buffer_config.sample_rate).round() as u32;
+        self.morse_fadeout_samples_end =
+            (MORSE_FADEOUT_END_MS / 1000.0 * buffer_config.sample_rate).round() as u32;
         self.osc_phase_tau_dt = MORSE_FREQUENCY / buffer_config.sample_rate * std::f32::consts::TAU;
 
         true
     }
 
     fn reset(&mut self) {
-        self.morse_fadeout_samples_current = self.morse_fadeout_samples_total;
+        self.morse_fadeout_samples_current = self.morse_fadeout_samples_end;
         self.reset_morse_signal();
     }
 
@@ -147,7 +156,7 @@ impl Plugin for SafetyLimiter {
             if is_peaking {
                 // We'll continue playback where it was left off when this gets triggered before the
                 // fadeout has finished, but otherwise the sequence should be restarted.
-                if self.morse_fadeout_samples_current >= self.morse_fadeout_samples_total {
+                if self.morse_fadeout_samples_current >= self.morse_fadeout_samples_end {
                     self.reset_morse_signal();
                 }
 
@@ -155,7 +164,7 @@ impl Plugin for SafetyLimiter {
                 self.morse_fadeout_samples_current = 0;
             }
 
-            if self.morse_fadeout_samples_current < self.morse_fadeout_samples_total {
+            if self.morse_fadeout_samples_current < self.morse_fadeout_samples_end {
                 // This phase runs from 0 to `2 * pi` as an optimization, so we can use it directly.
                 // And the sine wave is scaled down to the threshold minus 12 dB
                 let sine_wave =
@@ -165,9 +174,14 @@ impl Plugin for SafetyLimiter {
                     self.osc_phase_tau -= std::f32::consts::TAU;
                 }
 
-                let original_t = (self.morse_fadeout_samples_current as f32
-                    / self.morse_fadeout_samples_total as f32)
-                    .cbrt();
+                let original_t = if self.morse_fadeout_samples_current
+                    < self.morse_fadeout_samples_start
+                {
+                    0.0
+                } else {
+                    (self.morse_fadeout_samples_current - self.morse_fadeout_samples_start) as f32
+                        / (self.morse_fadeout_samples_end - self.morse_fadeout_samples_start) as f32
+                };
                 let morse_t = 1.0 - original_t;
                 for sample in channel_samples {
                     *sample = (sine_wave * morse_t) + (*sample * original_t);
