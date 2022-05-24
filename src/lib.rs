@@ -58,6 +58,9 @@
 //!      `Buffer` object for all of the ways you can use this API. You can access note events,
 //!      transport data, and more through the [`ProcessContext`][prelude::ProcessContext] that's
 //!      also passed to the process function.
+//!   6. [`Plugin::deactivate()`][prelude::Plugin::deactivate()] is called from the when the plugin
+//!      gets deactivated. You probably don't need to do anything here, but you could deallocate or
+//!      clean up resources here.
 //!
 //!  - Plugin parameters are managed automatically by creating a struct deriving the
 //!    [`Params`][prelude::Params] trait and returning a handle to it from the

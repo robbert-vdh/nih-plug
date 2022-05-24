@@ -145,6 +145,16 @@ pub trait Plugin: Default + Send + Sync + 'static {
     /// TODO: Create an example plugin that uses block-based processing
     fn process(&mut self, buffer: &mut Buffer, context: &mut impl ProcessContext) -> ProcessStatus;
 
+    /// Called when the plugin is deactivated. The host will call
+    /// [`initialize()`][Self::initialize()] again before the plugin resumes processing audio. These
+    /// two functions will not be called when the host only temporarily stops processing audio. You
+    /// can clean up or deallocate resources here. In most cases you can safely ignore this.
+    ///
+    /// There is no one-to-one relationship between calls to `initialize()` and `deactivate()`.
+    /// `initialize()` may be called more than once before `deactivate()` is called, for instance
+    /// when restoring state while the plugin is still activate.
+    fn deactivate(&mut self) {}
+
     /// Convenience function provided to allocate memory for block-based smoothing for this plugin.
     /// Since this allocates memory, this should be called in [`initialize()`][Self::initialize()].
     /// If you are going to use [`Buffer::iter_blocks()`] and want to use parameter smoothing in

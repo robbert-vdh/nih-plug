@@ -145,6 +145,10 @@ impl Plugin for Gain {
 
         ProcessStatus::Normal
     }
+
+    // This can be used for cleaning up special resources like socket connections whenever the
+    // plugin is deactivated. Most plugins won't need to do anything here.
+    fn deactivate(&mut self) {}
 }
 
 impl ClapPlugin for Gain {

@@ -309,6 +309,10 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
         terminate_audio_thread.store(true, Ordering::SeqCst);
         audio_thread.join().unwrap();
 
+        // Some plugins may use this to clean up resources. Should not be needed for the standalone
+        // application, but it seems like a good idea to stay consistent.
+        self.plugin.write().deactivate();
+
         Ok(())
     }
 

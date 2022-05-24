@@ -1575,8 +1575,11 @@ impl<P: ClapPlugin> Wrapper<P> {
         }
     }
 
-    unsafe extern "C" fn deactivate(_plugin: *const clap_plugin) {
-        // We currently don't do anything here
+    unsafe extern "C" fn deactivate(plugin: *const clap_plugin) {
+        check_null_ptr!((), plugin);
+        let wrapper = &*(plugin as *const Self);
+
+        wrapper.plugin.write().deactivate();
     }
 
     unsafe extern "C" fn start_processing(plugin: *const clap_plugin) -> bool {

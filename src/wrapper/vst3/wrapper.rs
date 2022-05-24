@@ -373,7 +373,11 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                 }
             }
             (true, None) => kResultFalse,
-            (false, _) => kResultOk,
+            (false, _) => {
+                self.inner.plugin.write().deactivate();
+
+                kResultOk
+            }
         }
     }
 
