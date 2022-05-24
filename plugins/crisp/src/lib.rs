@@ -298,8 +298,7 @@ impl Plugin for Crisp {
     const SAMPLE_ACCURATE_AUTOMATION: bool = true;
 
     fn params(&self) -> Arc<dyn Params> {
-        // The explicit cast is not needed, but Rust Analyzer gets very upset when you don't do it
-        self.params.clone() as Arc<dyn Params>
+        self.params.clone()
     }
 
     fn editor(&self) -> Option<Box<dyn Editor>> {
