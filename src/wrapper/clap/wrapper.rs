@@ -148,7 +148,7 @@ pub struct Wrapper<P: ClapPlugin> {
     /// apointer to pointers, so this needs to be preallocated in the setup call and kept around
     /// between process calls. This buffer owns the vector, because otherwise it would need to store
     /// a mutable reference to the data contained in this mutex.
-    pub output_buffer: AtomicRefCell<Buffer<'static>>,
+    output_buffer: AtomicRefCell<Buffer<'static>>,
     /// The plugin is able to restore state through a method on the `GuiContext`. To avoid changing
     /// parameters mid-processing and running into garbled data if the host also tries to load state
     /// at the same time the restoring happens at the end of each processing call. If this zero
