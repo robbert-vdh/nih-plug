@@ -185,7 +185,7 @@ impl Plugin for Sine {
             }
         }
 
-        ProcessStatus::Normal
+        ProcessStatus::KeepAlive
     }
 }
 
