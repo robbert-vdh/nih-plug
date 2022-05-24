@@ -30,8 +30,14 @@ to get started.
 
 ## Plugins
 
-Check each plugin's readme for more details on what the plugin actually does and
-for download links.
+Check each plugin's readme for more details on what the plugin actually does.
+You can download the development binaries for Linux, Windows and macOS from the
+[automated
+builds](https://github.com/robbert-vdh/nih-plug/actions/workflows/test.yml?query=branch%3Amaster)
+page. Or if you're not signed in on GitHub, then you can also find the latest
+nightly build [here](https://nightly.link/robbert-vdh/nih-plug/workflows/build/master).
+
+Scroll down for more information on the plugin framework.
 
 - [**Crisp**](plugins/crisp) adds a bright crispy top end to any low bass sound.
   Inspired by Polarity's [Fake Distortion](https://youtu.be/MKfFn4L1zeg) video.
