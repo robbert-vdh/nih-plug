@@ -55,6 +55,12 @@ Scroll down for more information on the plugin framework.
   pitches the signal down an octave, but it also has the side effect of causing
   things to sound like a cracking voice or to make them sound slightly out of
   tune.
+- [**Safety Limiter**](plugins/safety_limiter) is a simple tool to prevent ear
+  damage. As soon as there is a peak above 0 dBFS or the specified threshold,
+  the plugin will cut over to playing SOS in Morse code, gradually fading out
+  again when the input returns back to safe levels. Made for personal use during
+  plugin development and intense sound design sessions, but maybe you'll find it
+  useful too!
 
 ## Framework
 

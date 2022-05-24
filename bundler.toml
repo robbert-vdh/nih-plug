@@ -15,3 +15,6 @@ name = "Loudness War Winner"
 
 [puberty_simulator]
 name = "Puberty Simulator"
+
+[safety_limiter]
+name = "Safety Limiter"
