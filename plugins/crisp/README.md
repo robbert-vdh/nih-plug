@@ -18,7 +18,7 @@ on macOS.
 
 ### Building
 
-After installing [Rust](https://rustup.rs/), you can compile Puberty Simulator
+After installing [Rust](https://rustup.rs/), you can compile Crisp
 as follows:
 
 ```shell
