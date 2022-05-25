@@ -174,7 +174,8 @@ impl Plugin for SafetyLimiter {
                     self.osc_phase_tau -= std::f32::consts::TAU;
                 }
 
-                let original_t = if self.morse_fadeout_samples_current
+                // We'll do an equal power fade
+                let original_t_squared = if self.morse_fadeout_samples_current
                     < self.morse_fadeout_samples_start
                 {
                     0.0
@@ -182,7 +183,8 @@ impl Plugin for SafetyLimiter {
                     (self.morse_fadeout_samples_current - self.morse_fadeout_samples_start) as f32
                         / (self.morse_fadeout_samples_end - self.morse_fadeout_samples_start) as f32
                 };
-                let morse_t = 1.0 - original_t;
+                let original_t = original_t_squared.sqrt();
+                let morse_t = (1.0 - original_t_squared).sqrt();
                 for sample in channel_samples {
                     *sample = (sine_wave * morse_t) + (*sample * original_t);
                 }
