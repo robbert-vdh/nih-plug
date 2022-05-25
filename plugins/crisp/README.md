@@ -18,6 +18,8 @@ on macOS.
 
 ### Building
 
+Crisp depends on `libxcb-icccm`.
+
 After installing [Rust](https://rustup.rs/), you can compile Crisp
 as follows:
 
