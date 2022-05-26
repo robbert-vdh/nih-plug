@@ -90,7 +90,7 @@ impl Plugin for Gain {
         &mut self,
         _bus_config: &BusConfig,
         buffer_config: &BufferConfig,
-        _context: &mut impl ProcessContext,
+        _context: &mut impl InitContext,
     ) -> bool {
         // TODO: How do you tie this exponential decay to an actual time span?
         self.peak_meter_decay_weight = 0.9992f32.powf(44_100.0 / buffer_config.sample_rate);

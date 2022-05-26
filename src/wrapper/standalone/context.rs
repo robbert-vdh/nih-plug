@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use super::backend::Backend;
 use super::wrapper::{GuiTask, Wrapper};
-use crate::context::{GuiContext, PluginApi, ProcessContext, Transport};
+use crate::context::{GuiContext, InitContext, PluginApi, ProcessContext, Transport};
 use crate::midi::NoteEvent;
 use crate::param::internals::ParamPtr;
 use crate::plugin::Plugin;
@@ -17,6 +17,14 @@ pub(crate) struct WrapperGuiContext<P: Plugin, B: Backend> {
     /// This allows us to send tasks to the parent view that will be handled at the start of its
     /// next frame.
     pub(super) gui_task_sender: channel::Sender<GuiTask>,
+}
+
+/// A [`InitContext`] implementation for the standalone wrapper. This is a separate object so it
+/// can hold on to lock guards for event queues. Otherwise reading these events would require
+/// constant unnecessary atomic operations to lock the uncontested RwLocks.
+pub(crate) struct WrapperInitContext<'a, P: Plugin, B: Backend> {
+    #[allow(dead_code)]
+    pub(super) wrapper: &'a Wrapper<P, B>,
 }
 
 /// A [`ProcessContext`] implementation for the standalone wrapper. This is a separate object so it
@@ -69,6 +77,16 @@ impl<P: Plugin, B: Backend> GuiContext for WrapperGuiContext<P, B> {
 
     fn set_state(&self, state: crate::wrapper::state::PluginState) {
         self.wrapper.set_state_object(state)
+    }
+}
+
+impl<P: Plugin, B: Backend> InitContext for WrapperInitContext<'_, P, B> {
+    fn plugin_api(&self) -> PluginApi {
+        PluginApi::Standalone
+    }
+
+    fn set_latency_samples(&self, _samples: u32) {
+        nih_debug_assert_failure!("TODO: WrapperInitContext::set_latency_samples()");
     }
 }
 

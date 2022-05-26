@@ -6,6 +6,14 @@ new and what's changed, this document lists all breaking changes in reverse
 chronological order. If a new feature did not require any changes to existing
 code then it will not be listed here.
 
+## [2022-05-2y]
+
+- The `Plugin::initialize()` method now takes a `&mut impl InitContext` instead
+  of a `&mut impl ProcessContext`. This is to avoid soundness issues when
+  `ProcessContext` lets you access sidechain buffer and auxiliary outputs in the
+  future and because most of the methods on `ProcessContext` would not be
+  applicable to initialization.
+
 ## [2022-05-22]
 
 - Previously calling `param.non_automatable()` when constructing a parameter

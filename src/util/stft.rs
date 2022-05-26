@@ -253,8 +253,7 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
     /// Process the audio in `main_buffer` in small overlapping blocks, adding up the results for
     /// the main buffer so they can eventually be written back to the host one block later. This
     /// means that this function will introduce one block of latency. This can be compensated by
-    /// calling
-    /// [`ProcessContext::set_latency()`][`crate::prelude::ProcessContext::set_latency_samples()`]
+    /// calling [`InitContext::set_latency()`][`crate::prelude::InitContext::set_latency_samples()`]
     /// in your plugin's initialization function.
     ///
     /// If a padding value was specified in [`new()`][Self::new()], then the yielded blocks will

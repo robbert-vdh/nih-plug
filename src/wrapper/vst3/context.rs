@@ -2,10 +2,10 @@ use atomic_refcell::AtomicRefMut;
 use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use vst3_sys::vst::{IComponentHandler, RestartFlags};
+use vst3_sys::vst::IComponentHandler;
 
 use super::inner::{Task, WrapperInner};
-use crate::context::{GuiContext, PluginApi, ProcessContext, Transport};
+use crate::context::{GuiContext, InitContext, PluginApi, ProcessContext, Transport};
 use crate::midi::NoteEvent;
 use crate::param::internals::ParamPtr;
 use crate::plugin::Vst3Plugin;
@@ -16,6 +16,13 @@ use crate::wrapper::state::PluginState;
 /// with the host for things like setting parameters.
 pub(crate) struct WrapperGuiContext<P: Vst3Plugin> {
     pub(super) inner: Arc<WrapperInner<P>>,
+}
+
+/// A [`InitContext`] implementation for the wrapper. This is a separate object so it can hold on to
+/// lock guards for event queues. Otherwise reading these events would require constant unnecessary
+/// atomic operations to lock the uncontested locks.
+pub(crate) struct WrapperInitContext<'a, P: Vst3Plugin> {
+    pub(super) inner: &'a WrapperInner<P>,
 }
 
 /// A [`ProcessContext`] implementation for the wrapper. This is a separate object so it can hold on
@@ -108,6 +115,16 @@ impl<P: Vst3Plugin> GuiContext for WrapperGuiContext<P> {
     }
 }
 
+impl<P: Vst3Plugin> InitContext for WrapperInitContext<'_, P> {
+    fn plugin_api(&self) -> PluginApi {
+        PluginApi::Vst3
+    }
+
+    fn set_latency_samples(&self, samples: u32) {
+        self.inner.set_latency_samples(samples)
+    }
+}
+
 impl<P: Vst3Plugin> ProcessContext for WrapperProcessContext<'_, P> {
     fn plugin_api(&self) -> PluginApi {
         PluginApi::Vst3
@@ -126,13 +143,6 @@ impl<P: Vst3Plugin> ProcessContext for WrapperProcessContext<'_, P> {
     }
 
     fn set_latency_samples(&self, samples: u32) {
-        // Only trigger a restart if it's actually needed
-        let old_latency = self.inner.current_latency.swap(samples, Ordering::SeqCst);
-        if old_latency != samples {
-            let task_posted = self
-                .inner
-                .do_maybe_async(Task::TriggerRestart(RestartFlags::kLatencyChanged as i32));
-            nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
-        }
+        self.inner.set_latency_samples(samples)
     }
 }

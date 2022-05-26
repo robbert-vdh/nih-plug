@@ -5,7 +5,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use crate::buffer::Buffer;
-use crate::context::{GuiContext, ProcessContext};
+use crate::context::{GuiContext, InitContext, ProcessContext};
 use crate::midi::MidiConfig;
 use crate::param::internals::Params;
 
@@ -111,7 +111,7 @@ pub trait Plugin: Default + Send + Sync + 'static {
         &mut self,
         bus_config: &BusConfig,
         buffer_config: &BufferConfig,
-        context: &mut impl ProcessContext,
+        context: &mut impl InitContext,
     ) -> bool {
         true
     }

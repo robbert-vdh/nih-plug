@@ -10,7 +10,7 @@ use std::time::Duration;
 use vst3_sys::base::{kInvalidArgument, kResultOk, tresult};
 use vst3_sys::vst::{IComponentHandler, RestartFlags};
 
-use super::context::{WrapperGuiContext, WrapperProcessContext};
+use super::context::{WrapperGuiContext, WrapperInitContext, WrapperProcessContext};
 use super::note_expressions::NoteExpressionController;
 use super::param_units::ParamUnits;
 use super::util::{ObjectPtr, VstPtr, VST3_MIDI_PARAMS_END, VST3_MIDI_PARAMS_START};
@@ -313,6 +313,10 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         Arc::new(WrapperGuiContext { inner: self })
     }
 
+    pub fn make_init_context(&self) -> WrapperInitContext<'_, P> {
+        WrapperInitContext { inner: self }
+    }
+
     pub fn make_process_context(&self, transport: Transport) -> WrapperProcessContext<'_, P> {
         WrapperProcessContext {
             inner: self,
@@ -450,11 +454,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
                 let bus_config = self.current_bus_config.load();
                 if let Some(buffer_config) = self.current_buffer_config.load() {
                     let mut plugin = self.plugin.write();
-                    plugin.initialize(
-                        &bus_config,
-                        &buffer_config,
-                        &mut self.make_process_context(Transport::new(buffer_config.sample_rate)),
-                    );
+                    plugin.initialize(&bus_config, &buffer_config, &mut self.make_init_context());
                     process_wrapper(|| plugin.reset());
                 }
 
@@ -467,6 +467,16 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             Task::TriggerRestart(RestartFlags::kParamValuesChanged as i32),
         );
         nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+    }
+
+    pub fn set_latency_samples(&self, samples: u32) {
+        // Only trigger a restart if it's actually needed
+        let old_latency = self.current_latency.swap(samples, Ordering::SeqCst);
+        if old_latency != samples {
+            let task_posted =
+                self.do_maybe_async(Task::TriggerRestart(RestartFlags::kLatencyChanged as i32));
+            nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+        }
     }
 }
 

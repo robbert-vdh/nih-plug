@@ -315,7 +315,7 @@ impl Plugin for Crisp {
         &mut self,
         bus_config: &BusConfig,
         buffer_config: &BufferConfig,
-        _context: &mut impl ProcessContext,
+        _context: &mut impl InitContext,
     ) -> bool {
         nih_debug_assert_eq!(bus_config.num_input_channels, NUM_CHANNELS);
         nih_debug_assert_eq!(bus_config.num_output_channels, NUM_CHANNELS);

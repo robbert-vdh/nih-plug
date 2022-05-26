@@ -370,9 +370,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                 if plugin.initialize(
                     &bus_config,
                     &buffer_config,
-                    &mut self
-                        .inner
-                        .make_process_context(Transport::new(buffer_config.sample_rate)),
+                    &mut self.inner.make_init_context(),
                 ) {
                     // NOTE: We don't call `Plugin::reset()` here. The call is done in `set_process()`
                     //       instead. Otherwise we would call the function twice, and `set_process()` needs
@@ -459,9 +457,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
             plugin.initialize(
                 &bus_config,
                 &buffer_config,
-                &mut self
-                    .inner
-                    .make_process_context(Transport::new(buffer_config.sample_rate)),
+                &mut self.inner.make_init_context(),
             );
             // TODO: This also goes for the CLAP version, but should we call reset here? Won't the
             //       host always restart playback? Check this with a couple of hosts and remove the
@@ -1531,9 +1527,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                     plugin.initialize(
                         &bus_config,
                         &buffer_config,
-                        &mut self
-                            .inner
-                            .make_process_context(Transport::new(buffer_config.sample_rate)),
+                        &mut self.inner.make_init_context(),
                     )
                 });
                 plugin.reset();

@@ -124,7 +124,7 @@ impl Plugin for Sine {
         &mut self,
         _bus_config: &BusConfig,
         buffer_config: &BufferConfig,
-        _context: &mut impl ProcessContext,
+        _context: &mut impl InitContext,
     ) -> bool {
         self.sample_rate = buffer_config.sample_rate;
 

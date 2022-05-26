@@ -7,10 +7,25 @@ use crate::param::internals::ParamPtr;
 use crate::param::Param;
 use crate::wrapper::state::PluginState;
 
-// TODO: ProcessContext for parameter automation and sending events
+/// Callbacks the plugin can make while it is being initialized. This is passed to the plugin during
+/// [`Plugin::initialize()`][crate::plugin::Plugin::initialize()].
+//
+// # Safety
+//
+// The implementing wrapper needs to be able to handle concurrent requests, and it should perform
+// the actual callback within [MainThreadQueue::do_maybe_async].
+pub trait InitContext {
+    /// Get the current plugin API.
+    fn plugin_api(&self) -> PluginApi;
 
-/// General callbacks the plugin can make during its lifetime. This is passed to the plugin during
-/// [`Plugin::initialize()`][crate::plugin::Plugin::initialize()] and as part of
+    /// Update the current latency of the plugin. If the plugin is currently processing audio, then
+    /// this may cause audio playback to be restarted.
+    fn set_latency_samples(&self, samples: u32);
+}
+
+/// Contains both context data and callbacks the plugin can use during processing. Most notably this
+/// is how a plugin sends and receives note events, gets transport information, and accesses
+/// sidechain inputs and auxiliary outputs. This is passed to the plugin during as part of
 /// [`Plugin::process()`][crate::plugin::Plugin::process()].
 //
 // # Safety

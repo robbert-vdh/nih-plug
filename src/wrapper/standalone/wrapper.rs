@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::thread;
 
 use super::backend::Backend;
-use super::context::{WrapperGuiContext, WrapperProcessContext};
+use super::context::{WrapperGuiContext, WrapperInitContext, WrapperProcessContext};
 use crate::context::Transport;
 use crate::param::internals::{ParamPtr, Params};
 use crate::param::ParamFlags;
@@ -229,7 +229,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
             if !plugin.initialize(
                 &wrapper.bus_config,
                 &wrapper.buffer_config,
-                &mut wrapper.make_process_context(Transport::new(wrapper.config.sample_rate)),
+                &mut wrapper.make_init_context(),
             ) {
                 return Err(WrapperError::InitializationFailed);
             }
@@ -492,6 +492,10 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
             wrapper: self,
             gui_task_sender,
         })
+    }
+
+    fn make_init_context(&self) -> WrapperInitContext<'_, P, B> {
+        WrapperInitContext { wrapper: self }
     }
 
     fn make_process_context(&self, transport: Transport) -> WrapperProcessContext<'_, P, B> {

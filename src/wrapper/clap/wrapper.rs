@@ -74,7 +74,7 @@ use std::sync::{Arc, Weak};
 use std::thread::{self, ThreadId};
 use std::time::Duration;
 
-use super::context::{WrapperGuiContext, WrapperProcessContext};
+use super::context::{WrapperGuiContext, WrapperInitContext, WrapperProcessContext};
 use super::descriptor::PluginDescriptor;
 use super::util::ClapPtr;
 use crate::buffer::Buffer;
@@ -613,6 +613,10 @@ impl<P: ClapPlugin> Wrapper<P> {
 
     fn make_gui_context(self: Arc<Self>) -> Arc<WrapperGuiContext<P>> {
         Arc::new(WrapperGuiContext { wrapper: self })
+    }
+
+    fn make_init_context(&self) -> WrapperInitContext<'_, P> {
+        WrapperInitContext { wrapper: self }
     }
 
     fn make_process_context(&self, transport: Transport) -> WrapperProcessContext<'_, P> {
@@ -1484,11 +1488,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 let bus_config = self.current_bus_config.load();
                 if let Some(buffer_config) = self.current_buffer_config.load() {
                     let mut plugin = self.plugin.write();
-                    plugin.initialize(
-                        &bus_config,
-                        &buffer_config,
-                        &mut self.make_process_context(Transport::new(buffer_config.sample_rate)),
-                    );
+                    plugin.initialize(&bus_config, &buffer_config, &mut self.make_init_context());
                     process_wrapper(|| plugin.reset());
                 }
 
@@ -1499,6 +1499,17 @@ impl<P: ClapPlugin> Wrapper<P> {
         // After the state has been updated, notify the host about the new parameter values
         let task_posted = self.do_maybe_async(Task::RescanParamValues);
         nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+    }
+
+    pub fn set_latency_samples(&self, samples: u32) {
+        // Only make a callback if it's actually needed
+        // XXX: For CLAP we could move this handling to the Plugin struct, but it may be worthwhile
+        //      to keep doing it this way to stay consistent with VST3.
+        let old_latency = self.current_latency.swap(samples, Ordering::SeqCst);
+        if old_latency != samples {
+            let task_posted = self.do_maybe_async(Task::LatencyChanged);
+            nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+        }
     }
 
     unsafe extern "C" fn init(plugin: *const clap_plugin) -> bool {
@@ -1550,7 +1561,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         if plugin.initialize(
             &bus_config,
             &buffer_config,
-            &mut wrapper.make_process_context(Transport::new(buffer_config.sample_rate)),
+            &mut wrapper.make_init_context(),
         ) {
             // NOTE: `Plugin::reset()` is called in `clap_plugin::start_processing()` instead of in
             //       this function
@@ -1927,8 +1938,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                     plugin.initialize(
                         &bus_config,
                         &buffer_config,
-                        &mut wrapper
-                            .make_process_context(Transport::new(buffer_config.sample_rate)),
+                        &mut wrapper.make_init_context(),
                     )
                 });
                 plugin.reset();
@@ -2810,7 +2820,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             plugin.initialize(
                 &bus_config,
                 &buffer_config,
-                &mut wrapper.make_process_context(Transport::new(buffer_config.sample_rate)),
+                &mut wrapper.make_init_context(),
             );
             // TODO: This also goes for the VST3 version, but should we call reset here? Won't the
             //       host always restart playback? Check this with a couple of hosts and remove the

@@ -108,7 +108,7 @@ impl Plugin for Stft {
         &mut self,
         _bus_config: &BusConfig,
         _buffer_config: &BufferConfig,
-        context: &mut impl ProcessContext,
+        context: &mut impl InitContext,
     ) -> bool {
         // The plugin's latency consists of the block size from the overlap-add procedure and half
         // of the filter kernel's size (since we're using a linear phase/symmetrical convolution
