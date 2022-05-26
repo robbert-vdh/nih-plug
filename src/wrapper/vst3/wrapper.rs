@@ -86,6 +86,11 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
         type_: vst3_sys::vst::MediaType,
         dir: vst3_sys::vst::BusDirection,
     ) -> i32 {
+        // HACK: Bitwig will not call the process function at all if the plugin does not have any
+        //       audio IO, so we'll add a zero channel output to work around this if that is the
+        //       case
+        let no_main_audio_io = P::DEFAULT_NUM_INPUTS == 0 && P::DEFAULT_NUM_OUTPUTS == 0;
+
         // A plugin has a main input and output bus if the default number of channels is non-zero,
         // and a plugin can also have auxiliary input and output busses
         match type_ {
@@ -103,7 +108,11 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                 let main_busses = if P::DEFAULT_NUM_OUTPUTS > 0 { 1 } else { 0 };
                 let aux_busses = P::DEFAULT_AUX_OUTPUTS.unwrap_or_default().num_busses as i32;
 
-                main_busses + aux_busses
+                if no_main_audio_io {
+                    1
+                } else {
+                    main_busses + aux_busses
+                }
             }
             x if x == vst3_sys::vst::MediaTypes::kEvent as i32
                 && dir == vst3_sys::vst::BusDirections::kInput as i32
@@ -129,6 +138,11 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
         info: *mut vst3_sys::vst::BusInfo,
     ) -> tresult {
         check_null_ptr!(info);
+
+        // HACK: Bitwig will not call the process function at all if the plugin does not have any
+        //       audio IO, so we'll add a zero channel output to work around this if that is the
+        //       case
+        let no_main_audio_io = P::DEFAULT_NUM_INPUTS == 0 && P::DEFAULT_NUM_OUTPUTS == 0;
 
         match (type_, dir, index) {
             (t, _, _) if t == vst3_sys::vst::MediaTypes::kAudio as i32 => {
@@ -174,7 +188,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                     let aux_outputs_only =
                         P::DEFAULT_NUM_OUTPUTS == 0 && P::DEFAULT_AUX_OUTPUTS.is_some();
                     let aux_output_start_idx = if aux_outputs_only { 0 } else { 1 };
-                    if !aux_outputs_only && index == 0 {
+                    if (!aux_outputs_only || no_main_audio_io) && index == 0 {
                         info.bus_type = vst3_sys::vst::BusTypes::kMain as i32;
                         info.channel_count = bus_config.num_output_channels as i32;
                         u16strlcpy(&mut info.name, "Output");
@@ -285,6 +299,11 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
         index: i32,
         _state: vst3_sys::base::TBool,
     ) -> tresult {
+        // HACK: Bitwig will not call the process function at all if the plugin does not have any
+        //       audio IO, so we'll add a zero channel output to work around this if that is the
+        //       case
+        let no_main_audio_io = P::DEFAULT_NUM_INPUTS == 0 && P::DEFAULT_NUM_OUTPUTS == 0;
+
         // We don't need any special handling here
         match (type_, dir, index) {
             (t, d, _)
@@ -304,7 +323,11 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                 if t == vst3_sys::vst::MediaTypes::kAudio as i32
                     && d == vst3_sys::vst::BusDirections::kOutput as i32 =>
             {
-                let main_busses = if P::DEFAULT_NUM_OUTPUTS > 0 { 1 } else { 0 };
+                let main_busses = if P::DEFAULT_NUM_OUTPUTS > 0 || no_main_audio_io {
+                    1
+                } else {
+                    0
+                };
                 let aux_busses = P::DEFAULT_AUX_OUTPUTS.unwrap_or_default().num_busses as i32;
 
                 if (0..main_busses + aux_busses).contains(&index) {
@@ -699,6 +722,11 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
     ) -> tresult {
         check_null_ptr!(inputs, outputs);
 
+        // HACK: Bitwig will not call the process function at all if the plugin does not have any
+        //       audio IO, so we'll add a zero channel output to work around this if that is the
+        //       case
+        let no_main_audio_io = P::DEFAULT_NUM_INPUTS == 0 && P::DEFAULT_NUM_OUTPUTS == 0;
+
         // Why are these signed integers again?
         if num_ins < 0 || num_outs < 0 {
             return kInvalidArgument;
@@ -732,14 +760,14 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
         }
 
         let aux_outputs_only = P::DEFAULT_NUM_OUTPUTS == 0 && P::DEFAULT_AUX_OUTPUTS.is_some();
-        let num_output_channels = if aux_outputs_only || num_ins < 1 {
+        let num_output_channels = if (aux_outputs_only && !no_main_audio_io) || num_outs < 1 {
             0
         } else {
             (*outputs).count_ones()
         };
 
         let aux_output_start_idx = if aux_outputs_only { 0 } else { 1 };
-        let num_aux_output_busses = (num_ins as u32).saturating_sub(aux_output_start_idx);
+        let num_aux_output_busses = (num_outs as u32).saturating_sub(aux_output_start_idx);
         let num_aux_output_channels = if num_aux_output_busses == 0 {
             0
         } else {
@@ -788,6 +816,11 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
     ) -> tresult {
         check_null_ptr!(arr);
 
+        // HACK: Bitwig will not call the process function at all if the plugin does not have any
+        //       audio IO, so we'll add a zero channel output to work around this if that is the
+        //       case
+        let no_main_audio_io = P::DEFAULT_NUM_INPUTS == 0 && P::DEFAULT_NUM_OUTPUTS == 0;
+
         let channel_count_to_map = |count| match count {
             0 => vst3_sys::vst::kEmpty,
             1 => vst3_sys::vst::kMono,
@@ -822,7 +855,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
         } else if dir == vst3_sys::vst::BusDirections::kOutput as i32 {
             let aux_outputs_only = P::DEFAULT_NUM_OUTPUTS == 0 && P::DEFAULT_AUX_OUTPUTS.is_some();
             let aux_output_start_idx = if aux_outputs_only { 0 } else { 1 };
-            if !aux_outputs_only && index == 0 {
+            if (!aux_outputs_only || no_main_audio_io) && index == 0 {
                 bus_config.num_output_channels
             } else if (aux_output_start_idx
                 ..(aux_output_start_idx + bus_config.aux_output_busses.num_busses as i32))
