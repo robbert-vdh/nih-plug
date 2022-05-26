@@ -18,8 +18,7 @@ on macOS.
 
 ### Building
 
-After installing [Rust](https://rustup.rs/), you can compile Puberty Simulator
-as follows:
+After installing [Rust](https://rustup.rs/), you can compile Crisp as follows:
 
 ```shell
 cargo xtask bundle crisp --release

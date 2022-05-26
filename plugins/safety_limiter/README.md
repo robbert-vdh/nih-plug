@@ -31,5 +31,5 @@ After installing [Rust](https://rustup.rs/), you can compile Safety Limiter as
 follows:
 
 ```shell
-cargo xtask bundle puberty_simulator --release
+cargo xtask bundle safety_limiter --release
 ```
