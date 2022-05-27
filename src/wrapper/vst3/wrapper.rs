@@ -23,6 +23,7 @@ use super::util::{
     u16strlcpy, VstPtr, VST3_MIDI_CCS, VST3_MIDI_NUM_PARAMS, VST3_MIDI_PARAMS_START,
 };
 use super::view::WrapperView;
+use crate::buffer::Buffer;
 use crate::context::Transport;
 use crate::midi::{MidiConfig, NoteEvent};
 use crate::param::ParamFlags;
@@ -387,7 +388,48 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                                 .resize_with(bus_config.num_output_channels as usize, || &mut [])
                         });
 
-                    // TODO: Initialize auxiliary IO
+                    // Also allocate both the buffers and the slices pointing to those buffers for
+                    // sidechain inputs. The slices will be assigned in the process function as this
+                    // object may have been moved before then.
+                    let mut aux_input_storage = self.inner.aux_input_storage.borrow_mut();
+                    aux_input_storage.resize_with(
+                        bus_config.aux_input_busses.num_busses as usize,
+                        || {
+                            vec![
+                                vec![0.0; buffer_config.max_buffer_size as usize];
+                                bus_config.aux_input_busses.num_channels as usize
+                            ]
+                        },
+                    );
+
+                    let mut aux_input_buffers = self.inner.aux_input_buffers.borrow_mut();
+                    aux_input_buffers.resize_with(
+                        bus_config.aux_input_busses.num_busses as usize,
+                        Buffer::default,
+                    );
+                    for buffer in aux_input_buffers.iter_mut() {
+                        buffer.with_raw_vec(|channel_slices| {
+                            channel_slices.resize_with(
+                                bus_config.aux_input_busses.num_channels as usize,
+                                || &mut [],
+                            )
+                        });
+                    }
+
+                    // And the same thing for the output buffers
+                    let mut aux_output_buffers = self.inner.aux_output_buffers.borrow_mut();
+                    aux_output_buffers.resize_with(
+                        bus_config.aux_output_busses.num_busses as usize,
+                        Buffer::default,
+                    );
+                    for buffer in aux_output_buffers.iter_mut() {
+                        buffer.with_raw_vec(|channel_slices| {
+                            channel_slices.resize_with(
+                                bus_config.aux_output_busses.num_channels as usize,
+                                || &mut [],
+                            )
+                        });
+                    }
 
                     kResultOk
                 } else {
@@ -942,8 +984,6 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
     unsafe fn process(&self, data: *mut vst3_sys::vst::ProcessData) -> tresult {
         check_null_ptr!(data);
 
-        // TODO: Handle auxiliary IO, this still assumes main IO is always present and there's no auxiliary IO
-
         // Panic on allocations if the `assert_process_allocs` feature has been enabled, and make
         // sure that FTZ is set up correctly
         process_wrapper(|| {
@@ -956,20 +996,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                 .expect("Process call without prior setup call")
                 .sample_rate;
 
-            // The setups we suppport are:
-            // - 1 input bus
-            // - 1 output bus
-            // - 1 input bus and 1 output bus
-            //
-            // Depending on the host either of these may also be missing if the number of channels
-            // is set to 0.
-            nih_debug_assert!(
-                data.num_inputs >= 0
-                    && data.num_inputs <= 1
-                    && data.num_outputs >= 0
-                    && data.num_outputs <= 1,
-                "The host provides more than one input or output bus"
-            );
+            nih_debug_assert!(data.num_inputs >= 0 && data.num_outputs >= 0);
             nih_debug_assert_eq!(
                 data.symbolic_sample_size,
                 vst3_sys::vst::SymbolicSampleSizes::kSample32 as i32
@@ -1246,6 +1273,115 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                     }
                 });
 
+                let current_bus_config = self.inner.current_bus_config.load();
+                let has_main_input = current_bus_config.num_input_channels > 0;
+                // HACK: Bitwig requires VST3 plugins to always have a main output. We'll however
+                //       still use this variable here to maintain consistency between the backends.
+                let has_main_output = true;
+
+                // We'll need to do the same thing for auxiliary input sidechain buffers. Since we
+                // don't know whether overwriting the host's buffers is safe here or not, we'll copy
+                // the data to our own buffers instead. These buffers are only accessible through
+                // the `aux` parameter on the `process()` function.
+                let mut aux_input_storage = self.inner.aux_input_storage.borrow_mut();
+                let mut aux_input_buffers = self.inner.aux_input_buffers.borrow_mut();
+                for (auxiliary_input_idx, (storage, buffer)) in aux_input_storage
+                    .iter_mut()
+                    .zip(aux_input_buffers.iter_mut())
+                    .enumerate()
+                {
+                    let host_input_idx = if has_main_input {
+                        auxiliary_input_idx as isize + 1
+                    } else {
+                        auxiliary_input_idx as isize
+                    };
+                    let host_input = data.inputs.offset(host_input_idx);
+                    if host_input_idx >= data.num_inputs as isize
+                             || data.inputs.is_null()
+                             || (*host_input).buffers.is_null()
+                             // Would only happen if the user configured zero channels for the
+                             // auxiliary buffers
+                             || storage.is_empty()
+                             || (*host_input).num_channels != buffer.channels() as i32
+                    {
+                        nih_debug_assert!(host_input_idx < data.num_inputs as isize);
+                        nih_debug_assert!(!data.inputs.is_null());
+                        nih_debug_assert!(!(*host_input).buffers.is_null());
+                        nih_debug_assert!(!storage.is_empty());
+                        nih_debug_assert_eq!((*host_input).num_channels, buffer.channels() as i32);
+
+                        // If the host passes weird data then we need to be very sure that there are
+                        // no dangling references to previous data
+                        buffer.with_raw_vec(|slices| slices.fill_with(|| &mut []));
+                        continue;
+                    }
+
+                    // We'll always reuse the start of the buffer even of the current block is
+                    // shorter for cache locality reasons
+                    let block_len = block_end - block_start;
+                    for (channel_idx, channel_storage) in storage.iter_mut().enumerate() {
+                        // The `set_len()` avoids having to unnecessarily fill the buffer with
+                        // zeroes when sizing up
+                        assert!(block_len <= channel_storage.capacity());
+                        channel_storage.set_len(block_len);
+                        channel_storage.copy_from_slice(std::slice::from_raw_parts(
+                            (*(*host_input).buffers.add(channel_idx)).add(block_start)
+                                as *const f32,
+                            block_len,
+                        ));
+                    }
+
+                    buffer.with_raw_vec(|slices| {
+                        for (channel_slice, channel_storage) in
+                            slices.iter_mut().zip(storage.iter_mut())
+                        {
+                            // SAFETY: The 'static cast is required because Rust does not allow you
+                            //         to store references to a field in another field.  Because
+                            //         these slices are set here before the process function is
+                            //         called, we ensure that there are no dangling slices. These
+                            //         buffers/slices are only ever read from in the second part of
+                            //         this block process loop.
+                            *channel_slice = &mut *(channel_storage.as_mut_slice() as *mut [f32]);
+                        }
+                    });
+                }
+
+                // And the same thing for auxiliary output buffers
+                let mut aux_output_buffers = self.inner.aux_output_buffers.borrow_mut();
+                for (auxiliary_output_idx, buffer) in aux_output_buffers.iter_mut().enumerate() {
+                    let host_output_idx = if has_main_output {
+                        auxiliary_output_idx as isize + 1
+                    } else {
+                        auxiliary_output_idx as isize
+                    };
+                    let host_output = data.outputs.offset(host_output_idx);
+                    if host_output_idx >= data.num_outputs as isize
+                        || data.outputs.is_null()
+                        || (*host_output).buffers.is_null()
+                        || buffer.channels() == 0
+                    {
+                        nih_debug_assert!(host_output_idx < data.num_outputs as isize);
+                        nih_debug_assert!(!data.outputs.is_null());
+                        nih_debug_assert!(!(*host_output).buffers.is_null());
+
+                        // If the host passes weird data then we need to be very sure that there are
+                        // no dangling references to previous data
+                        buffer.with_raw_vec(|slices| slices.fill_with(|| &mut []));
+                        continue;
+                    }
+
+                    let block_len = block_end - block_start;
+                    buffer.with_raw_vec(|slices| {
+                        for (channel_idx, channel_slice) in slices.iter_mut().enumerate() {
+                            *channel_slice = std::slice::from_raw_parts_mut(
+                                (*(*host_output).buffers.add(channel_idx)).add(block_start)
+                                    as *mut f32,
+                                block_len,
+                            );
+                        }
+                    });
+                }
+
                 // Some hosts process data in place, in which case we don't need to do any copying
                 // ourselves. If the pointers do not alias, then we'll do the copy here and then the
                 // plugin can just do normal in place processing.
@@ -1332,10 +1468,12 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
 
                 let result = if buffer_is_valid {
                     let mut plugin = self.inner.plugin.write();
-                    // TODO: Provide this for the VST3 version
+                    // SAFETY: Shortening these borrows is safe as even if the plugin overwrites the
+                    //         slices (which it cannot do without using unsafe code), then they
+                    //         would still be reset on the next iteration
                     let mut aux = AuxiliaryBuffers {
-                        inputs: &mut [],
-                        outputs: &mut [],
+                        inputs: &mut *(aux_input_buffers.as_mut_slice() as *mut [Buffer]),
+                        outputs: &mut *(aux_output_buffers.as_mut_slice() as *mut [Buffer]),
                     };
                     let mut context = self.inner.make_process_context(transport);
                     let result = plugin.process(&mut output_buffer, &mut aux, &mut context);

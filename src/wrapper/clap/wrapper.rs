@@ -1821,13 +1821,13 @@ impl<P: ClapPlugin> Wrapper<P> {
                             // Would only happen if the user configured zero channels for the
                             // auxiliary buffers
                             || storage.is_empty()
-                            || (*host_input).channel_count != storage.len() as u32
+                            || (*host_input).channel_count != buffer.channels() as u32
                     {
                         nih_debug_assert!(host_input_idx < process.audio_inputs_count as isize);
                         nih_debug_assert!(!process.audio_inputs.is_null());
                         nih_debug_assert!(!(*host_input).data32.is_null());
                         nih_debug_assert!(!storage.is_empty());
-                        nih_debug_assert_eq!((*host_input).channel_count, storage.len() as u32);
+                        nih_debug_assert_eq!((*host_input).channel_count, buffer.channels() as u32);
 
                         // If the host passes weird data then we need to be very sure that there are
                         // no dangling references to previous data
