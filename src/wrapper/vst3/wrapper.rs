@@ -1273,6 +1273,31 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                     }
                 });
 
+                // Some hosts process data in place, in which case we don't need to do any copying
+                // ourselves. If the pointers do not alias, then we'll do the copy here and then the
+                // plugin can just do normal in place processing.
+                if !data.outputs.is_null() && !data.inputs.is_null() {
+                    let num_output_channels = (*data.outputs).num_channels as usize;
+                    let num_input_channels = (*data.inputs).num_channels as usize;
+                    nih_debug_assert!(
+                        num_input_channels <= num_output_channels,
+                        "Stereo to mono and similar configurations are not supported"
+                    );
+                    for input_channel_idx in 0..cmp::min(num_input_channels, num_output_channels) {
+                        let output_channel_ptr =
+                            *((*data.outputs).buffers as *mut *mut f32).add(input_channel_idx);
+                        let input_channel_ptr =
+                            *((*data.inputs).buffers as *const *const f32).add(input_channel_idx);
+                        if input_channel_ptr != output_channel_ptr {
+                            ptr::copy_nonoverlapping(
+                                input_channel_ptr.add(block_start),
+                                output_channel_ptr.add(block_start),
+                                block_end - block_start,
+                            );
+                        }
+                    }
+                }
+
                 let current_bus_config = self.inner.current_bus_config.load();
                 let has_main_input = current_bus_config.num_input_channels > 0;
                 // HACK: Bitwig requires VST3 plugins to always have a main output. We'll however
@@ -1380,31 +1405,6 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                             );
                         }
                     });
-                }
-
-                // Some hosts process data in place, in which case we don't need to do any copying
-                // ourselves. If the pointers do not alias, then we'll do the copy here and then the
-                // plugin can just do normal in place processing.
-                if !data.outputs.is_null() && !data.inputs.is_null() {
-                    let num_output_channels = (*data.outputs).num_channels as usize;
-                    let num_input_channels = (*data.inputs).num_channels as usize;
-                    nih_debug_assert!(
-                        num_input_channels <= num_output_channels,
-                        "Stereo to mono and similar configurations are not supported"
-                    );
-                    for input_channel_idx in 0..cmp::min(num_input_channels, num_output_channels) {
-                        let output_channel_ptr =
-                            *((*data.outputs).buffers as *mut *mut f32).add(input_channel_idx);
-                        let input_channel_ptr =
-                            *((*data.inputs).buffers as *const *const f32).add(input_channel_idx);
-                        if input_channel_ptr != output_channel_ptr {
-                            ptr::copy_nonoverlapping(
-                                input_channel_ptr.add(block_start),
-                                output_channel_ptr.add(block_start),
-                                block_end - block_start,
-                            );
-                        }
-                    }
                 }
 
                 // Some of the fields are left empty because VST3 does not provide this
