@@ -53,6 +53,16 @@ pub trait Plugin: Default + Send + Sync + 'static {
     /// `DEFAULT_NUM_INPUTS`.
     const DEFAULT_AUX_OUTPUTS: Option<AuxiliaryIOConfig> = None;
 
+    /// Optional names for the main and auxiliary input and output ports. Will be generated if not
+    /// set. This is mostly useful to give descriptive names to the outputs for multi-output
+    /// plugins.
+    const PORT_NAMES: PortNames = PortNames {
+        main_input: None,
+        main_output: None,
+        aux_inputs: None,
+        aux_outputs: None,
+    };
+
     /// Whether the plugin accepts note events, and what which events it wants to receive. If this
     /// is set to [`MidiConfig::None`], then the plugin won't receive any note events.
     const MIDI_INPUT: MidiConfig = MidiConfig::None;
@@ -326,14 +336,29 @@ pub struct BusConfig {
 }
 
 /// Configuration for auxiliary inputs or outputs on [`BusCofnig`].
-//
-// TODO: Add a way to name these
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct AuxiliaryIOConfig {
     /// The number of auxiliary input or output busses.
     pub num_busses: u32,
     /// The number of channels in each bus.
     pub num_channels: u32,
+}
+
+/// Contains names for the main input and output ports as well as for all of the auxiliary input and
+/// output ports. Setting these is optional, but it makes working with multi-output plugins much
+/// more convenient.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct PortNames {
+    /// The name for the main input port. Will be generated if not set.
+    pub main_input: Option<&'static str>,
+    /// The name for the main output port. Will be generated if not set.
+    pub main_output: Option<&'static str>,
+    /// Names for auxiliary (sidechain) input ports. Will be generated if not set or if this slice
+    /// does not contain enough names.
+    pub aux_inputs: Option<&'static [&'static str]>,
+    /// Names for auxiliary output ports. Will be generated if not set or if this slice does not
+    /// contain enough names.
+    pub aux_outputs: Option<&'static [&'static str]>,
 }
 
 /// Configuration for (the host's) audio buffers.
