@@ -9,10 +9,9 @@ code then it will not be listed here.
 ## [2022-05-2y]
 
 - The `Plugin::initialize()` method now takes a `&mut impl InitContext` instead
-  of a `&mut impl ProcessContext`. This is to avoid soundness issues when
-  `ProcessContext` lets you access sidechain buffer and auxiliary outputs in the
-  future and because most of the methods on `ProcessContext` would not be
-  applicable to initialization.
+  of a `&mut impl ProcessContext`.
+- `Plugin::process()` now takes a new `aux: &mut AuxiliaryBuffers` parameter.
+  This was needed to allow auxiliary (sidechain) inputs and outputs.
 
 ## [2022-05-22]
 

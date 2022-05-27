@@ -27,7 +27,8 @@ use crate::context::Transport;
 use crate::midi::{MidiConfig, NoteEvent};
 use crate::param::ParamFlags;
 use crate::plugin::{
-    AuxiliaryIOConfig, BufferConfig, BusConfig, ProcessMode, ProcessStatus, Vst3Plugin,
+    AuxiliaryBuffers, AuxiliaryIOConfig, BufferConfig, BusConfig, ProcessMode, ProcessStatus,
+    Vst3Plugin,
 };
 use crate::util::permit_alloc;
 use crate::wrapper::state;
@@ -1331,8 +1332,13 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
 
                 let result = if buffer_is_valid {
                     let mut plugin = self.inner.plugin.write();
+                    // TODO: Provide this for the VST3 version
+                    let mut aux = AuxiliaryBuffers {
+                        inputs: &mut [],
+                        outputs: &mut [],
+                    };
                     let mut context = self.inner.make_process_context(transport);
-                    let result = plugin.process(&mut output_buffer, &mut context);
+                    let result = plugin.process(&mut output_buffer, &mut aux, &mut context);
                     self.inner.last_process_status.store(result);
                     result
                 } else {

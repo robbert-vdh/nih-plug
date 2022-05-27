@@ -40,6 +40,7 @@ impl Plugin for MidiInverter {
     fn process(
         &mut self,
         _buffer: &mut Buffer,
+        _aux: &mut AuxiliaryBuffers,
         context: &mut impl ProcessContext,
     ) -> ProcessStatus {
         // We'll invert the channel, note index, velocity, pressure, CC value, pitch bend, and

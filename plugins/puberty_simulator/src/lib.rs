@@ -215,7 +215,12 @@ impl Plugin for PubertySimulator {
         self.stft.set_block_size(self.window_size());
     }
 
-    fn process(&mut self, buffer: &mut Buffer, context: &mut impl ProcessContext) -> ProcessStatus {
+    fn process(
+        &mut self,
+        buffer: &mut Buffer,
+        _aux: &mut AuxiliaryBuffers,
+        context: &mut impl ProcessContext,
+    ) -> ProcessStatus {
         // Compensate for the window function, the overlap, and the extra gain introduced by the
         // IDFT operation
         let window_size = self.window_size();

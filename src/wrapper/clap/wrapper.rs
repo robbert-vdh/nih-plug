@@ -84,7 +84,8 @@ use crate::midi::{MidiConfig, NoteEvent};
 use crate::param::internals::{ParamPtr, Params};
 use crate::param::ParamFlags;
 use crate::plugin::{
-    BufferConfig, BusConfig, ClapPlugin, Editor, ParentWindowHandle, ProcessMode, ProcessStatus,
+    AuxiliaryBuffers, BufferConfig, BusConfig, ClapPlugin, Editor, ParentWindowHandle, ProcessMode,
+    ProcessStatus,
 };
 use crate::util::permit_alloc;
 use crate::wrapper::state::{self, PluginState};
@@ -149,6 +150,18 @@ pub struct Wrapper<P: ClapPlugin> {
     /// between process calls. This buffer owns the vector, because otherwise it would need to store
     /// a mutable reference to the data contained in this mutex.
     output_buffer: AtomicRefCell<Buffer<'static>>,
+    /// Stores sample data for every sidechain input the plugin has. Indexed by
+    /// `[sidechain_input][channel][sample]` We'll copy the data to these buffers since modifying
+    /// the host's sidechain input buffers may not be safe, and the plugin may want to be able to
+    /// modify the buffers.
+    aux_input_storage: AtomicRefCell<Vec<Vec<Vec<f32>>>>,
+    /// Accompanying buffers for `aux_input_storage`. There is no way to do this in safe Rust, so
+    /// the process function needs to make sure all channel pointers stored in these buffers are
+    /// still correct before passing it to the plugin, hence the static lifetime.
+    aux_input_buffers: AtomicRefCell<Vec<Buffer<'static>>>,
+    /// Buffers for auxiliary plugin outputs, if the plugin has any. These reference the host's
+    /// memory directly.
+    aux_output_buffers: AtomicRefCell<Vec<Buffer<'static>>>,
     /// The plugin is able to restore state through a method on the `GuiContext`. To avoid changing
     /// parameters mid-processing and running into garbled data if the host also tries to load state
     /// at the same time the restoring happens at the end of each processing call. If this zero
@@ -515,6 +528,9 @@ impl<P: ClapPlugin> Wrapper<P> {
             last_process_status: AtomicCell::new(ProcessStatus::Normal),
             current_latency: AtomicU32::new(0),
             output_buffer: AtomicRefCell::new(Buffer::default()),
+            aux_input_storage: AtomicRefCell::new(Vec::new()),
+            aux_input_buffers: AtomicRefCell::new(Vec::new()),
+            aux_output_buffers: AtomicRefCell::new(Vec::new()),
             updated_state_sender,
             updated_state_receiver,
 
@@ -1575,7 +1591,45 @@ impl<P: ClapPlugin> Wrapper<P> {
                     output_slices.resize_with(bus_config.num_output_channels as usize, || &mut [])
                 });
 
-            // TODO: Allocate auxiliary IO buffers
+            // Also allocate both the buffers and the slices pointing to those buffers for sidechain
+            // inputs. The slices will be assigned in the process function as this object may have
+            // been moved before then.
+            let mut aux_input_storage = wrapper.aux_input_storage.borrow_mut();
+            aux_input_storage.resize_with(bus_config.aux_input_busses.num_busses as usize, || {
+                vec![
+                    vec![0.0; max_frames_count as usize];
+                    bus_config.aux_input_busses.num_channels as usize
+                ]
+            });
+
+            let mut aux_input_buffers = wrapper.aux_input_buffers.borrow_mut();
+            aux_input_buffers.resize_with(
+                bus_config.aux_input_busses.num_busses as usize,
+                Buffer::default,
+            );
+            for buffer in aux_input_buffers.iter_mut() {
+                buffer.with_raw_vec(|channel_slices| {
+                    channel_slices
+                        .resize_with(bus_config.aux_input_busses.num_channels as usize, || {
+                            &mut []
+                        })
+                });
+            }
+
+            // And the same thing for the output buffers
+            let mut aux_output_buffers = wrapper.aux_output_buffers.borrow_mut();
+            aux_output_buffers.resize_with(
+                bus_config.aux_output_busses.num_busses as usize,
+                Buffer::default,
+            );
+            for buffer in aux_output_buffers.iter_mut() {
+                buffer.with_raw_vec(|channel_slices| {
+                    channel_slices
+                        .resize_with(bus_config.aux_output_busses.num_channels as usize, || {
+                            &mut []
+                        })
+                });
+            }
 
             // Also store this for later, so we can reinitialize the plugin after restoring state
             wrapper.current_buffer_config.store(Some(buffer_config));
@@ -1630,8 +1684,6 @@ impl<P: ClapPlugin> Wrapper<P> {
     ) -> clap_process_status {
         check_null_ptr!(CLAP_PROCESS_ERROR, plugin, process);
         let wrapper = &*(plugin as *const Self);
-
-        // TODO: Support auxiliary IO and optional main IO, this is still the old version that assumes main IO and nothing else
 
         // Panic on allocations if the `assert_process_allocs` feature has been enabled, and make
         // sure that FTZ is set up correctly
@@ -1692,19 +1744,6 @@ impl<P: ClapPlugin> Wrapper<P> {
                     }
                 }
 
-                // The setups we suppport are:
-                // - 1 input bus
-                // - 1 output bus
-                // - 1 input bus and 1 output bus
-                // - 1 input bus and 1 output bus
-                //
-                // Depending on the host either of these may also be missing if the number of
-                // channels is set to 0.
-                nih_debug_assert!(
-                    process.audio_inputs_count <= 1 && process.audio_outputs_count <= 1,
-                    "The host provides more than one input or output bus"
-                );
-
                 // Right now we don't handle any auxiliary outputs
                 // This vector has been preallocated to contain enough slices as there are output
                 // channels. If the host does not provide outputs or if it does not provide the
@@ -1719,8 +1758,12 @@ impl<P: ClapPlugin> Wrapper<P> {
                     // Buffers for zero-channel plugins like note effects should always be allowed
                     buffer_is_valid = output_slices.is_empty();
 
+                    // Explicitly take plugins with no main output that does have auxiliary outputs
+                    // into account. Shouldn't happen, but if we just start copying audio here then
+                    // that would result in unsoundness.
                     if !process.audio_outputs.is_null()
                         && !(*process.audio_outputs).data32.is_null()
+                        && !output_slices.is_empty()
                     {
                         let audio_outputs = &*process.audio_outputs;
                         let num_output_channels = audio_outputs.channel_count as usize;
@@ -1750,6 +1793,112 @@ impl<P: ClapPlugin> Wrapper<P> {
                         }
                     }
                 });
+
+                let current_bus_config = wrapper.current_bus_config.load();
+                let has_main_input = current_bus_config.num_input_channels > 0;
+                let has_main_output = current_bus_config.num_output_channels > 0;
+
+                // We'll need to do the same thing for auxiliary input sidechain buffers. Since we
+                // don't know whether overwriting the host's buffers is safe here or not, we'll copy
+                // the data to our own buffers instead. These buffers are only accessible through
+                // the `aux` parameter on the `process()` function.
+                let mut aux_input_storage = wrapper.aux_input_storage.borrow_mut();
+                let mut aux_input_buffers = wrapper.aux_input_buffers.borrow_mut();
+                for (auxiliary_input_idx, (storage, buffer)) in aux_input_storage
+                    .iter_mut()
+                    .zip(aux_input_buffers.iter_mut())
+                    .enumerate()
+                {
+                    let host_input_idx = if has_main_input {
+                        auxiliary_input_idx as isize + 1
+                    } else {
+                        auxiliary_input_idx as isize
+                    };
+                    let host_input = process.audio_inputs.offset(host_input_idx);
+                    if host_input_idx >= process.audio_inputs_count as isize
+                            || process.audio_inputs.is_null()
+                            || (*host_input).data32.is_null()
+                            // Would only happen if the user configured zero channels for the
+                            // auxiliary buffers
+                            || storage.is_empty()
+                            || (*host_input).channel_count != storage.len() as u32
+                    {
+                        nih_debug_assert!(host_input_idx < process.audio_inputs_count as isize);
+                        nih_debug_assert!(!process.audio_inputs.is_null());
+                        nih_debug_assert!(!(*host_input).data32.is_null());
+                        nih_debug_assert!(!storage.is_empty());
+                        nih_debug_assert_eq!((*host_input).channel_count, storage.len() as u32);
+
+                        // If the host passes weird data then we need to be very sure that there are
+                        // no dangling references to previous data
+                        buffer.with_raw_vec(|slices| slices.fill_with(|| &mut []));
+                        continue;
+                    }
+
+                    // We'll always reuse the start of the buffer even of the current block is
+                    // shorter for cache locality reasons
+                    let block_len = block_end - block_start;
+                    for (channel_idx, channel_storage) in storage.iter_mut().enumerate() {
+                        // The `set_len()` avoids having to unnecessarily fill the buffer with
+                        // zeroes when sizing up
+                        assert!(block_len <= channel_storage.capacity());
+                        channel_storage.set_len(block_len);
+                        channel_storage.copy_from_slice(std::slice::from_raw_parts(
+                            (*(*host_input).data32.add(channel_idx)).add(block_start),
+                            block_len,
+                        ));
+                    }
+
+                    buffer.with_raw_vec(|slices| {
+                        for (channel_slice, channel_storage) in
+                            slices.iter_mut().zip(storage.iter_mut())
+                        {
+                            // SAFETY: The 'static cast is required because Rust does not allow you
+                            //         to store references to a field in another field.  Because
+                            //         these slices are set here before the process function is
+                            //         called, we ensure that there are no dangling slices. These
+                            //         buffers/slices are only ever read from in the second part of
+                            //         this block process loop.
+                            *channel_slice = &mut *(channel_storage.as_mut_slice() as *mut [f32]);
+                        }
+                    });
+                }
+
+                // And the same thing for auxiliary output buffers
+                let mut aux_output_buffers = wrapper.aux_output_buffers.borrow_mut();
+                for (auxiliary_output_idx, buffer) in aux_output_buffers.iter_mut().enumerate() {
+                    let host_output_idx = if has_main_output {
+                        auxiliary_output_idx as isize + 1
+                    } else {
+                        auxiliary_output_idx as isize
+                    };
+                    let host_output = process.audio_outputs.offset(host_output_idx);
+                    if host_output_idx >= process.audio_outputs_count as isize
+                        || process.audio_outputs.is_null()
+                        || (*host_output).data32.is_null()
+                        || buffer.channels() == 0
+                    {
+                        nih_debug_assert!(host_output_idx < process.audio_outputs_count as isize);
+                        nih_debug_assert!(!process.audio_outputs.is_null());
+                        nih_debug_assert!(!(*host_output).data32.is_null());
+
+                        // If the host passes weird data then we need to be very sure that there are
+                        // no dangling references to previous data
+                        buffer.with_raw_vec(|slices| slices.fill_with(|| &mut []));
+                        continue;
+                    }
+
+                    let block_len = block_end - block_start;
+                    buffer.with_raw_vec(|slices| {
+                        for (channel_idx, channel_slice) in slices.iter_mut().enumerate() {
+                            *channel_slice = std::slice::from_raw_parts_mut(
+                                (*(*host_output).data32.add(channel_idx)).add(block_start)
+                                    as *mut f32,
+                                block_len,
+                            );
+                        }
+                    });
+                }
 
                 // Some hosts process data in place, in which case we don't need to do any copying
                 // ourselves. If the pointers do not alias, then we'll do the copy here and then the
@@ -1782,8 +1931,9 @@ impl<P: ClapPlugin> Wrapper<P> {
                     }
                 }
 
-                // Some of the fields are left empty because CLAP does not provide this information, but
-                // the methods on [`Transport`] can reconstruct these values from the other fields
+                // Some of the fields are left empty because CLAP does not provide this information,
+                // but the methods on [`Transport`] can reconstruct these values from the other
+                // fields
                 let sample_rate = wrapper
                     .current_buffer_config
                     .load()
@@ -1875,8 +2025,15 @@ impl<P: ClapPlugin> Wrapper<P> {
 
                 let result = if buffer_is_valid {
                     let mut plugin = wrapper.plugin.write();
+                    // SAFETY: Shortening these borrows is safe as even if the plugin overwrites the
+                    //         slices (which it cannot do without using unsafe code), then they
+                    //         would still be reset on the next iteration
+                    let mut aux = AuxiliaryBuffers {
+                        inputs: &mut *(aux_input_buffers.as_mut_slice() as *mut [Buffer]),
+                        outputs: &mut *(aux_output_buffers.as_mut_slice() as *mut [Buffer]),
+                    };
                     let mut context = wrapper.make_process_context(transport);
-                    let result = plugin.process(&mut output_buffer, &mut context);
+                    let result = plugin.process(&mut output_buffer, &mut aux, &mut context);
                     wrapper.last_process_status.store(result);
                     result
                 } else {

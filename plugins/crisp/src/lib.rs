@@ -342,6 +342,7 @@ impl Plugin for Crisp {
     fn process(
         &mut self,
         buffer: &mut Buffer,
+        _aux: &mut AuxiliaryBuffers,
         _context: &mut impl ProcessContext,
     ) -> ProcessStatus {
         for (_, mut block) in buffer.iter_blocks(BLOCK_SIZE) {

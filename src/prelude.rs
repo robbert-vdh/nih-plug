@@ -20,7 +20,7 @@ pub use crate::param::range::{FloatRange, IntRange};
 pub use crate::param::smoothing::{Smoothable, Smoother, SmoothingStyle};
 pub use crate::param::{BoolParam, FloatParam, IntParam, Param, ParamFlags};
 pub use crate::plugin::{
-    AuxiliaryIOConfig, BufferConfig, BusConfig, ClapPlugin, Editor, ParentWindowHandle, Plugin,
-    ProcessMode, ProcessStatus, Vst3Plugin,
+    AuxiliaryBuffers, AuxiliaryIOConfig, BufferConfig, BusConfig, ClapPlugin, Editor,
+    ParentWindowHandle, Plugin, ProcessMode, ProcessStatus, Vst3Plugin,
 };
 pub use crate::wrapper::state::PluginState;

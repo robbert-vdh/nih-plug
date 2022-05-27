@@ -16,8 +16,8 @@ use crate::context::Transport;
 use crate::param::internals::{ParamPtr, Params};
 use crate::param::ParamFlags;
 use crate::plugin::{
-    AuxiliaryIOConfig, BufferConfig, BusConfig, Editor, ParentWindowHandle, Plugin, ProcessMode,
-    ProcessStatus,
+    AuxiliaryBuffers, AuxiliaryIOConfig, BufferConfig, BusConfig, Editor, ParentWindowHandle,
+    Plugin, ProcessMode, ProcessStatus,
 };
 use crate::util::permit_alloc;
 use crate::wrapper::state::{self, PluginState};
@@ -404,11 +404,15 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
             transport.time_sig_denominator = Some(self.config.timesig_denom as i32);
             transport.playing = true;
 
-            if let ProcessStatus::Error(err) = self
-                .plugin
-                .write()
-                .process(buffer, &mut self.make_process_context(transport))
-            {
+            if let ProcessStatus::Error(err) = self.plugin.write().process(
+                buffer,
+                // TODO: Provide extra inputs and outputs in the JACk backend
+                &mut AuxiliaryBuffers {
+                    inputs: &mut [],
+                    outputs: &mut [],
+                },
+                &mut self.make_process_context(transport),
+            ) {
                 eprintln!("The plugin returned an error while processing:");
                 eprintln!("{}", err);
 

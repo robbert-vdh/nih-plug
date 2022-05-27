@@ -197,6 +197,7 @@ impl Plugin for SafetyLimiter {
     fn process(
         &mut self,
         buffer: &mut Buffer,
+        _aux: &mut AuxiliaryBuffers,
         _context: &mut impl ProcessContext,
     ) -> ProcessStatus {
         // Don't do anything when bouncing

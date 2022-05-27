@@ -268,6 +268,7 @@ impl Plugin for Diopser {
     fn process(
         &mut self,
         buffer: &mut Buffer,
+        _aux: &mut AuxiliaryBuffers,
         _context: &mut impl ProcessContext,
     ) -> ProcessStatus {
         // Since this is an expensive operation, only update the filters when it's actually

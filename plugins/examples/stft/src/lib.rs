@@ -128,6 +128,7 @@ impl Plugin for Stft {
     fn process(
         &mut self,
         buffer: &mut Buffer,
+        _aux: &mut AuxiliaryBuffers,
         _context: &mut impl ProcessContext,
     ) -> ProcessStatus {
         self.stft

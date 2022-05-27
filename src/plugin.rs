@@ -139,11 +139,18 @@ pub trait Plugin: Default + Send + Sync + 'static {
     /// [`initialize()`][Self::initialize()] function first to reserve enough capacity in the
     /// smoothers.
     ///
+    /// The `context` object contains context information as well as callbacks for working with note
+    /// events. The [`AuxiliaryBuffers`] contain the plugin's sidechain input buffers and
+    /// auxiliary output buffers if it has any.
+    ///
     /// TODO: Provide a way to access auxiliary input channels if the IO configuration is
     ///       assymetric
-    /// TODO: Pass transport and other context information to the plugin
-    /// TODO: Create an example plugin that uses block-based processing
-    fn process(&mut self, buffer: &mut Buffer, context: &mut impl ProcessContext) -> ProcessStatus;
+    fn process(
+        &mut self,
+        buffer: &mut Buffer,
+        aux: &mut AuxiliaryBuffers,
+        context: &mut impl ProcessContext,
+    ) -> ProcessStatus;
 
     /// Called when the plugin is deactivated. The host will call
     /// [`initialize()`][Self::initialize()] again before the plugin resumes processing audio. These
@@ -319,6 +326,8 @@ pub struct BusConfig {
 }
 
 /// Configuration for auxiliary inputs or outputs on [`BusCofnig`].
+//
+// TODO: Add a way to name these
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct AuxiliaryIOConfig {
     /// The number of auxiliary input or output busses.
@@ -340,6 +349,17 @@ pub struct BufferConfig {
     pub max_buffer_size: u32,
     /// The current processing mode. The host will reinitialize the plugin any time this changes.
     pub process_mode: ProcessMode,
+}
+
+/// Contains auxiliary (sidechain) input and output buffers for a process call.
+pub struct AuxiliaryBuffers<'a> {
+    /// All auxiliary (sidechain) inputs defined for this plugin. The data in these buffers can
+    /// safely be overwritten. Auxiliary inputs can be defined by setting
+    /// [`Plugin::DEFAULT_AUX_INPUTS`][`crate::prelude::Plugin::DEFAULT_AUX_INPUTS`].
+    pub inputs: &'a mut [Buffer<'a>],
+    /// Get all auxiliary outputs defined for this plugin. Auxiliary outputs can be defined by
+    /// setting [`Plugin::DEFAULT_AUX_OUTPUTS`][`crate::prelude::Plugin::DEFAULT_AUX_OUTPUTS`].
+    pub outputs: &'a mut [Buffer<'a>],
 }
 
 /// Indicates the current situation after the plugin has processed audio.

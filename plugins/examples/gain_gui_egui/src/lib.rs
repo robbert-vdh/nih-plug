@@ -155,6 +155,7 @@ impl Plugin for Gain {
     fn process(
         &mut self,
         buffer: &mut Buffer,
+        _aux: &mut AuxiliaryBuffers,
         _context: &mut impl ProcessContext,
     ) -> ProcessStatus {
         for channel_samples in buffer.iter_samples() {
