@@ -2344,17 +2344,6 @@ impl<P: ClapPlugin> Wrapper<P> {
             (false, false) => current_bus_config.aux_output_busses.num_channels,
         };
 
-        let port_type_name = match (is_input, is_main_port) {
-            (true, true) => "Input",
-            (false, true) => "Output",
-            (true, false) => "Sidechain Input",
-            (false, false) => "Auxiliary Output",
-        };
-        let name = match channel_count {
-            1 => format!("Mono {port_type_name}"),
-            2 => format!("Stereo {port_type_name}"),
-            n => format!("{n} channel {port_type_name}"),
-        };
         let port_type = match channel_count {
             1 => CLAP_PORT_MONO,
             2 => CLAP_PORT_STEREO,
@@ -2365,7 +2354,49 @@ impl<P: ClapPlugin> Wrapper<P> {
 
         let info = &mut *info;
         info.id = stable_id;
-        strlcpy(&mut info.name, &name);
+        match (is_input, is_main_port) {
+            (true, true) => strlcpy(&mut info.name, P::PORT_NAMES.main_input.unwrap_or("Input")),
+            (false, true) => strlcpy(
+                &mut info.name,
+                P::PORT_NAMES.main_output.unwrap_or("Output"),
+            ),
+            (true, false) => {
+                let aux_input_idx = if has_main_input { index - 1 } else { index };
+                let custom_port_name = P::PORT_NAMES
+                    .aux_inputs
+                    .map(|names| names[aux_input_idx as usize]);
+                if current_bus_config.aux_input_busses.num_busses <= 1 {
+                    strlcpy(
+                        &mut info.name,
+                        custom_port_name.unwrap_or("Sidechain Input"),
+                    );
+                } else {
+                    strlcpy(
+                        &mut info.name,
+                        custom_port_name
+                            .unwrap_or(&format!("Sidechain Input {}", aux_input_idx + 1)),
+                    );
+                }
+            }
+            (false, false) => {
+                let aux_output_idx = if has_main_output { index - 1 } else { index };
+                let custom_port_name = P::PORT_NAMES
+                    .aux_outputs
+                    .map(|names| names[aux_output_idx as usize]);
+                if current_bus_config.aux_output_busses.num_busses <= 1 {
+                    strlcpy(
+                        &mut info.name,
+                        custom_port_name.unwrap_or("Auxiliary Output"),
+                    );
+                } else {
+                    strlcpy(
+                        &mut info.name,
+                        custom_port_name
+                            .unwrap_or(&format!("Auxiliary Output {}", aux_output_idx + 1)),
+                    );
+                }
+            }
+        };
         info.flags = if is_main_port {
             CLAP_AUDIO_PORT_IS_MAIN
         } else {
