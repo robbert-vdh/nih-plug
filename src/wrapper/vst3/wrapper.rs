@@ -164,7 +164,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                     if !aux_inputs_only && index == 0 {
                         info.bus_type = vst3_sys::vst::BusTypes::kMain as i32;
                         info.channel_count = bus_config.num_input_channels as i32;
-                        u16strlcpy(&mut info.name, "Input");
+                        u16strlcpy(&mut info.name, P::PORT_NAMES.main_input.unwrap_or("Input"));
 
                         kResultOk
                     } else if (aux_input_start_idx
@@ -173,12 +173,21 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                     {
                         info.bus_type = vst3_sys::vst::BusTypes::kAux as i32;
                         info.channel_count = bus_config.aux_input_busses.num_channels as i32;
+
+                        let aux_input_idx = index - aux_input_start_idx;
+                        let custom_port_name = P::PORT_NAMES
+                            .aux_inputs
+                            .map(|names| names[aux_input_idx as usize]);
                         if bus_config.aux_input_busses.num_busses <= 1 {
-                            u16strlcpy(&mut info.name, "Sidechain Input");
+                            u16strlcpy(
+                                &mut info.name,
+                                custom_port_name.unwrap_or("Sidechain Input"),
+                            );
                         } else {
                             u16strlcpy(
                                 &mut info.name,
-                                &format!("Sidechain Input {}", index - aux_input_start_idx),
+                                custom_port_name
+                                    .unwrap_or(&format!("Sidechain Input {}", aux_input_idx + 1)),
                             );
                         }
 
@@ -193,7 +202,10 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                     if (!aux_outputs_only || no_main_audio_io) && index == 0 {
                         info.bus_type = vst3_sys::vst::BusTypes::kMain as i32;
                         info.channel_count = bus_config.num_output_channels as i32;
-                        u16strlcpy(&mut info.name, "Output");
+                        u16strlcpy(
+                            &mut info.name,
+                            P::PORT_NAMES.main_output.unwrap_or("Output"),
+                        );
 
                         kResultOk
                     } else if (aux_output_start_idx
@@ -202,12 +214,21 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                     {
                         info.bus_type = vst3_sys::vst::BusTypes::kAux as i32;
                         info.channel_count = bus_config.aux_output_busses.num_channels as i32;
+
+                        let aux_output_idx = index - aux_output_start_idx;
+                        let custom_port_name = P::PORT_NAMES
+                            .aux_outputs
+                            .map(|names| names[aux_output_idx as usize]);
                         if bus_config.aux_output_busses.num_busses <= 1 {
-                            u16strlcpy(&mut info.name, "Sidechain Output");
+                            u16strlcpy(
+                                &mut info.name,
+                                custom_port_name.unwrap_or("Auxiliary Output"),
+                            );
                         } else {
                             u16strlcpy(
                                 &mut info.name,
-                                &format!("Sidechain Output {}", index - aux_output_start_idx),
+                                custom_port_name
+                                    .unwrap_or(&format!("Auxiliary Output {}", aux_output_idx + 1)),
                             );
                         }
 
