@@ -14,6 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+#![cfg_attr(feature = "simd", feature(portable_simd))]
+
+#[cfg(not(feature = "simd"))]
+compile_error!("Compiling without SIMD support is currently not supported");
+
 use nih_plug::prelude::*;
 use std::sync::Arc;
 

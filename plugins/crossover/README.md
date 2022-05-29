@@ -25,9 +25,9 @@ on macOS.
 
 ### Building
 
-After installing [Rust](https://rustup.rs/), you can compile Crossover as
-follows:
+After installing **nightly** [Rust](https://rustup.rs/) toolchain, you can
+compile Crossover as follows:
 
 ```shell
-cargo xtask bundle crossover --release
+cargo +nightly xtask bundle crossover --release
 ```
