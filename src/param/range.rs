@@ -1,7 +1,7 @@
 //! Different ranges for numeric parameters.
 
 /// A distribution for a floating point parameter's range. All range endpoints are inclusive.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum FloatRange {
     /// The values are uniformly distributed between `min` and `max`.
     Linear { min: f32, max: f32 },
