@@ -41,6 +41,11 @@ Scroll down for more information on the plugin framework.
 
 - [**Crisp**](plugins/crisp) adds a bright crispy top end to any low bass sound.
   Inspired by Polarity's [Fake Distortion](https://youtu.be/MKfFn4L1zeg) video.
+- [**Crossover**](plugins/crossover) is as boring as it sounds. It splits
+  cleanly splits the signal into two to five bands using a variety of algorithms
+  and outputs those through auxiliary outputs so they can be accessed and
+  processed individually. Meant as an alternative to Bitwig's Multiband FX
+  devices but with cleaner and steeper crossovers.
 - [**Diopser**](plugins/diopser) is a totally original phase rotation plugin.
   Useful for oomphing up kickdrums and basses, transforming synths into their
   evil phase-y cousin, and making everything sound like a cheap Sci-Fi laser

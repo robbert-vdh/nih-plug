@@ -29,6 +29,7 @@ members = [
   "plugins/examples/stft",
 
   "plugins/crisp",
+  "plugins/crossover",
   "plugins/diopser",
   "plugins/loudness_war_winner",
   "plugins/puberty_simulator",

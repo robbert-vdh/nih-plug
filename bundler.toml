@@ -7,6 +7,9 @@
 [crisp]
 name = "Crisp"
 
+[crossover]
+name = "Crossover"
+
 [diopser]
 name = "Diopser"
 
