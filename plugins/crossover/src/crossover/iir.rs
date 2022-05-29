@@ -100,19 +100,31 @@ impl IirCrossover {
     }
 
     /// Update the crossover frequencies for all filters. If the frequencies are not monotonic then
-    /// this function will ensure that they are.
-    pub fn update(&mut self, sample_rate: f32, mut frequencies: [f32; NUM_BANDS - 1]) {
-        // Make sure the frequencies are monotonic
-        for frequency_idx in 1..NUM_BANDS - 1 {
-            if frequencies[frequency_idx] < frequencies[frequency_idx - 1] {
-                frequencies[frequency_idx] = frequencies[frequency_idx - 1];
+    /// this function will ensure that they are. The active number of bands is used to make sure
+    /// unused bands are not part of the normalization.
+    pub fn update(
+        &mut self,
+        sample_rate: f32,
+        num_bands: usize,
+        mut frequencies: [f32; NUM_BANDS - 1],
+    ) {
+        // Make sure the frequencies are monotonic by pushing bands down when they are too close to
+        // the next band
+        for frequency_idx in (1..num_bands - 1).rev() {
+            if frequencies[frequency_idx - 1] > frequencies[frequency_idx] / 2.0 {
+                frequencies[frequency_idx - 1] = frequencies[frequency_idx] / 2.0;
             }
         }
 
         match self.mode {
             IirCrossoverType::LinkwitzRiley24 => {
                 const Q: f32 = std::f32::consts::FRAC_1_SQRT_2;
-                for (crossover, frequency) in self.crossovers.iter_mut().zip(frequencies) {
+                for (crossover, frequency) in self
+                    .crossovers
+                    .iter_mut()
+                    .zip(frequencies)
+                    .take(num_bands - 1)
+                {
                     let lp_coefs = BiquadCoefficients::lowpass(sample_rate, frequency, Q);
                     let hp_coefs = BiquadCoefficients::highpass(sample_rate, frequency, Q);
                     crossover.update_coefficients(lp_coefs, hp_coefs);

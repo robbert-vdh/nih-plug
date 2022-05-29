@@ -21,6 +21,7 @@ compile_error!("Compiling without SIMD support is currently not supported");
 
 use crossover::iir::{IirCrossover, IirCrossoverType};
 use nih_plug::prelude::*;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 mod crossover;
@@ -39,6 +40,8 @@ struct Crossover {
 
     /// Provides the LR24 crossover.
     iir_crossover: IirCrossover,
+    /// Set when the number of bands has changed and the filters must be updated.
+    should_update_filters: Arc<AtomicBool>,
 }
 
 // TODO: Add multiple crossover types. Haven't added the control for that yet because the current
@@ -63,8 +66,8 @@ struct CrossoverParams {
     pub crossover_4_freq: FloatParam,
 }
 
-impl Default for CrossoverParams {
-    fn default() -> Self {
+impl CrossoverParams {
+    fn new(should_update_filters: Arc<AtomicBool>) -> Self {
         let crossover_range = FloatRange::Skewed {
             min: MIN_CROSSOVER_FREQUENCY,
             max: MAX_CROSSOVER_FREQUENCY,
@@ -82,7 +85,10 @@ impl Default for CrossoverParams {
                     min: 2,
                     max: NUM_BANDS as i32,
                 },
-            ),
+            )
+            .with_callback(Arc::new(move |_| {
+                should_update_filters.store(true, Ordering::Relaxed)
+            })),
             // TODO: More sensible default frequencies
             crossover_1_freq: FloatParam::new("Crossover 1", 200.0, crossover_range)
                 .with_smoother(crossover_smoothing_style)
@@ -106,8 +112,10 @@ impl Default for CrossoverParams {
 
 impl Default for Crossover {
     fn default() -> Self {
+        let should_update_filters = Arc::new(AtomicBool::new(false));
+
         Crossover {
-            params: Arc::new(CrossoverParams::default()),
+            params: Arc::new(CrossoverParams::new(should_update_filters.clone())),
 
             buffer_config: BufferConfig {
                 sample_rate: 1.0,
@@ -117,6 +125,7 @@ impl Default for Crossover {
             },
 
             iir_crossover: IirCrossover::new(IirCrossoverType::LinkwitzRiley24),
+            should_update_filters,
         }
     }
 }
@@ -238,7 +247,11 @@ impl Plugin for Crossover {
 impl Crossover {
     /// Update the filter coefficients for the crossovers, but only if it's needed.
     fn maybe_update_filters(&mut self) {
-        if self.params.crossover_1_freq.smoothed.is_smoothing()
+        if self
+            .should_update_filters
+            .compare_exchange(true, false, Ordering::Relaxed, Ordering::Relaxed)
+            .is_ok()
+            || self.params.crossover_1_freq.smoothed.is_smoothing()
             || self.params.crossover_2_freq.smoothed.is_smoothing()
             || self.params.crossover_3_freq.smoothed.is_smoothing()
             || self.params.crossover_4_freq.smoothed.is_smoothing()
@@ -253,6 +266,7 @@ impl Crossover {
         // crossover 2 being lower than crossover 1
         self.iir_crossover.update(
             self.buffer_config.sample_rate,
+            self.params.num_bands.value as usize,
             [
                 self.params.crossover_1_freq.smoothed.next(),
                 self.params.crossover_2_freq.smoothed.next(),
