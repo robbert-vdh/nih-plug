@@ -1693,6 +1693,28 @@ impl<P: ClapPlugin> Wrapper<P> {
             // we'll process every incoming event.
             let process = &*process;
 
+            // Before doing anything, clear out any auxiliary outputs since they may contain
+            // uninitialized data when the host assumes that we'll always write soemthing there
+            let current_bus_config = wrapper.current_bus_config.load();
+            let has_main_input = current_bus_config.num_input_channels > 0;
+            let has_main_output = current_bus_config.num_output_channels > 0;
+            if !process.audio_outputs.is_null() {
+                for output_idx in
+                    if has_main_output { 1 } else { 0 }..process.audio_outputs_count as isize
+                {
+                    let host_output = process.audio_outputs.offset(output_idx);
+                    if !(*host_output).data32.is_null() {
+                        for channel_idx in 0..(*host_output).channel_count as isize {
+                            ptr::write_bytes(
+                                *((*host_output).data32.offset(channel_idx)) as *mut f32,
+                                0,
+                                process.frames_count as usize,
+                            );
+                        }
+                    }
+                }
+            }
+
             // If `P::SAMPLE_ACCURATE_AUTOMATION` is set, then we'll split up the audio buffer into
             // chunks whenever a parameter change occurs
             let mut block_start = 0;
@@ -1823,10 +1845,6 @@ impl<P: ClapPlugin> Wrapper<P> {
                         }
                     }
                 }
-
-                let current_bus_config = wrapper.current_bus_config.load();
-                let has_main_input = current_bus_config.num_input_channels > 0;
-                let has_main_output = current_bus_config.num_output_channels > 0;
 
                 // We'll need to do the same thing for auxiliary input sidechain buffers. Since we
                 // don't know whether overwriting the host's buffers is safe here or not, we'll copy

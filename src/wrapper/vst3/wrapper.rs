@@ -1024,6 +1024,28 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
             );
             nih_debug_assert!(data.num_samples >= 0);
 
+            // Before doing anything, clear out any auxiliary outputs since they may contain
+            // uninitialized data when the host assumes that we'll always write soemthing there
+            let current_bus_config = self.inner.current_bus_config.load();
+            let has_main_input = current_bus_config.num_input_channels > 0;
+            // HACK: Bitwig requires VST3 plugins to always have a main output. We'll however still
+            //       use this variable here to maintain consistency between the backends.
+            let has_main_output = true;
+            if !data.outputs.is_null() {
+                for output_idx in if has_main_output { 1 } else { 0 }..data.num_outputs as isize {
+                    let host_output = data.outputs.offset(output_idx);
+                    if !(*host_output).buffers.is_null() {
+                        for channel_idx in 0..(*host_output).num_channels as isize {
+                            ptr::write_bytes(
+                                *((*host_output).buffers.offset(channel_idx)) as *mut f32,
+                                0,
+                                data.num_samples as usize,
+                            );
+                        }
+                    }
+                }
+            }
+
             // If `P::SAMPLE_ACCURATE_AUTOMATION` is set, then we'll split up the audio buffer into
             // chunks whenever a parameter change occurs. To do that, we'll store all of those
             // parameter changes in a vector. Otherwise all parameter changes are handled right here
@@ -1318,12 +1340,6 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                         }
                     }
                 }
-
-                let current_bus_config = self.inner.current_bus_config.load();
-                let has_main_input = current_bus_config.num_input_channels > 0;
-                // HACK: Bitwig requires VST3 plugins to always have a main output. We'll however
-                //       still use this variable here to maintain consistency between the backends.
-                let has_main_output = true;
 
                 // We'll need to do the same thing for auxiliary input sidechain buffers. Since we
                 // don't know whether overwriting the host's buffers is safe here or not, we'll copy
