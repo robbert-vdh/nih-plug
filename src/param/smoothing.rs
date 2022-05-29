@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicI32, Ordering};
 use crate::buffer::Block;
 
 /// Controls if and how parameters gets smoothed.
+#[derive(Debug, Clone, Copy)]
 pub enum SmoothingStyle {
     /// No smoothing is applied. The parameter's `value` field contains the latest sample value
     /// available for the parameters.
