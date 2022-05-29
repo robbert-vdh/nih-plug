@@ -140,16 +140,17 @@ impl Plugin for Crossover {
 
     fn process(
         &mut self,
-        _buffer: &mut Buffer,
+        buffer: &mut Buffer,
         _aux: &mut AuxiliaryBuffers,
         _context: &mut impl ProcessContext,
     ) -> ProcessStatus {
-        // // TODO
-        // let main = _buffer.as_slice();
-        // let outputs = _aux.outputs[0].as_slice();
-        // for (m, o) in main.iter_mut().zip(outputs.iter_mut()) {
-        //     o.copy_from_slice(m);
-        // }
+        // TODO: Do the splitty thing
+
+        // The main output should be silent as the signal is already evenly split over the other
+        // bands
+        for channel_slice in buffer.as_slice() {
+            channel_slice.fill(0.0);
+        }
 
         ProcessStatus::Normal
     }
