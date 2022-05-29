@@ -19,16 +19,26 @@
 #[cfg(not(feature = "simd"))]
 compile_error!("Compiling without SIMD support is currently not supported");
 
+use crossover::iir::{IirCrossover, IirCrossoverType};
 use nih_plug::prelude::*;
 use std::sync::Arc;
 
 mod crossover;
+
+/// The number of bands. Not used directly here, but this avoids hardcoding some constants in the
+/// crossover implementations.
+pub const NUM_BANDS: usize = 5;
 
 const MIN_CROSSOVER_FREQUENCY: f32 = 40.0;
 const MAX_CROSSOVER_FREQUENCY: f32 = 20_000.0;
 
 struct Crossover {
     params: Arc<CrossoverParams>,
+
+    buffer_config: BufferConfig,
+
+    /// Provides the LR24 crossover.
+    iir_crossover: IirCrossover,
 }
 
 // TODO: Add multiple crossover types. Haven't added the control for that yet because the current
@@ -65,7 +75,14 @@ impl Default for CrossoverParams {
         let crossover_string_to_value = formatters::s2v_f32_hz_then_khz();
 
         Self {
-            num_bands: IntParam::new("Band Count", 2, IntRange::Linear { min: 2, max: 5 }),
+            num_bands: IntParam::new(
+                "Band Count",
+                2,
+                IntRange::Linear {
+                    min: 2,
+                    max: NUM_BANDS as i32,
+                },
+            ),
             // TODO: More sensible default frequencies
             crossover_1_freq: FloatParam::new("Crossover 1", 200.0, crossover_range)
                 .with_smoother(crossover_smoothing_style)
@@ -91,6 +108,15 @@ impl Default for Crossover {
     fn default() -> Self {
         Crossover {
             params: Arc::new(CrossoverParams::default()),
+
+            buffer_config: BufferConfig {
+                sample_rate: 1.0,
+                min_buffer_size: None,
+                max_buffer_size: 0,
+                process_mode: ProcessMode::Realtime,
+            },
+
+            iir_crossover: IirCrossover::new(IirCrossoverType::LinkwitzRiley24),
         }
     }
 }
@@ -134,32 +160,106 @@ impl Plugin for Crossover {
     fn initialize(
         &mut self,
         _bus_config: &BusConfig,
-        _buffer_config: &BufferConfig,
+        buffer_config: &BufferConfig,
         _context: &mut impl InitContext,
     ) -> bool {
-        // TODO: Setup filters
+        self.buffer_config = *buffer_config;
+
+        // Make sure the filter states match the current parameters
+        self.update_filters();
+
         true
     }
 
     fn reset(&mut self) {
-        // TODO: Reset filters
+        self.iir_crossover.reset();
     }
 
     fn process(
         &mut self,
         buffer: &mut Buffer,
-        _aux: &mut AuxiliaryBuffers,
+        aux: &mut AuxiliaryBuffers,
         _context: &mut impl ProcessContext,
     ) -> ProcessStatus {
-        // TODO: Do the splitty thing
+        let aux_outputs = &mut aux.outputs;
+        let (band_1_buffer, aux_outputs) = aux_outputs.split_first_mut().unwrap();
+        let (band_2_buffer, aux_outputs) = aux_outputs.split_first_mut().unwrap();
+        let (band_3_buffer, aux_outputs) = aux_outputs.split_first_mut().unwrap();
+        let (band_4_buffer, aux_outputs) = aux_outputs.split_first_mut().unwrap();
+        let (band_5_buffer, _) = aux_outputs.split_first_mut().unwrap();
 
-        // The main output should be silent as the signal is already evenly split over the other
-        // bands
-        for channel_slice in buffer.as_slice() {
-            channel_slice.fill(0.0);
+        // Snoclists for days
+        for (
+            (
+                (
+                    ((main_channel_samples, band_1_channel_samples), band_2_channel_samples),
+                    band_3_channel_samples,
+                ),
+                band_4_channel_samples,
+            ),
+            band_5_channel_samples,
+        ) in buffer
+            .iter_samples()
+            .zip(band_1_buffer.iter_samples())
+            .zip(band_2_buffer.iter_samples())
+            .zip(band_3_buffer.iter_samples())
+            .zip(band_4_buffer.iter_samples())
+            .zip(band_5_buffer.iter_samples())
+        {
+            // We can avoid a lot of hardcoding and conditionals by restoring the original array structure
+            let bands = [
+                band_1_channel_samples,
+                band_2_channel_samples,
+                band_3_channel_samples,
+                band_4_channel_samples,
+                band_5_channel_samples,
+            ];
+
+            // Only update the filters when needed
+            self.maybe_update_filters();
+
+            self.iir_crossover.process(
+                self.params.num_bands.value as usize,
+                &main_channel_samples,
+                bands,
+            );
+
+            // The main output should be silent as the signal is already evenly split over the other
+            // bands
+            for sample in main_channel_samples {
+                *sample = 0.0;
+            }
         }
 
         ProcessStatus::Normal
+    }
+}
+
+impl Crossover {
+    /// Update the filter coefficients for the crossovers, but only if it's needed.
+    fn maybe_update_filters(&mut self) {
+        if self.params.crossover_1_freq.smoothed.is_smoothing()
+            || self.params.crossover_2_freq.smoothed.is_smoothing()
+            || self.params.crossover_3_freq.smoothed.is_smoothing()
+            || self.params.crossover_4_freq.smoothed.is_smoothing()
+        {
+            self.update_filters();
+        }
+    }
+
+    /// Update the filter coefficients for the crossovers.
+    fn update_filters(&mut self) {
+        // This function will take care of non-monotonic crossover frequencies for us, e.g.
+        // crossover 2 being lower than crossover 1
+        self.iir_crossover.update(
+            self.buffer_config.sample_rate,
+            [
+                self.params.crossover_1_freq.smoothed.next(),
+                self.params.crossover_2_freq.smoothed.next(),
+                self.params.crossover_3_freq.smoothed.next(),
+                self.params.crossover_4_freq.smoothed.next(),
+            ],
+        )
     }
 }
 

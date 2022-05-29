@@ -14,10 +14,162 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use nih_plug::buffer::ChannelSamples;
 use nih_plug::debug::*;
 use std::f32::consts;
 use std::ops::{Add, Mul, Sub};
 use std::simd::f32x2;
+
+use crate::NUM_BANDS;
+
+#[derive(Debug)]
+pub struct IirCrossover {
+    /// The kind of crossover to use. `.update_filters()` must be called after changing this.
+    mode: IirCrossoverType,
+
+    /// The crossovers. Depending on the number of bands argument passed to `.process()` one to four
+    /// of these may be used.
+    crossovers: [Crossover; NUM_BANDS - 1],
+}
+
+/// The type of IIR crossover to use.
+#[derive(Debug, Clone, Copy)]
+pub enum IirCrossoverType {
+    /// Clean crossover with 24 dB/octave slopes and one period of delay in the power band. Stacks
+    /// two Butterworth-style (i.e. $q = \frac{\sqrt{2}}{2}$) filters per crossover.
+    LinkwitzRiley24,
+}
+
+/// A single crossover using multiple biquads in series to get steeper slopes. This can do both the
+/// low-pass and the high-pass parts of the crossover.
+#[derive(Debug, Clone, Default)]
+struct Crossover {
+    /// Filters for the low-pass section of the crossover. Not all filters may be used dependign on
+    /// the crossover type.
+    lp_filters: [Biquad<f32x2>; 2],
+    /// Filters for the high-pass section of the crossover. Not all filters may be used dependign on
+    /// the crossover type.
+    hp_filters: [Biquad<f32x2>; 2],
+}
+
+impl IirCrossover {
+    /// Create a new multiband crossover processor. All filters will be configured to pass audio
+    /// through as it. `.update()` needs to be called first to set up the filters, and `.reset()`
+    /// can be called whenever the filter state must be cleared.
+    pub fn new(mode: IirCrossoverType) -> Self {
+        Self {
+            mode,
+            crossovers: Default::default(),
+        }
+    }
+
+    /// Split the signal into bands using the crossovers previously configured through `.update()`.
+    /// The split bands will be written to `band_outputs`. `main_io` is not written to, and should
+    /// be cleared separately.
+    pub fn process(
+        &mut self,
+        num_bands: usize,
+        main_io: &ChannelSamples,
+        mut band_outputs: [ChannelSamples; NUM_BANDS],
+    ) {
+        nih_debug_assert!(num_bands >= 2);
+        nih_debug_assert!(num_bands <= NUM_BANDS);
+        // Required for the SIMD, so we'll just do a hard assert or the unchecked conversions will
+        // be unsound
+        assert!(main_io.len() == 2);
+
+        let mut samples: f32x2 = unsafe { main_io.to_simd_unchecked() };
+        match self.mode {
+            IirCrossoverType::LinkwitzRiley24 => {
+                for (crossover, band_channel_samples) in self
+                    .crossovers
+                    .iter_mut()
+                    .zip(band_outputs.iter_mut())
+                    .take(num_bands as usize - 1)
+                {
+                    let (lp_samples, hp_samples) = crossover.process_lr24(samples);
+
+                    unsafe { band_channel_samples.from_simd_unchecked(lp_samples) };
+                    samples = hp_samples;
+                }
+
+                // And the final high-passed result should be written to the last band
+                unsafe { band_outputs[num_bands - 1].from_simd_unchecked(samples) };
+            }
+        }
+    }
+
+    /// Update the crossover frequencies for all filters. If the frequencies are not monotonic then
+    /// this function will ensure that they are.
+    pub fn update(&mut self, sample_rate: f32, mut frequencies: [f32; NUM_BANDS - 1]) {
+        // Make sure the frequencies are monotonic
+        for frequency_idx in 1..NUM_BANDS - 1 {
+            if frequencies[frequency_idx] < frequencies[frequency_idx - 1] {
+                frequencies[frequency_idx] = frequencies[frequency_idx - 1];
+            }
+        }
+
+        match self.mode {
+            IirCrossoverType::LinkwitzRiley24 => {
+                const Q: f32 = std::f32::consts::FRAC_1_SQRT_2;
+                for (crossover, frequency) in self.crossovers.iter_mut().zip(frequencies) {
+                    let lp_coefs = BiquadCoefficients::lowpass(sample_rate, frequency, Q);
+                    let hp_coefs = BiquadCoefficients::highpass(sample_rate, frequency, Q);
+                    crossover.update_coefficients(lp_coefs, hp_coefs);
+                }
+            }
+        }
+    }
+
+    /// Reset the internal filter state for all crossovers.
+    pub fn reset(&mut self) {
+        for crossover in &mut self.crossovers {
+            crossover.reset();
+        }
+    }
+}
+
+impl Crossover {
+    /// Process left and right audio samples through two low-pass and two high-pass filter stages.
+    /// The resulting tuple contains the low-passed and the high-passed samples. Used for the
+    /// Linkwitz-Riley 24 dB/octave crossover.
+    pub fn process_lr24(&mut self, samples: f32x2) -> (f32x2, f32x2) {
+        let mut low_passed = samples;
+        for filter in &mut self.lp_filters[..2] {
+            low_passed = filter.process(low_passed)
+        }
+        let mut high_passed = samples;
+        for filter in &mut self.hp_filters[..2] {
+            high_passed = filter.process(high_passed)
+        }
+
+        (low_passed, high_passed)
+    }
+
+    /// Update the coefficients for all filters in the crossover.
+    pub fn update_coefficients(
+        &mut self,
+        lp_coefs: BiquadCoefficients<f32x2>,
+        hp_coefs: BiquadCoefficients<f32x2>,
+    ) {
+        for filter in &mut self.lp_filters {
+            filter.coefficients = lp_coefs;
+        }
+        for filter in &mut self.hp_filters {
+            filter.coefficients = hp_coefs;
+        }
+    }
+
+    /// Reset the internal filter state.
+    pub fn reset(&mut self) {
+        for filter in &mut self.lp_filters {
+            filter.reset();
+        }
+        for filter in &mut self.hp_filters {
+            filter.reset();
+        }
+    }
+}
 
 /// A simple biquad filter with functions for generating coefficients for second order low-pass and
 /// high-pass filters. Since these filters have 3 dB of attenuation at the center frequency, we'll
