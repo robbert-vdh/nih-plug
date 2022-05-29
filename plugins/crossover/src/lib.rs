@@ -22,6 +22,8 @@ compile_error!("Compiling without SIMD support is currently not supported");
 use nih_plug::prelude::*;
 use std::sync::Arc;
 
+mod crossover;
+
 const MIN_CROSSOVER_FREQUENCY: f32 = 40.0;
 const MAX_CROSSOVER_FREQUENCY: f32 = 20_000.0;
 
