@@ -43,8 +43,10 @@ impl FloatRange {
     /// normalized value exceeds `[0, 1]`.
     pub fn normalize(&self, plain: f32) -> f32 {
         match &self {
-            FloatRange::Linear { min, max } => (plain - min) / (max - min),
-            FloatRange::Skewed { min, max, factor } => ((plain - min) / (max - min)).powf(*factor),
+            FloatRange::Linear { min, max } => (plain.clamp(*min, *max) - min) / (max - min),
+            FloatRange::Skewed { min, max, factor } => {
+                ((plain.clamp(*min, *max) - min) / (max - min)).powf(*factor)
+            }
             FloatRange::SymmetricalSkewed {
                 min,
                 max,
@@ -53,7 +55,7 @@ impl FloatRange {
             } => {
                 // There's probably a much faster equivalent way to write this. Also, I have no clue
                 // how I managed to implement this correctly on the first try.
-                let unscaled_proportion = (plain - min) / (max - min);
+                let unscaled_proportion = (plain.clamp(*min, *max) - min) / (max - min);
                 let center_proportion = (center - min) / (max - min);
                 if unscaled_proportion > center_proportion {
                     // The part above the center gets normalized to a [0, 1] range, skewed, and then
@@ -72,7 +74,6 @@ impl FloatRange {
                 }
             }
         }
-        .clamp(0.0, 1.0)
     }
 
     /// Unnormalize a normalized value. Will be clamped to `[0, 1]` if the plain, unnormalized value
