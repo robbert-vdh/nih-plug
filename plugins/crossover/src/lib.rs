@@ -17,18 +17,66 @@
 use nih_plug::prelude::*;
 use std::sync::Arc;
 
+const MIN_CROSSOVER_FREQUENCY: f32 = 40.0;
+const MAX_CROSSOVER_FREQUENCY: f32 = 20_000.0;
+
 struct Crossover {
     params: Arc<CrossoverParams>,
 }
 
+// TODO: Add multiple crossover types. Haven't added the control for that yet because the current
+//       type (LR24) would become the second one in the list, and EnumParams are keyed by index so
+//       then we'd have an LR12 doing nothing instead. Aside form those two LR48 and some linear
+//       phase crossovers would also be nice
 #[derive(Params)]
 struct CrossoverParams {
-    // TODO:
+    /// The number of bands between 2 and 5
+    #[id = "bandcnt"]
+    pub num_bands: IntParam,
+
+    // We'll only provide frequency controls, as gain, panning, solo, mute etc. is all already
+    // provided by Bitwig's UI
+    #[id = "xov1fq"]
+    pub crossover_1_freq: FloatParam,
+    #[id = "xov2fq"]
+    pub crossover_2_freq: FloatParam,
+    #[id = "xov3fq"]
+    pub crossover_3_freq: FloatParam,
+    #[id = "xov4fq"]
+    pub crossover_4_freq: FloatParam,
 }
 
 impl Default for CrossoverParams {
     fn default() -> Self {
-        Self {}
+        let crossover_range = FloatRange::Skewed {
+            min: MIN_CROSSOVER_FREQUENCY,
+            max: MAX_CROSSOVER_FREQUENCY,
+            factor: FloatRange::skew_factor(-1.0),
+        };
+        let crossover_smoothing_style = SmoothingStyle::Logarithmic(100.0);
+        let crossover_value_to_string = formatters::v2s_f32_hz_then_khz(0);
+        let crossover_string_to_value = formatters::s2v_f32_hz_then_khz();
+
+        Self {
+            num_bands: IntParam::new("Band Count", 2, IntRange::Linear { min: 2, max: 5 }),
+            // TODO: More sensible default frequencies
+            crossover_1_freq: FloatParam::new("Crossover 1", 200.0, crossover_range)
+                .with_smoother(crossover_smoothing_style)
+                .with_value_to_string(crossover_value_to_string.clone())
+                .with_string_to_value(crossover_string_to_value.clone()),
+            crossover_2_freq: FloatParam::new("Crossover 2", 1000.0, crossover_range)
+                .with_smoother(crossover_smoothing_style)
+                .with_value_to_string(crossover_value_to_string.clone())
+                .with_string_to_value(crossover_string_to_value.clone()),
+            crossover_3_freq: FloatParam::new("Crossover 3", 5000.0, crossover_range)
+                .with_smoother(crossover_smoothing_style)
+                .with_value_to_string(crossover_value_to_string.clone())
+                .with_string_to_value(crossover_string_to_value.clone()),
+            crossover_4_freq: FloatParam::new("Crossover 4", 10000.0, crossover_range)
+                .with_smoother(crossover_smoothing_style)
+                .with_value_to_string(crossover_value_to_string.clone())
+                .with_string_to_value(crossover_string_to_value.clone()),
+        }
     }
 }
 
@@ -96,7 +144,12 @@ impl Plugin for Crossover {
         _aux: &mut AuxiliaryBuffers,
         _context: &mut impl ProcessContext,
     ) -> ProcessStatus {
-        // TODO
+        // // TODO
+        // let main = _buffer.as_slice();
+        // let outputs = _aux.outputs[0].as_slice();
+        // for (m, o) in main.iter_mut().zip(outputs.iter_mut()) {
+        //     o.copy_from_slice(m);
+        // }
 
         ProcessStatus::Normal
     }
