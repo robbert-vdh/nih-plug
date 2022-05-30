@@ -206,6 +206,8 @@ pub trait ClapPlugin: Plugin {
     /// If this is set to true, then the plugin will report itself as having a hard realtime
     /// processing requirement when the host asks for it. Supported hosts will never ask the plugin
     /// to do offline processing.
+    // TODO: Supposedly VST3 also has something similar if you add an `|OnlyRT` category. We should
+    //       move this to the Plugin trait and use that for VST3
     const CLAP_HARD_REALTIME: bool = false;
 }
 
