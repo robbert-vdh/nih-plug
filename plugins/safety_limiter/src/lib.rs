@@ -298,7 +298,7 @@ impl SafetyLimiter {
 impl ClapPlugin for SafetyLimiter {
     const CLAP_ID: &'static str = "nl.robbertvanderhelm.safety-limiter";
     const CLAP_DESCRIPTION: &'static str = "Plays SOS in Morse code when redlining";
-    const CLAP_FEATURES: &'static [&'static str] = &["audio_effect", "stereo", "utility"];
+    const CLAP_FEATURES: &'static [&'static str] = &["audio-effect", "stereo", "utility"];
     const CLAP_MANUAL_URL: &'static str = Self::URL;
     const CLAP_SUPPORT_URL: &'static str = Self::URL;
 }

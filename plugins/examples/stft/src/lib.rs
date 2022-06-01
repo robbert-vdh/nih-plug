@@ -164,7 +164,7 @@ impl Plugin for Stft {
 impl ClapPlugin for Stft {
     const CLAP_ID: &'static str = "com.moist-plugins-gmbh.stft";
     const CLAP_DESCRIPTION: &'static str = "An example plugin using the STFT helper";
-    const CLAP_FEATURES: &'static [&'static str] = &["audio_effect", "stereo", "tool"];
+    const CLAP_FEATURES: &'static [&'static str] = &["audio-effect", "stereo", "tool"];
     const CLAP_MANUAL_URL: &'static str = Self::URL;
     const CLAP_SUPPORT_URL: &'static str = Self::URL;
 }

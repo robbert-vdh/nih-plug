@@ -244,7 +244,7 @@ impl ClapPlugin for LoudnessWarWinner {
     const CLAP_ID: &'static str = "nl.robbertvanderhelm.loudness-war-winner";
     const CLAP_DESCRIPTION: &'static str = "Win the loudness war with ease";
     const CLAP_FEATURES: &'static [&'static str] = &[
-        "audio_effect",
+        "audio-effect",
         "stereo",
         "mono",
         "limiter",

@@ -192,7 +192,7 @@ impl Plugin for Gain {
 impl ClapPlugin for Gain {
     const CLAP_ID: &'static str = "com.moist-plugins-gmbh-egui.gain-gui";
     const CLAP_DESCRIPTION: &'static str = "A smoothed gain parameter example plugin";
-    const CLAP_FEATURES: &'static [&'static str] = &["audio_effect", "mono", "stereo", "tool"];
+    const CLAP_FEATURES: &'static [&'static str] = &["audio-effect", "mono", "stereo", "tool"];
     const CLAP_MANUAL_URL: &'static str = Self::URL;
     const CLAP_SUPPORT_URL: &'static str = Self::URL;
 }

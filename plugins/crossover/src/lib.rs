@@ -280,7 +280,7 @@ impl Crossover {
 impl ClapPlugin for Crossover {
     const CLAP_ID: &'static str = "nl.robbertvanderhelm.crossover";
     const CLAP_DESCRIPTION: &'static str = "Cleanly split a signal into multiple bands";
-    const CLAP_FEATURES: &'static [&'static str] = &["audio_effect", "stereo", "utility"];
+    const CLAP_FEATURES: &'static [&'static str] = &["audio-effect", "stereo", "utility"];
     const CLAP_MANUAL_URL: &'static str = Self::URL;
     const CLAP_SUPPORT_URL: &'static str = Self::URL;
 }
