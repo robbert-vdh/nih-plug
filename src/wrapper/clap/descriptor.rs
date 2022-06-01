@@ -61,15 +61,6 @@ impl<P: ClapPlugin> Default for PluginDescriptor<P> {
         };
 
         // The keyword list is an environ-like list of char pointers terminated by a null pointer.
-        // On Windows `win32-dpi-aware` is a special value informing the host that the plugin is
-        // DPI-aware.
-        // TODO: Is this actually what we want? What happens if we don't add it? If this means that
-        //       we need to do our own DPI handling instead of the host passing a scale then we
-        //       don't want that of course.
-        #[cfg(target_os = "windows")]
-        descriptor
-            .clap_features
-            .push(CString::new("win32-dpi-aware").unwrap());
         let mut clap_features_ptrs: Vec<*const c_char> = descriptor
             .clap_features
             .iter()
