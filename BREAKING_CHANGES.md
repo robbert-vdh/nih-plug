@@ -6,7 +6,14 @@ new and what's changed, this document lists all breaking changes in reverse
 chronological order. If a new feature did not require any changes to existing
 code then it will not be listed here.
 
-## [2022-05-2y]
+## [2022-06-01]
+
+- The `ClapPlugin::CLAP_FEATURES` field now uses an array of `ClapFeature`
+  values instead of `&'static str`s. CLAP 0.26 contains many new predefined
+  features, and the existing ones now use dashes instead of underscores. Custom
+  features are still possible using `ClapFeature::Custom`.
+
+## [2022-05-27]
 
 - The `Plugin::initialize()` method now takes a `&mut impl InitContext` instead
   of a `&mut impl ProcessContext`.

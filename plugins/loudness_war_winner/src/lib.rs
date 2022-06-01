@@ -243,14 +243,14 @@ impl LoudnessWarWinner {
 impl ClapPlugin for LoudnessWarWinner {
     const CLAP_ID: &'static str = "nl.robbertvanderhelm.loudness-war-winner";
     const CLAP_DESCRIPTION: &'static str = "Win the loudness war with ease";
-    const CLAP_FEATURES: &'static [&'static str] = &[
-        "audio-effect",
-        "stereo",
-        "mono",
-        "limiter",
-        "distortion",
-        "utility",
-        "pain",
+    const CLAP_FEATURES: &'static [ClapFeature] = &[
+        ClapFeature::AudioEffect,
+        ClapFeature::Stereo,
+        ClapFeature::Mono,
+        ClapFeature::Limiter,
+        ClapFeature::Distortion,
+        ClapFeature::Utility,
+        ClapFeature::Custom("pain"),
     ];
     const CLAP_MANUAL_URL: &'static str = Self::URL;
     const CLAP_SUPPORT_URL: &'static str = Self::URL;

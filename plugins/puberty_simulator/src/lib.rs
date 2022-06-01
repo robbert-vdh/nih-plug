@@ -414,8 +414,12 @@ impl PubertySimulator {
 impl ClapPlugin for PubertySimulator {
     const CLAP_ID: &'static str = "nl.robbertvanderhelm.puberty-simulator";
     const CLAP_DESCRIPTION: &'static str = "Simulates a pitched down cracking voice";
-    const CLAP_FEATURES: &'static [&'static str] =
-        &["audio-effect", "stereo", "glitch", "pitch_shifter"];
+    const CLAP_FEATURES: &'static [ClapFeature] = &[
+        ClapFeature::AudioEffect,
+        ClapFeature::Stereo,
+        ClapFeature::Glitch,
+        ClapFeature::PitchShifter,
+    ];
     const CLAP_MANUAL_URL: &'static str = Self::URL;
     const CLAP_SUPPORT_URL: &'static str = Self::URL;
 }

@@ -4,6 +4,7 @@ mod util;
 mod context;
 mod descriptor;
 mod factory;
+pub mod features;
 mod wrapper;
 
 /// Re-export for the wrapper.

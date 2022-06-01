@@ -51,7 +51,8 @@ impl<P: ClapPlugin> Default for PluginDescriptor<P> {
                 .expect("`CLAP_DESCRIPTION` contained null bytes"),
             clap_features: P::CLAP_FEATURES
                 .iter()
-                .map(|s| CString::new(*s).expect("`CLAP_FEATURES` contained null bytes"))
+                .map(|feat| feat.as_str())
+                .map(|s| CString::new(s).expect("`CLAP_FEATURES` contained null bytes"))
                 .collect(),
             clap_features_ptrs: MaybeUninit::uninit(),
 

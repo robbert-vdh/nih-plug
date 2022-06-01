@@ -8,6 +8,7 @@ use crate::buffer::Buffer;
 use crate::context::{GuiContext, InitContext, ProcessContext};
 use crate::midi::MidiConfig;
 use crate::param::internals::Params;
+use crate::wrapper::clap::features::ClapFeature;
 
 /// Basic functionality that needs to be implemented by a plugin. The wrappers will use this to
 /// expose the plugin in a particular plugin format.
@@ -193,9 +194,7 @@ pub trait ClapPlugin: Plugin {
     const CLAP_DESCRIPTION: &'static str;
     /// Arbitrary keywords describing the plugin. See the CLAP specification for examples:
     /// <https://github.com/free-audio/clap/blob/main/include/clap/plugin.h>.
-    ///
-    /// On windows `win32-dpi-aware` is automatically added.
-    const CLAP_FEATURES: &'static [&'static str];
+    const CLAP_FEATURES: &'static [ClapFeature];
     /// A URL to the plugin's manual, CLAP does not specify what to do when there is none.
     //
     // TODO: CLAP does not specify this, can these manual fields be null pointers?
@@ -221,6 +220,8 @@ pub trait Vst3Plugin: Plugin {
     /// One or more categories, separated by pipe characters (`|`), up to 127 characters. Anything
     /// logner than that will be truncated. See the VST3 SDK for examples of common categories:
     /// <https://github.com/steinbergmedia/vst3_pluginterfaces/blob/2ad397ade5b51007860bedb3b01b8afd2c5f6fba/vst/ivstaudioprocessor.h#L49-L90>
+    //
+    // TODO: Create a category enum similar to CLapFeature
     const VST3_CATEGORIES: &'static str;
 
     /// [`VST3_CLASS_ID`][Self::VST3_CLASS_ID`] in the correct order for the current platform so
