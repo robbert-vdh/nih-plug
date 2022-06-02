@@ -9,7 +9,9 @@ regular equalizers or dynamics processors, especially when applied to low
 pitched or wide band sounds. More extreme settings will make everything sound
 like a cartoon laser beam, or a psytrance kickdrum. If you are experimenting
 with those kinds of settings, then you may want to consider temporarily placing
-a peak limiter after the plugin in case loud resonances start building up.
+a peak limiter after the plugin in case loud resonances start building up. Or
+maybe you'll want to check out [Safety Limiter](../safety_limiter), which is
+made for this exact purpose.
 
 This is a port from https://github.com/robbert-vdh/diopser with more features
 and much better performance.
