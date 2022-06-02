@@ -10,6 +10,10 @@ In Bitwig Studio you'll want to click on the 'Show plug-in multi-out chain
 selector' button and then on 'Add missing chains' to access the chains. The main
 output will not output any audio.
 
+<!-- Screenshots and other binary assets aren't in this repo as that would add bloat to NIH-plug checkouts -->
+
+![Screenshot in Bitwig](https://imgur.com/lvwgHQf.png)
+
 ## Download
 
 You can download the development binaries for Linux, Windows and macOS from the
