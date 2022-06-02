@@ -138,14 +138,7 @@ impl IirCrossover {
         num_bands: usize,
         frequencies: [f32; NUM_BANDS - 1],
     ) {
-        // TODO: Can probably get rid of the /2 now
-        // // Make sure the frequencies are monotonic by pushing bands down when they are too close to
-        // // the next band
-        // for frequency_idx in (1..num_bands - 1).rev() {
-        //     if frequencies[frequency_idx - 1] > frequencies[frequency_idx] / 2.0 {
-        //         frequencies[frequency_idx - 1] = frequencies[frequency_idx] / 2.0;
-        //     }
-        // }
+        // NOTE: Currently we don't actually need to make sure that the frequencies are monotonic
 
         match self.mode {
             IirCrossoverType::LinkwitzRiley24 => {
