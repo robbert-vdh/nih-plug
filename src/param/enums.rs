@@ -11,11 +11,12 @@ use super::{IntParam, Param, ParamFlags, ParamMut};
 // Re-export the derive macro
 pub use nih_plug_derive::Enum;
 
-/// An enum usable with `EnumParam`. This trait can be derived. Variants are identified by their
-/// **declaration order**. You can freely rename the variant names, but reordering them will break
-/// compatibility with existing presets. The variatn's name is used as the display name by default.
-/// If you want to override this, for instance, because it needs to contain spaces, then yo ucan use
-/// the `$[name = "..."]` attribute:
+/// An enum usable with `EnumParam`. This trait can be derived. Variants are identified either by a
+/// stable _id_ (see below), or if those are not set then they are identifier by their **declaration
+/// order**. If you don't provide IDs then you can freely rename the variant names, but reordering
+/// them will break compatibility with existing presets. The variant's name is used as the display
+/// name by default. If you want to override this, for instance, because it needs to contain spaces,
+/// then you can use the `#[name = "..."]` attribute:
 ///
 /// ```ignore
 /// #[derive(Enum)]
@@ -26,11 +27,34 @@ pub use nih_plug_derive::Enum;
 ///     ContainsSpaces,
 /// }
 /// ```
+///
+/// IDs can be added by adding the `#[id = "..."]` attribute to each variant:
+///
+/// ```ignore
+/// #[derive(Enum)]
+/// enum Foo {
+///     #[id = "bar"],
+///     Bar,
+///     #[id = "baz"],
+///     Baz,
+///     #[id = "contains-spaces"],
+///     #[name = "Contains Spaces"]
+///     ContainsSpaces,
+/// }
+/// ```
+///
+/// You can safely move from not using IDs to using IDs without breaking patches, but you cannot go
+/// back to not using IDs after that.
 pub trait Enum {
     /// The human readable names for the variants. These are displayed in the GUI or parameter list,
     /// and also used for parsing text back to a parameter value. The length of this slice
     /// determines how many variants there are.
     fn variants() -> &'static [&'static str];
+
+    /// Optional identifiers for each variant. This makes it possible to reorder variants while
+    /// maintaining save compatibility (automation will still break of course). The length of this
+    /// slice needs to be equal to [`variants()`][Self::variants()].
+    fn ids() -> Option<&'static [&'static str]>;
 
     /// Get the variant index (which may not be the same as the discriminator) corresponding to the
     /// active variant. The index needs to correspond to the name in
@@ -63,6 +87,11 @@ pub struct EnumParamInner {
     pub(crate) inner: IntParam,
     /// The human readable variant names, obtained from [Enum::variants()].
     variants: &'static [&'static str],
+    /// Stable identifiers for the enum variants, obtained from [Enum::ids()]. These are optional,
+    /// but if they are set (they're either not set for any variant, or set for all variants) then
+    /// these identifiers are used when saving enum parameter values to the state. Otherwise the
+    /// index is used.
+    ids: Option<&'static [&'static str]>,
 }
 
 impl<T: Enum + PartialEq> Display for EnumParam<T> {
@@ -278,6 +307,7 @@ impl<T: Enum + PartialEq + 'static> EnumParam<T> {
     /// parameter.
     pub fn new(name: impl Into<String>, default: T) -> Self {
         let variants = T::variants();
+        let ids = T::ids();
 
         Self {
             inner: EnumParamInner {
@@ -290,6 +320,7 @@ impl<T: Enum + PartialEq + 'static> EnumParam<T> {
                     },
                 ),
                 variants,
+                ids,
             },
             _marker: PhantomData,
         }
@@ -340,5 +371,30 @@ impl EnumParamInner {
     #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         self.variants.len()
+    }
+
+    /// Get the stable ID for the parameter's current value according to
+    /// [`unmodulated_plain_value()`][Param::unmodulated_plain_value()]. Returns `None` if this enum
+    /// parameter doesn't have any stable IDs.
+    pub fn unmodulated_plain_id(&self) -> Option<&'static str> {
+        let ids = &self.ids?;
+
+        // The `Enum` trait is supposed to make sure this contains enough values
+        Some(ids[self.unmodulated_plain_value() as usize])
+    }
+
+    /// Set the parameter based on a serialized stable string identifier. Return whether the ID was
+    /// known and the parameter was set.
+    pub fn set_from_id(&mut self, id: &str) -> bool {
+        match self
+            .ids
+            .and_then(|ids| ids.iter().position(|candidate| *candidate == id))
+        {
+            Some(index) => {
+                self.set_plain_value(index as i32);
+                true
+            }
+            None => false,
+        }
     }
 }

@@ -19,6 +19,8 @@ pub enum ParamValue {
     F32(f32),
     I32(i32),
     Bool(bool),
+    /// Only used for enum parameters that have the `#[id = "..."]` attribute set.
+    String(String),
 }
 
 /// A plugin's state so it can be restored at a later point. This object can be serialized and
@@ -91,10 +93,14 @@ pub(crate) unsafe fn serialize_object<'a>(
                 ParamValue::Bool((*p).unmodulated_plain_value()),
             ),
             ParamPtr::EnumParam(p) => (
-                // Enums are serialized based on the active variant's index (which may not be
-                // the same as the discriminator)
+                // Enums are either serialized based on the active variant's index (which may not be
+                // the same as the discriminator), or a custom set stable string ID. The latter
+                // allows the variants to be reordered.
                 param_id_str.clone(),
-                ParamValue::I32((*p).unmodulated_plain_value()),
+                match (*p).unmodulated_plain_id() {
+                    Some(id) => ParamValue::String(id.to_owned()),
+                    None => ParamValue::I32((*p).unmodulated_plain_value()),
+                },
             ),
         })
         .collect();
@@ -145,10 +151,20 @@ pub(crate) unsafe fn deserialize_object(
             (ParamPtr::FloatParam(p), ParamValue::F32(v)) => (*p).set_plain_value(*v),
             (ParamPtr::IntParam(p), ParamValue::I32(v)) => (*p).set_plain_value(*v),
             (ParamPtr::BoolParam(p), ParamValue::Bool(v)) => (*p).set_plain_value(*v),
-            // Enums are serialized based on the active variant's index (which may not be the same
-            // as the discriminator)
+            // Enums are either serialized based on the active variant's index (which may not be the
+            // same as the discriminator), or a custom set stable string ID. The latter allows the
+            // variants to be reordered.
             (ParamPtr::EnumParam(p), ParamValue::I32(variant_idx)) => {
                 (*p).set_plain_value(*variant_idx)
+            }
+            (ParamPtr::EnumParam(p), ParamValue::String(id)) => {
+                let deserialized_enum = (*p).set_from_id(id);
+                nih_debug_assert!(
+                    deserialized_enum,
+                    "Unknown ID {:?} for enum parameter \"{}\"",
+                    id,
+                    param_id_str,
+                );
             }
             (param_ptr, param_value) => {
                 nih_debug_assert_failure!(
