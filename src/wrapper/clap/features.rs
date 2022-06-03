@@ -9,6 +9,10 @@ pub enum ClapFeature {
     AudioEffect,
     NoteEffect,
     Analyzer,
+    Synthesizer,
+    Sampler,
+    Drum,
+    DrumMachine,
     Filter,
     Phaser,
     Equalizer,
@@ -37,7 +41,6 @@ pub enum ClapFeature {
     Stereo,
     Surround,
     Ambisonic,
-    Win32DpiAware,
     /// A non-predefined feature. Hosts may display this among its plugin categories.
     Custom(&'static str),
 }
@@ -49,6 +52,10 @@ impl ClapFeature {
             ClapFeature::AudioEffect => "audio-effect",
             ClapFeature::NoteEffect => "note-effect",
             ClapFeature::Analyzer => "analyzer",
+            ClapFeature::Synthesizer => "synthesizer",
+            ClapFeature::Sampler => "sampler",
+            ClapFeature::Drum => "drum",
+            ClapFeature::DrumMachine => "drum-machine",
             ClapFeature::Filter => "filter",
             ClapFeature::Phaser => "phaser",
             ClapFeature::Equalizer => "equalizer",
@@ -77,7 +84,6 @@ impl ClapFeature {
             ClapFeature::Stereo => "stereo",
             ClapFeature::Surround => "surround",
             ClapFeature::Ambisonic => "ambisonic",
-            ClapFeature::Win32DpiAware => "win32-dpi-aware",
             ClapFeature::Custom(s) => s,
         }
     }
