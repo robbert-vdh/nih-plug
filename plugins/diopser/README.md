@@ -7,11 +7,15 @@ without affecting its spectral content. This effect can be used to emphasize
 transients and other parts of a sound that in a way that isn't possible with
 regular equalizers or dynamics processors, especially when applied to low
 pitched or wide band sounds. More extreme settings will make everything sound
-like a cartoon laser beam, or a psytrance kickdrum. If you are experimenting
-with those kinds of settings, then you may want to consider temporarily placing
-a peak limiter after the plugin in case loud resonances start building up. Or
-maybe you'll want to check out [Safety Limiter](../safety_limiter), which is
-made for this exact purpose.
+like a cartoon laser beam, or a psytrance kickdrum.
+
+Because this plugin lets you crank every parameter up to 11, you may want to
+avoid rapidly sweeping the frequency parameter down all the way to 5 Hertz when
+you have many filter stages enabled. Because of the way these filters work, this
+may cause comparatively loud resonances in the 0-15 Hertz range. In that case
+you may want to use a peak limiter after this plugin until you understand how it
+reacts to different changes, or maybe you'll want to check out [Safety
+Limiter](../safety_limiter), which is made for this exact purpose.
 
 This is a port from https://github.com/robbert-vdh/diopser with more features
 and much better performance.
