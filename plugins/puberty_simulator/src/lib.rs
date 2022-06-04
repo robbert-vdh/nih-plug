@@ -86,10 +86,12 @@ struct PubertySimulatorParams {
 enum PitchShiftingMode {
     /// Directly linearly interpolate sine and cosine waves from different bins. This obviously
     /// sounds very bad, but it also sounds kind of hilarious.
+    #[id = "interpolated-rectangular"]
     #[name = "Very broken"]
     InterpolateRectangular,
     /// The same as `InterpolateRectangular`, but interpolating the polar forms instead. This sounds
     /// slightly better, which actually ends up making it sound a lot worse.
+    #[id = "interpolated-polar"]
     #[name = "Also very broken"]
     InterpolatePolar,
 }

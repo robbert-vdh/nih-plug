@@ -218,7 +218,9 @@ impl DiopserParams {
 
 #[derive(Enum, Debug, PartialEq)]
 enum SpreadStyle {
+    #[id = "octaves"]
     Octaves,
+    #[id = "linear"]
     Linear,
 }
 

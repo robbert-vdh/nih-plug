@@ -102,10 +102,13 @@ struct CrispParams {
 #[derive(Enum, Debug, PartialEq)]
 enum Mode {
     /// RM the entire waveform.
+    #[id = "soggy"]
     Soggy,
     /// RM only the positive part of the waveform.
+    #[id = "crispy"]
     Crispy,
     /// RM only the negative part of the waveform.
+    #[id = "crispy-negated"]
     #[name = "Crispy (alt)"]
     CrispyNegated,
 }
@@ -114,8 +117,10 @@ enum Mode {
 #[derive(Enum, Debug, PartialEq)]
 enum StereoMode {
     /// Use the same noise for both channels.
+    #[id = "mono"]
     Mono,
     /// Use a different noise source per channel.
+    #[id = "stereo"]
     Stereo,
 }
 
