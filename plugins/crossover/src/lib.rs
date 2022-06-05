@@ -20,6 +20,7 @@
 compile_error!("Compiling without SIMD support is currently not supported");
 
 use crossover::iir::{IirCrossover, IirCrossoverType};
+use nih_plug::buffer::ChannelSamples;
 use nih_plug::prelude::*;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -45,10 +46,6 @@ struct Crossover {
     should_update_filters: Arc<AtomicBool>,
 }
 
-// TODO: Add multiple crossover types. Haven't added the control for that yet because the current
-//       type (LR24) would become the second one in the list, and EnumParams are keyed by index so
-//       then we'd have an LR12 doing nothing instead. Aside form those two LR48 and some linear
-//       phase crossovers would also be nice
 #[derive(Params)]
 struct CrossoverParams {
     /// The number of bands between 2 and 5
@@ -65,6 +62,22 @@ struct CrossoverParams {
     pub crossover_3_freq: FloatParam,
     #[id = "xov4fq"]
     pub crossover_4_freq: FloatParam,
+
+    // Having this parameter first or after the number of bands makes more sense, but this way the
+    // band control plus the four crossovers fits exactly in Bitwig's parameter list
+    #[id = "xovtyp"]
+    pub crossover_type: EnumParam<CrossoverType>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Enum)]
+enum CrossoverType {
+    #[id = "lr24"]
+    #[name = "LR24"]
+    LinkwitzRiley24,
+    // TODO: Add this next
+    // #[id = "lr24-lp"]
+    // #[name = "LR24 (LP)"]
+    // LinkwitzRiley24LinearPhase,
 }
 
 impl CrossoverParams {
@@ -90,6 +103,7 @@ impl CrossoverParams {
             .with_callback(Arc::new(move |_| {
                 should_update_filters.store(true, Ordering::Relaxed)
             })),
+
             // TODO: More sensible default frequencies
             crossover_1_freq: FloatParam::new("Crossover 1", 200.0, crossover_range)
                 .with_smoother(crossover_smoothing_style)
@@ -107,6 +121,8 @@ impl CrossoverParams {
                 .with_smoother(crossover_smoothing_style)
                 .with_value_to_string(crossover_value_to_string.clone())
                 .with_string_to_value(crossover_string_to_value.clone()),
+
+            crossover_type: EnumParam::new("Type", CrossoverType::LinkwitzRiley24),
         }
     }
 }
@@ -191,6 +207,35 @@ impl Plugin for Crossover {
         aux: &mut AuxiliaryBuffers,
         _context: &mut impl ProcessContext,
     ) -> ProcessStatus {
+        match self.params.crossover_type.value() {
+            CrossoverType::LinkwitzRiley24 => {
+                Self::do_process(buffer, aux, |main_channel_samples, bands| {
+                    // Only update the filters when needed
+                    self.maybe_update_filters();
+
+                    self.iir_crossover.process(
+                        self.params.num_bands.value as usize,
+                        main_channel_samples,
+                        bands,
+                    );
+                })
+            }
+        }
+
+        ProcessStatus::Normal
+    }
+}
+
+impl Crossover {
+    /// Takes care of all of the boilerplate in zipping the outputs together to get a nice iterator
+    /// friendly and SIMD-able interface for the processing function. Prevents havign to branch per
+    /// sample. The closure receives an input sample and it should write the output samples for each
+    /// band to the array.
+    fn do_process(
+        buffer: &mut Buffer,
+        aux: &mut AuxiliaryBuffers,
+        mut f: impl FnMut(&ChannelSamples, [ChannelSamples; NUM_BANDS]),
+    ) {
         let aux_outputs = &mut aux.outputs;
         let (band_1_buffer, aux_outputs) = aux_outputs.split_first_mut().unwrap();
         let (band_2_buffer, aux_outputs) = aux_outputs.split_first_mut().unwrap();
@@ -225,14 +270,7 @@ impl Plugin for Crossover {
                 band_5_channel_samples,
             ];
 
-            // Only update the filters when needed
-            self.maybe_update_filters();
-
-            self.iir_crossover.process(
-                self.params.num_bands.value as usize,
-                &main_channel_samples,
-                bands,
-            );
+            f(&main_channel_samples, bands);
 
             // The main output should be silent as the signal is already evenly split over the other
             // bands
@@ -240,12 +278,8 @@ impl Plugin for Crossover {
                 *sample = 0.0;
             }
         }
-
-        ProcessStatus::Normal
     }
-}
 
-impl Crossover {
     /// Update the filter coefficients for the crossovers, but only if it's needed.
     fn maybe_update_filters(&mut self) {
         if self
@@ -263,18 +297,18 @@ impl Crossover {
 
     /// Update the filter coefficients for the crossovers.
     fn update_filters(&mut self) {
-        // This function will take care of non-monotonic crossover frequencies for us, e.g.
-        // crossover 2 being lower than crossover 1
-        self.iir_crossover.update(
-            self.buffer_config.sample_rate,
-            self.params.num_bands.value as usize,
-            [
-                self.params.crossover_1_freq.smoothed.next(),
-                self.params.crossover_2_freq.smoothed.next(),
-                self.params.crossover_3_freq.smoothed.next(),
-                self.params.crossover_4_freq.smoothed.next(),
-            ],
-        )
+        match self.params.crossover_type.value() {
+            CrossoverType::LinkwitzRiley24 => self.iir_crossover.update(
+                self.buffer_config.sample_rate,
+                self.params.num_bands.value as usize,
+                [
+                    self.params.crossover_1_freq.smoothed.next(),
+                    self.params.crossover_2_freq.smoothed.next(),
+                    self.params.crossover_3_freq.smoothed.next(),
+                    self.params.crossover_4_freq.smoothed.next(),
+                ],
+            ),
+        }
     }
 }
 
