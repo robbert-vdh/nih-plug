@@ -20,6 +20,8 @@ use std::f32::consts;
 use std::ops::{Add, Mul, Sub};
 use std::simd::f32x2;
 
+pub const NEUTRAL_Q: f32 = std::f32::consts::FRAC_1_SQRT_2;
+
 /// A simple biquad filter with functions for generating coefficients for second order low-pass and
 /// high-pass filters. Since these filters have 3 dB of attenuation at the center frequency, we'll
 /// two of them in series to get 6 dB of attenutation at the crossover point for the LR24

@@ -18,10 +18,8 @@ use nih_plug::buffer::ChannelSamples;
 use nih_plug::debug::*;
 use std::simd::f32x2;
 
-use crate::biquad::{Biquad, BiquadCoefficients};
+use crate::biquad::{Biquad, BiquadCoefficients, NEUTRAL_Q};
 use crate::NUM_BANDS;
-
-const NEUTRAL_Q: f32 = std::f32::consts::FRAC_1_SQRT_2;
 
 #[derive(Debug)]
 pub struct IirCrossover {
