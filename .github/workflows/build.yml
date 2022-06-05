@@ -22,7 +22,11 @@ jobs:
   package:
     strategy:
       matrix:
-        os: [ubuntu-18.04, macos-10.15, windows-latest]
+        include:
+          - { name: ubuntu-18.04,       os: ubuntu-18.04,   cross-target: '' }
+          - { name: macos-10.15-x84_64, os: macos-10.15,    cross-target: '' }
+          - { name: macos-11-aarch64,   os: macos-11,       cross-target: aarch64-apple-darwin }
+          - { name: windows,            os: windows-latest, cross-target: '' }
     name: Package plugin binaries
     runs-on: ${{ matrix.os }}
     steps:
@@ -44,7 +48,7 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.name }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Set up Rust toolchain
         uses: actions-rs/toolchain@v1
@@ -55,6 +59,9 @@ jobs:
           toolchain: nightly
           profile: minimal
           default: true
+          # The macOS AArch64 build is done from an x86_64 macOS CI runner, so
+          # it needs to be cross compiled
+          target: ${{ matrix.cross-target }}
       - name: Package all targets from bundler.toml
         # Instead of hardcoding which targets to build and package, we'll
         # package everything that's got en entry in the `bundler.toml` file
@@ -65,11 +72,16 @@ jobs:
             package_args+=("-p" "$package")
           done
 
+          cross_target=${{ matrix.cross-target }}
+          if [[ -n $cross_target ]]; then
+            package_args+=("--target" "$cross_target")
+          fi
+
           cargo xtask bundle "${package_args[@]}" --release
 
       - name: Determine build archive name
         run: |
-          echo "ARCHIVE_NAME=nih-plugs-$(git describe --always)-${{ matrix.os }}" >> "$GITHUB_ENV"
+          echo "ARCHIVE_NAME=nih-plugs-$(git describe --always)-${{ matrix.name }}" >> "$GITHUB_ENV"
       - name: Move all packaged plugin into a directory
         run: |
           # GitHub Action strips the top level directory, great, have another one
