@@ -420,7 +420,7 @@ fn compilation_target(cross_compile_target: Option<&str>) -> Result<CompilationT
             #[cfg(target_arch = "x86_64")]
             let architecture = Architecture::X86_64;
             #[cfg(target_arch = "aarch64")]
-            let architecture = Architecture::ARM64;
+            let architecture = Architecture::AArch64;
 
             #[cfg(target_os = "linux")]
             return Ok(CompilationTarget::Linux(architecture));
