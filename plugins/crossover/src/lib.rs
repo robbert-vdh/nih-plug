@@ -24,6 +24,7 @@ use nih_plug::prelude::*;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+mod biquad;
 mod crossover;
 
 /// The number of bands. Not used directly here, but this avoids hardcoding some constants in the
