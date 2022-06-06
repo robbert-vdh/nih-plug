@@ -126,7 +126,8 @@ impl IirCrossover {
         }
     }
 
-    /// Update the crossover frequencies for all filters.
+    /// Update the crossover frequencies for all filters. `num_bands` is assumed to be in `[2,
+    /// NUM_BANDS]`.
     pub fn update(
         &mut self,
         sample_rate: f32,
