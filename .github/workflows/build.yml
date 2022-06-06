@@ -42,8 +42,10 @@ jobs:
 
       - uses: actions/cache@v2
         with:
+          # FIXME: In combination with `actions-rs/toolchain@v1` this may
+          #        somehow cause the AArch64 version of rustup to end up here
+          # ~/.cargo/bin/
           path: |
-            ~/.cargo/bin/
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
