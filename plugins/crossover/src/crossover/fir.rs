@@ -246,7 +246,7 @@ impl FirCrossover {
                 }
                 fir_hp_coefs.0[FILTER_SIZE / 2] += f32x2::splat(1.0);
 
-                self.band_filters[num_bands].coefficients = fir_hp_coefs;
+                self.band_filters[num_bands - 1].coefficients = fir_hp_coefs;
             }
         }
     }
