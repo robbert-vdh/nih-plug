@@ -254,64 +254,55 @@ impl FirCoefficients {
     pub fn design_linear_phase_low_pass_from_biquad(
         biquad_coefs: BiquadCoefficients<f32x2>,
     ) -> Self {
-        // We'll start with an impulse...
-        let mut impulse_response = [f32x2::default(); FILTER_SIZE / 2 + 1];
-        impulse_response[0] = f32x2::splat(1.0);
+        const CENTER_IDX: usize = FILTER_SIZE / 2;
+
+        // We'll start with an impulse (at exactly half of this odd sized buffer)...
+        let mut impulse_response = [f32x2::default(); FILTER_SIZE];
+        impulse_response[CENTER_IDX] = f32x2::splat(1.0);
 
         // ...and filter that in both directions
         let mut biquad = Biquad::default();
         biquad.coefficients = biquad_coefs;
-        for sample in impulse_response.iter_mut() {
+        for sample in impulse_response.iter_mut().skip(CENTER_IDX - 1) {
             *sample = biquad.process(*sample);
         }
 
         biquad.reset();
-        for sample in impulse_response.iter_mut().rev() {
+        for sample in impulse_response.iter_mut().skip(CENTER_IDX - 1).rev() {
             *sample = biquad.process(*sample);
         }
 
-        // Now `impulse_response` contains a truncated right half of the linear-phase FIR filter. We
-        // can apply the window function here, and then normalize it so that the the final FIR
-        // filter kernel sums to 1.
+        // Now the right half of `impulse_response` contains a truncated right half of the
+        // linear-phase FIR filter. We can apply the window function here, and then fianlly
+        // normalize it so that the the final FIR filter kernel sums to 1.
 
-        // Adopted from `nih_plug::util::window`
+        // Adopted from `nih_plug::util::window`. We only end up applying the right half of the
+        // window, starting at the top of the window.
         let blackman_scale_1 = (2.0 * f32::consts::PI) / (impulse_response.len() - 1) as f32;
         let blackman_scale_2 = blackman_scale_1 * 2.0;
-        // We only apply the right half of the window, starting at the top of the window
-        let blackman_offset = impulse_response.len() / 2;
-        for (sample_idx, sample) in impulse_response.iter_mut().enumerate() {
-            let i = sample_idx + blackman_offset;
-            let cos_1 = (blackman_scale_1 * i as f32).cos();
-            let cos_2 = (blackman_scale_2 * i as f32).cos();
+        for (sample_idx, sample) in impulse_response.iter_mut().enumerate().skip(CENTER_IDX - 1) {
+            let cos_1 = (blackman_scale_1 * sample_idx as f32).cos();
+            let cos_2 = (blackman_scale_2 * sample_idx as f32).cos();
             *sample *= f32x2::splat(0.42 - (0.5 * cos_1) + (0.08 * cos_2));
         }
 
-        // Since this final filter will be symmetrical around
-        // `impulse_response[0]`, we can simply normalized based on that fact:
-        let would_be_coefficients_sum =
-            impulse_response.iter().sum::<f32x2>() * f32x2::splat(2.0) - impulse_response[0];
-        let would_be_coefficients_recip = would_be_coefficients_sum.recip();
+        // Since this final filter will be symmetrical around `impulse_response[CENTER_IDX]`, we can
+        // simply normalized based on that fact:
+        let would_be_impulse_response_sum =
+            impulse_response.iter().skip(CENTER_IDX - 1).sum::<f32x2>() * f32x2::splat(2.0)
+                - impulse_response[CENTER_IDX];
+        let would_be_impulse_response_recip = would_be_impulse_response_sum.recip();
         for sample in &mut impulse_response {
-            *sample *= would_be_coefficients_recip;
+            *sample *= would_be_impulse_response_recip;
         }
 
-        // And finally we can simply build the filter from the processed impulse response (which,
-        // again, corresponds to the right half of the final linear-phase filter kernel with the
-        // first sample in the IR being the middlemost element in the kernel)
-        let mut coefficients = [f32x2::default(); FILTER_SIZE];
-        for (coefficient, ir_sample) in coefficients
-            .iter_mut()
-            .take(impulse_response.len() / 2 - 1)
-            // We won't copy the very first sample of the IR here, that will be part of the second
-            // (non-reversed) half
-            .zip(impulse_response.iter().skip(1).rev())
-        {
-            *coefficient = *ir_sample;
+        // And finally we can simply copy the right half of the filter kernel to the left half
+        // around the `CENTER_IDX`.
+        for source_idx in CENTER_IDX + 1..impulse_response.len() {
+            let target_idx = CENTER_IDX - (source_idx - CENTER_IDX);
+            impulse_response[target_idx] = impulse_response[source_idx];
         }
 
-        // And the second half can be a simple memcpy
-        coefficients[impulse_response.len() / 2..].copy_from_slice(&impulse_response);
-
-        Self(coefficients)
+        Self(impulse_response)
     }
 }
