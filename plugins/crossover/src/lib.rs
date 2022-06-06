@@ -19,6 +19,7 @@
 #[cfg(not(feature = "simd"))]
 compile_error!("Compiling without SIMD support is currently not supported");
 
+use crossover::fir::{FirCrossover, FirCrossoverType};
 use crossover::iir::{IirCrossover, IirCrossoverType};
 use nih_plug::buffer::ChannelSamples;
 use nih_plug::prelude::*;
@@ -42,6 +43,8 @@ struct Crossover {
 
     /// Provides the LR24 crossover.
     iir_crossover: IirCrossover,
+    /// Provides the linear-phase LR24 crossover.
+    fir_crossover: FirCrossover,
     /// Set when the number of bands has changed and the filters must be updated.
     should_update_filters: Arc<AtomicBool>,
 }
@@ -69,15 +72,17 @@ struct CrossoverParams {
     pub crossover_type: EnumParam<CrossoverType>,
 }
 
+// The `non_exhaustive` is to prevent adding cases for latency compensation when adding more types
+// later
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Enum)]
+#[non_exhaustive]
 enum CrossoverType {
     #[id = "lr24"]
     #[name = "LR24"]
     LinkwitzRiley24,
-    // TODO: Add this next
-    // #[id = "lr24-lp"]
-    // #[name = "LR24 (LP)"]
-    // LinkwitzRiley24LinearPhase,
+    #[id = "lr24-lp"]
+    #[name = "LR24 (LP)"]
+    LinkwitzRiley24LinearPhase,
 }
 
 impl CrossoverParams {
@@ -100,9 +105,11 @@ impl CrossoverParams {
                     max: NUM_BANDS as i32,
                 },
             )
-            .with_callback(Arc::new(move |_| {
-                should_update_filters.store(true, Ordering::Relaxed)
-            })),
+            .with_callback({
+                let should_update_filters = should_update_filters.clone();
+
+                Arc::new(move |_| should_update_filters.store(true, Ordering::Relaxed))
+            }),
 
             // TODO: More sensible default frequencies
             crossover_1_freq: FloatParam::new("Crossover 1", 200.0, crossover_range)
@@ -122,7 +129,9 @@ impl CrossoverParams {
                 .with_value_to_string(crossover_value_to_string.clone())
                 .with_string_to_value(crossover_string_to_value.clone()),
 
-            crossover_type: EnumParam::new("Type", CrossoverType::LinkwitzRiley24),
+            crossover_type: EnumParam::new("Type", CrossoverType::LinkwitzRiley24).with_callback(
+                Arc::new(move |_| should_update_filters.store(true, Ordering::Relaxed)),
+            ),
         }
     }
 }
@@ -142,6 +151,7 @@ impl Default for Crossover {
             },
 
             iir_crossover: IirCrossover::new(IirCrossoverType::LinkwitzRiley24),
+            fir_crossover: FirCrossover::new(FirCrossoverType::LinkwitzRiley24LinearPhase),
             should_update_filters,
         }
     }
@@ -187,26 +197,36 @@ impl Plugin for Crossover {
         &mut self,
         _bus_config: &BusConfig,
         buffer_config: &BufferConfig,
-        _context: &mut impl InitContext,
+        context: &mut impl InitContext,
     ) -> bool {
         self.buffer_config = *buffer_config;
 
         // Make sure the filter states match the current parameters
         self.update_filters();
 
+        // The FIR filters are linear-phase and introduce latency
+        match self.params.crossover_type.value() {
+            CrossoverType::LinkwitzRiley24 => (),
+            CrossoverType::LinkwitzRiley24LinearPhase => {
+                context.set_latency_samples(self.fir_crossover.latency())
+            }
+        }
+
         true
     }
 
     fn reset(&mut self) {
         self.iir_crossover.reset();
+        self.fir_crossover.reset();
     }
 
     fn process(
         &mut self,
         buffer: &mut Buffer,
         aux: &mut AuxiliaryBuffers,
-        _context: &mut impl ProcessContext,
+        context: &mut impl ProcessContext,
     ) -> ProcessStatus {
+        // Right now both crossover types only do 24 dB/octave Linkwitz-Riley style crossovers
         match self.params.crossover_type.value() {
             CrossoverType::LinkwitzRiley24 => {
                 Self::do_process(buffer, aux, |main_channel_samples, bands| {
@@ -214,6 +234,19 @@ impl Plugin for Crossover {
                     self.maybe_update_filters();
 
                     self.iir_crossover.process(
+                        self.params.num_bands.value as usize,
+                        main_channel_samples,
+                        bands,
+                    );
+                })
+            }
+            CrossoverType::LinkwitzRiley24LinearPhase => {
+                context.set_latency_samples(self.fir_crossover.latency());
+
+                Self::do_process(buffer, aux, |main_channel_samples, bands| {
+                    self.maybe_update_filters();
+
+                    self.fir_crossover.process(
                         self.params.num_bands.value as usize,
                         main_channel_samples,
                         bands,
@@ -297,16 +330,23 @@ impl Crossover {
 
     /// Update the filter coefficients for the crossovers.
     fn update_filters(&mut self) {
+        let crossover_frequencies = [
+            self.params.crossover_1_freq.smoothed.next(),
+            self.params.crossover_2_freq.smoothed.next(),
+            self.params.crossover_3_freq.smoothed.next(),
+            self.params.crossover_4_freq.smoothed.next(),
+        ];
+
         match self.params.crossover_type.value() {
             CrossoverType::LinkwitzRiley24 => self.iir_crossover.update(
                 self.buffer_config.sample_rate,
                 self.params.num_bands.value as usize,
-                [
-                    self.params.crossover_1_freq.smoothed.next(),
-                    self.params.crossover_2_freq.smoothed.next(),
-                    self.params.crossover_3_freq.smoothed.next(),
-                    self.params.crossover_4_freq.smoothed.next(),
-                ],
+                crossover_frequencies,
+            ),
+            CrossoverType::LinkwitzRiley24LinearPhase => self.fir_crossover.update(
+                self.buffer_config.sample_rate,
+                self.params.num_bands.value as usize,
+                crossover_frequencies,
             ),
         }
     }

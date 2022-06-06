@@ -61,7 +61,7 @@ struct FirFilter {
     ///
     /// TODO: Profile to see if storing this as f32x2 rather than f32s plus splatting makes any
     ///       difference in performance at all
-    coefficients: FirCoefficients,
+    pub coefficients: FirCoefficients,
 
     /// A ring buffer storing the last `FILTER_SIZE - 1` samples. The capacity is `FILTER_SIZE`
     /// rounded up to the next power of two.
@@ -114,11 +114,11 @@ impl FirCrossover {
     }
 
     /// Get the current latency in samples. This depends on the selected mode.
-    pub fn latency(&self) -> usize {
+    pub fn latency(&self) -> u32 {
         // Actually, that's a lie, since we currently only do linear-phase filters with a constant
         // size
         match self.mode {
-            FirCrossoverType::LinkwitzRiley24LinearPhase => FILTER_SIZE / 2,
+            FirCrossoverType::LinkwitzRiley24LinearPhase => (FILTER_SIZE / 2) as u32,
         }
     }
 
@@ -129,7 +129,7 @@ impl FirCrossover {
         &mut self,
         num_bands: usize,
         main_io: &ChannelSamples,
-        mut band_outputs: [ChannelSamples; NUM_BANDS],
+        band_outputs: [ChannelSamples; NUM_BANDS],
     ) {
         nih_debug_assert!(num_bands >= 2);
         nih_debug_assert!(num_bands <= NUM_BANDS);
@@ -300,11 +300,6 @@ impl FirFilter {
         self.delay_buffer_next_idx = (self.delay_buffer_next_idx + 1) % self.delay_buffer.len();
 
         result
-    }
-
-    /// Update the coefficients for all filters in the crossover.
-    pub fn update_coefficients(&mut self, coefs: FirCoefficients) {
-        self.coefficients = coefs;
     }
 
     /// Reset the internal filter state.
