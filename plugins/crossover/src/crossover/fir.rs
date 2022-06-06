@@ -22,10 +22,10 @@ use std::simd::{f32x2, StdFloat};
 use crate::biquad::{Biquad, BiquadCoefficients, NEUTRAL_Q};
 use crate::NUM_BANDS;
 
-// TODO: These filters would be more efficient when processing four samples at a time instead of
-//       processing two channels at a time. But this keeps the interface nicer.
+// TODO: Move this to FFT convolution so we can increase the filter size and improve low latency performance
 
-/// The size of the FIR filter window, or the number of taps.
+/// The size of the FIR filter window, or the number of taps. The low frequency performance is
+/// greatly limited by this.
 const FILTER_SIZE: usize = 121;
 /// The size of the FIR filter's ring buffer. This is `FILTER_SIZE` rounded up to the next power of
 /// two.

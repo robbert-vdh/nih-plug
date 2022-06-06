@@ -81,7 +81,7 @@ enum CrossoverType {
     #[name = "LR24"]
     LinkwitzRiley24,
     #[id = "lr24-lp"]
-    #[name = "LR24 (LP)"]
+    #[name = "LR24 (LP, experimental)"]
     LinkwitzRiley24LinearPhase,
 }
 
