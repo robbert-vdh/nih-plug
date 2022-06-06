@@ -221,10 +221,11 @@ impl FirFilter {
 }
 
 impl FirCoefficients {
-    /// A somewhat crude but very functional and relatively fast way create a linear phase FIR
-    /// **low-pass** filter that matches the frequency response of a biquad filter. This normalizes
-    /// the result, so biquad coefficients for high- and band-pass filters will not work correctly.
-    /// The algorithm works as follows:
+    /// A somewhat crude but very functional and relatively fast way create linear phase FIR
+    /// **low-pass** filter that matches the frequency response of a fourth order biquad low-pass
+    /// filter. As in, this matches the frequency response magnitudes of applying those biquads to a
+    /// signal twice. This only works for low-pass filters, as the function normalizes the result to
+    /// hae unity gain at the DC bin. The algorithm works as follows:
     ///
     /// - An impulse function (so all zeroes except for the first element) of length `FILTER_LEN / 2
     ///   + 1` is filtered with the biquad.
@@ -241,7 +242,7 @@ impl FirCoefficients {
     ///   this starts at unity gain for the first sample and then tapers off towards the right.
     /// - The impulse response is then normalized such that the final linear-phase FIR kernel has a
     ///   sum of 1.0. Since it will be symmetrical around the IRs first sample, the would-be final
-    ///   sum can be computed as `ir.sum() * 2 - ir[0]`>
+    ///   sum can be computed as `ir.sum() * 2 - ir[0]`.
     ///
     /// Lastly the linear phase FIR filter simply needs to be constructed from this right half:
     ///
@@ -251,7 +252,7 @@ impl FirCoefficients {
     ///   the coefficients. (one of the copies doesn't need to include the centermost coefficient)
     ///
     /// The corresponding high-pass filter can be computed through spectral inversion.
-    pub fn design_linear_phase_low_pass_from_biquad(
+    pub fn design_fourth_order_linear_phase_low_pass_from_biquad(
         biquad_coefs: BiquadCoefficients<f32x2>,
     ) -> Self {
         const CENTER_IDX: usize = FILTER_SIZE / 2;
@@ -286,8 +287,8 @@ impl FirCoefficients {
             *sample *= f32x2::splat(0.42 - (0.5 * cos_1) + (0.08 * cos_2));
         }
 
-        // Since this final filter will be symmetrical around `impulse_response[CENTER_IDX]`, we can
-        // simply normalized based on that fact:
+        // Since this final filter will be symmetrical around `impulse_response[CENTER_IDX]`, we
+        // can simply normalize based on that fact:
         let would_be_impulse_response_sum =
             impulse_response.iter().skip(CENTER_IDX - 1).sum::<f32x2>() * f32x2::splat(2.0)
                 - impulse_response[CENTER_IDX];
