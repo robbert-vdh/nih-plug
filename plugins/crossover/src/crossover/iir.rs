@@ -75,7 +75,7 @@ struct AllPassCascade {
 
 impl IirCrossover {
     /// Create a new multiband crossover processor. All filters will be configured to pass audio
-    /// through as it. `.update()` needs to be called first to set up the filters, and `.reset()`
+    /// through as is. `.update()` needs to be called first to set up the filters, and `.reset()`
     /// can be called whenever the filter state must be cleared.
     pub fn new(mode: IirCrossoverType) -> Self {
         Self {
@@ -126,9 +126,7 @@ impl IirCrossover {
         }
     }
 
-    /// Update the crossover frequencies for all filters. If the frequencies are not monotonic then
-    /// this function will ensure that they are. The active number of bands is used to make sure
-    /// unused bands are not part of the normalization.
+    /// Update the crossover frequencies for all filters.
     pub fn update(
         &mut self,
         sample_rate: f32,
