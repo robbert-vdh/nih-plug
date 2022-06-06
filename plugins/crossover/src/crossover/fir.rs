@@ -137,10 +137,24 @@ impl FirCrossover {
         // be unsound
         assert!(main_io.len() == 2);
 
-        let mut samples: f32x2 = unsafe { main_io.to_simd_unchecked() };
+        let samples: f32x2 = unsafe { main_io.to_simd_unchecked() };
         match self.mode {
             FirCrossoverType::LinkwitzRiley24LinearPhase => {
-                todo!();
+                // TODO: Everything is structured to be fast to compute for the IIR filters. Instead
+                //       of doing two channels at the same time, it would probably be faster to use
+                //       SIMD for the actual convolution so we can do 4 or 8 multiply-adds at the
+                //       same time. Or perhaps a better way to spend the time, use FFT convolution
+                //       for this.
+                for (filter, mut output) in self
+                    .band_filters
+                    .iter_mut()
+                    .zip(band_outputs)
+                    .take(num_bands)
+                {
+                    let filtered_samples = filter.process(samples);
+
+                    unsafe { output.from_simd_unchecked(filtered_samples) };
+                }
             }
         }
     }
