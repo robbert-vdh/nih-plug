@@ -379,7 +379,7 @@ impl FirCoefficients {
         // Since this final filter will be symmetrical around `impulse_response[CENTER_IDX]`, we
         // can simply normalize based on that fact:
         let would_be_impulse_response_sum =
-            impulse_response.iter().skip(CENTER_IDX - 1).sum::<f32x2>() * f32x2::splat(2.0)
+            (impulse_response.iter().skip(CENTER_IDX).sum::<f32x2>() * f32x2::splat(2.0))
                 - impulse_response[CENTER_IDX];
         let would_be_impulse_response_recip = would_be_impulse_response_sum.recip();
         for sample in &mut impulse_response {
