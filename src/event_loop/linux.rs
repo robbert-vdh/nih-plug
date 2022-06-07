@@ -7,7 +7,6 @@ use std::sync::Weak;
 use std::thread::{self, JoinHandle, ThreadId};
 
 use super::{EventLoop, MainThreadExecutor};
-use crate::nih_log;
 use crate::util::permit_alloc;
 
 /// See [`EventLoop`][super::EventLoop].
