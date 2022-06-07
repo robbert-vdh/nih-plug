@@ -19,7 +19,7 @@ use nih_plug::debug::*;
 use std::f32;
 use std::simd::{f32x2, StdFloat};
 
-use crate::biquad::{Biquad, BiquadCoefficients, NEUTRAL_Q};
+use crate::crossover::iir::biquad::{Biquad, BiquadCoefficients, NEUTRAL_Q};
 use crate::NUM_BANDS;
 
 // TODO: Move this to FFT convolution so we can increase the filter size and improve low latency performance
