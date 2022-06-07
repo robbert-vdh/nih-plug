@@ -14,36 +14,60 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use nih_plug::buffer::ChannelSamples;
 use nih_plug::debug::*;
+use realfft::num_complex::Complex32;
+use realfft::{ComplexToReal, RealFftPlanner, RealToComplex};
 use std::f32;
-use std::simd::f32x2;
+use std::sync::Arc;
 
-use self::filter::{FirCoefficients, FirFilter};
+use self::filter::{FftFirFilter, FirCoefficients, FFT_INPUT_SIZE, FFT_SIZE};
+use crate::crossover::fir::filter::FILTER_SIZE;
 use crate::crossover::iir::biquad::{BiquadCoefficients, NEUTRAL_Q};
-use crate::NUM_BANDS;
+use crate::{NUM_BANDS, NUM_CHANNELS};
 
 pub mod filter;
 
-// TODO: Move this to FFT convolution so we can increase the filter size and improve low latency performance
-
-/// The size of the FIR filter window, or the number of taps. The low frequency performance is
-/// greatly limited by this.
-const FILTER_SIZE: usize = 121;
-/// The size of the FIR filter's ring buffer. This is `FILTER_SIZE` rounded up to the next power of
-/// two.
-const RING_BUFFER_SIZE: usize = FILTER_SIZE.next_power_of_two();
-
-#[derive(Debug)]
 pub struct FirCrossover {
     /// The kind of crossover to use. `.update_filters()` must be called after changing this.
     mode: FirCrossoverType,
 
     /// Filters for each of the bands. Depending on the number of bands argument passed to
-    /// `.process()` two to five of these may be used. The first one always contains a low-pass
+    /// `.process()`, two to five of these may be used. The first one always contains a low-pass
     /// filter, the last one always contains a high-pass filter, while the other bands will contain
     /// band-pass filters.
-    band_filters: [FirFilter; NUM_BANDS],
+    ///
+    /// These filters will be fed the FFT from the main input to produce output samples for the enxt
+    /// period. Everything could be a bit nicer to read if the filter did the entire STFT process,
+    /// but that would mean duplicating the input ring buffer and forward DFT up to five times.
+    band_filters: [FftFirFilter; NUM_BANDS],
+
+    /// A ring buffer that is used to store inputs for the next FFT. Until it is time to take the
+    /// next FFT, samples are copied from the inputs to this buffer, while simultaneously copying
+    /// the already processed output samples from the output buffers to the output. Once
+    /// `io_buffer_next_indices` wrap back around to 0, the next buffer should be produced.
+    input_buffers: [[f32; FFT_INPUT_SIZE]; NUM_CHANNELS as usize],
+    /// A ring that contains the next period's outputs for each of the five bands. This is written
+    /// to and read from in lockstep with `input_buffers`.
+    band_output_buffers: [[[f32; FFT_INPUT_SIZE]; NUM_CHANNELS as usize]; NUM_BANDS],
+    /// The index in the inner `io_buffer` the next sample should be read from. After a sample is
+    /// written to the band's output then this is incremented by one. Once
+    /// `self.io_buffer_next_indices[channel_idx] == self.io_buffer.len()` then the next block
+    /// should be processed.
+    ///
+    /// This is stored as an array since each channel is processed individually. While this should
+    /// of course stay in sync, this makes it much simpler to process both channels in sequence.
+    io_buffers_next_indices: [usize; NUM_CHANNELS as usize],
+
+    /// The algorithm for the FFT operation.
+    r2c_plan: Arc<dyn RealToComplex<f32>>,
+    /// The algorithm for the IFFT operation.
+    c2r_plan: Arc<dyn ComplexToReal<f32>>,
+
+    /// A real buffer that may be written to in place during the FFT and IFFT operations.
+    real_scratch_buffer: [f32; FFT_SIZE],
+    /// A complex buffer corresponding to `real_scratch_buffer` that may be written to in place
+    /// during the FFT and IFFT operations.
+    complex_scratch_buffer: [Complex32; FFT_SIZE / 2 + 1],
 }
 
 /// The type of FIR crossover to use.
@@ -63,9 +87,19 @@ impl FirCrossover {
     /// Make sure to add the latency reported by [`latency()`][Self::latency()] to the plugin's
     /// reported latency.
     pub fn new(mode: FirCrossoverType) -> Self {
+        let mut fft_planner = RealFftPlanner::new();
+
         Self {
             mode,
             band_filters: Default::default(),
+
+            input_buffers: [[0.0; FFT_INPUT_SIZE]; NUM_CHANNELS as usize],
+            band_output_buffers: [[[0.0; FFT_INPUT_SIZE]; NUM_CHANNELS as usize]; NUM_BANDS],
+            io_buffers_next_indices: [0; NUM_CHANNELS as usize],
+            r2c_plan: fft_planner.plan_fft_forward(FFT_SIZE),
+            c2r_plan: fft_planner.plan_fft_inverse(FFT_SIZE),
+            real_scratch_buffer: [0.0; FFT_SIZE],
+            complex_scratch_buffer: [Complex32::default(); FFT_SIZE / 2 + 1],
         }
     }
 
@@ -74,43 +108,96 @@ impl FirCrossover {
         // Actually, that's a lie, since we currently only do linear-phase filters with a constant
         // size
         match self.mode {
-            FirCrossoverType::LinkwitzRiley24LinearPhase => (FILTER_SIZE / 2) as u32,
+            FirCrossoverType::LinkwitzRiley24LinearPhase => FFT_INPUT_SIZE as u32,
         }
     }
 
     /// Split the signal into bands using the crossovers previously configured through `.update()`.
-    /// The split bands will be written to `band_outputs`. `main_io` is not written to, and should
-    /// be cleared separately.
+    /// The split bands will be written to `band_outputs`. The main output should be cleared
+    /// separately. For efficiency's sake this processes an entire channel at once to minimize the
+    /// number of FFT operations needed. Since this process delays the signal by `FFT_INPUT_SIZE`
+    /// samples, the latency should be reported to the host.
     pub fn process(
         &mut self,
         num_bands: usize,
-        main_io: &ChannelSamples,
-        band_outputs: [ChannelSamples; NUM_BANDS],
+        main_input: &[f32],
+        mut band_outputs: [&mut &mut [f32]; NUM_BANDS],
+        channel_idx: usize,
     ) {
-        nih_debug_assert!(num_bands >= 2);
-        nih_debug_assert!(num_bands <= NUM_BANDS);
-        // Required for the SIMD, so we'll just do a hard assert or the unchecked conversions will
-        // be unsound
-        assert!(main_io.len() == 2);
+        nih_debug_assert!(main_input.len() == band_outputs[0].len());
+        nih_debug_assert!(channel_idx < NUM_CHANNELS as usize);
 
-        let samples: f32x2 = unsafe { main_io.to_simd_unchecked() };
-        match self.mode {
-            FirCrossoverType::LinkwitzRiley24LinearPhase => {
-                // TODO: Everything is structured to be fast to compute for the IIR filters. Instead
-                //       of doing two channels at the same time, it would probably be faster to use
-                //       SIMD for the actual convolution so we can do 4 or 8 multiply-adds at the
-                //       same time. Or perhaps a better way to spend the time, use FFT convolution
-                //       for this.
-                for (filter, mut output) in self
-                    .band_filters
+        // We'll copy already processed output to `band_outputs` while storing input for the next
+        // FFT operation. This is a modified version of what's going on in `StftHelper`.
+        let mut current_sample_idx = 0;
+        while current_sample_idx < main_input.len() {
+            {
+                // When `self.io_buffers_next_indices == FFT_SIZE`, the next block should be processed
+                let io_buffers_next_indices = self.io_buffers_next_indices[channel_idx];
+                let process_num_samples = (FFT_INPUT_SIZE - io_buffers_next_indices)
+                    .min(main_input.len() - current_sample_idx);
+
+                // Since we can't do this in-place (without unnecessarily duplicating a ton of data),
+                // copying data from and to the ring buffers can be done with simple memcpys
+                self.input_buffers[channel_idx]
+                    [io_buffers_next_indices..io_buffers_next_indices + process_num_samples]
+                    .copy_from_slice(
+                        &main_input[current_sample_idx..current_sample_idx + process_num_samples],
+                    );
+                for (band_output, band_output_buffers) in band_outputs
                     .iter_mut()
-                    .zip(band_outputs)
+                    .zip(self.band_output_buffers.iter())
                     .take(num_bands)
                 {
-                    let filtered_samples = filter.process(samples);
-
-                    unsafe { output.from_simd_unchecked(filtered_samples) };
+                    band_output[current_sample_idx..current_sample_idx + process_num_samples]
+                        .copy_from_slice(
+                            &band_output_buffers[channel_idx][io_buffers_next_indices
+                                ..io_buffers_next_indices + process_num_samples],
+                        );
                 }
+
+                // This is tracked per-channel because both channels are processed individually
+                self.io_buffers_next_indices[channel_idx] += process_num_samples;
+                current_sample_idx += process_num_samples;
+            }
+
+            // At this point we either reached the end of the buffer (`current_sample_idx ==
+            // main_input.len()`), or we filled up the `io_buffer` and we can process the next block
+            if self.io_buffers_next_indices[channel_idx] == FFT_INPUT_SIZE {
+                // Zero pad the input for the FFT
+                self.real_scratch_buffer[..FFT_INPUT_SIZE]
+                    .copy_from_slice(&self.input_buffers[channel_idx]);
+                self.real_scratch_buffer[FFT_INPUT_SIZE..].fill(0.0);
+
+                self.r2c_plan
+                    .process_with_scratch(
+                        &mut self.real_scratch_buffer,
+                        &mut self.complex_scratch_buffer,
+                        &mut [],
+                    )
+                    .unwrap();
+
+                // The input can then be used to produce each band's output. Since realfft expects
+                // to be able to modify the input, we need to make a copy of this first:
+                let input_fft = self.complex_scratch_buffer;
+
+                for (band_output_buffers, band_filter) in self
+                    .band_output_buffers
+                    .iter_mut()
+                    .zip(self.band_filters.iter_mut())
+                    .take(num_bands)
+                {
+                    band_filter.process(
+                        &input_fft,
+                        &mut band_output_buffers[channel_idx],
+                        channel_idx,
+                        &*self.c2r_plan,
+                        &mut self.real_scratch_buffer,
+                        &mut self.complex_scratch_buffer,
+                    )
+                }
+
+                self.io_buffers_next_indices[channel_idx] = 0;
             }
         }
     }
@@ -150,11 +237,16 @@ impl FirCrossover {
                     FirCoefficients::design_fourth_order_linear_phase_low_pass_from_biquad(
                         iir_coefs,
                     );
-                self.band_filters[0].coefficients = lp_fir_coefs;
+                self.band_filters[0].recompute_coefficients(
+                    lp_fir_coefs.clone(),
+                    &*self.r2c_plan,
+                    &mut self.real_scratch_buffer,
+                    &mut self.complex_scratch_buffer,
+                );
 
                 // For the band-pass filters and the final high-pass filter, we need to keep track
                 // of the accumulated impulse response
-                let mut accumulated_ir = self.band_filters[0].coefficients.clone();
+                let mut accumulated_ir = lp_fir_coefs;
                 for (split_frequency, band_filter) in frequencies
                     .iter()
                     .zip(self.band_filters.iter_mut())
@@ -191,7 +283,12 @@ impl FirCrossover {
                         *accumulated_coef += *bp_coef;
                     }
 
-                    band_filter.coefficients = fir_bp_coefs;
+                    band_filter.recompute_coefficients(
+                        fir_bp_coefs,
+                        &*self.r2c_plan,
+                        &mut self.real_scratch_buffer,
+                        &mut self.complex_scratch_buffer,
+                    );
                 }
 
                 // And finally we can do a spectral inversion of the accumulated IR to the the last
@@ -202,7 +299,12 @@ impl FirCrossover {
                 }
                 fir_hp_coefs.0[FILTER_SIZE / 2] += 1.0;
 
-                self.band_filters[num_bands - 1].coefficients = fir_hp_coefs;
+                self.band_filters[num_bands - 1].recompute_coefficients(
+                    fir_hp_coefs,
+                    &*self.r2c_plan,
+                    &mut self.real_scratch_buffer,
+                    &mut self.complex_scratch_buffer,
+                );
             }
         }
     }
@@ -212,5 +314,16 @@ impl FirCrossover {
         for filter in &mut self.band_filters {
             filter.reset();
         }
+
+        // The inputs don't need to be reset as they'll be overwritten immediately
+        for band_buffers in &mut self.band_output_buffers {
+            for buffer in band_buffers {
+                buffer.fill(0.0);
+            }
+        }
+
+        // This being 0 means that the very first period will simply output the silence form above
+        // and gather input for the next FFT
+        self.io_buffers_next_indices.fill(0);
     }
 }

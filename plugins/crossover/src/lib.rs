@@ -27,6 +27,9 @@ use std::sync::Arc;
 
 mod crossover;
 
+/// The number of channels this plugin supports. Hard capped at 2 for SIMD reasons.
+pub const NUM_CHANNELS: u32 = 2;
+
 /// The number of bands. Not used directly here, but this avoids hardcoding some constants in the
 /// crossover implementations.
 pub const NUM_BANDS: usize = 5;
@@ -163,13 +166,13 @@ impl Plugin for Crossover {
 
     const VERSION: &'static str = "0.1.0";
 
-    const DEFAULT_NUM_INPUTS: u32 = 2;
-    const DEFAULT_NUM_OUTPUTS: u32 = 2;
+    const DEFAULT_NUM_INPUTS: u32 = NUM_CHANNELS;
+    const DEFAULT_NUM_OUTPUTS: u32 = NUM_CHANNELS;
 
     const DEFAULT_AUX_OUTPUTS: Option<AuxiliaryIOConfig> = Some(AuxiliaryIOConfig {
         // Two to five of these busses will be used at a time
         num_busses: 5,
-        num_channels: 2,
+        num_channels: NUM_CHANNELS,
     });
 
     const PORT_NAMES: PortNames = PortNames {
@@ -186,9 +189,9 @@ impl Plugin for Crossover {
 
     fn accepts_bus_config(&self, config: &BusConfig) -> bool {
         // Only do stereo
-        config.num_input_channels == 2
-            && config.num_output_channels == 2
-            && config.aux_output_busses.num_channels == 2
+        config.num_input_channels == NUM_CHANNELS
+            && config.num_output_channels == NUM_CHANNELS
+            && config.aux_output_busses.num_channels == NUM_CHANNELS
     }
 
     fn initialize(
@@ -232,18 +235,7 @@ impl Plugin for Crossover {
             CrossoverType::LinkwitzRiley24LinearPhase => {
                 context.set_latency_samples(self.fir_crossover.latency());
 
-                todo!();
-                // Self::do_process(buffer, aux, |main_channel_samples, bands| {
-                //     if self.should_update_filters() {
-                //         self.update_filters(buffer.len() as u32);
-                //     }
-
-                //     self.fir_crossover.process(
-                //         self.params.num_bands.value as usize,
-                //         main_channel_samples,
-                //         bands,
-                //     );
-                // })
+                self.process_fir(buffer, aux);
             }
         }
 
@@ -253,7 +245,7 @@ impl Plugin for Crossover {
 
 impl Crossover {
     /// Takes care of all of the boilerplate in zipping the outputs together to get a nice iterator
-    /// friendly and SIMD-able interface for the processing function. Prevents havign to branch per
+    /// friendly and SIMD-able interface for the processing function. Prevents having to branch per
     /// sample. The closure receives an input sample and it should write the output samples for each
     /// band to the array.
     fn process_iir(&mut self, buffer: &mut Buffer, aux: &mut AuxiliaryBuffers) {
@@ -307,6 +299,45 @@ impl Crossover {
             for sample in main_channel_samples {
                 *sample = 0.0;
             }
+        }
+    }
+
+    /// `process_iir()`, but for the linear-phase FIR crossovers. This processes an entire channel
+    /// at once instead of processing per-sample since we use FFT convolution.
+    fn process_fir(&mut self, buffer: &mut Buffer, aux: &mut AuxiliaryBuffers) {
+        // In theory we could do smoothing in between processed blocks, but this hsould be fine
+        if self.should_update_filters() {
+            self.update_filters(buffer.len() as u32);
+        }
+
+        let aux_outputs = &mut aux.outputs;
+        let (band_1_buffer, aux_outputs) = aux_outputs.split_first_mut().unwrap();
+        let (band_2_buffer, aux_outputs) = aux_outputs.split_first_mut().unwrap();
+        let (band_3_buffer, aux_outputs) = aux_outputs.split_first_mut().unwrap();
+        let (band_4_buffer, aux_outputs) = aux_outputs.split_first_mut().unwrap();
+        let (band_5_buffer, _) = aux_outputs.split_first_mut().unwrap();
+
+        // We can avoid a lot of hardcoding and conditionals by restoring the original array structure
+        for channel_idx in 0..buffer.channels() {
+            let main_io = &mut buffer.as_slice()[channel_idx];
+            let band_outputs = [
+                &mut band_1_buffer.as_slice()[channel_idx],
+                &mut band_2_buffer.as_slice()[channel_idx],
+                &mut band_3_buffer.as_slice()[channel_idx],
+                &mut band_4_buffer.as_slice()[channel_idx],
+                &mut band_5_buffer.as_slice()[channel_idx],
+            ];
+
+            self.fir_crossover.process(
+                self.params.num_bands.value as usize,
+                main_io,
+                band_outputs,
+                channel_idx,
+            );
+
+            // The main output should be silent as the signal is already evenly split over the other
+            // bands
+            main_io.fill(0.0);
         }
     }
 

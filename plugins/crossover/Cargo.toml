@@ -16,3 +16,4 @@ simd = ["nih_plug/simd"]
 
 [dependencies]
 nih_plug = { path = "../../", features = ["assert_process_allocs"] }
+realfft = "3.0.0"

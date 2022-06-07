@@ -14,27 +14,50 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use realfft::num_complex::Complex32;
+use realfft::{ComplexToReal, RealToComplex};
 use std::f32;
-use std::simd::{f32x2, StdFloat};
 
-use super::{FILTER_SIZE, RING_BUFFER_SIZE};
 use crate::crossover::iir::biquad::{Biquad, BiquadCoefficients};
+use crate::NUM_CHANNELS;
+
+/// We're doing FFT convolution here since otherwise there's no way to get decent low-frequency
+/// accuracy while still having acceptable performance. The input going into the STFT will be
+/// smaller since it will be padding with zeroes to compensate for the otherwise overlapping tail
+/// caused by the convolution.
+pub const FFT_SIZE: usize = 4096;
+/// The input chunk size the FFT convolution is processing. This is also the latency. By having this
+/// be exactly half of FFT_SIZE, we can make the overlap-add part of the FFT convolution a lot
+/// simpler for ourselves. (check the `StftHelper` struct in NIH-plug itself for an examples that
+/// can handle arbitrary padding)
+pub const FFT_INPUT_SIZE: usize = FFT_SIZE / 2;
+/// The size of the FIR filter window, or the number of taps. Convoling `FFT_INPUT_SIZE` samples
+/// with this filter should fit exactly in `FFT_SIZE`, and it should be an odd number.
+pub const FILTER_SIZE: usize = FFT_SIZE - FFT_INPUT_SIZE + 1;
 
 /// A single FIR filter that may be configured in any way. In this plugin this will be a
-/// linear-phase low-pass, band-pass, or high-pass filter.
+/// linear-phase low-pass, band-pass, or high-pass filter. Implemented using FFT convolution. `git
+/// blame` this for a version that uses direct convolution.
+///
+/// `N_INPUT` is the size of the input that will be processed. The size of the FFT window becomes
+/// `N_INPUT * 2`. That makes handling the overlap easy, as each IDFT after multiplying the padded
+/// input and the padded impulse response FFTs will result one `N_INPUT` period of output that can
+/// be taken as is, followed by one `N_INPUT` period of samples that need to be added to the next
+/// period's outputs as part of the overlap-add process.
 #[derive(Debug, Clone)]
-pub struct FirFilter {
-    /// The coefficients for this filter. The filters for both channels should be equivalent, this
-    /// just avoids broadcasts in the filter process.
-    pub coefficients: FirCoefficients<FILTER_SIZE>,
+pub struct FftFirFilter {
+    /// An `N_INPUT + 1` sized IIR. Padded, ran through the DFT, and then normalized by dividing by
+    /// `FFT_SIZE`.
+    padded_ir_fft: [Complex32; FFT_SIZE / 2 + 1],
 
-    /// A ring buffer storing the last `FILTER_SIZE - 1` samples. The capacity is `FILTER_SIZE`
-    /// rounded up to the next power of two.
-    delay_buffer: [f32x2; RING_BUFFER_SIZE],
-    /// The index in `delay_buffer` to write the next sample to. Wrapping negative indices back to
-    /// the end, the previous sample can be found at `delay_buffer[delay_buffer_next_idx - 1]`, the
-    /// one before that at `delay_buffer[delay_buffer_next_idx - 2]`, and so on.
-    delay_buffer_next_idx: usize,
+    /// The padding from the previous IDFT operation that needs to be added to the next output
+    /// buffer. After the IDFT process there will be an `FFT_SIZE` real scratch buffer containing
+    /// the output. At that point the first `FFT_INPUT_SIZE` samples of those will be copied to
+    /// `output_buffers` in the FIR crossover, `unapplied_padding_buffer` will be added to that
+    /// output buffer, and then finally the last `FFT_INPUT_SIZE` samples of the scratch buffer are
+    /// copied to `unapplied_padding_buffer`. This thus makes sure the tail gets delayed by another
+    /// period so that everything matches up.
+    unapplied_padding_buffers: [[f32; FFT_INPUT_SIZE]; NUM_CHANNELS as usize],
 }
 
 /// Coefficients for a (linear-phase) FIR filter. This struct includes ways to design the filter.
@@ -43,12 +66,14 @@ pub struct FirFilter {
 #[derive(Debug, Clone)]
 pub struct FirCoefficients<const N: usize>(pub [f32; N]);
 
-impl Default for FirFilter {
+impl Default for FftFirFilter {
     fn default() -> Self {
         Self {
-            coefficients: FirCoefficients::default(),
-            delay_buffer: [f32x2::default(); RING_BUFFER_SIZE],
-            delay_buffer_next_idx: 0,
+            // Would be nicer to initialize this to an impulse response that actually had the
+            // correct position wrt the usual linear-phase latency, but this is fine since it should
+            // never be used anyways
+            padded_ir_fft: [Complex32::new(1.0 / FFT_SIZE as f32, 0.0); FFT_SIZE / 2 + 1],
+            unapplied_padding_buffers: [[0.0; FFT_INPUT_SIZE]; NUM_CHANNELS as usize],
         }
     }
 }
@@ -64,53 +89,87 @@ impl<const N: usize> Default for FirCoefficients<N> {
     }
 }
 
-impl FirFilter {
-    /// Process left and right audio samples through the filter.
-    pub fn process(&mut self, samples: f32x2) -> f32x2 {
-        // TODO: Replace direct convolution with FFT convolution, would make the implementation much
-        //       more complex though because of the multi output part
-        let coefficients = &self.coefficients.0;
-        let mut result = f32x2::splat(coefficients[0]) * samples;
+impl FftFirFilter {
+    /// Filter `FFT_INPUT_SIZE` samples padded to `FFT_SIZE` through this filter, and write the
+    /// outputs to `output_samples` (belonging to channel `channel_idx`), at an `FFT_INPUT_SIZE`
+    /// delay. This is a bit weird and probably difficult to follow because as an optimization the
+    /// DFT is taken only once, and then the IDFT is taken once for every filtered band. This
+    /// function is thus called inside of the overlap-add loop to avoid duplicate work.
+    pub fn process(
+        &mut self,
+        input_fft: &[Complex32; FFT_SIZE / 2 + 1],
+        output_samples: &mut [f32; FFT_INPUT_SIZE],
+        output_channel_idx: usize,
+        c2r_plan: &dyn ComplexToReal<f32>,
+        real_scratch_buffer: &mut [f32; FFT_SIZE],
+        complex_scratch_buffer: &mut [Complex32; FFT_SIZE / 2 + 1],
+    ) {
+        // The padded input FFT has already been taken, so we only need to copy it to the scratch
+        // buffer (the input cannot change as the next band might need it as well).
+        complex_scratch_buffer.copy_from_slice(input_fft);
 
-        // Now multiply `self.coefficients[1..]` with the delay buffer starting at
-        // `self.delay_buffer_next_idx - 1`, wrapping around to the end when that is reached
-        // The end index is exclusive, and we already did the multiply+add for the first coefficient.
-        let before_wraparound_start_idx = self
-            .delay_buffer_next_idx
-            .saturating_sub(coefficients.len() - 1);
-        let before_wraparound_end_idx = self.delay_buffer_next_idx;
-        let num_before_wraparound = before_wraparound_end_idx - before_wraparound_start_idx;
-        for (coefficient, delayed_sample) in coefficients[1..1 + num_before_wraparound].iter().zip(
-            self.delay_buffer[before_wraparound_start_idx..before_wraparound_end_idx]
-                .iter()
-                .rev(),
-        ) {
-            // `result += coefficient * sample`, but with explicit FMA
-            result = f32x2::splat(*coefficient).mul_add(*delayed_sample, result);
+        // The FFT of the impulse response has already been normalized, so we just need to
+        // multiply the two buffers
+        for (output_bin, ir_bin) in complex_scratch_buffer
+            .iter_mut()
+            .zip(self.padded_ir_fft.iter())
+        {
+            *output_bin *= ir_bin;
         }
+        c2r_plan
+            .process_with_scratch(complex_scratch_buffer, real_scratch_buffer, &mut [])
+            .unwrap();
 
-        let after_wraparound_begin_idx =
-            self.delay_buffer.len() - (coefficients.len() - num_before_wraparound);
-        let after_wraparound_end_idx = self.delay_buffer.len();
-        for (coefficient, delayed_sample) in coefficients[1 + num_before_wraparound..].iter().zip(
-            self.delay_buffer[after_wraparound_begin_idx..after_wraparound_end_idx]
-                .iter()
-                .rev(),
-        ) {
-            result = f32x2::splat(*coefficient).mul_add(*delayed_sample, result);
+        // At this point the first `FFT_INPUT_SIZE` elements in `real_scratch_buffer`
+        // contain the output for the next period, while the last `FFT_INPUT_SIZE` elements
+        // contain output that needs to be added to the period after that. Since previous
+        // period also produced similar delayed output, we'll need to copy that to the
+        // results as well.
+        output_samples.copy_from_slice(&real_scratch_buffer[..FFT_INPUT_SIZE]);
+        for (output_sample, padding_sample) in output_samples
+            .iter_mut()
+            .zip(self.unapplied_padding_buffers[output_channel_idx].iter())
+        {
+            *output_sample += *padding_sample;
         }
+        self.unapplied_padding_buffers[output_channel_idx]
+            .copy_from_slice(&real_scratch_buffer[FFT_INPUT_SIZE..]);
+    }
 
-        // And finally write the samples to the delay buffer for the enxt sample
-        self.delay_buffer[self.delay_buffer_next_idx] = samples;
-        self.delay_buffer_next_idx = (self.delay_buffer_next_idx + 1) % self.delay_buffer.len();
+    /// Set the filter's coefficients based on raw FIR filter coefficients. These will be padded,
+    /// ran through the DFT, and normalized.
+    pub fn recompute_coefficients(
+        &mut self,
+        coefficients: FirCoefficients<FILTER_SIZE>,
+        r2c_plan: &dyn RealToComplex<f32>,
+        real_scratch_buffer: &mut [f32; FFT_SIZE],
+        complex_scratch_buffer: &mut [Complex32; FFT_SIZE / 2 + 1],
+    ) {
+        // This needs to be padded with zeroes
+        real_scratch_buffer[..FILTER_SIZE].copy_from_slice(&coefficients.0);
+        real_scratch_buffer[FILTER_SIZE..].fill(0.0);
 
-        result
+        r2c_plan
+            .process_with_scratch(real_scratch_buffer, complex_scratch_buffer, &mut [])
+            .unwrap();
+
+        // The resulting buffer needs to be normalized and written to `self.padded_ir_fft`. That way
+        // we don't need to do anything but multiplying and writing the results back when
+        // processing.
+        let normalization_factor = 1.0 / FFT_SIZE as f32;
+        for (filter_bin, target_bin) in complex_scratch_buffer
+            .iter()
+            .zip(self.padded_ir_fft.iter_mut())
+        {
+            *target_bin = *filter_bin * normalization_factor;
+        }
     }
 
     /// Reset the internal filter state.
     pub fn reset(&mut self) {
-        self.delay_buffer.fill(f32x2::default());
-        self.delay_buffer_next_idx = 0;
+        for buffer in &mut self.unapplied_padding_buffers {
+            buffer.fill(0.0);
+        }
     }
 }
 
