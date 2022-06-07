@@ -230,6 +230,8 @@ impl Plugin for Crossover {
         // Right now both crossover types only do 24 dB/octave Linkwitz-Riley style crossovers
         match self.params.crossover_type.value() {
             CrossoverType::LinkwitzRiley24 => {
+                context.set_latency_samples(0);
+
                 self.process_iir(buffer, aux);
             }
             CrossoverType::LinkwitzRiley24LinearPhase => {
