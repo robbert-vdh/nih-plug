@@ -45,7 +45,7 @@ Scroll down for more information on the plugin framework.
   cleanly splits the signal into two to five bands using a variety of algorithms
   and outputs those through auxiliary outputs so they can be accessed and
   processed individually. Meant as an alternative to Bitwig's Multiband FX
-  devices but with cleaner and steeper crossovers.
+  devices but with cleaner crossovers and a linear-phase option.
 - [**Diopser**](plugins/diopser) is a totally original phase rotation plugin.
   Useful for oomphing up kickdrums and basses, transforming synths into their
   evil phase-y cousin, and making everything sound like a cheap Sci-Fi laser

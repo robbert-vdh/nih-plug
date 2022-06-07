@@ -3,8 +3,8 @@
 This plugin is as boring as it sounds. It splits cleanly splits the signal into
 two to five bands using a variety of algorithms and outputs those through
 auxiliary outputs so they can be accessed and processed individually. Meant as
-an alternative to Bitwig's Multiband FX devices but with cleaner and steeper
-crossovers.
+an alternative to Bitwig's Multiband FX devices but with cleaner crossovers and
+a linear-phase option.
 
 In Bitwig Studio you'll want to click on the 'Show plug-in multi-out chain
 selector' button and then on 'Add missing chains' to access the chains. The main
