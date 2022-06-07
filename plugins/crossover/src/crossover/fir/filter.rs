@@ -26,10 +26,11 @@ use crate::NUM_CHANNELS;
 /// smaller since it will be padding with zeroes to compensate for the otherwise overlapping tail
 /// caused by the convolution.
 pub const FFT_SIZE: usize = 4096;
-/// The input chunk size the FFT convolution is processing. This is also the latency. By having this
-/// be exactly half of FFT_SIZE, we can make the overlap-add part of the FFT convolution a lot
-/// simpler for ourselves. (check the `StftHelper` struct in NIH-plug itself for an examples that
-/// can handle arbitrary padding)
+/// The input chunk size the FFT convolution is processing. This is also part of the latency, with
+/// the total latency being `FFT_INPUT_SIZE + (FILTER_SIZE / 2)` samples. By having this be exactly
+/// half of FFT_SIZE, we can make the overlap-add part of the FFT convolution a lot simpler for
+/// ourselves. (check the `StftHelper` struct in NIH-plug itself for an examples that can handle
+/// arbitrary padding)
 pub const FFT_INPUT_SIZE: usize = FFT_SIZE / 2;
 /// The size of the FIR filter window, or the number of taps. Convoling `FFT_INPUT_SIZE` samples
 /// with this filter should fit exactly in `FFT_SIZE`, and it should be an odd number.

@@ -108,7 +108,9 @@ impl FirCrossover {
         // Actually, that's a lie, since we currently only do linear-phase filters with a constant
         // size
         match self.mode {
-            FirCrossoverType::LinkwitzRiley24LinearPhase => FFT_INPUT_SIZE as u32,
+            FirCrossoverType::LinkwitzRiley24LinearPhase => {
+                (FFT_INPUT_SIZE + (FILTER_SIZE / 2)) as u32
+            }
         }
     }
 
