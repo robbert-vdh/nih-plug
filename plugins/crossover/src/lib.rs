@@ -21,7 +21,6 @@ compile_error!("Compiling without SIMD support is currently not supported");
 
 use crossover::fir::{FirCrossover, FirCrossoverType};
 use crossover::iir::{IirCrossover, IirCrossoverType};
-use nih_plug::buffer::ChannelSamples;
 use nih_plug::prelude::*;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -201,7 +200,7 @@ impl Plugin for Crossover {
         self.buffer_config = *buffer_config;
 
         // Make sure the filter states match the current parameters
-        self.update_filters();
+        self.update_filters(1);
 
         // The FIR filters are linear-phase and introduce latency
         match self.params.crossover_type.value() {
@@ -228,29 +227,23 @@ impl Plugin for Crossover {
         // Right now both crossover types only do 24 dB/octave Linkwitz-Riley style crossovers
         match self.params.crossover_type.value() {
             CrossoverType::LinkwitzRiley24 => {
-                Self::do_process(buffer, aux, |main_channel_samples, bands| {
-                    // Only update the filters when needed
-                    self.maybe_update_filters();
-
-                    self.iir_crossover.process(
-                        self.params.num_bands.value as usize,
-                        main_channel_samples,
-                        bands,
-                    );
-                })
+                self.process_iir(buffer, aux);
             }
             CrossoverType::LinkwitzRiley24LinearPhase => {
                 context.set_latency_samples(self.fir_crossover.latency());
 
-                Self::do_process(buffer, aux, |main_channel_samples, bands| {
-                    self.maybe_update_filters();
+                todo!();
+                // Self::do_process(buffer, aux, |main_channel_samples, bands| {
+                //     if self.should_update_filters() {
+                //         self.update_filters(buffer.len() as u32);
+                //     }
 
-                    self.fir_crossover.process(
-                        self.params.num_bands.value as usize,
-                        main_channel_samples,
-                        bands,
-                    );
-                })
+                //     self.fir_crossover.process(
+                //         self.params.num_bands.value as usize,
+                //         main_channel_samples,
+                //         bands,
+                //     );
+                // })
             }
         }
 
@@ -263,11 +256,7 @@ impl Crossover {
     /// friendly and SIMD-able interface for the processing function. Prevents havign to branch per
     /// sample. The closure receives an input sample and it should write the output samples for each
     /// band to the array.
-    fn do_process(
-        buffer: &mut Buffer,
-        aux: &mut AuxiliaryBuffers,
-        mut f: impl FnMut(&ChannelSamples, [ChannelSamples; NUM_BANDS]),
-    ) {
+    fn process_iir(&mut self, buffer: &mut Buffer, aux: &mut AuxiliaryBuffers) {
         let aux_outputs = &mut aux.outputs;
         let (band_1_buffer, aux_outputs) = aux_outputs.split_first_mut().unwrap();
         let (band_2_buffer, aux_outputs) = aux_outputs.split_first_mut().unwrap();
@@ -302,7 +291,16 @@ impl Crossover {
                 band_5_channel_samples,
             ];
 
-            f(&main_channel_samples, bands);
+            // Only update the filters when needed
+            if self.should_update_filters() {
+                self.update_filters(1);
+            }
+
+            self.iir_crossover.process(
+                self.params.num_bands.value as usize,
+                &main_channel_samples,
+                bands,
+            );
 
             // The main output should be silent as the signal is already evenly split over the other
             // bands
@@ -312,28 +310,29 @@ impl Crossover {
         }
     }
 
-    /// Update the filter coefficients for the crossovers, but only if it's needed.
-    fn maybe_update_filters(&mut self) {
-        if self
-            .should_update_filters
+    /// Returns whether the filters should be updated. There are different updating functions for
+    /// the IIR and FIR crossovers.
+    fn should_update_filters(&mut self) -> bool {
+        // Technically this would only require a &self since `should_update_filters` has interior
+        // mutability, but with the current setup this doesn't cause any problems and makes the
+        // former a bit more obvious
+        self.should_update_filters
             .compare_exchange(true, false, Ordering::Relaxed, Ordering::Relaxed)
             .is_ok()
             || self.params.crossover_1_freq.smoothed.is_smoothing()
             || self.params.crossover_2_freq.smoothed.is_smoothing()
             || self.params.crossover_3_freq.smoothed.is_smoothing()
             || self.params.crossover_4_freq.smoothed.is_smoothing()
-        {
-            self.update_filters();
-        }
     }
 
-    /// Update the filter coefficients for the crossovers.
-    fn update_filters(&mut self) {
+    /// Update the filter coefficients for the crossovers. The step size can be used when the filter
+    /// coefficietns aren't updated every sample.
+    fn update_filters(&mut self, step_size: u32) {
         let crossover_frequencies = [
-            self.params.crossover_1_freq.smoothed.next(),
-            self.params.crossover_2_freq.smoothed.next(),
-            self.params.crossover_3_freq.smoothed.next(),
-            self.params.crossover_4_freq.smoothed.next(),
+            self.params.crossover_1_freq.smoothed.next_step(step_size),
+            self.params.crossover_2_freq.smoothed.next_step(step_size),
+            self.params.crossover_3_freq.smoothed.next_step(step_size),
+            self.params.crossover_4_freq.smoothed.next_step(step_size),
         ];
 
         match self.params.crossover_type.value() {
