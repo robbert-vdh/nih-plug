@@ -1424,7 +1424,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             }
             // TODO: Make sure this only gets logged in debug mode
             _ => {
-                nih_log!(
+                nih_trace!(
                     "Unhandled CLAP event type {} for namespace {}",
                     raw_event.type_,
                     raw_event.space_id
@@ -2152,7 +2152,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         } else if id == CStr::from_ptr(CLAP_EXT_TAIL) {
             &wrapper.clap_plugin_tail as *const _ as *const c_void
         } else {
-            nih_log!("Host tried to query unknown extension {:?}", id);
+            nih_trace!("Host tried to query unknown extension {:?}", id);
             ptr::null()
         }
     }

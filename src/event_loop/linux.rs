@@ -72,7 +72,7 @@ where
                     true
                 }
                 None => {
-                    nih_log!("The executor doesn't exist but somehow it's still submitting tasks, this shouldn't be possible!");
+                    nih_trace!("The executor doesn't exist but somehow it's still submitting tasks, this shouldn't be possible!");
                     false
                 }
             }
@@ -113,13 +113,13 @@ where
             Ok(Message::Task(task)) => match executor.upgrade() {
                 Some(e) => unsafe { e.execute(task) },
                 None => {
-                    nih_log!("Received a new task but the executor is no longer alive, shutting down worker");
+                    nih_trace!("Received a new task but the executor is no longer alive, shutting down worker");
                     return;
                 }
             },
             Ok(Message::Shutdown) => return,
             Err(err) => {
-                nih_log!(
+                nih_trace!(
                     "Worker thread got disconnected unexpectedly, shutting down: {}",
                     err
                 );
