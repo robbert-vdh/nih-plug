@@ -200,7 +200,7 @@ impl FirCrossover {
                 for coef in fir_hp_coefs.0.iter_mut() {
                     *coef = -*coef;
                 }
-                fir_hp_coefs.0[FILTER_SIZE / 2] += f32x2::splat(1.0);
+                fir_hp_coefs.0[FILTER_SIZE / 2] += 1.0;
 
                 self.band_filters[num_bands - 1].coefficients = fir_hp_coefs;
             }
