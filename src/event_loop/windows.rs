@@ -19,7 +19,6 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 use super::{EventLoop, MainThreadExecutor};
-use crate::nih_log;
 use crate::util::permit_alloc;
 
 /// The custom message ID for our notify event. If the hidden event loop window receives this, then
