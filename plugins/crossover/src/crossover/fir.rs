@@ -39,16 +39,16 @@ pub struct FirCrossover {
     /// These filters will be fed the FFT from the main input to produce output samples for the enxt
     /// period. Everything could be a bit nicer to read if the filter did the entire STFT process,
     /// but that would mean duplicating the input ring buffer and forward DFT up to five times.
-    band_filters: [FftFirFilter; NUM_BANDS],
+    band_filters: Box<[FftFirFilter; NUM_BANDS]>,
 
     /// A ring buffer that is used to store inputs for the next FFT. Until it is time to take the
     /// next FFT, samples are copied from the inputs to this buffer, while simultaneously copying
     /// the already processed output samples from the output buffers to the output. Once
     /// `io_buffer_next_indices` wrap back around to 0, the next buffer should be produced.
-    input_buffers: [[f32; FFT_INPUT_SIZE]; NUM_CHANNELS as usize],
+    input_buffers: Box<[[f32; FFT_INPUT_SIZE]; NUM_CHANNELS as usize]>,
     /// A ring that contains the next period's outputs for each of the five bands. This is written
     /// to and read from in lockstep with `input_buffers`.
-    band_output_buffers: [[[f32; FFT_INPUT_SIZE]; NUM_CHANNELS as usize]; NUM_BANDS],
+    band_output_buffers: Box<[[[f32; FFT_INPUT_SIZE]; NUM_CHANNELS as usize]; NUM_BANDS]>,
     /// The index in the inner `io_buffer` the next sample should be read from. After a sample is
     /// written to the band's output then this is incremented by one. Once
     /// `self.io_buffer_next_indices[channel_idx] == self.io_buffer.len()` then the next block
@@ -64,10 +64,10 @@ pub struct FirCrossover {
     c2r_plan: Arc<dyn ComplexToReal<f32>>,
 
     /// A real buffer that may be written to in place during the FFT and IFFT operations.
-    real_scratch_buffer: [f32; FFT_SIZE],
+    real_scratch_buffer: Box<[f32; FFT_SIZE]>,
     /// A complex buffer corresponding to `real_scratch_buffer` that may be written to in place
     /// during the FFT and IFFT operations.
-    complex_scratch_buffer: [Complex32; FFT_SIZE / 2 + 1],
+    complex_scratch_buffer: Box<[Complex32; FFT_SIZE / 2 + 1]>,
 }
 
 /// The type of FIR crossover to use.
@@ -93,13 +93,15 @@ impl FirCrossover {
             mode,
             band_filters: Default::default(),
 
-            input_buffers: [[0.0; FFT_INPUT_SIZE]; NUM_CHANNELS as usize],
-            band_output_buffers: [[[0.0; FFT_INPUT_SIZE]; NUM_CHANNELS as usize]; NUM_BANDS],
+            input_buffers: Box::new([[0.0; FFT_INPUT_SIZE]; NUM_CHANNELS as usize]),
+            band_output_buffers: Box::new(
+                [[[0.0; FFT_INPUT_SIZE]; NUM_CHANNELS as usize]; NUM_BANDS],
+            ),
             io_buffers_next_indices: [0; NUM_CHANNELS as usize],
             r2c_plan: fft_planner.plan_fft_forward(FFT_SIZE),
             c2r_plan: fft_planner.plan_fft_inverse(FFT_SIZE),
-            real_scratch_buffer: [0.0; FFT_SIZE],
-            complex_scratch_buffer: [Complex32::default(); FFT_SIZE / 2 + 1],
+            real_scratch_buffer: Box::new([0.0; FFT_SIZE]),
+            complex_scratch_buffer: Box::new([Complex32::default(); FFT_SIZE / 2 + 1]),
         }
     }
 
@@ -173,15 +175,15 @@ impl FirCrossover {
 
                 self.r2c_plan
                     .process_with_scratch(
-                        &mut self.real_scratch_buffer,
-                        &mut self.complex_scratch_buffer,
+                        &mut *self.real_scratch_buffer,
+                        &mut *self.complex_scratch_buffer,
                         &mut [],
                     )
                     .unwrap();
 
                 // The input can then be used to produce each band's output. Since realfft expects
                 // to be able to modify the input, we need to make a copy of this first:
-                let input_fft = self.complex_scratch_buffer;
+                let input_fft = *self.complex_scratch_buffer;
 
                 for (band_output_buffers, band_filter) in self
                     .band_output_buffers
@@ -313,12 +315,12 @@ impl FirCrossover {
 
     /// Reset the internal filter state for all crossovers.
     pub fn reset(&mut self) {
-        for filter in &mut self.band_filters {
+        for filter in self.band_filters.iter_mut() {
             filter.reset();
         }
 
         // The inputs don't need to be reset as they'll be overwritten immediately
-        for band_buffers in &mut self.band_output_buffers {
+        for band_buffers in self.band_output_buffers.iter_mut() {
             for buffer in band_buffers {
                 buffer.fill(0.0);
             }
