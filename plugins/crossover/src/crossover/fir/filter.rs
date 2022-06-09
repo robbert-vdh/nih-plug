@@ -209,7 +209,7 @@ impl<const N: usize> FirCoefficients<N> {
     pub fn design_fourth_order_linear_phase_low_pass_from_biquad(
         biquad_coefs: BiquadCoefficients<f32>,
     ) -> Self {
-        // Ruest doesn't allow you to define this as a constant
+        // Rust doesn't allow you to define this as a constant
         let center_idx = N / 2;
 
         // We'll start with an impulse (at exactly half of this odd sized buffer)...
