@@ -209,7 +209,14 @@ impl Plugin for SafetyLimiter {
         for mut channel_samples in buffer.iter_samples() {
             let mut is_peaking = false;
             for sample in channel_samples.iter_mut() {
-                is_peaking |= sample.abs() > self.params.threshold_gain.value;
+                if sample.is_finite() {
+                    is_peaking |= sample.abs() > self.params.threshold_gain.value;
+                } else {
+                    // Infinity or NaN values need to be completely filtered out, because otherwise
+                    // we'll try to mix them back into the signal later
+                    *sample = 0.0;
+                    is_peaking = true;
+                }
             }
 
             if is_peaking {

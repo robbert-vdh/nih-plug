@@ -3,7 +3,8 @@
 This plugin is a simple tool to prevent ear damage. As soon as there is a peak
 above 0 dBFS or the specified threshold, the plugin will cut over to playing SOS
 in Morse code, gradually fading out again when the input returns back to safe
-levels. Made for personal use during plugin development and intense sound design
+levels. The same thing happens if the input contains infinite or NaN values.
+Made for personal use during plugin development and intense sound design
 sessions, but maybe you'll find it useful too!
 
 **Why not use a regular brickwall peak limiter?**  
