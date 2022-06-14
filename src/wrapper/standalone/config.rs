@@ -28,6 +28,15 @@ pub struct WrapperConfig {
     #[clap(value_parser, short = 'p', long, default_value = "512")]
     pub period_size: u32,
 
+    /// If set to a port name ('foo:bar_1'), then all all inputs will be connected to that port. If
+    /// the option is set to a comma separated list of port names ('foo:bar_1,foo:bar_2') then the
+    /// input ports will be connected in that order. No inputs will be connected if the port option
+    /// is not set.
+    ///
+    /// This option is only used with the JACK backend.
+    #[clap(value_parser, long)]
+    pub connect_jack_inputs: Option<String>,
+
     /// The editor's DPI scaling factor.
     ///
     /// This option is ignored on macOS.

@@ -125,7 +125,25 @@ impl Jack {
             outputs.push(port);
         }
 
-        // TODO: Command line argument to connect the inputs?
+        // This option can either be set to a single port all inputs should be connected to, or a
+        // comma separated list of ports
+        if let Some(port_name) = config.connect_jack_inputs {
+            if port_name.contains(',') {
+                for (port_name, input) in port_name.split(',').zip(&inputs) {
+                    if let Err(err) = client.connect_ports_by_name(port_name, &input.name()?) {
+                        nih_error!("Could not connect to '{port_name}': {err}");
+                        break;
+                    }
+                }
+            } else {
+                for input in &inputs {
+                    if let Err(err) = client.connect_ports_by_name(&port_name, &input.name()?) {
+                        nih_error!("Could not connect to '{port_name}': {err}");
+                        break;
+                    }
+                }
+            }
+        }
 
         Ok(Self {
             client: Some(client),
