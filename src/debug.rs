@@ -21,6 +21,15 @@ macro_rules! nih_log {
 }
 pub use nih_log;
 
+/// Similar to `nih_log!()`, more scream-y. Used for printing fatal errors.
+#[macro_export]
+macro_rules! nih_error {
+    ($($args:tt)*) => (
+        $crate::log::error!($($args)*)
+    );
+}
+pub use nih_error;
+
 /// The same as `nih_log!()`, but with source and thread information. Like the
 /// `nih_debug_assert*!()` macros, this is only shown when compiling in debug mode.
 #[macro_export]

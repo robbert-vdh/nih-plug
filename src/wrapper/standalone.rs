@@ -80,7 +80,7 @@ pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = Stri
         config::BackendType::Jack => match backend::Jack::new(config.clone()) {
             Ok(backend) => run_wrapper::<P, _>(backend, config),
             Err(err) => {
-                nih_log!("{:#}", err);
+                nih_error!("Could not initialize the JACK backend: {:#}", err);
                 false
             }
         },
@@ -112,10 +112,10 @@ fn run_wrapper<P: Plugin, B: Backend>(backend: B, config: WrapperConfig) -> bool
 fn print_error(error: WrapperError, config: &WrapperConfig) {
     match error {
         WrapperError::IncompatibleConfig => {
-            eprintln!("The plugin does not support the {} channel input and {} channel output configuration", config.input_channels, config.output_channels);
+            nih_error!("The plugin does not support the {} channel input and {} channel output configuration", config.input_channels, config.output_channels);
         }
         WrapperError::InitializationFailed => {
-            eprintln!("The plugin failed to initialize");
+            nih_error!("The plugin failed to initialize");
         }
     }
 }

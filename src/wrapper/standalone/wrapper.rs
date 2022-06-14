@@ -388,8 +388,8 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
                 },
                 &mut self.make_process_context(transport),
             ) {
-                eprintln!("The plugin returned an error while processing:");
-                eprintln!("{}", err);
+                nih_error!("The plugin returned an error while processing:");
+                nih_error!("{}", err);
 
                 let push_successful = gui_task_sender.send(GuiTask::Close).is_ok();
                 nih_debug_assert!(

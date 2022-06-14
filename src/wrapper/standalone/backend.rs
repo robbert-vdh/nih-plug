@@ -77,7 +77,7 @@ impl Jack {
     /// Initialize the JACK backend. Returns an error if this failed for whatever reason.
     pub fn new(config: WrapperConfig) -> Result<Self> {
         // TODO: Actually implement the JACK backend
-        anyhow::bail!("Could not initialize JACK backend")
+        anyhow::bail!("Not yet implemented")
         // Ok(Self { config })
     }
 }
