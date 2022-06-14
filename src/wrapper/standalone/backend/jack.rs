@@ -133,7 +133,6 @@ impl Jack {
             outputs.push(port);
         }
 
-        // TODO: CLI arguments to connect the MIDI input and output ports
         let midi_input = if P::MIDI_INPUT >= MidiConfig::Basic {
             Some(Arc::new(client.register_port("midi_input", MidiIn)?))
         } else {
@@ -165,6 +164,17 @@ impl Jack {
                         break;
                     }
                 }
+            }
+        }
+
+        if let (Some(port), Some(port_name)) = (&midi_input, config.connect_jack_midi_input) {
+            if let Err(err) = client.connect_ports_by_name(&port_name, &port.name()?) {
+                nih_error!("Could not connect to '{port_name}': {err}");
+            }
+        }
+        if let (Some(port), Some(port_name)) = (&midi_output, config.connect_jack_midi_output) {
+            if let Err(err) = client.connect_ports_by_name(&port.borrow().name()?, &port_name) {
+                nih_error!("Could not connect to '{port_name}': {err}");
             }
         }
 

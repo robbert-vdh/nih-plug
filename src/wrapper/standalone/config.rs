@@ -37,6 +37,18 @@ pub struct WrapperConfig {
     #[clap(value_parser, long)]
     pub connect_jack_inputs: Option<String>,
 
+    /// If set, then the plugin's MIDI input port will be connected to this JACK MIDI output port.
+    ///
+    /// This option is only used with the JACK backend.
+    #[clap(value_parser, long)]
+    pub connect_jack_midi_input: Option<String>,
+
+    /// If set, then the plugin's MIDI output port will be connected to this JACK MIDI input port.
+    ///
+    /// This option is only used with the JACK backend.
+    #[clap(value_parser, long)]
+    pub connect_jack_midi_output: Option<String>,
+
     /// The editor's DPI scaling factor.
     ///
     /// This option is ignored on macOS.
