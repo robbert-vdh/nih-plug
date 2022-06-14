@@ -13,5 +13,6 @@ pub trait Backend: 'static + Send + Sync {
     /// buffer. This will block until the process callback returns `false`.
     ///
     /// TODO: MIDI
+    /// TODO: Auxiliary inputs and outputs
     fn run(&mut self, cb: impl FnMut(&mut Buffer) -> bool);
 }
