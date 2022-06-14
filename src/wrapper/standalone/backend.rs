@@ -1,9 +1,9 @@
-use anyhow::{Context, Result};
-use std::time::{Duration, Instant};
+pub use self::dummy::Dummy;
+pub use self::jack::Jack;
+pub use crate::buffer::Buffer;
 
-use crate::buffer::Buffer;
-
-use super::config::WrapperConfig;
+mod dummy;
+mod jack;
 
 /// An audio+MIDI backend for the standalone wrapper.
 pub trait Backend: 'static + Send + Sync {
@@ -14,86 +14,4 @@ pub trait Backend: 'static + Send + Sync {
     ///
     /// TODO: MIDI
     fn run(&mut self, cb: impl FnMut(&mut Buffer) -> bool);
-}
-
-/// Uses JACK audio and MIDI.
-pub struct Jack {
-    config: WrapperConfig,
-    client: jack::Client,
-}
-
-/// This backend doesn't input or output any audio or MIDI. It only exists so the standalone
-/// application can continue to run even when there is no audio backend available. This can be
-/// useful for testing plugin GUIs.
-pub struct Dummy {
-    config: WrapperConfig,
-}
-
-impl Backend for Jack {
-    fn run(&mut self, cb: impl FnMut(&mut Buffer) -> bool) {
-        // TODO: Create an async client and do The Thing (tm)
-        todo!()
-    }
-}
-
-impl Backend for Dummy {
-    fn run(&mut self, mut cb: impl FnMut(&mut Buffer) -> bool) {
-        // We can't really do anything meaningful here, so we'll simply periodically call the
-        // callback with empty buffers.
-        let interval =
-            Duration::from_secs_f32(self.config.period_size as f32 / self.config.sample_rate);
-
-        let mut channels = vec![
-            vec![0.0f32; self.config.period_size as usize];
-            self.config.output_channels as usize
-        ];
-        let mut buffer = Buffer::default();
-        unsafe {
-            buffer.with_raw_vec(|output_slices| {
-                // SAFETY: `channels` is no longer used directly after this
-                *output_slices = channels
-                    .iter_mut()
-                    .map(|channel| &mut *(channel.as_mut_slice() as *mut [f32]))
-                    .collect();
-            })
-        }
-
-        loop {
-            let period_start = Instant::now();
-
-            for channel in buffer.as_slice() {
-                channel.fill(0.0);
-            }
-
-            if !cb(&mut buffer) {
-                break;
-            }
-
-            let period_end = Instant::now();
-            std::thread::sleep((period_start + interval).saturating_duration_since(period_end));
-        }
-    }
-}
-
-impl Jack {
-    /// Initialize the JACK backend. Returns an error if this failed for whatever reason.
-    pub fn new(name: &str, config: WrapperConfig) -> Result<Self> {
-        let (client, status) = jack::Client::new(name, jack::ClientOptions::NO_START_SERVER)
-            .context("Error while initializing the JACK client")?;
-        if !status.is_empty() {
-            anyhow::bail!("The JACK server returned an error: {status:?}");
-        }
-
-        // TODO: Register ports
-        // TODO: Connect output
-        // TODO: Command line argument to connect the inputs?
-
-        Ok(Self { config, client })
-    }
-}
-
-impl Dummy {
-    pub fn new(config: WrapperConfig) -> Self {
-        Self { config }
-    }
 }
