@@ -117,7 +117,7 @@ impl Plugin for Sine {
 
     fn accepts_bus_config(&self, config: &BusConfig) -> bool {
         // This can output to any number of channels, but it doesn't take any audio inputs
-        config.num_input_channels == 0 && config.num_input_channels > 0
+        config.num_input_channels == 0 && config.num_output_channels > 0
     }
 
     fn initialize(
