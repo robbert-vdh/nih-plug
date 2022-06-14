@@ -1,5 +1,7 @@
 //! Constants and definitions surrounding MIDI support.
 
+use midi_consts::channel_event as midi;
+
 pub use midi_consts::channel_event::control_change;
 
 /// Determines which note events a plugin receives.
@@ -181,6 +183,52 @@ impl NoteEvent {
             NoteEvent::MidiChannelPressure { timing, .. } => *timing,
             NoteEvent::MidiPitchBend { timing, .. } => *timing,
             NoteEvent::MidiCC { timing, .. } => *timing,
+        }
+    }
+
+    /// Parse MIDI into a [`NoteEvent`]. Will return `Err(event_type)` if the parsing failed.
+    pub fn from_midi(timing: u32, midi_data: [u8; 3]) -> Result<Self, u8> {
+        // TODO: Maybe add special handling for 14-bit CCs and RPN messages at some
+        //       point, right now the plugin has to figure it out for itself
+        let event_type = midi_data[0] & midi::EVENT_TYPE_MASK;
+        let channel = midi_data[0] & midi::MIDI_CHANNEL_MASK;
+        match event_type {
+            midi::NOTE_ON => Ok(NoteEvent::NoteOn {
+                timing,
+                channel,
+                note: midi_data[1],
+                velocity: midi_data[2] as f32 / 127.0,
+            }),
+            midi::NOTE_OFF => Ok(NoteEvent::NoteOff {
+                timing,
+                channel,
+                note: midi_data[1],
+                velocity: midi_data[2] as f32 / 127.0,
+            }),
+            midi::POLYPHONIC_KEY_PRESSURE => Ok(NoteEvent::PolyPressure {
+                timing,
+                channel,
+                note: midi_data[1],
+                pressure: midi_data[2] as f32 / 127.0,
+            }),
+            midi::CHANNEL_KEY_PRESSURE => Ok(NoteEvent::MidiChannelPressure {
+                timing,
+                channel,
+                pressure: midi_data[1] as f32 / 127.0,
+            }),
+            midi::PITCH_BEND_CHANGE => Ok(NoteEvent::MidiPitchBend {
+                timing,
+                channel,
+                value: (midi_data[1] as u16 + ((midi_data[2] as u16) << 7)) as f32
+                    / ((1 << 14) - 1) as f32,
+            }),
+            midi::CONTROL_CHANGE => Ok(NoteEvent::MidiCC {
+                timing,
+                channel,
+                cc: midi_data[1],
+                value: midi_data[2] as f32 / 127.0,
+            }),
+            n => Err(n),
         }
     }
 

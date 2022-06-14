@@ -1360,63 +1360,14 @@ impl<P: ClapPlugin> Wrapper<P> {
                 if P::MIDI_INPUT >= MidiConfig::MidiCCs {
                     let event = &*(event as *const clap_event_midi);
 
-                    // TODO: Maybe add special handling for 14-bit CCs and RPN messages at some
-                    //       point, right now the plugin has to figure it out for itself
-                    let event_type = event.data[0] & midi::EVENT_TYPE_MASK;
-                    let channel = event.data[0] & midi::MIDI_CHANNEL_MASK;
-                    match event_type {
-                        // Hosts shouldn't be sending this, bu twe'll handle it just in case
-                        midi::NOTE_ON => {
-                            input_events.push_back(NoteEvent::NoteOn {
-                                timing: raw_event.time - current_sample_idx as u32,
-                                channel,
-                                note: event.data[1],
-                                velocity: event.data[2] as f32 / 127.0,
-                            });
+                    match NoteEvent::from_midi(
+                        raw_event.time - current_sample_idx as u32,
+                        event.data,
+                    ) {
+                        Ok(note_event) => {
+                            input_events.push_back(note_event);
                         }
-                        // Hosts shouldn't be sending this, bu twe'll handle it just in case
-                        midi::NOTE_OFF => {
-                            input_events.push_back(NoteEvent::NoteOff {
-                                timing: raw_event.time - current_sample_idx as u32,
-                                channel,
-                                note: event.data[1],
-                                velocity: event.data[2] as f32 / 127.0,
-                            });
-                        }
-                        // Hosts shouldn't be sending this, bu twe'll handle it just in case
-                        midi::POLYPHONIC_KEY_PRESSURE => {
-                            input_events.push_back(NoteEvent::PolyPressure {
-                                timing: raw_event.time - current_sample_idx as u32,
-                                channel,
-                                note: event.data[1],
-                                pressure: event.data[2] as f32 / 127.0,
-                            });
-                        }
-                        midi::CHANNEL_KEY_PRESSURE => {
-                            input_events.push_back(NoteEvent::MidiChannelPressure {
-                                timing: raw_event.time - current_sample_idx as u32,
-                                channel,
-                                pressure: event.data[1] as f32 / 127.0,
-                            });
-                        }
-                        midi::PITCH_BEND_CHANGE => {
-                            input_events.push_back(NoteEvent::MidiPitchBend {
-                                timing: raw_event.time - current_sample_idx as u32,
-                                channel,
-                                value: (event.data[1] as u16 + ((event.data[2] as u16) << 7))
-                                    as f32
-                                    / ((1 << 14) - 1) as f32,
-                            });
-                        }
-                        midi::CONTROL_CHANGE => {
-                            input_events.push_back(NoteEvent::MidiCC {
-                                timing: raw_event.time - current_sample_idx as u32,
-                                channel,
-                                cc: event.data[1],
-                                value: event.data[2] as f32 / 127.0,
-                            });
-                        }
-                        n => nih_debug_assert_failure!("Unhandled MIDI message type {}", n),
+                        Err(n) => nih_debug_assert_failure!("Unhandled MIDI message type {}", n),
                     };
                 }
 
