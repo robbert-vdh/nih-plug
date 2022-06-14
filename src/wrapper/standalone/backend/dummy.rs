@@ -12,7 +12,7 @@ pub struct Dummy {
 }
 
 impl Backend for Dummy {
-    fn run(&mut self, mut cb: impl FnMut(&mut Buffer) -> bool) {
+    fn run(&mut self, mut cb: impl FnMut(&mut Buffer) -> bool + 'static + Send) {
         // We can't really do anything meaningful here, so we'll simply periodically call the
         // callback with empty buffers.
         let interval =
