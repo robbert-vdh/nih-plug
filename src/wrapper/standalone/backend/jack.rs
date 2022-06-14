@@ -84,11 +84,31 @@ impl Backend for Jack {
                 })
             }
 
-            // TODO: Read MIDI, convert to events
+            input_events.clear();
+            if let Some(midi_input) = &midi_input {
+                input_events.extend(midi_input.iter(ps).filter_map(|midi| {
+                    // This should always be three bytes, but we get an unsized slice
+                    let midi_data: [u8; 3] = midi.bytes.try_into().ok()?;
+                    NoteEvent::from_midi(midi.time, midi_data).ok()
+                }));
+            }
 
             output_events.clear();
             if cb(&mut buffer, &input_events, &mut output_events) {
-                // TODO: Convert output events to MIDI, send to the output port
+                if let Some(midi_output) = &midi_output {
+                    let mut midi_output = midi_output.borrow_mut();
+                    let mut midi_writer = midi_output.writer(ps);
+                    for event in output_events.drain(..) {
+                        let timing = event.timing();
+                        if let Some(midi_data) = event.as_midi() {
+                            let write_result = midi_writer.write(&jack::RawMidi {
+                                time: timing,
+                                bytes: &midi_data,
+                            });
+                            nih_debug_assert!(write_result.is_ok(), "The MIDI buffer is full");
+                        }
+                    }
+                }
 
                 Control::Continue
             } else {
