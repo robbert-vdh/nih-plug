@@ -3,11 +3,15 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use atomic_refcell::AtomicRefCell;
 use crossbeam::channel;
-use jack::{AudioIn, AudioOut, Client, ClientOptions, ClosureProcessHandler, Control, Port};
+use jack::{
+    AudioIn, AudioOut, Client, ClientOptions, ClosureProcessHandler, Control, MidiIn, MidiOut, Port,
+};
 
 use super::super::config::WrapperConfig;
 use super::Backend;
 use crate::buffer::Buffer;
+use crate::midi::MidiConfig;
+use crate::plugin::Plugin;
 
 /// Uses JACK audio and MIDI.
 pub struct Jack {
@@ -17,6 +21,8 @@ pub struct Jack {
 
     inputs: Arc<Vec<Port<AudioIn>>>,
     outputs: Arc<AtomicRefCell<Vec<Port<AudioOut>>>>,
+    midi_input: Option<Arc<Port<MidiIn>>>,
+    midi_output: Option<Arc<AtomicRefCell<Port<MidiOut>>>>,
 }
 
 /// A simple message to tell the audio thread to shut down, since the actual processing happens in
@@ -100,9 +106,11 @@ impl Backend for Jack {
 }
 
 impl Jack {
-    /// Initialize the JACK backend. Returns an error if this failed for whatever reason.
-    pub fn new(name: &str, config: WrapperConfig) -> Result<Self> {
-        let (client, status) = Client::new(name, ClientOptions::NO_START_SERVER)
+    /// Initialize the JACK backend. Returns an error if this failed for whatever reason. The plugin
+    /// generic argument is to get the name for the client, and to know whether or not the
+    /// standalone should expose JACK MIDI ports.
+    pub fn new<P: Plugin>(config: WrapperConfig) -> Result<Self> {
+        let (client, status) = Client::new(P::NAME, ClientOptions::NO_START_SERVER)
             .context("Error while initializing the JACK client")?;
         if !status.is_empty() {
             anyhow::bail!("The JACK server returned an error: {status:?}");
@@ -124,6 +132,21 @@ impl Jack {
 
             outputs.push(port);
         }
+
+        // TODO: CLI arguments to connect the MIDI input and output ports
+        let midi_input = if P::MIDI_INPUT >= MidiConfig::Basic {
+            Some(Arc::new(client.register_port("midi_input", MidiIn)?))
+        } else {
+            None
+        };
+
+        let midi_output = if P::MIDI_OUTPUT >= MidiConfig::Basic {
+            Some(Arc::new(AtomicRefCell::new(
+                client.register_port("midi_output", MidiOut)?,
+            )))
+        } else {
+            None
+        };
 
         // This option can either be set to a single port all inputs should be connected to, or a
         // comma separated list of ports
@@ -150,6 +173,8 @@ impl Jack {
 
             inputs: Arc::new(inputs),
             outputs: Arc::new(AtomicRefCell::new(outputs)),
+            midi_input,
+            midi_output,
         })
     }
 }
