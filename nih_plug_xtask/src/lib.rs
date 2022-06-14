@@ -5,6 +5,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+
 mod symbols;
 
 /// Re-export for the main function.
@@ -231,6 +234,22 @@ fn bundle_binary(
         .context("Could not create standalone bundle directory")?;
     reflink::reflink_or_copy(&bin_path, &standalone_binary_path)
         .context("Could not copy binary to standalone bundle")?;
+
+    // FIXME: The reflink crate seems to sometime strip away the executable bit, so we need to help
+    //        it a little here
+    #[cfg(unix)]
+    if let Ok(metadata) = fs::metadata(&standalone_binary_path) {
+        // These are the executable bits
+        let mut permissions = metadata.permissions();
+        permissions.set_mode(permissions.mode() | 0b0001001001);
+
+        fs::set_permissions(&standalone_binary_path, permissions).with_context(|| {
+            format!(
+                "Could not make '{}' executable",
+                standalone_binary_path.display()
+            )
+        })?;
+    }
 
     let standalone_bundle_home = Path::new(BUNDLE_HOME).join(
         Path::new(&standalone_bundle_binary_name)
