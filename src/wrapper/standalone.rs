@@ -70,14 +70,14 @@ pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = Stri
     .unwrap_or_else(|err| err.exit());
 
     match config.backend {
-        config::BackendType::Auto => match backend::Jack::new(config.clone()) {
+        config::BackendType::Auto => match backend::Jack::new(P::NAME, config.clone()) {
             Ok(backend) => run_wrapper::<P, _>(backend, config),
             Err(_) => {
                 nih_log!("Could not initialize JACK, falling back to the dummy audio backend");
                 run_wrapper::<P, _>(backend::Dummy::new(config.clone()), config)
             }
         },
-        config::BackendType::Jack => match backend::Jack::new(config.clone()) {
+        config::BackendType::Jack => match backend::Jack::new(P::NAME, config.clone()) {
             Ok(backend) => run_wrapper::<P, _>(backend, config),
             Err(err) => {
                 nih_error!("Could not initialize the JACK backend: {:#}", err);

@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::time::{Duration, Instant};
 
 use crate::buffer::Buffer;
@@ -19,6 +19,7 @@ pub trait Backend: 'static + Send + Sync {
 /// Uses JACK audio and MIDI.
 pub struct Jack {
     config: WrapperConfig,
+    client: jack::Client,
 }
 
 /// This backend doesn't input or output any audio or MIDI. It only exists so the standalone
@@ -30,6 +31,7 @@ pub struct Dummy {
 
 impl Backend for Jack {
     fn run(&mut self, cb: impl FnMut(&mut Buffer) -> bool) {
+        // TODO: Create an async client and do The Thing (tm)
         todo!()
     }
 }
@@ -75,10 +77,18 @@ impl Backend for Dummy {
 
 impl Jack {
     /// Initialize the JACK backend. Returns an error if this failed for whatever reason.
-    pub fn new(config: WrapperConfig) -> Result<Self> {
-        // TODO: Actually implement the JACK backend
-        anyhow::bail!("Not yet implemented")
-        // Ok(Self { config })
+    pub fn new(name: &str, config: WrapperConfig) -> Result<Self> {
+        let (client, status) = jack::Client::new(name, jack::ClientOptions::NO_START_SERVER)
+            .context("Error while initializing the JACK client")?;
+        if !status.is_empty() {
+            anyhow::bail!("The JACK server returned an error: {status:?}");
+        }
+
+        // TODO: Register ports
+        // TODO: Connect output
+        // TODO: Command line argument to connect the inputs?
+
+        Ok(Self { config, client })
     }
 }
 
