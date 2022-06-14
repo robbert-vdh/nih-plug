@@ -232,6 +232,85 @@ impl NoteEvent {
         }
     }
 
+    /// Create a MIDI message from this note event. Return `None` if this even does not have a
+    /// direct MIDI equivalent. `PolyPressure` will be converted to polyphonic key pressure, but the
+    /// other polyphonic note expression types will not be converted to MIDI CC messages.
+    pub fn as_midi(self) -> Option<[u8; 3]> {
+        match self {
+            NoteEvent::NoteOn {
+                timing: _,
+                channel,
+                note,
+                velocity,
+            } => Some([
+                midi::NOTE_ON | channel,
+                note,
+                (velocity * 127.0).round().clamp(0.0, 127.0) as u8,
+            ]),
+            NoteEvent::NoteOff {
+                timing: _,
+                channel,
+                note,
+                velocity,
+            } => Some([
+                midi::NOTE_OFF | channel,
+                note,
+                (velocity * 127.0).round().clamp(0.0, 127.0) as u8,
+            ]),
+            NoteEvent::PolyPressure {
+                timing: _,
+                channel,
+                note,
+                pressure,
+            } => Some([
+                midi::POLYPHONIC_KEY_PRESSURE | channel,
+                note,
+                (pressure * 127.0).round().clamp(0.0, 127.0) as u8,
+            ]),
+            NoteEvent::MidiChannelPressure {
+                timing: _,
+                channel,
+                pressure,
+            } => Some([
+                midi::CHANNEL_KEY_PRESSURE | channel,
+                (pressure * 127.0).round().clamp(0.0, 127.0) as u8,
+                0,
+            ]),
+            NoteEvent::MidiPitchBend {
+                timing: _,
+                channel,
+                value,
+            } => {
+                const PITCH_BEND_RANGE: f32 = ((1 << 14) - 1) as f32;
+                let midi_value = (value * PITCH_BEND_RANGE)
+                    .round()
+                    .clamp(0.0, PITCH_BEND_RANGE) as u16;
+
+                Some([
+                    midi::PITCH_BEND_CHANGE | channel,
+                    (midi_value & ((1 << 7) - 1)) as u8,
+                    (midi_value >> 7) as u8,
+                ])
+            }
+            NoteEvent::MidiCC {
+                timing: _,
+                channel,
+                cc,
+                value,
+            } => Some([
+                midi::CONTROL_CHANGE | channel,
+                cc,
+                (value * 127.0).round().clamp(0.0, 127.0) as u8,
+            ]),
+            NoteEvent::PolyVolume { .. }
+            | NoteEvent::PolyPan { .. }
+            | NoteEvent::PolyTuning { .. }
+            | NoteEvent::PolyVibrato { .. }
+            | NoteEvent::PolyExpression { .. }
+            | NoteEvent::PolyBrightness { .. } => None,
+        }
+    }
+
     /// Subtract a sample offset from this event's timing, needed to compensate for the block
     /// splitting in the VST3 wrapper implementation because all events have to be read upfront.
     pub(crate) fn subtract_timing(&mut self, samples: u32) {
@@ -249,5 +328,101 @@ impl NoteEvent {
             NoteEvent::MidiPitchBend { timing, .. } => *timing -= samples,
             NoteEvent::MidiCC { timing, .. } => *timing -= samples,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const TIMING: u32 = 5;
+
+    #[test]
+    fn test_note_on_midi_conversion() {
+        let event = NoteEvent::NoteOn {
+            timing: TIMING,
+            channel: 1,
+            note: 2,
+            // The value will be rounded in the conversion to MIDI, hence this overly specific value
+            velocity: 0.6929134,
+        };
+
+        assert_eq!(
+            NoteEvent::from_midi(TIMING, event.as_midi().unwrap()).unwrap(),
+            event
+        );
+    }
+
+    #[test]
+    fn test_note_off_midi_conversion() {
+        let event = NoteEvent::NoteOff {
+            timing: TIMING,
+            channel: 1,
+            note: 2,
+            velocity: 0.6929134,
+        };
+
+        assert_eq!(
+            NoteEvent::from_midi(TIMING, event.as_midi().unwrap()).unwrap(),
+            event
+        );
+    }
+
+    #[test]
+    fn test_poly_pressure_midi_conversion() {
+        let event = NoteEvent::PolyPressure {
+            timing: TIMING,
+            channel: 1,
+            note: 2,
+            pressure: 0.6929134,
+        };
+
+        assert_eq!(
+            NoteEvent::from_midi(TIMING, event.as_midi().unwrap()).unwrap(),
+            event
+        );
+    }
+
+    #[test]
+    fn test_channel_pressure_midi_conversion() {
+        let event = NoteEvent::MidiChannelPressure {
+            timing: TIMING,
+            channel: 1,
+            pressure: 0.6929134,
+        };
+
+        assert_eq!(
+            NoteEvent::from_midi(TIMING, event.as_midi().unwrap()).unwrap(),
+            event
+        );
+    }
+
+    #[test]
+    fn test_pitch_bend_midi_conversion() {
+        let event = NoteEvent::MidiPitchBend {
+            timing: TIMING,
+            channel: 1,
+            value: 0.6929134,
+        };
+
+        assert_eq!(
+            NoteEvent::from_midi(TIMING, event.as_midi().unwrap()).unwrap(),
+            event
+        );
+    }
+
+    #[test]
+    fn test_cc_midi_conversion() {
+        let event = NoteEvent::MidiCC {
+            timing: TIMING,
+            channel: 1,
+            cc: 2,
+            value: 0.6929134,
+        };
+
+        assert_eq!(
+            NoteEvent::from_midi(TIMING, event.as_midi().unwrap()).unwrap(),
+            event
+        );
     }
 }
