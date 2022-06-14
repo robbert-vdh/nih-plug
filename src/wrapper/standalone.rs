@@ -1,6 +1,8 @@
 //! A standalone plugin target that directly connects to the system's audio and MIDI ports instead
 //! of relying on a plugin host. This is mostly useful for quickly testing GUI changes.
 
+use clap::{FromArgMatches, IntoApp};
+
 use self::wrapper::{Wrapper, WrapperConfig, WrapperError};
 use super::util::setup_logger;
 use crate::plugin::Plugin;
@@ -42,13 +44,6 @@ mod wrapper;
 ///
 /// If the wrapped plugin fails to initialize or throws an error during audio processing, then this
 /// function will return `false`.
-///
-/// # TODOs
-///
-/// The aforementioned command line options have not yet been implemented. Currently there's also no
-/// way to change these options at runtime, for instance through the plugin's GUI. And lastly
-/// there's no way to interact with parameters outside of what's exposed through the plugin's GUI.
-/// We should implement a REPL at some point for interacting with the plugin.
 pub fn nih_export_standalone<P: Plugin>() -> bool {
     nih_export_standalone_with_args::<P, _>(std::env::args())
 }
@@ -56,26 +51,20 @@ pub fn nih_export_standalone<P: Plugin>() -> bool {
 /// The same as [`nih_export_standalone()`], but with the arguments taken from an iterator instead
 /// of using [`std::env::args()`].
 pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = String>>(
-    _args: Args,
+    args: Args,
 ) -> bool {
     setup_logger();
 
-    // TODO: Do something with the arguments
-
-    // FIXME: The configuration should be set based on the command line arguments
-    let config = WrapperConfig {
-        input_channels: 2,
-        output_channels: 2,
-        sample_rate: 44100.0,
-        period_size: 512,
-
-        // TODO: When adding command line options, ignore this option on macOS
-        dpi_scale: 1.0,
-
-        tempo: 120.0,
-        timesig_num: 4,
-        timesig_denom: 4,
-    };
+    // Instead of parsing this directly, we need to take a bit of a roundabout approach to get the
+    // plugin's name and vendor in here since they'd otherwise be taken from NIH-plug's own
+    // `Cargo.toml` file.
+    let config = WrapperConfig::from_arg_matches(
+        &WrapperConfig::command()
+            .name(P::NAME)
+            .author(P::VENDOR)
+            .get_matches_from(args),
+    )
+    .unwrap_or_else(|err| err.exit());
 
     nih_log!(
         "Audio and MIDI IO has not yet been implemented in the standalone targets. So if you're \
@@ -93,6 +82,7 @@ pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = Stri
         }
     };
 
+    // TODO: Add a repl while the application is running to interact with parameters
     match wrapper.run() {
         Ok(()) => true,
         Err(err) => {
