@@ -202,6 +202,11 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
                 return Err(WrapperError::IncompatibleConfig);
             }
 
+            // Befure initializing the plugin, make sure all smoothers are set the the default values
+            for param in wrapper.known_parameters.iter() {
+                unsafe { param.update_smoother(wrapper.buffer_config.sample_rate, true) };
+            }
+
             if !plugin.initialize(
                 &wrapper.bus_config,
                 &wrapper.buffer_config,
@@ -402,6 +407,9 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
                     return false;
                 }
 
+                // Any output note events are now in a vector that can be processed by the
+                // audio/MIDI backend
+
                 // We'll always write these events to the first sample, so even when we add note output we
                 // shouldn't have to think about interleaving events here
                 let mut parameter_values_changed = false;
@@ -417,8 +425,6 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
                 if parameter_values_changed {
                     self.notify_param_values_changed();
                 }
-
-                // TODO: MIDI output
 
                 // After processing audio, we'll check if the editor has sent us updated plugin state.
                 // We'll restore that here on the audio thread to prevent changing the values during the
