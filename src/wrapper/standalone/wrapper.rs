@@ -14,6 +14,7 @@ use super::backend::Backend;
 use super::config::WrapperConfig;
 use super::context::{WrapperGuiContext, WrapperInitContext, WrapperProcessContext};
 use crate::context::Transport;
+use crate::midi::NoteEvent;
 use crate::param::internals::{ParamPtr, Params};
 use crate::param::ParamFlags;
 use crate::plugin::{
@@ -372,8 +373,6 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
                     return false;
                 }
 
-                // TODO: Do something with the input and output events
-
                 let sample_rate = self.buffer_config.sample_rate;
                 let mut transport = Transport::new(sample_rate);
                 transport.pos_samples = Some(num_processed_samples);
@@ -389,7 +388,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
                         inputs: &mut [],
                         outputs: &mut [],
                     },
-                    &mut self.make_process_context(transport),
+                    &mut self.make_process_context(transport, input_events, output_events),
                 ) {
                     nih_error!("The plugin returned an error while processing:");
                     nih_error!("{}", err);
@@ -481,9 +480,17 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
         WrapperInitContext { wrapper: self }
     }
 
-    fn make_process_context(&self, transport: Transport) -> WrapperProcessContext<'_, P, B> {
+    fn make_process_context<'a>(
+        &'a self,
+        transport: Transport,
+        input_events: &'a [NoteEvent],
+        output_events: &'a mut Vec<NoteEvent>,
+    ) -> WrapperProcessContext<'a, P, B> {
         WrapperProcessContext {
             wrapper: self,
+            input_events,
+            input_events_idx: 0,
+            output_events,
             transport,
         }
     }

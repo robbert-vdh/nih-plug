@@ -33,9 +33,11 @@ pub(crate) struct WrapperInitContext<'a, P: Plugin, B: Backend> {
 pub(crate) struct WrapperProcessContext<'a, P: Plugin, B: Backend> {
     #[allow(dead_code)]
     pub(super) wrapper: &'a Wrapper<P, B>,
-    // TODO: Events
-    // pub(super) input_events_guard: AtomicRefMut<'a, VecDeque<NoteEvent>>,
-    // pub(super) output_events_guard: AtomicRefMut<'a, VecDeque<NoteEvent>>,
+    pub(super) input_events: &'a [NoteEvent],
+    // The current index in `input_events`, since we're not actually popping anything from a queue
+    // here to keep the standalone backend implementation a bit more flexible
+    pub(super) input_events_idx: usize,
+    pub(super) output_events: &'a mut Vec<NoteEvent>,
     pub(super) transport: Transport,
 }
 
@@ -100,16 +102,19 @@ impl<P: Plugin, B: Backend> ProcessContext for WrapperProcessContext<'_, P, B> {
     }
 
     fn next_event(&mut self) -> Option<NoteEvent> {
-        nih_debug_assert_failure!("TODO: WrapperProcessContext::next_event()");
+        // We'll pretend we're a queue, choo choo
+        if self.input_events_idx < self.input_events.len() {
+            let event = self.input_events[self.input_events_idx];
+            self.input_events_idx += 1;
 
-        // self.input_events_guard.pop_front()
-        None
+            Some(event)
+        } else {
+            None
+        }
     }
 
-    fn send_event(&mut self, _event: NoteEvent) {
-        nih_debug_assert_failure!("TODO: WrapperProcessContext::send_event()");
-
-        // self.output_events_guard.push_back(event);
+    fn send_event(&mut self, event: NoteEvent) {
+        self.output_events.push(event);
     }
 
     fn set_latency_samples(&self, _samples: u32) {
