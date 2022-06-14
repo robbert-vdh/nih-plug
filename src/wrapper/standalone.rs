@@ -72,7 +72,7 @@ pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = Stri
     match config.backend {
         config::BackendType::Auto => match backend::Jack::new(P::NAME, config.clone()) {
             Ok(backend) => {
-                nih_info!("Using the JACK backend");
+                nih_log!("Using the JACK backend");
                 run_wrapper::<P, _>(backend, config)
             }
             Err(_) => {
