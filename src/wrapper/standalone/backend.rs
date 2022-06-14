@@ -1,6 +1,7 @@
 pub use self::dummy::Dummy;
 pub use self::jack::Jack;
 pub use crate::buffer::Buffer;
+use crate::context::Transport;
 use crate::midi::NoteEvent;
 
 mod dummy;
@@ -16,6 +17,8 @@ pub trait Backend: 'static + Send + Sync {
     /// TODO: Auxiliary inputs and outputs
     fn run(
         &mut self,
-        cb: impl FnMut(&mut Buffer, &[NoteEvent], &mut Vec<NoteEvent>) -> bool + 'static + Send,
+        cb: impl FnMut(&mut Buffer, Transport, &[NoteEvent], &mut Vec<NoteEvent>) -> bool
+            + 'static
+            + Send,
     );
 }

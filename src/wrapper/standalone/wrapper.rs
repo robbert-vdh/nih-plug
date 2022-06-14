@@ -368,25 +368,13 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
         should_terminate: Arc<AtomicBool>,
         gui_task_sender: channel::Sender<GuiTask>,
     ) {
-        // TODO: We should add a way to pull the transport information from the JACK backend
-        let mut num_processed_samples = 0;
-
-        self.clone()
-            .backend
-            .borrow_mut()
-            .run(move |buffer, input_events, output_events| {
+        self.clone().backend.borrow_mut().run(
+            move |buffer, transport, input_events, output_events| {
                 if should_terminate.load(Ordering::SeqCst) {
                     return false;
                 }
 
                 let sample_rate = self.buffer_config.sample_rate;
-                let mut transport = Transport::new(sample_rate);
-                transport.pos_samples = Some(num_processed_samples);
-                transport.tempo = Some(self.config.tempo as f64);
-                transport.time_sig_numerator = Some(self.config.timesig_num as i32);
-                transport.time_sig_denominator = Some(self.config.timesig_denom as i32);
-                transport.playing = true;
-
                 if let ProcessStatus::Error(err) = self.plugin.write().process(
                     buffer,
                     // TODO: Provide extra inputs and outputs in the JACk backend
@@ -460,10 +448,9 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
                     };
                 }
 
-                num_processed_samples += buffer.len() as i64;
-
                 true
-            });
+            },
+        );
     }
 
     /// Tell the editor that the parameter values have changed, if the plugin has an editor.

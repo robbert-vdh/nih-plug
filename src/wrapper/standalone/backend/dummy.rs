@@ -3,6 +3,7 @@ use std::time::{Duration, Instant};
 use super::super::config::WrapperConfig;
 use super::Backend;
 use crate::buffer::Buffer;
+use crate::context::Transport;
 use crate::midi::NoteEvent;
 
 /// This backend doesn't input or output any audio or MIDI. It only exists so the standalone
@@ -15,7 +16,9 @@ pub struct Dummy {
 impl Backend for Dummy {
     fn run(
         &mut self,
-        mut cb: impl FnMut(&mut Buffer, &[NoteEvent], &mut Vec<NoteEvent>) -> bool + 'static + Send,
+        mut cb: impl FnMut(&mut Buffer, Transport, &[NoteEvent], &mut Vec<NoteEvent>) -> bool
+            + 'static
+            + Send,
     ) {
         // We can't really do anything meaningful here, so we'll simply periodically call the
         // callback with empty buffers.
@@ -37,19 +40,29 @@ impl Backend for Dummy {
             })
         }
 
-        // These will never actually be used
+        // This queue will never actually be used
         let mut midi_output_events = Vec::with_capacity(1024);
+        let mut num_processed_samples = 0;
         loop {
             let period_start = Instant::now();
+
+            let mut transport = Transport::new(self.config.sample_rate);
+            transport.pos_samples = Some(num_processed_samples);
+            transport.tempo = Some(self.config.tempo as f64);
+            transport.time_sig_numerator = Some(self.config.timesig_num as i32);
+            transport.time_sig_denominator = Some(self.config.timesig_denom as i32);
+            transport.playing = true;
 
             for channel in buffer.as_slice() {
                 channel.fill(0.0);
             }
 
             midi_output_events.clear();
-            if !cb(&mut buffer, &[], &mut midi_output_events) {
+            if !cb(&mut buffer, transport, &[], &mut midi_output_events) {
                 break;
             }
+
+            num_processed_samples += buffer.len() as i64;
 
             let period_end = Instant::now();
             std::thread::sleep((period_start + interval).saturating_duration_since(period_end));

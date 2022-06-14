@@ -10,11 +10,13 @@ use jack::{
 use super::super::config::WrapperConfig;
 use super::Backend;
 use crate::buffer::Buffer;
+use crate::context::Transport;
 use crate::midi::{MidiConfig, NoteEvent};
 use crate::plugin::Plugin;
 
 /// Uses JACK audio and MIDI.
 pub struct Jack {
+    config: WrapperConfig,
     /// The JACK client, wrapped in an option since it needs to be transformed into an `AsyncClient`
     /// and then back into a regular `Client`.
     client: Option<Client>,
@@ -34,7 +36,9 @@ enum Task {
 impl Backend for Jack {
     fn run(
         &mut self,
-        mut cb: impl FnMut(&mut Buffer, &[NoteEvent], &mut Vec<NoteEvent>) -> bool + 'static + Send,
+        mut cb: impl FnMut(&mut Buffer, Transport, &[NoteEvent], &mut Vec<NoteEvent>) -> bool
+            + 'static
+            + Send,
     ) {
         let client = self.client.take().unwrap();
         let buffer_size = client.buffer_size();
@@ -50,11 +54,12 @@ impl Backend for Jack {
         let mut output_events = Vec::with_capacity(2048);
 
         let (control_sender, control_receiver) = channel::bounded(32);
+        let config = self.config.clone();
         let inputs = self.inputs.clone();
         let outputs = self.outputs.clone();
         let midi_input = self.midi_input.clone();
         let midi_output = self.midi_output.clone();
-        let process_handler = ClosureProcessHandler::new(move |_client, ps| {
+        let process_handler = ClosureProcessHandler::new(move |client, ps| {
             // In theory we could handle `num_frames <= buffer_size`, but JACK will never chop up
             // buffers like that so we'll just make it easier for ourselves by not supporting that
             let num_frames = ps.n_frames();
@@ -62,6 +67,29 @@ impl Backend for Jack {
                 nih_error!("Buffer size changed from {buffer_size} to {num_frames}. Buffer size changes are currently not supported, aborting...");
                 control_sender.send(Task::Shutdown).unwrap();
                 return Control::Quit;
+            }
+
+            let mut transport = Transport::new(client.sample_rate() as f32);
+            transport.tempo = Some(config.tempo as f64);
+            transport.time_sig_numerator = Some(config.timesig_num as i32);
+            transport.time_sig_denominator = Some(config.timesig_denom as i32);
+
+            if let Ok(jack_transport) = client.transport().query() {
+                transport.pos_samples = Some(jack_transport.pos.frame() as i64);
+                transport.playing = jack_transport.state == jack::TransportState::Rolling;
+
+                if let Some(bbt) = jack_transport.pos.bbt() {
+                    transport.tempo = Some(bbt.bpm);
+                    transport.time_sig_numerator = Some(bbt.sig_num as i32);
+                    transport.time_sig_denominator = Some(bbt.sig_denom as i32);
+
+                    transport.pos_beats = Some(
+                        (bbt.bar as f64 * 4.0)
+                            + (bbt.beat as f64 / bbt.sig_denom as f64 * 4.0)
+                            + (bbt.tick as f64 / bbt.ticks_per_beat),
+                    );
+                    transport.bar_number = Some(bbt.bar as i32);
+                }
             }
 
             // Just like all of the plugin backends, we need to grab the output slices and copy the
@@ -94,7 +122,7 @@ impl Backend for Jack {
             }
 
             output_events.clear();
-            if cb(&mut buffer, &input_events, &mut output_events) {
+            if cb(&mut buffer, transport, &input_events, &mut output_events) {
                 if let Some(midi_output) = &midi_output {
                     let mut midi_output = midi_output.borrow_mut();
                     let mut midi_writer = midi_output.writer(ps);
@@ -182,7 +210,7 @@ impl Jack {
 
         // This option can either be set to a single port all inputs should be connected to, or a
         // comma separated list of ports
-        if let Some(port_name) = config.connect_jack_inputs {
+        if let Some(port_name) = &config.connect_jack_inputs {
             if port_name.contains(',') {
                 for (port_name, input) in port_name.split(',').zip(&inputs) {
                     if let Err(err) = client.connect_ports_by_name(port_name, &input.name()?) {
@@ -192,7 +220,7 @@ impl Jack {
                 }
             } else {
                 for input in &inputs {
-                    if let Err(err) = client.connect_ports_by_name(&port_name, &input.name()?) {
+                    if let Err(err) = client.connect_ports_by_name(port_name, &input.name()?) {
                         nih_error!("Could not connect to '{port_name}': {err}");
                         break;
                     }
@@ -200,18 +228,19 @@ impl Jack {
             }
         }
 
-        if let (Some(port), Some(port_name)) = (&midi_input, config.connect_jack_midi_input) {
-            if let Err(err) = client.connect_ports_by_name(&port_name, &port.name()?) {
+        if let (Some(port), Some(port_name)) = (&midi_input, &config.connect_jack_midi_input) {
+            if let Err(err) = client.connect_ports_by_name(port_name, &port.name()?) {
                 nih_error!("Could not connect to '{port_name}': {err}");
             }
         }
-        if let (Some(port), Some(port_name)) = (&midi_output, config.connect_jack_midi_output) {
-            if let Err(err) = client.connect_ports_by_name(&port.borrow().name()?, &port_name) {
+        if let (Some(port), Some(port_name)) = (&midi_output, &config.connect_jack_midi_output) {
+            if let Err(err) = client.connect_ports_by_name(&port.borrow().name()?, port_name) {
                 nih_error!("Could not connect to '{port_name}': {err}");
             }
         }
 
         Ok(Self {
+            config,
             client: Some(client),
 
             inputs: Arc::new(inputs),
