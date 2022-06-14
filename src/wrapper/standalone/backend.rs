@@ -1,6 +1,7 @@
 pub use self::dummy::Dummy;
 pub use self::jack::Jack;
 pub use crate::buffer::Buffer;
+use crate::midi::NoteEvent;
 
 mod dummy;
 mod jack;
@@ -12,7 +13,9 @@ pub trait Backend: 'static + Send + Sync {
     /// buffers for the wrapped plugin's outputs. Any inputs will have already been copied to this
     /// buffer. This will block until the process callback returns `false`.
     ///
-    /// TODO: MIDI
     /// TODO: Auxiliary inputs and outputs
-    fn run(&mut self, cb: impl FnMut(&mut Buffer) -> bool + 'static + Send);
+    fn run(
+        &mut self,
+        cb: impl FnMut(&mut Buffer, &[NoteEvent], &mut Vec<NoteEvent>) -> bool + 'static + Send,
+    );
 }

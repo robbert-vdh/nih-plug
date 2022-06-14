@@ -3,6 +3,7 @@ use std::time::{Duration, Instant};
 use super::super::config::WrapperConfig;
 use super::Backend;
 use crate::buffer::Buffer;
+use crate::midi::NoteEvent;
 
 /// This backend doesn't input or output any audio or MIDI. It only exists so the standalone
 /// application can continue to run even when there is no audio backend available. This can be
@@ -12,7 +13,10 @@ pub struct Dummy {
 }
 
 impl Backend for Dummy {
-    fn run(&mut self, mut cb: impl FnMut(&mut Buffer) -> bool + 'static + Send) {
+    fn run(
+        &mut self,
+        mut cb: impl FnMut(&mut Buffer, &[NoteEvent], &mut Vec<NoteEvent>) -> bool + 'static + Send,
+    ) {
         // We can't really do anything meaningful here, so we'll simply periodically call the
         // callback with empty buffers.
         let interval =
@@ -33,6 +37,8 @@ impl Backend for Dummy {
             })
         }
 
+        // These will never actually be used
+        let mut midi_output_events = Vec::with_capacity(1024);
         loop {
             let period_start = Instant::now();
 
@@ -40,7 +46,8 @@ impl Backend for Dummy {
                 channel.fill(0.0);
             }
 
-            if !cb(&mut buffer) {
+            midi_output_events.clear();
+            if !cb(&mut buffer, &[], &mut midi_output_events) {
                 break;
             }
 

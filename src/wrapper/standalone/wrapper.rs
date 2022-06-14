@@ -364,96 +364,100 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
         // TODO: We should add a way to pull the transport information from the JACK backend
         let mut num_processed_samples = 0;
 
-        self.clone().backend.borrow_mut().run(move |buffer| {
-            if should_terminate.load(Ordering::SeqCst) {
-                return false;
-            }
-
-            // TODO: Process incoming events
-
-            let sample_rate = self.buffer_config.sample_rate;
-            let mut transport = Transport::new(sample_rate);
-            transport.pos_samples = Some(num_processed_samples);
-            transport.tempo = Some(self.config.tempo as f64);
-            transport.time_sig_numerator = Some(self.config.timesig_num as i32);
-            transport.time_sig_denominator = Some(self.config.timesig_denom as i32);
-            transport.playing = true;
-
-            if let ProcessStatus::Error(err) = self.plugin.write().process(
-                buffer,
-                // TODO: Provide extra inputs and outputs in the JACk backend
-                &mut AuxiliaryBuffers {
-                    inputs: &mut [],
-                    outputs: &mut [],
-                },
-                &mut self.make_process_context(transport),
-            ) {
-                nih_error!("The plugin returned an error while processing:");
-                nih_error!("{}", err);
-
-                let push_successful = gui_task_sender.send(GuiTask::Close).is_ok();
-                nih_debug_assert!(
-                    push_successful,
-                    "Could not queue window close, the editor will remain open"
-                );
-
-                return false;
-            }
-
-            // We'll always write these events to the first sample, so even when we add note output we
-            // shouldn't have to think about interleaving events here
-            let mut parameter_values_changed = false;
-            while let Some((param_ptr, normalized_value)) = self.unprocessed_param_changes.pop() {
-                unsafe { param_ptr.set_normalized_value(normalized_value) };
-                unsafe { param_ptr.update_smoother(sample_rate, false) };
-                parameter_values_changed = true;
-            }
-
-            // Allow the editor to react to the new parameter values if the editor uses a reactive data
-            // binding model
-            if parameter_values_changed {
-                self.notify_param_values_changed();
-            }
-
-            // TODO: MIDI output
-
-            // After processing audio, we'll check if the editor has sent us updated plugin state.
-            // We'll restore that here on the audio thread to prevent changing the values during the
-            // process call and also to prevent inconsistent state when the host also wants to load
-            // plugin state.
-            // FIXME: Zero capacity channels allocate on receiving, find a better alternative that
-            //        doesn't do that
-            let updated_state = permit_alloc(|| self.updated_state_receiver.try_recv());
-            if let Ok(state) = updated_state {
-                unsafe {
-                    state::deserialize_object(
-                        &state,
-                        self.params.clone(),
-                        |param_id| self.param_map.get(param_id).copied(),
-                        Some(&self.buffer_config),
-                    );
+        self.clone()
+            .backend
+            .borrow_mut()
+            .run(move |buffer, input_events, output_events| {
+                if should_terminate.load(Ordering::SeqCst) {
+                    return false;
                 }
 
-                self.notify_param_values_changed();
+                // TODO: Do something with the input and output events
 
-                // TODO: Normally we'd also call initialize after deserializing state, but that's
-                //       not guaranteed to be realtime safe. Should we do it anyways?
-                self.plugin.write().reset();
+                let sample_rate = self.buffer_config.sample_rate;
+                let mut transport = Transport::new(sample_rate);
+                transport.pos_samples = Some(num_processed_samples);
+                transport.tempo = Some(self.config.tempo as f64);
+                transport.time_sig_numerator = Some(self.config.timesig_num as i32);
+                transport.time_sig_denominator = Some(self.config.timesig_denom as i32);
+                transport.playing = true;
 
-                // We'll pass the state object back to the GUI thread so deallocation can happen
-                // there without potentially blocking the audio thread
-                if let Err(err) = self.updated_state_sender.send(state) {
-                    nih_debug_assert_failure!(
-                        "Failed to send state object back to GUI thread: {}",
-                        err
+                if let ProcessStatus::Error(err) = self.plugin.write().process(
+                    buffer,
+                    // TODO: Provide extra inputs and outputs in the JACk backend
+                    &mut AuxiliaryBuffers {
+                        inputs: &mut [],
+                        outputs: &mut [],
+                    },
+                    &mut self.make_process_context(transport),
+                ) {
+                    nih_error!("The plugin returned an error while processing:");
+                    nih_error!("{}", err);
+
+                    let push_successful = gui_task_sender.send(GuiTask::Close).is_ok();
+                    nih_debug_assert!(
+                        push_successful,
+                        "Could not queue window close, the editor will remain open"
                     );
-                };
-            }
 
-            num_processed_samples += buffer.len() as i64;
+                    return false;
+                }
 
-            true
-        });
+                // We'll always write these events to the first sample, so even when we add note output we
+                // shouldn't have to think about interleaving events here
+                let mut parameter_values_changed = false;
+                while let Some((param_ptr, normalized_value)) = self.unprocessed_param_changes.pop()
+                {
+                    unsafe { param_ptr.set_normalized_value(normalized_value) };
+                    unsafe { param_ptr.update_smoother(sample_rate, false) };
+                    parameter_values_changed = true;
+                }
+
+                // Allow the editor to react to the new parameter values if the editor uses a reactive data
+                // binding model
+                if parameter_values_changed {
+                    self.notify_param_values_changed();
+                }
+
+                // TODO: MIDI output
+
+                // After processing audio, we'll check if the editor has sent us updated plugin state.
+                // We'll restore that here on the audio thread to prevent changing the values during the
+                // process call and also to prevent inconsistent state when the host also wants to load
+                // plugin state.
+                // FIXME: Zero capacity channels allocate on receiving, find a better alternative that
+                //        doesn't do that
+                let updated_state = permit_alloc(|| self.updated_state_receiver.try_recv());
+                if let Ok(state) = updated_state {
+                    unsafe {
+                        state::deserialize_object(
+                            &state,
+                            self.params.clone(),
+                            |param_id| self.param_map.get(param_id).copied(),
+                            Some(&self.buffer_config),
+                        );
+                    }
+
+                    self.notify_param_values_changed();
+
+                    // TODO: Normally we'd also call initialize after deserializing state, but that's
+                    //       not guaranteed to be realtime safe. Should we do it anyways?
+                    self.plugin.write().reset();
+
+                    // We'll pass the state object back to the GUI thread so deallocation can happen
+                    // there without potentially blocking the audio thread
+                    if let Err(err) = self.updated_state_sender.send(state) {
+                        nih_debug_assert_failure!(
+                            "Failed to send state object back to GUI thread: {}",
+                            err
+                        );
+                    };
+                }
+
+                num_processed_samples += buffer.len() as i64;
+
+                true
+            });
     }
 
     /// Tell the editor that the parameter values have changed, if the plugin has an editor.

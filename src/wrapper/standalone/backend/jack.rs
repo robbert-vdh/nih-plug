@@ -10,7 +10,7 @@ use jack::{
 use super::super::config::WrapperConfig;
 use super::Backend;
 use crate::buffer::Buffer;
-use crate::midi::MidiConfig;
+use crate::midi::{MidiConfig, NoteEvent};
 use crate::plugin::Plugin;
 
 /// Uses JACK audio and MIDI.
@@ -32,7 +32,10 @@ enum Task {
 }
 
 impl Backend for Jack {
-    fn run(&mut self, mut cb: impl FnMut(&mut Buffer) -> bool + 'static + Send) {
+    fn run(
+        &mut self,
+        mut cb: impl FnMut(&mut Buffer, &[NoteEvent], &mut Vec<NoteEvent>) -> bool + 'static + Send,
+    ) {
         let client = self.client.take().unwrap();
         let buffer_size = client.buffer_size();
 
@@ -43,9 +46,14 @@ impl Backend for Jack {
             })
         }
 
+        let mut input_events = Vec::with_capacity(2048);
+        let mut output_events = Vec::with_capacity(2048);
+
         let (control_sender, control_receiver) = channel::bounded(32);
         let inputs = self.inputs.clone();
         let outputs = self.outputs.clone();
+        let midi_input = self.midi_input.clone();
+        let midi_output = self.midi_output.clone();
         let process_handler = ClosureProcessHandler::new(move |_client, ps| {
             // In theory we could handle `num_frames <= buffer_size`, but JACK will never chop up
             // buffers like that so we'll just make it easier for ourselves by not supporting that
@@ -76,7 +84,12 @@ impl Backend for Jack {
                 })
             }
 
-            if cb(&mut buffer) {
+            // TODO: Read MIDI, convert to events
+
+            output_events.clear();
+            if cb(&mut buffer, &input_events, &mut output_events) {
+                // TODO: Convert output events to MIDI, send to the output port
+
                 Control::Continue
             } else {
                 control_sender.send(Task::Shutdown).unwrap();
