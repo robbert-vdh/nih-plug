@@ -1,9 +1,16 @@
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 
 /// Configuration for a standalone plugin that would normally be provided by the DAW.
 #[derive(Debug, Clone, Parser)]
 #[clap(about = None, long_about = None)]
 pub struct WrapperConfig {
+    /// The audio and MIDI backend to use.
+    ///
+    /// The 'auto' option will try all backends in order, and falls back to the dummy backend with
+    /// no audio input or output if the other backends are not available.
+    #[clap(value_parser, short = 'b', long, default_value = "auto")]
+    pub backend: BackendType,
+
     /// The number of input channels.
     #[clap(value_parser, short = 'i', long, default_value = "2")]
     pub input_channels: u32,
@@ -35,4 +42,15 @@ pub struct WrapperConfig {
     /// The time signature's denominator.
     #[clap(value_parser, long, default_value = "4")]
     pub timesig_denom: u32,
+}
+
+/// Determines which audio and MIDI backend should be used.
+#[derive(Debug, Clone, ValueEnum)]
+pub enum BackendType {
+    /// Automatically pick the backend depending on what's available.
+    ///
+    /// This defaults to JACK if JACK is available, and falls back to the dummy backend if not.
+    Auto,
+    /// Does not playback or receive any audio or MIDI.
+    Dummmy,
 }
