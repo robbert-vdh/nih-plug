@@ -3,11 +3,13 @@
 
 use clap::{FromArgMatches, IntoApp};
 
-use self::wrapper::{Wrapper, WrapperConfig, WrapperError};
+use self::config::WrapperConfig;
+use self::wrapper::{Wrapper, WrapperError};
 use super::util::setup_logger;
 use crate::plugin::Plugin;
 
 mod backend;
+mod config;
 mod context;
 mod wrapper;
 

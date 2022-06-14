@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use crate::buffer::Buffer;
 
-use super::wrapper::WrapperConfig;
+use super::config::WrapperConfig;
 
 /// An audio+MIDI backend for the standalone wrapper.
 pub trait Backend: 'static + Send + Sync {
