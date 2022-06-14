@@ -1,3 +1,4 @@
+use anyhow::Result;
 use std::time::{Duration, Instant};
 
 use crate::buffer::Buffer;
@@ -15,10 +16,10 @@ pub trait Backend: 'static + Send + Sync {
     fn run(&mut self, cb: impl FnMut(&mut Buffer) -> bool);
 }
 
-// /// Uses JACK audio and MIDI.
-// pub struct Jack {
-//     // TODO
-// }
+/// Uses JACK audio and MIDI.
+pub struct Jack {
+    config: WrapperConfig,
+}
 
 /// This backend doesn't input or output any audio or MIDI. It only exists so the standalone
 /// application can continue to run even when there is no audio backend available. This can be
@@ -27,12 +28,11 @@ pub struct Dummy {
     config: WrapperConfig,
 }
 
-// TODO: Add a JACK backend
-// impl Backend for Jack {
-//     fn run(&mut self, cb: impl FnMut(&mut Buffer) -> bool) {
-//         todo!()
-//     }
-// }
+impl Backend for Jack {
+    fn run(&mut self, cb: impl FnMut(&mut Buffer) -> bool) {
+        todo!()
+    }
+}
 
 impl Backend for Dummy {
     fn run(&mut self, mut cb: impl FnMut(&mut Buffer) -> bool) {
@@ -70,6 +70,15 @@ impl Backend for Dummy {
             let period_end = Instant::now();
             std::thread::sleep((period_start + interval).saturating_duration_since(period_end));
         }
+    }
+}
+
+impl Jack {
+    /// Initialize the JACK backend. Returns an error if this failed for whatever reason.
+    pub fn new(config: WrapperConfig) -> Result<Self> {
+        // TODO: Actually implement the JACK backend
+        anyhow::bail!("Could not initialize JACK backend")
+        // Ok(Self { config })
     }
 }
 

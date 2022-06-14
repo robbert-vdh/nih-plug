@@ -2096,6 +2096,7 @@ dependencies = [
 name = "nih_plug"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
  "assert_no_alloc",
  "atomic_float",
  "atomic_refcell",

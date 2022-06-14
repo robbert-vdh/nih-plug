@@ -51,6 +51,8 @@ pub enum BackendType {
     ///
     /// This defaults to JACK if JACK is available, and falls back to the dummy backend if not.
     Auto,
+    /// Use JACK for audio and MIDI.
+    Jack,
     /// Does not playback or receive any audio or MIDI.
     Dummmy,
 }

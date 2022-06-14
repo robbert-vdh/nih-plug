@@ -3,6 +3,7 @@
 
 use clap::{FromArgMatches, IntoApp};
 
+use self::backend::Backend;
 use self::config::WrapperConfig;
 use self::wrapper::{Wrapper, WrapperError};
 use super::util::setup_logger;
@@ -68,14 +69,28 @@ pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = Stri
     )
     .unwrap_or_else(|err| err.exit());
 
-    nih_log!(
-        "Audio and MIDI IO has not yet been implemented in the standalone targets. So if you're \
-         not hearing anything, then that's correct!"
-    );
+    match config.backend {
+        config::BackendType::Auto => match backend::Jack::new(config.clone()) {
+            Ok(backend) => run_wrapper::<P, _>(backend, config),
+            Err(_) => {
+                nih_log!("Could not initialize JACK, falling back to the dummy audio backend");
+                run_wrapper::<P, _>(backend::Dummy::new(config.clone()), config)
+            }
+        },
+        config::BackendType::Jack => match backend::Jack::new(config.clone()) {
+            Ok(backend) => run_wrapper::<P, _>(backend, config),
+            Err(err) => {
+                nih_log!("{:#}", err);
+                false
+            }
+        },
+        config::BackendType::Dummmy => {
+            run_wrapper::<P, _>(backend::Dummy::new(config.clone()), config)
+        }
+    }
+}
 
-    // TODO: We should try JACK first, then CPAL, and then fall back to the dummy backend. With a
-    //       command line option to override this behavior.
-    let backend = backend::Dummy::new(config.clone());
+fn run_wrapper<P: Plugin, B: Backend>(backend: B, config: WrapperConfig) -> bool {
     let wrapper = match Wrapper::<P, _>::new(backend, config.clone()) {
         Ok(wrapper) => wrapper,
         Err(err) => {
