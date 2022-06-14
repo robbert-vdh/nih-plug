@@ -71,7 +71,10 @@ pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = Stri
 
     match config.backend {
         config::BackendType::Auto => match backend::Jack::new(P::NAME, config.clone()) {
-            Ok(backend) => run_wrapper::<P, _>(backend, config),
+            Ok(backend) => {
+                nih_info!("Using the JACK backend");
+                run_wrapper::<P, _>(backend, config)
+            }
             Err(_) => {
                 nih_log!("Could not initialize JACK, falling back to the dummy audio backend");
                 run_wrapper::<P, _>(backend::Dummy::new(config.clone()), config)
