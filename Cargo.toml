@@ -47,7 +47,7 @@ assert_process_allocs = ["dep:assert_no_alloc"]
 # Enables an export target for standalone binaries through the
 # `nih_export_standalone()` function. Disabled by default, as this requires
 # building additional dependencies for audio and MIDI handling.
-standalone = ["dep:baseview"]
+standalone = ["dep:baseview", "dep:clap"]
 # Enables the `nih_export_vst3!()` macro. Enabled by default. This feature
 # exists mostly for GPL-compliance reasons, since even if you don't use the VST3
 # wrapper you might otherwise still include a couple (unused) symbols from the
@@ -86,6 +86,8 @@ assert_no_alloc = { version = "1.1", optional = true }
 # NOTE: OpenGL support is not needed here, but rust-analyzer gets confused when
 #       some crates do use it and others don't
 baseview = { git = "https://github.com/robbert-vdh/baseview.git", branch = "feature/resize", features = ["opengl"], optional = true }
+# All the claps!
+clap = { version = "3.2", features = ["derive"], optional = true }
 
 # Used for the `vst3` feature
 vst3-sys = { git = "https://github.com/robbert-vdh/vst3-sys.git", branch = "fix/note-off-event", optional = true }
