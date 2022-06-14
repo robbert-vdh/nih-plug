@@ -281,9 +281,10 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
                 )
             }
             None => {
-                // TODO: Block until SIGINT is received if the plugin does not have an editor
+                // TODO: Properly block until SIGINT is received if the plugin does not have an editor
                 // TODO: Make sure to handle `GuiTask::Close` here as well
-                todo!("Support standalone plugins without editors");
+                nih_log!("{} does not have a GUI, blocking indefinitely...", P::NAME);
+                std::thread::park();
             }
         }
 
