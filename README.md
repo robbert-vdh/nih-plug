@@ -75,7 +75,8 @@ Scroll down for more information on the plugin framework.
   adding the corresponding `nih_export_<api>!(Foo)` macro to your plugin's
   library.
 - Standalone binaries can be made by calling `nih_export_standalone(Foo)` from
-  your `main()` function.
+  your `main()` function. Standalones come with a CLI for configuration and full
+  JACK audio, MIDI, and transport support.
 - Declarative parameter handling without any boilerplate.
   - Define parameters for your plugin by adding `FloatParam`, `IntParam`,
     `BoolParam`, and `EnumParam<T>` fields to your parameter struct, assign
