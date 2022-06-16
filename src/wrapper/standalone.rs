@@ -87,7 +87,7 @@ pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = Stri
                 false
             }
         },
-        config::BackendType::Dummmy => {
+        config::BackendType::Dummy => {
             run_wrapper::<P, _>(backend::Dummy::new(config.clone()), config)
         }
     }
