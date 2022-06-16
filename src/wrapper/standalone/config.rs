@@ -79,5 +79,5 @@ pub enum BackendType {
     /// Use JACK for audio and MIDI.
     Jack,
     /// Does not playback or receive any audio or MIDI.
-    Dummmy,
+    Dummy,
 }
