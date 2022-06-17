@@ -645,11 +645,10 @@ impl<P: ClapPlugin> Wrapper<P> {
     /// host (it will still be set on the plugin either way).
     pub fn queue_parameter_event(&self, event: OutputParamEvent) -> bool {
         let result = self.output_parameter_events.push(event).is_ok();
+
+        // Requesting a flush is fine even during audio processing. This avoids a race condition.
         match &*self.host_params.borrow() {
-            Some(host_params) if !self.is_processing.load(Ordering::SeqCst) => {
-                unsafe { (host_params.request_flush)(&*self.host_callback) };
-            }
-            Some(_) => (),
+            Some(host_params) => unsafe { (host_params.request_flush)(&*self.host_callback) },
             None => nih_debug_assert_failure!("The host does not support parameters? What?"),
         }
 
