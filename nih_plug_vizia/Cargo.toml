@@ -15,4 +15,4 @@ baseview = { git = "https://github.com/robbert-vdh/baseview.git", branch = "feat
 crossbeam = "0.8"
 # This fork contains changed for better keyboard modifier handling and DPI
 # scaling, window scaling, and a lot more fixes and improvements
-vizia = { git = "https://github.com/robbert-vdh/vizia.git", branch = "patched", default_features = false, features = ["baseview", "clipboard"] }
+vizia = { git = "https://github.com/robbert-vdh/vizia.git", branch = "patched", default_features = false, features = ["baseview", "clipboard", "x11"] }

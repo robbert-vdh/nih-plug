@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use nih_plug::prelude::{ParamFlags, ParamPtr, Params};
-use vizia::*;
+use vizia::prelude::*;
 
 use super::{ParamSlider, ParamSliderExt, ParamSliderStyle};
 
@@ -95,7 +95,7 @@ impl GenericUi {
 }
 
 impl View for GenericUi {
-    fn element(&self) -> Option<String> {
-        Some(String::from("generic-ui"))
+    fn element(&self) -> Option<&'static str> {
+        Some("generic-ui")
     }
 }

@@ -7,8 +7,7 @@
 
 use nih_plug::prelude::{GuiContext, Param, ParamPtr};
 use std::sync::Arc;
-
-use vizia::{Context, Lens, Model, WindowEvent};
+use vizia::prelude::*;
 
 use super::ViziaState;
 
@@ -76,7 +75,7 @@ pub(crate) struct WindowModel {
 }
 
 impl Model for ParamModel {
-    fn event(&mut self, _cx: &mut vizia::Context, event: &mut vizia::Event) {
+    fn event(&mut self, _cx: &mut Context, event: &mut Event) {
         // `ParamEvent` gets downcast into `NormalizedParamEvent` by the `Message`
         // implementation below
         event.map(|param_event, _| match *param_event {
@@ -92,14 +91,14 @@ impl Model for ParamModel {
 }
 
 impl Model for WindowModel {
-    fn event(&mut self, cx: &mut vizia::Context, event: &mut vizia::Event) {
+    fn event(&mut self, cx: &mut Context, event: &mut Event) {
         // This gets fired whenever the inner window gets resized
         event.map(|window_event, _| {
             if let WindowEvent::WindowResize = window_event {
-                let logical_size = (cx.window_size.width, cx.window_size.height);
+                let logical_size = (cx.window_size().width, cx.window_size().height);
                 let old_logical_size @ (old_logical_width, old_logical_height) =
                     self.vizia_state.size.load();
-                let scale_factor = cx.user_scale_factor;
+                let scale_factor = cx.user_scale_factor();
                 let old_user_scale_factor = self.vizia_state.scale_factor.load();
 
                 // Don't do anything if the current size already matches the new size, this could
@@ -117,9 +116,11 @@ impl Model for WindowModel {
                     self.vizia_state.scale_factor.store(old_user_scale_factor);
 
                     // This will cause the window's size to be reverted on the next event loop
-                    cx.window_size.width = old_logical_width;
-                    cx.window_size.height = old_logical_height;
-                    cx.user_scale_factor = old_user_scale_factor;
+                    cx.set_window_size(WindowSize {
+                        width: old_logical_width,
+                        height: old_logical_height,
+                    });
+                    cx.set_user_scale_factor(old_user_scale_factor);
                 }
             }
         });

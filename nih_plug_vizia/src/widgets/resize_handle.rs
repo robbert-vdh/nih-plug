@@ -1,6 +1,8 @@
 //! A resize handle for uniformly scaling a plugin GUI.
 
-use vizia::*;
+use vizia::cache::BoundingBox;
+use vizia::prelude::*;
+use vizia::vg;
 
 /// A resize handle placed at the bottom right of the window that lets you resize the window.
 pub struct ResizeHandle {
@@ -30,8 +32,8 @@ impl ResizeHandle {
 }
 
 impl View for ResizeHandle {
-    fn element(&self) -> Option<String> {
-        Some(String::from("resize-handle"))
+    fn element(&self) -> Option<&'static str> {
+        Some("resize-handle")
     }
 
     fn event(&mut self, cx: &mut Context, event: &mut Event) {
@@ -40,17 +42,17 @@ impl View for ResizeHandle {
                 // The handle is a triangle, so we should also interac twith it as if it was a
                 // triangle
                 if intersects_triangle(
-                    cx.cache.get_bounds(cx.current),
-                    (cx.mouse.cursorx, cx.mouse.cursory),
+                    cx.cache_ref().get_bounds(cx.current()),
+                    (cx.mouse().cursorx, cx.mouse().cursory),
                 ) {
                     cx.capture();
-                    cx.current.set_active(cx, true);
+                    cx.set_active(true);
 
                     self.drag_active = true;
-                    self.start_scale_factor = cx.user_scale_factor;
+                    self.start_scale_factor = cx.user_scale_factor();
                     self.start_physical_coordinates = (
-                        cx.mouse.cursorx * cx.style.dpi_factor as f32,
-                        cx.mouse.cursory * cx.style.dpi_factor as f32,
+                        cx.mouse().cursorx * cx.style().dpi_factor as f32,
+                        cx.mouse().cursory * cx.style().dpi_factor as f32,
                     );
 
                     meta.consume();
@@ -61,16 +63,16 @@ impl View for ResizeHandle {
             WindowEvent::MouseUp(MouseButton::Left) => {
                 if self.drag_active {
                     cx.release();
-                    cx.current.set_active(cx, false);
+                    cx.set_active(false);
 
                     self.drag_active = false;
                 }
             }
             WindowEvent::MouseMove(x, y) => {
-                cx.current.set_hover(
-                    cx,
-                    intersects_triangle(cx.cache.get_bounds(cx.current), (x, y)),
-                );
+                cx.set_hover(intersects_triangle(
+                    cx.cache_ref().get_bounds(cx.current()),
+                    (x, y),
+                ));
 
                 if self.drag_active {
                     // We need to convert our measurements into physical pixels relative to the
@@ -93,7 +95,7 @@ impl View for ResizeHandle {
 
                     // If this is different then the window will automatically be resized at the end
                     // of the frame
-                    cx.user_scale_factor = new_scale_factor;
+                    cx.set_user_scale_factor(new_scale_factor);
                 }
             }
             _ => {}

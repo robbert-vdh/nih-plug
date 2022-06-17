@@ -4,7 +4,8 @@ use nih_plug::prelude::util;
 use std::cell::Cell;
 use std::time::Duration;
 use std::time::Instant;
-use vizia::*;
+use vizia::prelude::*;
+use vizia::vg;
 
 /// The thickness of a tick inside of the peak meter's bar.
 const TICK_WIDTH: f32 = 1.0;
@@ -97,8 +98,8 @@ impl PeakMeter {
                             Element::new(cx).class("ticks__tick");
                         }
 
-                        let font_size = cx.style.font_size.get(cx.current).unwrap_or(&15.0)
-                            * cx.style.dpi_factor as f32;
+                        let font_size = cx.style_ref().font_size.get(cx.current()).unwrap_or(&15.0)
+                            * cx.style_ref().dpi_factor as f32;
                         let label = if first_tick {
                             Label::new(cx, "-inf")
                                 .class("ticks__label")
@@ -133,8 +134,8 @@ impl PeakMeter {
 }
 
 impl View for PeakMeter {
-    fn element(&self) -> Option<String> {
-        Some(String::from("peak-meter"))
+    fn element(&self) -> Option<&'static str> {
+        Some("peak-meter")
     }
 }
 

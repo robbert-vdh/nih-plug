@@ -1,7 +1,7 @@
 //! Binary assets for use with `nih_plug_vizia`. These fonts first need to be registered by calling
 //! [`nih_plug_vizia::assets::register_fonts()`][register_fonts()].
 
-use vizia::Context;
+use vizia::prelude::*;
 
 // This module provides a re-export and simple font wrappers around the re-exported fonts.
 pub use nih_plug_assets::*;

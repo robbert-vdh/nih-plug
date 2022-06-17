@@ -15,7 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use nih_plug::prelude::Editor;
-use nih_plug_vizia::vizia::*;
+use nih_plug_vizia::vizia::prelude::*;
 use nih_plug_vizia::widgets::*;
 use nih_plug_vizia::{assets, create_vizia_editor, ViziaState};
 use std::sync::Arc;

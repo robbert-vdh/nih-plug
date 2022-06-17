@@ -1,7 +1,7 @@
 //! A slider that integrates with NIH-plug's [`Param`] types.
 
 use nih_plug::prelude::{Param, ParamPtr};
-use vizia::*;
+use vizia::prelude::*;
 
 use super::util::{self, ModifiersExt};
 use super::RawParamEvent;
@@ -240,11 +240,12 @@ impl ParamSlider {
                         if text_input_active.get(cx) {
                             Textbox::new(cx, param_display_value_lens)
                                 .class("value-entry")
-                                .on_submit(|cx, string| {
-                                    cx.emit(ParamSliderEvent::TextInput(string))
-                                })
-                                .on_edit_end(|cx| {
-                                    cx.emit(ParamSliderEvent::CancelTextInput);
+                                .on_submit(|cx, string, success| {
+                                    if success {
+                                        cx.emit(ParamSliderEvent::TextInput(string))
+                                    } else {
+                                        cx.emit(ParamSliderEvent::CancelTextInput);
+                                    }
                                 })
                                 .on_build(|cx| {
                                     cx.emit(TextEvent::StartEdit);
@@ -410,15 +411,15 @@ impl ParamSlider {
 }
 
 impl View for ParamSlider {
-    fn element(&self) -> Option<String> {
-        Some(String::from("param-slider"))
+    fn element(&self) -> Option<&'static str> {
+        Some("param-slider")
     }
 
     fn event(&mut self, cx: &mut Context, event: &mut Event) {
         event.map(|param_slider_event, _| match param_slider_event {
             ParamSliderEvent::CancelTextInput => {
                 cx.emit(ParamSliderInternalEvent::SetTextInputActive(false));
-                cx.current.set_active(cx, false);
+                cx.set_active(false);
             }
             ParamSliderEvent::TextInput(string) => {
                 if let Some(normalized_value) =
@@ -435,11 +436,11 @@ impl View for ParamSlider {
 
         event.map(|window_event, _| match window_event {
             WindowEvent::MouseDown(MouseButton::Left) => {
-                if cx.modifiers.alt() {
+                if cx.modifiers().alt() {
                     // ALt+Click brings up a text entry dialog
                     cx.emit(ParamSliderInternalEvent::SetTextInputActive(true));
-                    cx.current.set_active(cx, true);
-                } else if cx.modifiers.command() || self.is_double_click {
+                    cx.set_active(true);
+                } else if cx.modifiers().command() || self.is_double_click {
                     // Ctrl+Click and double click should reset the parameter instead of initiating
                     // a drag operation
                     cx.emit(RawParamEvent::BeginSetParameter(self.param_ptr));
@@ -452,21 +453,21 @@ impl View for ParamSlider {
                     self.drag_active = true;
                     cx.capture();
                     // NOTE: Otherwise we don't get key up events
-                    cx.focused = cx.current;
-                    cx.current.set_active(cx, true);
+                    cx.focus();
+                    cx.set_active(true);
 
                     // When holding down shift while clicking on a parameter we want to granuarly
                     // edit the parameter without jumping to a new value
                     cx.emit(RawParamEvent::BeginSetParameter(self.param_ptr));
-                    if cx.modifiers.shift() {
-                        self.granular_drag_start_x_value = Some((cx.mouse.cursorx, unsafe {
+                    if cx.modifiers().shift() {
+                        self.granular_drag_start_x_value = Some((cx.mouse().cursorx, unsafe {
                             self.param_ptr.unmodulated_normalized_value()
                         }));
                     } else {
                         self.granular_drag_start_x_value = None;
                         self.set_normalized_value_drag(
                             cx,
-                            util::remap_current_entity_x_coordinate(cx, cx.mouse.cursorx),
+                            util::remap_current_entity_x_coordinate(cx, cx.mouse().cursorx),
                         );
                     }
                 }
@@ -483,7 +484,7 @@ impl View for ParamSlider {
                 if self.drag_active {
                     self.drag_active = false;
                     cx.release();
-                    cx.current.set_active(cx, false);
+                    cx.set_active(false);
 
                     cx.emit(RawParamEvent::EndSetParameter(self.param_ptr));
                 }
@@ -492,10 +493,10 @@ impl View for ParamSlider {
                 if self.drag_active {
                     // If shift is being held then the drag should be more granular instead of
                     // absolute
-                    if cx.modifiers.shift() {
+                    if cx.modifiers().shift() {
                         let (drag_start_x, drag_start_value) =
                             *self.granular_drag_start_x_value.get_or_insert_with(|| {
-                                (cx.mouse.cursorx, unsafe {
+                                (cx.mouse().cursorx, unsafe {
                                     self.param_ptr.unmodulated_normalized_value()
                                 })
                             });
@@ -526,7 +527,7 @@ impl View for ParamSlider {
                     self.granular_drag_start_x_value = None;
                     self.set_normalized_value(
                         cx,
-                        util::remap_current_entity_x_coordinate(cx, cx.mouse.cursorx),
+                        util::remap_current_entity_x_coordinate(cx, cx.mouse().cursorx),
                     );
                 }
             }
@@ -543,7 +544,7 @@ pub trait ParamSliderExt {
 
 impl ParamSliderExt for Handle<'_, ParamSlider> {
     fn set_style(self, style: ParamSliderStyle) -> Self {
-        self.cx.event_queue.push_back(
+        self.cx.emit_custom(
             Event::new(ParamSliderInternalEvent::SetStyle(style))
                 .target(self.entity)
                 .origin(self.entity)
