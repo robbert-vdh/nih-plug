@@ -575,7 +575,7 @@ pub fn maybe_create_macos_bundle_metadata(
 <plist>
   <dict>
     <key>CFBundleExecutable</key>
-    <string>{package}</string>
+    <string>{display_name}</string>
     <key>CFBundleIconFile</key>
     <string></string>
     <key>CFBundleIdentifier</key>
