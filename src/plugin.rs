@@ -20,6 +20,8 @@ use crate::wrapper::clap::features::ClapFeature;
 /// implemented. Notable missing features include:
 ///
 /// - MIDI SysEx and MIDI2 for CLAP, note expressions and MIDI1 are already supported
+/// - Polyphonic modulation for CLAP
+/// - Audio thread thread pools (with host integration in CLAP)
 #[allow(unused_variables)]
 pub trait Plugin: Default + Send + Sync + 'static {
     const NAME: &'static str;
