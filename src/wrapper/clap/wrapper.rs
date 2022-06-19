@@ -1372,7 +1372,6 @@ impl<P: ClapPlugin> Wrapper<P> {
 
                 false
             }
-            // TODO: Make sure this only gets logged in debug mode
             _ => {
                 nih_trace!(
                     "Unhandled CLAP event type {} for namespace {}",
