@@ -92,9 +92,19 @@ pub fn v2s_f32_hz_then_khz(digits: usize) -> Arc<dyn Fn(f32) -> String + Send + 
     })
 }
 
-/// Convert an input in the same format at that of [`v2s_f32_hz_then_khz()] to a Hertz value.
+/// Convert an input in the same format at that of [`v2s_f32_hz_then_khz()] to a Hertz value. This
+/// additionally also accepts note names in the same format as [`s2v_i32_note_formatter()`].
 pub fn s2v_f32_hz_then_khz() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> {
+    // FIXME: This is a very crude way to reuse the note value formatter. There's no real runtime
+    //        penalty for doing it this way, but it does look less pretty.
+    let note_formatter = s2v_i32_note_formatter();
+
     Arc::new(move |string| {
+        // If the user inputs a note representation, then we'll use that
+        if let Some(midi_note_number) = note_formatter(string) {
+            return Some(util::midi_note_to_freq(midi_note_number as u8) as f32);
+        }
+
         let string = string.trim();
         let cleaned_string = string
             .trim_end_matches(&[' ', 'k', 'K', 'h', 'H', 'z', 'Z'])
