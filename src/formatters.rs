@@ -102,7 +102,7 @@ pub fn s2v_f32_hz_then_khz() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> {
     Arc::new(move |string| {
         // If the user inputs a note representation, then we'll use that
         if let Some(midi_note_number) = note_formatter(string) {
-            return Some(util::midi_note_to_freq(midi_note_number as u8) as f32);
+            return Some((midi_note_number.clamp(0, 127) as u8) as f32);
         }
 
         let string = string.trim();
@@ -143,9 +143,16 @@ pub fn v2s_i32_note_formatter() -> Arc<dyn Fn(i32) -> String + Send + Sync> {
 /// Parse a note name to a MIDI number using the inverse mapping from [`v2s_i32_note_formatter()].
 pub fn s2v_i32_note_formatter() -> Arc<dyn Fn(&str) -> Option<i32> + Send + Sync> {
     Arc::new(|string| {
+        let string = string.trim();
+        if string.len() < 2 {
+            return None;
+        }
+
+        // A valid trimmed string will either be be two characters (we already checked the length),
+        // or two characters separated by spaces
         let (note_name, octave) = string
-            .trim()
-            .split_once(|c: char| c.is_whitespace() || c.is_ascii_digit())?;
+            .split_once(|c: char| c.is_whitespace())
+            .unwrap_or_else(|| (&string[..1], &string[1..]));
 
         let note_id = util::NOTES
             .iter()
@@ -153,7 +160,8 @@ pub fn s2v_i32_note_formatter() -> Arc<dyn Fn(&str) -> Option<i32> + Send + Sync
             as i32;
         let octave: i32 = octave.trim().parse().ok()?;
 
-        Some((octave + 1) + (12 * note_id))
+        // 0 = C-1, 12 = C0, 24 = C1
+        Some(note_id + (12 * (octave + 1)))
     })
 }
 
