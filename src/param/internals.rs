@@ -90,16 +90,22 @@ pub enum ParamPtr {
 unsafe impl Send for ParamPtr {}
 unsafe impl Sync for ParamPtr {}
 
-/// The functinoality needed for persisting a field to the plugin's state, and for restoring values
-/// when loading old state.
+/// Handles the functionality needed for persisting a non-parameter fields in a plugin's state.
+/// These types can be used with [`Params`]' `#[persist = "..."]` attributes.
 ///
-/// TODO: Modifying these fields (or any parameter for that matter) should mark the plugin's state
-///       as dirty.
+/// This should be implemented for some type with interior mutability containing a `T`.
+//
+// TODO: Modifying these fields (or any parameter for that matter) should mark the plugin's state
+//       as dirty.
 pub trait PersistentField<'a, T>: Send + Sync
 where
     T: serde::Serialize + serde::Deserialize<'a>,
 {
+    /// Update the stored `T` value using interior mutability.
     fn set(&self, new_value: T);
+
+    /// Get a reference to the stored `T` value, and apply a function to it. This is used to
+    /// serialize the `T` value.
     fn map<F, R>(&self, f: F) -> R
     where
         F: Fn(&T) -> R;
