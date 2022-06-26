@@ -83,7 +83,7 @@ pub fn setup_logger() {
     #[cfg(target_os = "windows")]
     if nih_log_env_str.eq_ignore_ascii_case("windbg") || win_dbg_logger::is_debugger_present() {
         win_dbg_logger::init();
-        log_panics::init();
+        log_panics();
         return;
     }
 
@@ -126,8 +126,12 @@ pub fn setup_logger() {
         }
     }
 
-    // This is copied from same as the `log_panics` crate, but it's wrapped in `permit_alloc()`.
-    // Otherwise logging panics will trigger `assert_no_alloc` as this also allocates.
+    log_panics();
+}
+
+/// This is copied from same as the `log_panics` crate, but it's wrapped in `permit_alloc()`.
+/// Otherwise logging panics will trigger `assert_no_alloc` as this also allocates.
+fn log_panics() {
     std::panic::set_hook(Box::new(|info| {
         permit_alloc(|| {
             // All of this is directly copied from `permit_no_alloc`, except that `error!()` became
