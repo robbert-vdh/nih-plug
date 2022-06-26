@@ -2119,16 +2119,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "log-panics"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae0136257df209261daa18d6c16394757c63e032e27aafd8b07788b051082bef"
-dependencies = [
- "backtrace",
- "log",
-]
-
-[[package]]
 name = "loudness_war_winner"
 version = "0.1.0"
 dependencies = [
@@ -2387,6 +2377,7 @@ dependencies = [
  "assert_no_alloc",
  "atomic_float",
  "atomic_refcell",
+ "backtrace",
  "baseview 0.1.0 (git+https://github.com/robbert-vdh/baseview.git?branch=feature/resize)",
  "bitflags",
  "cfg-if 1.0.0",
@@ -2397,7 +2388,6 @@ dependencies = [
  "lazy_static",
  "libc",
  "log",
- "log-panics",
  "midi-consts",
  "nih_plug_derive",
  "parking_lot 0.12.1",

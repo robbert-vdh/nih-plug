@@ -1,8 +1,11 @@
+use backtrace::Backtrace;
 use std::cmp;
 use std::fs::File;
 use std::marker::PhantomData;
 use std::os::raw::c_char;
 use std::sync::atomic::{AtomicBool, Ordering};
+
+use crate::util::permit_alloc;
 
 /// The environment variable for controlling the logging behavior.
 const NIH_LOG_ENV: &str = "NIH_LOG";
@@ -123,7 +126,48 @@ pub fn setup_logger() {
         }
     }
 
-    log_panics::init();
+    // This is copied from same as the `log_panics` crate, but it's wrapped in `permit_alloc()`.
+    // Otherwise logging panics will trigger `assert_no_alloc` as this also allocates.
+    std::panic::set_hook(Box::new(|info| {
+        permit_alloc(|| {
+            // All of this is directly copied from `permit_no_alloc`, except that `error!()` became
+            // `nih_error!()` and `Shim` has been inlined
+            let backtrace = Backtrace::new();
+
+            let thread = std::thread::current();
+            let thread = thread.name().unwrap_or("unnamed");
+
+            let msg = match info.payload().downcast_ref::<&'static str>() {
+                Some(s) => *s,
+                None => match info.payload().downcast_ref::<String>() {
+                    Some(s) => &**s,
+                    None => "Box<Any>",
+                },
+            };
+
+            match info.location() {
+                Some(location) => {
+                    nih_error!(
+                        target: "panic", "thread '{}' panicked at '{}': {}:{}\n{:?}",
+                        thread,
+                        msg,
+                        location.file(),
+                        location.line(),
+                        backtrace
+                    );
+                }
+                None => {
+                    nih_error!(
+                        target: "panic",
+                        "thread '{}' panicked at '{}'\n{:?}",
+                        thread,
+                        msg,
+                        backtrace
+                    )
+                }
+            }
+        })
+    }));
 }
 
 /// A wrapper around the entire process function, including the plugin wrapper parts. This sets up
