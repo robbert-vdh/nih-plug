@@ -2286,13 +2286,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         } else {
             index + num_input_ports
         };
-        let pair_stable_id = match (is_input, is_main_port) {
-            // Ports are named linearly with inputs coming before outputs, so this is the index of
-            // the first output port
-            (true, true) => num_input_ports,
-            (false, true) => 0,
-            (_, false) => CLAP_INVALID_ID,
-        };
+        let pair_stable_id = if is_main_port { 0 } else { CLAP_INVALID_ID };
 
         let channel_count = match (is_input, is_main_port) {
             (true, true) => current_bus_config.num_input_channels,
