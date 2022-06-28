@@ -19,7 +19,7 @@ struct GainParams {
     pub gain: FloatParam,
 
     /// This field isn't used in this exampleq, but anything written to the vector would be restored
-    /// together with a preset/state file saved for this plugin. This can be useful for storign
+    /// together with a preset/state file saved for this plugin. This can be useful for storing
     /// things like sample data.
     #[persist = "industry_secrets"]
     pub random_data: RwLock<Vec<f32>>,
