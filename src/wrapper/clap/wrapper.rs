@@ -2289,9 +2289,9 @@ impl<P: ClapPlugin> Wrapper<P> {
         let pair_stable_id = match (is_input, is_main_port) {
             // Ports are named linearly with inputs coming before outputs, so this is the index of
             // the first output port
-            (true, true) => num_input_ports,
-            (false, true) => 0,
-            (_, false) => CLAP_INVALID_ID,
+            (true, true) if has_main_output => num_input_ports,
+            (false, true) if has_main_input => 0,
+            _ => CLAP_INVALID_ID,
         };
 
         let channel_count = match (is_input, is_main_port) {
