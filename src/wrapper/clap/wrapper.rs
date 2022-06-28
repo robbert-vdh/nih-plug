@@ -1639,7 +1639,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             let current_bus_config = wrapper.current_bus_config.load();
             let has_main_input = current_bus_config.num_input_channels > 0;
             let has_main_output = current_bus_config.num_output_channels > 0;
-            if !process.audio_outputs.is_null() {
+            if process.audio_outputs_count > 0 && !process.audio_outputs.is_null() {
                 for output_idx in
                     if has_main_output { 1 } else { 0 }..process.audio_outputs_count as isize
                 {
@@ -1724,7 +1724,8 @@ impl<P: ClapPlugin> Wrapper<P> {
                     // Explicitly take plugins with no main output that does have auxiliary outputs
                     // into account. Shouldn't happen, but if we just start copying audio here then
                     // that would result in unsoundness.
-                    if !process.audio_outputs.is_null()
+                    if process.audio_outputs_count > 0
+                        && !process.audio_outputs.is_null()
                         && !(*process.audio_outputs).data32.is_null()
                         && !output_slices.is_empty()
                     {
@@ -1759,8 +1760,10 @@ impl<P: ClapPlugin> Wrapper<P> {
                 // Some hosts process data in place, in which case we don't need to do any copying
                 // ourselves. If the pointers do not alias, then we'll do the copy here and then the
                 // plugin can just do normal in place processing.
-                if !process.audio_outputs.is_null()
+                if process.audio_outputs_count > 0
+                    && !process.audio_outputs.is_null()
                     && !(*process.audio_outputs).data32.is_null()
+                    && process.audio_inputs_count > 0
                     && !process.audio_inputs.is_null()
                     && !(*process.audio_inputs).data32.is_null()
                 {
