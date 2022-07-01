@@ -202,6 +202,16 @@ impl DiopserParams {
                 .with_value_to_string(Arc::new(|value| {
                     String::from(if value { "please don't" } else { "stop it" })
                 }))
+                .with_string_to_value(Arc::new(|string| {
+                    let string = string.trim();
+                    if string.eq_ignore_ascii_case("please don't") {
+                        Some(true)
+                    } else if string.eq_ignore_ascii_case("stop it") {
+                        Some(false)
+                    } else {
+                        None
+                    }
+                }))
                 .hide_in_generic_ui(),
 
             automation_precision: FloatParam::new(
