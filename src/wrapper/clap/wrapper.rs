@@ -737,10 +737,10 @@ impl<P: ClapPlugin> Wrapper<P> {
         let mut input_events = self.input_events.borrow_mut();
         input_events.clear();
 
-        let num_events = ((*in_).size)(&*in_);
+        let num_events = ((*in_).size)(in_);
         let mut parameter_values_changed = false;
         for event_idx in 0..num_events {
-            let event = ((*in_).get)(&*in_, event_idx);
+            let event = ((*in_).get)(in_, event_idx);
             parameter_values_changed |=
                 self.handle_in_event(event, &mut input_events, None, current_sample_idx);
         }
@@ -772,13 +772,13 @@ impl<P: ClapPlugin> Wrapper<P> {
         input_events.clear();
 
         // To achive this, we'll always read one event ahead
-        let num_events = ((*in_).size)(&*in_);
+        let num_events = ((*in_).size)(in_);
         if num_events == 0 {
             return None;
         }
 
         let start_idx = resume_from_event_idx as u32;
-        let mut event: *const clap_event_header = ((*in_).get)(&*in_, start_idx);
+        let mut event: *const clap_event_header = ((*in_).get)(in_, start_idx);
         let mut parameter_values_changed = false;
         for next_event_idx in (start_idx + 1)..num_events {
             parameter_values_changed |= self.handle_in_event(
@@ -790,7 +790,7 @@ impl<P: ClapPlugin> Wrapper<P> {
 
             // Stop just before the next parameter change or transport information event at a sample
             // after the current sample
-            let next_event: *const clap_event_header = ((*in_).get)(&*in_, next_event_idx);
+            let next_event: *const clap_event_header = ((*in_).get)(in_, next_event_idx);
             if (*next_event).time > current_sample_idx as u32 && stop_predicate(next_event) {
                 return Some(((*next_event).time as usize, next_event_idx as usize));
             }
