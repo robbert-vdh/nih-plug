@@ -1,7 +1,3 @@
-// Clippy doesn't understand it when we use a unit in our `check_null_ptr!()` maccro, even if we
-// explicitly pattern match on that unit
-#![allow(clippy::unused_unit)]
-
 use atomic_float::AtomicF32;
 use atomic_refcell::{AtomicRefCell, AtomicRefMut};
 use clap_sys::events::{
