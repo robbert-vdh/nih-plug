@@ -2,6 +2,9 @@
 //!
 //! TODO: Proper usage example, for now check out the gain_gui example
 
+// See the comment in the main `nih_plug` crate
+#![allow(clippy::type_complexity)]
+
 use baseview::gl::GlConfig;
 use baseview::{Size, WindowHandle, WindowOpenOptions, WindowScalePolicy};
 use crossbeam::atomic::AtomicCell;

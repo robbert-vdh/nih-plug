@@ -1,5 +1,8 @@
 //! [VIZIA](https://github.com/vizia/vizia) editor support for NIH plug.
 
+// See the comment in the main `nih_plug` crate
+#![allow(clippy::type_complexity)]
+
 use baseview::{WindowHandle, WindowScalePolicy};
 use crossbeam::atomic::AtomicCell;
 use nih_plug::prelude::{Editor, GuiContext, ParentWindowHandle};
