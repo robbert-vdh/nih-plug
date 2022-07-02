@@ -6,6 +6,14 @@ new and what's changed, this document lists all breaking changes in reverse
 chronological order. If a new feature did not require any changes to existing
 code then it will not be listed here.
 
+## [2022-07-02]
+
+- The `Params::serialize_fields()` and `Params::deserialize_fields()` methods
+  and the `State` struct now use `BTreeMap`s instead of `HashMap`s so the order
+  is consistent the plugin's state to JSON multiple times. These things are part
+  of NIH-plug's internals, so unless you're implementing the `Params` trait by
+  hand you will not notice any changes.
+
 ## [2022-06-01]
 
 - The `ClapPlugin::CLAP_FEATURES` field now uses an array of `ClapFeature`

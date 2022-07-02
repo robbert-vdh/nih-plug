@@ -255,8 +255,8 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                 param_map
             }
 
-            fn serialize_fields(&self) -> ::std::collections::HashMap<String, String> {
-                let mut serialized = ::std::collections::HashMap::new();
+            fn serialize_fields(&self) -> ::std::collections::BTreeMap<String, String> {
+                let mut serialized = ::std::collections::BTreeMap::new();
                 #(#field_serialize_tokens)*
 
                 let nested_params_fields: &[&dyn Params] = &[#(&self.#nested_params_field_idents),*];
@@ -267,7 +267,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                 serialized
             }
 
-            fn deserialize_fields(&self, serialized: &::std::collections::HashMap<String, String>) {
+            fn deserialize_fields(&self, serialized: &::std::collections::BTreeMap<String, String>) {
                 for (field_name, data) in serialized {
                     match field_name.as_str() {
                         #(#field_deserialize_tokens)*

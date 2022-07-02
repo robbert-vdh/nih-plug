@@ -2,7 +2,7 @@
 //! to plugins through the [`GuiContext`][crate::prelude::GuiContext].
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 use crate::param::internals::{ParamPtr, Params};
@@ -25,19 +25,21 @@ pub enum ParamValue {
 
 /// A plugin's state so it can be restored at a later point. This object can be serialized and
 /// deserialized using serde.
+///
+/// The fields are stored as `BTreeMap`s so the order in the serialized file is consistent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginState {
     /// The plugin's parameter values. These are stored unnormalized. This mean sthe old values will
     /// be recalled when when the parameter's range gets increased. Doing so may still mess with
     /// parameter automation though, depending on how the host impelments that.
-    pub params: HashMap<String, ParamValue>,
+    pub params: BTreeMap<String, ParamValue>,
     /// Arbitrary fields that should be persisted together with the plugin's parameters. Any field
     /// on the [`Params`][crate::param::internals::Params] struct that's annotated with `#[persist =
     /// "stable_name"]` will be persisted this way.
     ///
     /// The individual fields are also serialized as JSON so they can safely be restored
     /// independently of the other fields.
-    pub fields: HashMap<String, String>,
+    pub fields: BTreeMap<String, String>,
 }
 
 /// Create a parameters iterator from the hashtables stored in the plugin wrappers. This avoids
@@ -77,7 +79,7 @@ pub(crate) unsafe fn serialize_object<'a>(
     // We'll serialize parameter values as a simple `string_param_id: display_value` map.
     // NOTE: If the plugin is being modulated (and the plugin is a CLAP plugin in Bitwig Studio),
     //       then this should save the values without any modulation applied to it
-    let params: HashMap<_, _> = params_iter
+    let params: BTreeMap<_, _> = params_iter
         .into_iter()
         .map(|(param_id_str, param_ptr)| match param_ptr {
             ParamPtr::FloatParam(p) => (

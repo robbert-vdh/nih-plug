@@ -1,6 +1,6 @@
 //! Implementation details for the parameter management.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use super::{Param, ParamFlags, ParamMut};
 
@@ -59,8 +59,8 @@ pub unsafe trait Params: 'static + Send + Sync {
     /// Serialize all fields marked with `#[persist = "stable_name"]` into a hash map containing
     /// JSON-representations of those fields so they can be written to the plugin's state and
     /// recalled later. This uses [`serialize_field()`] under the hood.
-    fn serialize_fields(&self) -> HashMap<String, String> {
-        HashMap::new()
+    fn serialize_fields(&self) -> BTreeMap<String, String> {
+        BTreeMap::new()
     }
 
     /// Restore all fields marked with `#[persist = "stable_name"]` from a hashmap created by
@@ -69,7 +69,7 @@ pub unsafe trait Params: 'static + Send + Sync {
     /// This gets called when the plugin's state is being restored. This uses [deserialize_field()]
     /// under the hood.
     #[allow(unused_variables)]
-    fn deserialize_fields(&self, serialized: &HashMap<String, String>) {}
+    fn deserialize_fields(&self, serialized: &BTreeMap<String, String>) {}
 }
 
 /// Internal pointers to parameters. This is an implementation detail used by the wrappers for type
