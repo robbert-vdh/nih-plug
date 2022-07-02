@@ -222,8 +222,12 @@ impl ParamMut for FloatParam {
     }
 
     fn set_normalized_value(&mut self, normalized: f32) {
+        // NOTE: The double conversion here is to make sure the state is reproducible. State is
+        //       saved and restored using plain values, and the new normalized value will be
+        //       different from `normalized`. This is not necesasry for the modulation as these
+        //       values are never shown to the host.
         self.unmodulated_value = self.preview_plain(normalized);
-        self.unmodulated_normalized_value = normalized;
+        self.unmodulated_normalized_value = self.preview_normalized(self.unmodulated_value);
         if self.modulation_offset == 0.0 {
             self.value = self.unmodulated_value;
             self.normalized_value = self.unmodulated_normalized_value;
