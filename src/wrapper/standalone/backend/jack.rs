@@ -64,7 +64,10 @@ impl Backend for Jack {
             // buffers like that so we'll just make it easier for ourselves by not supporting that
             let num_frames = ps.n_frames();
             if num_frames != buffer_size {
-                nih_error!("Buffer size changed from {buffer_size} to {num_frames}. Buffer size changes are currently not supported, aborting...");
+                nih_error!(
+                    "Buffer size changed from {buffer_size} to {num_frames}. Buffer size changes \
+                     are currently not supported, aborting..."
+                );
                 control_sender.send(Task::Shutdown).unwrap();
                 return Control::Quit;
             }

@@ -50,7 +50,8 @@ pub fn derive_enum(input: TokenStream) -> TokenStream {
                     _ => {
                         return syn::Error::new(
                             attr.span(),
-                            "The name attribute should be a key-value pair with a string argument: #[name = \"foo bar\"]",
+                            "The name attribute should be a key-value pair with a string \
+                             argument: #[name = \"foo bar\"]",
                         )
                         .to_compile_error()
                         .into()
@@ -73,7 +74,8 @@ pub fn derive_enum(input: TokenStream) -> TokenStream {
                     _ => {
                         return syn::Error::new(
                             attr.span(),
-                            "The id attribute should be a key-value pair with a string argument: #[id = \"foo-bar\"]",
+                            "The id attribute should be a key-value pair with a string argument: \
+                             #[id = \"foo-bar\"]",
                         )
                         .to_compile_error()
                         .into()

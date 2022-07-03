@@ -142,8 +142,8 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
             nih_debug_assert_eq!(
                 param_map.len(),
                 param_ids.len(),
-                "The plugin has duplicate parameter IDs, weird things may happen. \
-                 Consider using 6 character parameter IDs to avoid collissions.."
+                "The plugin has duplicate parameter IDs, weird things may happen. Consider using \
+                 6 character parameter IDs to avoid collissions.."
             );
 
             let mut bypass_param_exists = false;

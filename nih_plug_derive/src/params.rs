@@ -69,7 +69,8 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                     _ => {
                         return syn::Error::new(
                             attr.span(),
-                            "The id attribute should be a key-value pair with a string argument: #[id = \"foo_bar\"]",
+                            "The id attribute should be a key-value pair with a string argument: \
+                             #[id = \"foo_bar\"]",
                         )
                         .to_compile_error()
                         .into()
@@ -92,7 +93,8 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                     _ => {
                         return syn::Error::new(
                             attr.span(),
-                            "The persist attribute should be a key-value pair with a string argument: #[persist = \"foo_bar\"]",
+                            "The persist attribute should be a key-value pair with a string \
+                             argument: #[persist = \"foo_bar\"]",
                         )
                         .to_compile_error()
                         .into()
@@ -110,9 +112,12 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                                 .to_compile_error()
                                 .into();
                         } else if s.contains('/') {
-                            return syn::Error::new(attr.span(), "Group names may not contain slashes")
-                                .to_compile_error()
-                                .into();
+                            return syn::Error::new(
+                                attr.span(),
+                                "Group names may not contain slashes",
+                            )
+                            .to_compile_error()
+                            .into();
                         } else if nested_attr.is_some() {
                             return syn::Error::new(attr.span(), "Duplicate nested attribute")
                                 .to_compile_error()
@@ -124,7 +129,8 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                     _ => {
                         return syn::Error::new(
                             attr.span(),
-                            "The nested attribute should be a key-value pair with a string argument: #[nested = \"Group Name\"]",
+                            "The nested attribute should be a key-value pair with a string \
+                             argument: #[nested = \"Group Name\"]",
                         )
                         .to_compile_error()
                         .into()

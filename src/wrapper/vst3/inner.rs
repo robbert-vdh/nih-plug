@@ -220,8 +220,8 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             nih_debug_assert_eq!(
                 param_map.len(),
                 param_ids.len(),
-                "The plugin has duplicate parameter IDs, weird things may happen. \
-                 Consider using 6 character parameter IDs to avoid collissions.."
+                "The plugin has duplicate parameter IDs, weird things may happen. Consider using \
+                 6 character parameter IDs to avoid collissions.."
             );
 
             let mut bypass_param_exists = false;
@@ -241,7 +241,9 @@ impl<P: Vst3Plugin> WrapperInner<P> {
                     && (VST3_MIDI_PARAMS_START..VST3_MIDI_PARAMS_END).contains(hash)
                 {
                     nih_debug_assert_failure!(
-                        "Parameter '{}' collides with an automatically generated MIDI CC parameter, consider giving it a different ID", id
+                        "Parameter '{}' collides with an automatically generated MIDI CC \
+                         parameter, consider giving it a different ID",
+                        id
                     );
                 }
             }

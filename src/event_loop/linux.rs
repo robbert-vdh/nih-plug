@@ -12,7 +12,8 @@ use crate::util::permit_alloc;
 /// See [`EventLoop`][super::EventLoop].
 #[cfg_attr(
     target_os = "macos",
-    deprecated = "macOS needs to have its own event loop implementation, this implementation may not work correctly"
+    deprecated = "macOS needs to have its own event loop implementation, this implementation may \
+                  not work correctly"
 )]
 pub(crate) struct LinuxEventLoop<T, E> {
     /// The thing that ends up executing these tasks. The tasks are usually executed from the worker
@@ -71,7 +72,10 @@ where
                     true
                 }
                 None => {
-                    nih_trace!("The executor doesn't exist but somehow it's still submitting tasks, this shouldn't be possible!");
+                    nih_trace!(
+                        "The executor doesn't exist but somehow it's still submitting tasks, this \
+                         shouldn't be possible!"
+                    );
                     false
                 }
             }
@@ -112,7 +116,10 @@ where
             Ok(Message::Task(task)) => match executor.upgrade() {
                 Some(e) => unsafe { e.execute(task) },
                 None => {
-                    nih_trace!("Received a new task but the executor is no longer alive, shutting down worker");
+                    nih_trace!(
+                        "Received a new task but the executor is no longer alive, shutting down \
+                         worker"
+                    );
                     return;
                 }
             },

@@ -141,7 +141,10 @@ where
                     true
                 }
                 None => {
-                    nih_trace!("The executor doesn't exist but somehow it's still submitting tasks, this shouldn't be possible!");
+                    nih_trace!(
+                        "The executor doesn't exist but somehow it's still submitting tasks, this \
+                         shouldn't be possible!"
+                    );
                     false
                 }
             }

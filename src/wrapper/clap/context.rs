@@ -50,7 +50,11 @@ impl<P: ClapPlugin> GuiContext for WrapperGuiContext<P> {
                     .wrapper
                     .queue_parameter_event(OutputParamEvent::BeginGesture { param_hash: *hash });
 
-                nih_debug_assert!(success, "Parameter output event queue was full, parameter change will not be sent to the host");
+                nih_debug_assert!(
+                    success,
+                    "Parameter output event queue was full, parameter change will not be sent to \
+                     the host"
+                );
             }
             None => nih_debug_assert_failure!("Unknown parameter: {:?}", param),
         }
@@ -72,7 +76,11 @@ impl<P: ClapPlugin> GuiContext for WrapperGuiContext<P> {
                         clap_plain_value,
                     });
 
-                nih_debug_assert!(success, "Parameter output event queue was full, parameter change will not be sent to the host");
+                nih_debug_assert!(
+                    success,
+                    "Parameter output event queue was full, parameter change will not be sent to \
+                     the host"
+                );
             }
             None => nih_debug_assert_failure!("Unknown parameter: {:?}", param),
         }
@@ -85,7 +93,11 @@ impl<P: ClapPlugin> GuiContext for WrapperGuiContext<P> {
                     .wrapper
                     .queue_parameter_event(OutputParamEvent::EndGesture { param_hash: *hash });
 
-                nih_debug_assert!(success, "Parameter output event queue was full, parameter change will not be sent to the host");
+                nih_debug_assert!(
+                    success,
+                    "Parameter output event queue was full, parameter change will not be sent to \
+                     the host"
+                );
             }
             None => nih_debug_assert_failure!("Unknown parameter: {:?}", param),
         }

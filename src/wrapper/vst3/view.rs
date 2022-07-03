@@ -519,8 +519,8 @@ impl<P: Vst3Plugin> Drop for RunLoopEventHandler<P> {
 
         if posting_failed {
             nih_debug_assert_failure!(
-                "Outstanding tasks have been dropped when clsoing \
-                 the editor as the task queue was full"
+                "Outstanding tasks have been dropped when clsoing the editor as the task queue \
+                 was full"
             );
         }
 
