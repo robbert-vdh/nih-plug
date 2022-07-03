@@ -72,7 +72,6 @@ unsafe impl ByteReadBuffer for &mut [u8] {
     }
 
     fn as_mut_ptr(&mut self) -> *mut u8 {
-        // Bit of a fun one since we reuse the names of the original functions
         <[u8]>::as_mut_ptr(self)
     }
 }
