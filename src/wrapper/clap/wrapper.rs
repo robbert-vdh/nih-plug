@@ -305,7 +305,7 @@ impl<P: ClapPlugin> EventLoop<Task, Wrapper<P>> for Wrapper<P> {
             if success {
                 // CLAP lets us use the host's event loop instead of having to implement our own
                 let host = &self.host_callback;
-                unsafe { (host.request_callback)(&**host) };
+                unsafe_clap_call! { host=>request_callback(&**host) };
             }
 
             success
@@ -316,7 +316,9 @@ impl<P: ClapPlugin> EventLoop<Task, Wrapper<P>> for Wrapper<P> {
         // If the host supports the thread check interface then we'll use that, otherwise we'll
         // check if this is the same thread as the one that created the plugin instance.
         match &*self.host_thread_check.borrow() {
-            Some(thread_check) => unsafe { (thread_check.is_main_thread)(&*self.host_callback) },
+            Some(thread_check) => {
+                unsafe_clap_call! { thread_check=>is_main_thread(&*self.host_callback) }
+            }
             // FIXME: `thread::current()` may allocate the first time it's called, is there a safe
             //        nonallocating version of this without using huge OS-specific libraries?
             None => permit_alloc(|| thread::current().id() == self.main_thread_id),
@@ -335,16 +337,16 @@ impl<P: ClapPlugin> MainThreadExecutor<Task> for Wrapper<P> {
                     //      is processing, but we'll treat it as the same thing). In practice just
                     //      calling the latency changed function also seems to work just fine.
                     if self.is_processing.load(Ordering::SeqCst) {
-                        (self.host_callback.request_restart)(&*self.host_callback)
+                        clap_call! { &*self.host_callback=>request_restart(&*self.host_callback) };
                     } else {
-                        (host_latency.changed)(&*self.host_callback)
+                        clap_call! { host_latency=>changed(&*self.host_callback) };
                     }
                 }
                 None => nih_debug_assert_failure!("Host does not support the latency extension"),
             },
             Task::RescanParamValues => match &*self.host_params.borrow() {
                 Some(host_params) => {
-                    (host_params.rescan)(&*self.host_callback, CLAP_PARAM_RESCAN_VALUES);
+                    clap_call! { host_params=>rescan(&*self.host_callback, CLAP_PARAM_RESCAN_VALUES) };
                 }
                 None => nih_debug_assert_failure!("The host does not support parameters? What?"),
             },
@@ -487,16 +489,16 @@ impl<P: ClapPlugin> Wrapper<P> {
                 // We already need to use pointer casts in the factory, so might as well continue
                 // doing that here
                 plugin_data: ptr::null_mut(),
-                init: Self::init,
-                destroy: Self::destroy,
-                activate: Self::activate,
-                deactivate: Self::deactivate,
-                start_processing: Self::start_processing,
-                stop_processing: Self::stop_processing,
-                reset: Self::reset,
-                process: Self::process,
-                get_extension: Self::get_extension,
-                on_main_thread: Self::on_main_thread,
+                init: Some(Self::init),
+                destroy: Some(Self::destroy),
+                activate: Some(Self::activate),
+                deactivate: Some(Self::deactivate),
+                start_processing: Some(Self::start_processing),
+                stop_processing: Some(Self::stop_processing),
+                reset: Some(Self::reset),
+                process: Some(Self::process),
+                get_extension: Some(Self::get_extension),
+                on_main_thread: Some(Self::on_main_thread),
             },
 
             this: AtomicRefCell::new(Weak::new()),
@@ -532,53 +534,53 @@ impl<P: ClapPlugin> Wrapper<P> {
             host_callback,
 
             clap_plugin_audio_ports_config: clap_plugin_audio_ports_config {
-                count: Self::ext_audio_ports_config_count,
-                get: Self::ext_audio_ports_config_get,
-                select: Self::ext_audio_ports_config_select,
+                count: Some(Self::ext_audio_ports_config_count),
+                get: Some(Self::ext_audio_ports_config_get),
+                select: Some(Self::ext_audio_ports_config_select),
             },
             supported_bus_configs,
 
             clap_plugin_audio_ports: clap_plugin_audio_ports {
-                count: Self::ext_audio_ports_count,
-                get: Self::ext_audio_ports_get,
+                count: Some(Self::ext_audio_ports_count),
+                get: Some(Self::ext_audio_ports_get),
             },
 
             clap_plugin_gui: clap_plugin_gui {
-                is_api_supported: Self::ext_gui_is_api_supported,
-                get_preferred_api: Self::ext_gui_get_preferred_api,
-                create: Self::ext_gui_create,
-                destroy: Self::ext_gui_destroy,
-                set_scale: Self::ext_gui_set_scale,
-                get_size: Self::ext_gui_get_size,
-                can_resize: Self::ext_gui_can_resize,
-                get_resize_hints: Self::ext_gui_get_resize_hints,
-                adjust_size: Self::ext_gui_adjust_size,
-                set_size: Self::ext_gui_set_size,
-                set_parent: Self::ext_gui_set_parent,
-                set_transient: Self::ext_gui_set_transient,
-                suggest_title: Self::ext_gui_suggest_title,
-                show: Self::ext_gui_show,
-                hide: Self::ext_gui_hide,
+                is_api_supported: Some(Self::ext_gui_is_api_supported),
+                get_preferred_api: Some(Self::ext_gui_get_preferred_api),
+                create: Some(Self::ext_gui_create),
+                destroy: Some(Self::ext_gui_destroy),
+                set_scale: Some(Self::ext_gui_set_scale),
+                get_size: Some(Self::ext_gui_get_size),
+                can_resize: Some(Self::ext_gui_can_resize),
+                get_resize_hints: Some(Self::ext_gui_get_resize_hints),
+                adjust_size: Some(Self::ext_gui_adjust_size),
+                set_size: Some(Self::ext_gui_set_size),
+                set_parent: Some(Self::ext_gui_set_parent),
+                set_transient: Some(Self::ext_gui_set_transient),
+                suggest_title: Some(Self::ext_gui_suggest_title),
+                show: Some(Self::ext_gui_show),
+                hide: Some(Self::ext_gui_hide),
             },
             host_gui: AtomicRefCell::new(None),
 
             clap_plugin_latency: clap_plugin_latency {
-                get: Self::ext_latency_get,
+                get: Some(Self::ext_latency_get),
             },
             host_latency: AtomicRefCell::new(None),
 
             clap_plugin_note_ports: clap_plugin_note_ports {
-                count: Self::ext_note_ports_count,
-                get: Self::ext_note_ports_get,
+                count: Some(Self::ext_note_ports_count),
+                get: Some(Self::ext_note_ports_get),
             },
 
             clap_plugin_params: clap_plugin_params {
-                count: Self::ext_params_count,
-                get_info: Self::ext_params_get_info,
-                get_value: Self::ext_params_get_value,
-                value_to_text: Self::ext_params_value_to_text,
-                text_to_value: Self::ext_params_text_to_value,
-                flush: Self::ext_params_flush,
+                count: Some(Self::ext_params_count),
+                get_info: Some(Self::ext_params_get_info),
+                get_value: Some(Self::ext_params_get_value),
+                value_to_text: Some(Self::ext_params_value_to_text),
+                text_to_value: Some(Self::ext_params_text_to_value),
+                flush: Some(Self::ext_params_flush),
             },
             host_params: AtomicRefCell::new(None),
             param_hashes,
@@ -591,17 +593,17 @@ impl<P: ClapPlugin> Wrapper<P> {
             host_thread_check: AtomicRefCell::new(None),
 
             clap_plugin_render: clap_plugin_render {
-                has_hard_realtime_requirement: Self::ext_render_has_hard_realtime_requirement,
-                set: Self::ext_render_set,
+                has_hard_realtime_requirement: Some(Self::ext_render_has_hard_realtime_requirement),
+                set: Some(Self::ext_render_set),
             },
 
             clap_plugin_state: clap_plugin_state {
-                save: Self::ext_state_save,
-                load: Self::ext_state_load,
+                save: Some(Self::ext_state_save),
+                load: Some(Self::ext_state_load),
             },
 
             clap_plugin_tail: clap_plugin_tail {
-                get: Self::ext_tail_get,
+                get: Some(Self::ext_tail_get),
             },
 
             tasks: ArrayQueue::new(TASK_QUEUE_CAPACITY),
@@ -645,7 +647,9 @@ impl<P: ClapPlugin> Wrapper<P> {
 
         // Requesting a flush is fine even during audio processing. This avoids a race condition.
         match &*self.host_params.borrow() {
-            Some(host_params) => unsafe { (host_params.request_flush)(&*self.host_callback) },
+            Some(host_params) => {
+                unsafe_clap_call! { host_params=>request_flush(&*self.host_callback) }
+            }
             None => nih_debug_assert_failure!("The host does not support parameters? What?"),
         }
 
@@ -670,8 +674,8 @@ impl<P: ClapPlugin> Wrapper<P> {
                 let (unscaled_width, unscaled_height) = editor.size();
                 let scaling_factor = self.editor_scaling_factor.load(Ordering::Relaxed);
 
-                unsafe {
-                    (host_gui.request_resize)(
+                unsafe_clap_call! {
+                    host_gui=>request_resize(
                         &*self.host_callback,
                         (unscaled_width as f32 * scaling_factor).round() as u32,
                         (unscaled_height as f32 * scaling_factor).round() as u32,
@@ -738,10 +742,10 @@ impl<P: ClapPlugin> Wrapper<P> {
         let mut input_events = self.input_events.borrow_mut();
         input_events.clear();
 
-        let num_events = ((*in_).size)(in_);
+        let num_events = clap_call! { in_=>size(in_) };
         let mut parameter_values_changed = false;
         for event_idx in 0..num_events {
-            let event = ((*in_).get)(in_, event_idx);
+            let event = clap_call! { in_=>get(in_, event_idx) };
             parameter_values_changed |=
                 self.handle_in_event(event, &mut input_events, None, current_sample_idx);
         }
@@ -773,13 +777,13 @@ impl<P: ClapPlugin> Wrapper<P> {
         input_events.clear();
 
         // To achive this, we'll always read one event ahead
-        let num_events = ((*in_).size)(in_);
+        let num_events = clap_call! { in_=>size(in_) };
         if num_events == 0 {
             return None;
         }
 
         let start_idx = resume_from_event_idx as u32;
-        let mut event: *const clap_event_header = ((*in_).get)(in_, start_idx);
+        let mut event: *const clap_event_header = clap_call! { in_=>get(in_, start_idx) };
         let mut parameter_values_changed = false;
         for next_event_idx in (start_idx + 1)..num_events {
             parameter_values_changed |= self.handle_in_event(
@@ -791,7 +795,7 @@ impl<P: ClapPlugin> Wrapper<P> {
 
             // Stop just before the next parameter change or transport information event at a sample
             // after the current sample
-            let next_event: *const clap_event_header = ((*in_).get)(in_, next_event_idx);
+            let next_event: *const clap_event_header = clap_call! { in_=>get(in_, next_event_idx) };
             if (*next_event).time > current_sample_idx as u32 && stop_predicate(next_event) {
                 return Some(((*next_event).time as usize, next_event_idx as usize));
             }
@@ -840,7 +844,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                         param_id: param_hash,
                     };
 
-                    (out.try_push)(out, &event.header)
+                    clap_call! { out=>try_push(out, &event.header) }
                 }
                 OutputParamEvent::SetValue {
                     param_hash,
@@ -870,7 +874,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                         value: clap_plain_value,
                     };
 
-                    (out.try_push)(out, &event.header)
+                    clap_call! { out=>try_push(out, &event.header) }
                 }
                 OutputParamEvent::EndGesture { param_hash } => {
                     let event = clap_event_param_gesture {
@@ -884,7 +888,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                         param_id: param_hash,
                     };
 
-                    (out.try_push)(out, &event.header)
+                    clap_call! { out=>try_push(out, &event.header) }
                 }
             };
 
@@ -925,7 +929,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                         velocity: velocity as f64,
                     };
 
-                    (out.try_push)(out, &event.header)
+                    clap_call! { out=>try_push(out, &event.header) }
                 }
                 NoteEvent::NoteOff {
                     timing: _,
@@ -948,7 +952,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                         velocity: velocity as f64,
                     };
 
-                    (out.try_push)(out, &event.header)
+                    clap_call! { out=>try_push(out, &event.header) }
                 }
                 NoteEvent::PolyPressure {
                     timing: _,
@@ -972,7 +976,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                         value: pressure as f64,
                     };
 
-                    (out.try_push)(out, &event.header)
+                    clap_call! { out=>try_push(out, &event.header) }
                 }
                 NoteEvent::PolyVolume {
                     timing: _,
@@ -996,7 +1000,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                         value: gain as f64,
                     };
 
-                    (out.try_push)(out, &event.header)
+                    clap_call! { out=>try_push(out, &event.header) }
                 }
                 NoteEvent::PolyPan {
                     timing: _,
@@ -1020,7 +1024,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                         value: (pan as f64 + 1.0) / 2.0,
                     };
 
-                    (out.try_push)(out, &event.header)
+                    clap_call! { out=>try_push(out, &event.header) }
                 }
                 NoteEvent::PolyTuning {
                     timing: _,
@@ -1044,7 +1048,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                         value: tuning as f64,
                     };
 
-                    (out.try_push)(out, &event.header)
+                    clap_call! { out=>try_push(out, &event.header) }
                 }
                 NoteEvent::PolyVibrato {
                     timing: _,
@@ -1068,7 +1072,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                         value: vibrato as f64,
                     };
 
-                    (out.try_push)(out, &event.header)
+                    clap_call! { out=>try_push(out, &event.header) }
                 }
                 NoteEvent::PolyExpression {
                     timing: _,
@@ -1092,7 +1096,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                         value: expression as f64,
                     };
 
-                    (out.try_push)(out, &event.header)
+                    clap_call! { out=>try_push(out, &event.header) }
                 }
                 NoteEvent::PolyBrightness {
                     timing: _,
@@ -1116,7 +1120,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                         value: brightness as f64,
                     };
 
-                    (out.try_push)(out, &event.header)
+                    clap_call! { out=>try_push(out, &event.header) }
                 }
                 NoteEvent::MidiChannelPressure {
                     timing: _,
@@ -1139,7 +1143,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                         ],
                     };
 
-                    (out.try_push)(out, &event.header)
+                    clap_call! { out=>try_push(out, &event.header) }
                 }
                 NoteEvent::MidiPitchBend {
                     timing: _,
@@ -1164,7 +1168,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                         ],
                     };
 
-                    (out.try_push)(out, &event.header)
+                    clap_call! { out=>try_push(out, &event.header) }
                 }
                 NoteEvent::MidiCC {
                     timing: _,
@@ -1188,7 +1192,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                         ],
                     };
 
-                    (out.try_push)(out, &event.header)
+                    clap_call! { out=>try_push(out, &event.header) }
                 }
                 _ => {
                     nih_debug_assert_failure!(
@@ -2081,24 +2085,24 @@ impl<P: ClapPlugin> Wrapper<P> {
 
         let id = CStr::from_ptr(id);
 
-        if id == CStr::from_ptr(CLAP_EXT_AUDIO_PORTS_CONFIG) {
+        if id == CLAP_EXT_AUDIO_PORTS_CONFIG {
             &wrapper.clap_plugin_audio_ports_config as *const _ as *const c_void
-        } else if id == CStr::from_ptr(CLAP_EXT_AUDIO_PORTS) {
+        } else if id == CLAP_EXT_AUDIO_PORTS {
             &wrapper.clap_plugin_audio_ports as *const _ as *const c_void
-        } else if id == CStr::from_ptr(CLAP_EXT_GUI) && wrapper.editor.is_some() {
+        } else if id == CLAP_EXT_GUI && wrapper.editor.is_some() {
             // Only report that we support this extension if the plugin has an editor
             &wrapper.clap_plugin_gui as *const _ as *const c_void
-        } else if id == CStr::from_ptr(CLAP_EXT_LATENCY) {
+        } else if id == CLAP_EXT_LATENCY {
             &wrapper.clap_plugin_latency as *const _ as *const c_void
-        } else if id == CStr::from_ptr(CLAP_EXT_NOTE_PORTS)
+        } else if id == CLAP_EXT_NOTE_PORTS
             && (P::MIDI_INPUT >= MidiConfig::Basic || P::MIDI_OUTPUT >= MidiConfig::Basic)
         {
             &wrapper.clap_plugin_note_ports as *const _ as *const c_void
-        } else if id == CStr::from_ptr(CLAP_EXT_PARAMS) {
+        } else if id == CLAP_EXT_PARAMS {
             &wrapper.clap_plugin_params as *const _ as *const c_void
-        } else if id == CStr::from_ptr(CLAP_EXT_STATE) {
+        } else if id == CLAP_EXT_STATE {
             &wrapper.clap_plugin_state as *const _ as *const c_void
-        } else if id == CStr::from_ptr(CLAP_EXT_TAIL) {
+        } else if id == CLAP_EXT_TAIL {
             &wrapper.clap_plugin_tail as *const _ as *const c_void
         } else {
             nih_trace!("Host tried to query unknown extension {:?}", id);
@@ -2154,13 +2158,13 @@ impl<P: ClapPlugin> Wrapper<P> {
                     } => format!("{num_input_channels} inputs, {num_output_channels} outputs"),
                 };
                 let input_port_type = match bus_config.num_input_channels {
-                    1 => CLAP_PORT_MONO,
-                    2 => CLAP_PORT_STEREO,
+                    1 => CLAP_PORT_MONO.as_ptr(),
+                    2 => CLAP_PORT_STEREO.as_ptr(),
                     _ => ptr::null(),
                 };
                 let output_port_type = match bus_config.num_output_channels {
-                    1 => CLAP_PORT_MONO,
-                    2 => CLAP_PORT_STEREO,
+                    1 => CLAP_PORT_MONO.as_ptr(),
+                    2 => CLAP_PORT_STEREO.as_ptr(),
                     _ => ptr::null(),
                 };
 
@@ -2302,8 +2306,8 @@ impl<P: ClapPlugin> Wrapper<P> {
         };
 
         let port_type = match channel_count {
-            1 => CLAP_PORT_MONO,
-            2 => CLAP_PORT_STEREO,
+            1 => CLAP_PORT_MONO.as_ptr(),
+            2 => CLAP_PORT_STEREO.as_ptr(),
             _ => ptr::null(),
         };
 
@@ -2377,15 +2381,15 @@ impl<P: ClapPlugin> Wrapper<P> {
         }
 
         #[cfg(all(target_family = "unix", not(target_os = "macos")))]
-        if CStr::from_ptr(api) == CStr::from_ptr(CLAP_WINDOW_API_X11) {
+        if CStr::from_ptr(api) == CLAP_WINDOW_API_X11 {
             return true;
         }
         #[cfg(target_os = "macos")]
-        if CStr::from_ptr(api) == CStr::from_ptr(CLAP_WINDOW_API_COCOA) {
+        if CStr::from_ptr(api) == CLAP_WINDOW_API_COCOA {
             return true;
         }
         #[cfg(target_os = "windows")]
-        if CStr::from_ptr(api) == CStr::from_ptr(CLAP_WINDOW_API_WIN32) {
+        if CStr::from_ptr(api) == CLAP_WINDOW_API_WIN32 {
             return true;
         }
 
@@ -2401,15 +2405,15 @@ impl<P: ClapPlugin> Wrapper<P> {
 
         #[cfg(all(target_family = "unix", not(target_os = "macos")))]
         {
-            *api = CLAP_WINDOW_API_X11;
+            *api = CLAP_WINDOW_API_X11.as_ptr();
         }
         #[cfg(target_os = "macos")]
         {
-            *api = CLAP_WINDOW_API_COCOA;
+            *api = CLAP_WINDOW_API_COCOA.as_ptr();
         }
         #[cfg(target_os = "windows")]
         {
-            *api = CLAP_WINDOW_API_WIN32;
+            *api = CLAP_WINDOW_API_WIN32.as_ptr();
         }
 
         // We don't do standalone floating windows yet
@@ -2555,15 +2559,15 @@ impl<P: ClapPlugin> Wrapper<P> {
             let mut editor_handle = wrapper.editor_handle.write();
             if editor_handle.is_none() {
                 let api = CStr::from_ptr(window.api);
-                let handle = if api == CStr::from_ptr(CLAP_WINDOW_API_X11) {
+                let handle = if api == CLAP_WINDOW_API_X11 {
                     let mut handle = raw_window_handle::XcbHandle::empty();
                     handle.window = window.specific.x11 as u32;
                     RawWindowHandle::Xcb(handle)
-                } else if api == CStr::from_ptr(CLAP_WINDOW_API_COCOA) {
+                } else if api == CLAP_WINDOW_API_COCOA {
                     let mut handle = raw_window_handle::AppKitHandle::empty();
                     handle.ns_view = window.specific.cocoa;
                     RawWindowHandle::AppKit(handle)
-                } else if api == CStr::from_ptr(CLAP_WINDOW_API_WIN32) {
+                } else if api == CLAP_WINDOW_API_WIN32 {
                     let mut handle = raw_window_handle::Win32Handle::empty();
                     handle.hwnd = window.specific.win32;
                     RawWindowHandle::Win32(handle)
@@ -2971,9 +2975,10 @@ impl<P: ClapPlugin> Wrapper<P> {
 /// The extension type `T` must match the extension's name `name`.
 unsafe fn query_host_extension<T>(
     host_callback: &ClapPtr<clap_host>,
-    name: *const c_char,
+    name: &CStr,
 ) -> Option<ClapPtr<T>> {
-    let extension_ptr = (host_callback.get_extension)(&**host_callback, name);
+    let extension_ptr =
+        clap_call! { host_callback=>get_extension(&**host_callback, name.as_ptr()) };
     if !extension_ptr.is_null() {
         Some(ClapPtr::new(extension_ptr as *const T))
     } else {

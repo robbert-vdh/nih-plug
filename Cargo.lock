@@ -502,9 +502,8 @@ dependencies = [
 
 [[package]]
 name = "clap-sys"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a8aa914ef6a42441b5ef7884eef20c6d38bd5b24c3c9eba865b08bf3353bc11"
+version = "0.2.0"
+source = "git+https://github.com/glowcoil/clap-sys.git?rev=efc0940651c3a57a3f9402bf3798cda9a7f7fc87#efc0940651c3a57a3f9402bf3798cda9a7f7fc87"
 
 [[package]]
 name = "clap_derive"

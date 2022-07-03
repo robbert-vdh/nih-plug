@@ -42,11 +42,7 @@ macro_rules! nih_export_clap {
             ) -> *const ::std::ffi::c_void {
                 if !factory_id.is_null()
                     && unsafe { ::std::ffi::CStr::from_ptr(factory_id) }
-                        == unsafe {
-                            ::std::ffi::CStr::from_ptr(
-                                ::nih_plug::wrapper::clap::CLAP_PLUGIN_FACTORY_ID,
-                            )
-                        }
+                        == ::nih_plug::wrapper::clap::CLAP_PLUGIN_FACTORY_ID
                 {
                     &(*FACTORY).clap_plugin_factory as *const _ as *const ::std::ffi::c_void
                 } else {
@@ -60,9 +56,9 @@ macro_rules! nih_export_clap {
         pub static clap_entry: ::nih_plug::wrapper::clap::clap_plugin_entry =
             ::nih_plug::wrapper::clap::clap_plugin_entry {
                 clap_version: ::nih_plug::wrapper::clap::CLAP_VERSION,
-                init: self::clap::init,
-                deinit: self::clap::deinit,
-                get_factory: self::clap::get_factory,
+                init: Some(self::clap::init),
+                deinit: Some(self::clap::deinit),
+                get_factory: Some(self::clap::get_factory),
             };
     };
 }

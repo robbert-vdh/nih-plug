@@ -25,9 +25,9 @@ impl<P: ClapPlugin> Default for Factory<P> {
     fn default() -> Self {
         Self {
             clap_plugin_factory: clap_plugin_factory {
-                get_plugin_count: Self::get_plugin_count,
-                get_plugin_descriptor: Self::get_plugin_descriptor,
-                create_plugin: Self::create_plugin,
+                get_plugin_count: Some(Self::get_plugin_count),
+                get_plugin_descriptor: Some(Self::get_plugin_descriptor),
+                create_plugin: Some(Self::create_plugin),
             },
             plugin_descriptor: PluginDescriptor::default(),
         }
