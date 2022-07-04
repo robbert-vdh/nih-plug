@@ -6,6 +6,12 @@ new and what's changed, this document lists all breaking changes in reverse
 chronological order. If a new feature did not require any changes to existing
 code then it will not be listed here.
 
+## [2022-07-04]
+
+- The `CLAP_DESCRIPTION`, `CLAP_MANUAL_URL`, and `CLAP_SUPPORT_URL` associated
+  constants from the `ClapPlugin` are now optional and have the type
+  `Option<&'static str>` instead of `&'static str`.
+
 ## [2022-07-02]
 
 - The `Params::serialize_fields()` and `Params::deserialize_fields()` methods

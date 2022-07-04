@@ -385,14 +385,15 @@ impl Crossover {
 
 impl ClapPlugin for Crossover {
     const CLAP_ID: &'static str = "nl.robbertvanderhelm.crossover";
-    const CLAP_DESCRIPTION: &'static str = "Cleanly split a signal into multiple bands";
+    const CLAP_DESCRIPTION: Option<&'static str> =
+        Some("Cleanly split a signal into multiple bands");
+    const CLAP_MANUAL_URL: Option<&'static str> = Some(Self::URL);
+    const CLAP_SUPPORT_URL: Option<&'static str> = None;
     const CLAP_FEATURES: &'static [ClapFeature] = &[
         ClapFeature::AudioEffect,
         ClapFeature::Stereo,
         ClapFeature::Utility,
     ];
-    const CLAP_MANUAL_URL: &'static str = Self::URL;
-    const CLAP_SUPPORT_URL: &'static str = Self::URL;
 }
 
 impl Vst3Plugin for Crossover {

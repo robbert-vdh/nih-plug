@@ -4,7 +4,6 @@ use std::ffi::{CStr, CString};
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 use std::os::raw::c_char;
-use std::ptr;
 
 use crate::plugin::ClapPlugin;
 
@@ -19,10 +18,10 @@ pub struct PluginDescriptor<P: ClapPlugin> {
     name: CString,
     vendor: CString,
     url: CString,
-    clap_manual_url: CString,
-    clap_support_url: CString,
     version: CString,
-    clap_description: CString,
+    clap_manual_url: Option<CString>,
+    clap_support_url: Option<CString>,
+    clap_description: Option<CString>,
     clap_features: Vec<CString>,
     clap_features_ptrs: MaybeUninit<Vec<*const c_char>>,
 
@@ -42,13 +41,14 @@ impl<P: ClapPlugin> Default for PluginDescriptor<P> {
             name: CString::new(P::NAME).expect("`NAME` contained null bytes"),
             vendor: CString::new(P::VENDOR).expect("`VENDOR` contained null bytes"),
             url: CString::new(P::URL).expect("`URL` contained null bytes"),
-            clap_manual_url: CString::new(P::CLAP_MANUAL_URL)
-                .expect("`CLAP_MANUAL_URL` contained null bytes"),
-            clap_support_url: CString::new(P::CLAP_SUPPORT_URL)
-                .expect("`CLAP_SUPPORT_URL` contained null bytes"),
             version: CString::new(P::VERSION).expect("`VERSION` contained null bytes"),
-            clap_description: CString::new(P::CLAP_DESCRIPTION)
-                .expect("`CLAP_DESCRIPTION` contained null bytes"),
+            clap_manual_url: P::CLAP_MANUAL_URL
+                .map(|url| CString::new(url).expect("`CLAP_MANUAL_URL` contained null bytes")),
+            clap_support_url: P::CLAP_SUPPORT_URL
+                .map(|url| CString::new(url).expect("`CLAP_SUPPORT_URL` contained null bytes")),
+            clap_description: P::CLAP_DESCRIPTION.map(|description| {
+                CString::new(description).expect("`CLAP_DESCRIPTION` contained null bytes")
+            }),
             clap_features: P::CLAP_FEATURES
                 .iter()
                 .map(|feat| feat.as_str())
@@ -67,7 +67,7 @@ impl<P: ClapPlugin> Default for PluginDescriptor<P> {
             .iter()
             .map(|feature| feature.as_ptr())
             .collect();
-        clap_features_ptrs.push(ptr::null());
+        clap_features_ptrs.push(std::ptr::null());
         descriptor.clap_features_ptrs.write(clap_features_ptrs);
 
         // We couldn't initialize this directly because of all the CStrings
@@ -77,10 +77,22 @@ impl<P: ClapPlugin> Default for PluginDescriptor<P> {
             name: descriptor.name.as_ptr(),
             vendor: descriptor.vendor.as_ptr(),
             url: descriptor.url.as_ptr(),
-            manual_url: descriptor.clap_manual_url.as_ptr(),
-            support_url: descriptor.clap_support_url.as_ptr(),
             version: descriptor.version.as_ptr(),
-            description: descriptor.clap_description.as_ptr(),
+            manual_url: descriptor
+                .clap_manual_url
+                .as_ref()
+                .map(|url| url.as_ptr())
+                .unwrap_or(std::ptr::null()),
+            support_url: descriptor
+                .clap_support_url
+                .as_ref()
+                .map(|url| url.as_ptr())
+                .unwrap_or(std::ptr::null()),
+            description: descriptor
+                .clap_description
+                .as_ref()
+                .map(|description| description.as_ptr())
+                .unwrap_or(std::ptr::null()),
             features: unsafe { descriptor.clap_features_ptrs.assume_init_ref() }.as_ptr(),
         });
 

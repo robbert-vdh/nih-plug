@@ -481,15 +481,16 @@ impl Crisp {
 
 impl ClapPlugin for Crisp {
     const CLAP_ID: &'static str = "nl.robbertvanderhelm.crisp";
-    const CLAP_DESCRIPTION: &'static str = "Adds a bright crispy top end to low bass sounds";
+    const CLAP_DESCRIPTION: Option<&'static str> =
+        Some("Adds a bright crispy top end to low bass sounds");
+    const CLAP_MANUAL_URL: Option<&'static str> = Some(Self::URL);
+    const CLAP_SUPPORT_URL: Option<&'static str> = None;
     const CLAP_FEATURES: &'static [ClapFeature] = &[
         ClapFeature::AudioEffect,
         ClapFeature::Stereo,
         ClapFeature::Mono,
         ClapFeature::Distortion,
     ];
-    const CLAP_MANUAL_URL: &'static str = Self::URL;
-    const CLAP_SUPPORT_URL: &'static str = Self::URL;
 }
 
 impl Vst3Plugin for Crisp {

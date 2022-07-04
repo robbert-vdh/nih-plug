@@ -304,15 +304,15 @@ impl SafetyLimiter {
 
 impl ClapPlugin for SafetyLimiter {
     const CLAP_ID: &'static str = "nl.robbertvanderhelm.safety-limiter";
-    const CLAP_DESCRIPTION: &'static str = "Plays SOS in Morse code when redlining";
+    const CLAP_DESCRIPTION: Option<&'static str> = Some("Plays SOS in Morse code when redlining");
+    const CLAP_MANUAL_URL: Option<&'static str> = Some(Self::URL);
+    const CLAP_SUPPORT_URL: Option<&'static str> = None;
     const CLAP_FEATURES: &'static [ClapFeature] = &[
         ClapFeature::AudioEffect,
         ClapFeature::Stereo,
         ClapFeature::Mono,
         ClapFeature::Utility,
     ];
-    const CLAP_MANUAL_URL: &'static str = Self::URL;
-    const CLAP_SUPPORT_URL: &'static str = Self::URL;
 }
 
 impl Vst3Plugin for SafetyLimiter {

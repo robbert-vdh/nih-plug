@@ -192,17 +192,15 @@ pub trait ClapPlugin: Plugin {
     /// A unique ID that identifies this particular plugin. This is usually in reverse domain name
     /// notation, e.g. `com.manufacturer.plugin-name`.
     const CLAP_ID: &'static str;
-    /// A short description for the plugin.
-    const CLAP_DESCRIPTION: &'static str;
-    /// Arbitrary keywords describing the plugin. See the CLAP specification for examples:
-    /// <https://github.com/free-audio/clap/blob/main/include/clap/plugin.h>.
+    /// An optional short description for the plugin.
+    const CLAP_DESCRIPTION: Option<&'static str>;
+    /// The URL to the plugin's manual, if available.
+    const CLAP_MANUAL_URL: Option<&'static str>;
+    /// The URL to the plugin's support page, if available.
+    const CLAP_SUPPORT_URL: Option<&'static str>;
+    /// Keywords describing the plugin. The host may use this to classify the plugin in its plugin
+    /// browser.
     const CLAP_FEATURES: &'static [ClapFeature];
-    /// A URL to the plugin's manual, CLAP does not specify what to do when there is none.
-    //
-    // TODO: CLAP does not specify this, can these manual fields be null pointers?
-    const CLAP_MANUAL_URL: &'static str;
-    /// A URL to the plugin's support page, CLAP does not specify what to do when there is none.
-    const CLAP_SUPPORT_URL: &'static str;
 
     /// If this is set to true, then the plugin will report itself as having a hard realtime
     /// processing requirement when the host asks for it. Supported hosts will never ask the plugin

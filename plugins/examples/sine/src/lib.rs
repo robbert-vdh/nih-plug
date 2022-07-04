@@ -195,15 +195,16 @@ impl Plugin for Sine {
 
 impl ClapPlugin for Sine {
     const CLAP_ID: &'static str = "com.moist-plugins-gmbh.sine";
-    const CLAP_DESCRIPTION: &'static str = "An optionally MIDI controlled sine test tone";
+    const CLAP_DESCRIPTION: Option<&'static str> =
+        Some("An optionally MIDI controlled sine test tone");
+    const CLAP_MANUAL_URL: Option<&'static str> = Some(Self::URL);
+    const CLAP_SUPPORT_URL: Option<&'static str> = None;
     const CLAP_FEATURES: &'static [ClapFeature] = &[
         ClapFeature::Synthesizer,
         ClapFeature::Stereo,
         ClapFeature::Mono,
         ClapFeature::Utility,
     ];
-    const CLAP_MANUAL_URL: &'static str = Self::URL;
-    const CLAP_SUPPORT_URL: &'static str = Self::URL;
 }
 
 impl Vst3Plugin for Sine {

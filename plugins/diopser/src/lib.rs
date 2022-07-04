@@ -408,15 +408,15 @@ fn unnormalize_automation_precision(normalized: f32) -> u32 {
 
 impl ClapPlugin for Diopser {
     const CLAP_ID: &'static str = "nl.robbertvanderhelm.diopser";
-    const CLAP_DESCRIPTION: &'static str = "A totally original phase rotation plugin";
+    const CLAP_DESCRIPTION: Option<&'static str> = Some("A totally original phase rotation plugin");
+    const CLAP_MANUAL_URL: Option<&'static str> = Some(Self::URL);
+    const CLAP_SUPPORT_URL: Option<&'static str> = None;
     const CLAP_FEATURES: &'static [ClapFeature] = &[
         ClapFeature::AudioEffect,
         ClapFeature::Stereo,
         ClapFeature::Filter,
         ClapFeature::Utility,
     ];
-    const CLAP_MANUAL_URL: &'static str = Self::URL;
-    const CLAP_SUPPORT_URL: &'static str = Self::URL;
 }
 
 impl Vst3Plugin for Diopser {
