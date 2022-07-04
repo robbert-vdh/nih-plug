@@ -1079,6 +1079,9 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                 &mut value,
                             ) == kResultOk
                             {
+                                // Later this timing will be compensated for block splits by calling
+                                // `event.subtract_timing(block_start)` before it is passed to the
+                                // plugin
                                 let timing = sample_offset as u32;
                                 let value = value as f32;
 
