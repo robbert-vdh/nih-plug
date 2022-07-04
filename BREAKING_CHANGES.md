@@ -8,10 +8,13 @@ code then it will not be listed here.
 
 ## [2022-07-04]
 
+- There is a new `NoteEvent::VoiceTerminated` event to let the host know a voice
+  has been terminated. This needs to be output by CLAP plugins that support
+  polyphonic modulation.
+- Most `NoteEvent` variants now have an additional `voice_id` field.
 - The `CLAP_DESCRIPTION`, `CLAP_MANUAL_URL`, and `CLAP_SUPPORT_URL` associated
   constants from the `ClapPlugin` are now optional and have the type
   `Option<&'static str>` instead of `&'static str`.
-- Most `NoteEvent` variants now have an additional `voice_id` field.
 
 ## [2022-07-02]
 

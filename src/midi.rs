@@ -10,7 +10,10 @@ pub enum MidiConfig {
     /// The plugin will not have a note input port and will thus not receive any not events.
     None,
     /// The plugin receives note on/off events, pressure, and potentially a couple standardized
-    /// expression types depending on the plugin standard and host.
+    /// expression types depending on the plugin standard and host. If the plugin sets up
+    /// configuration for polyphonic modulation (see [`ClapPlugin`][crate::prelude::ClapPlugin]) and
+    /// assigns polyphonic modulation IDs to some of its parameters, then it will also receive
+    /// polyphonic modulation events.
     Basic,
     /// The plugin receives full MIDI CCs as well as pitch bend information. For VST3 plugins this
     /// involves adding 130*16 parameters to bind to the the 128 MIDI CCs, pitch bend, and channel
@@ -54,6 +57,19 @@ pub enum NoteEvent {
         /// The note's velocity, from 0 to 1. Some plugin APIs may allow higher precision than the
         /// 127 levels available in MIDI.
         velocity: f32,
+    },
+    /// Sent by the plugin to the host to indicate that a voice has ended. This **needs** to be sent
+    /// when a voice terminates when using polyphonic modulation. Otherwise you can ignore this
+    /// event.
+    VoiceTerminated {
+        timing: u32,
+        /// The voice's unique identifier. Setting this allows a single voice to be terminated if
+        /// the plugin allows multiple overlapping voices for a single key.
+        voice_id: Option<i32>,
+        /// The note's channel, from 0 to 16, and the note's MIDI key number, from 0 to 127.
+        channel: u8,
+        /// The note's MIDI key number
+        note: u8,
     },
     /// A polyphonic note pressure/aftertouch event, available on [`MidiConfig::Basic`] and up. Not
     /// all hosts may support polyphonic aftertouch.
@@ -200,6 +216,7 @@ impl NoteEvent {
         match &self {
             NoteEvent::NoteOn { timing, .. } => *timing,
             NoteEvent::NoteOff { timing, .. } => *timing,
+            NoteEvent::VoiceTerminated { timing, .. } => *timing,
             NoteEvent::PolyPressure { timing, .. } => *timing,
             NoteEvent::PolyVolume { timing, .. } => *timing,
             NoteEvent::PolyPan { timing, .. } => *timing,
@@ -218,6 +235,7 @@ impl NoteEvent {
         match &self {
             NoteEvent::NoteOn { voice_id, .. } => *voice_id,
             NoteEvent::NoteOff { voice_id, .. } => *voice_id,
+            NoteEvent::VoiceTerminated { voice_id, .. } => *voice_id,
             NoteEvent::PolyPressure { voice_id, .. } => *voice_id,
             NoteEvent::PolyVolume { voice_id, .. } => *voice_id,
             NoteEvent::PolyPan { voice_id, .. } => *voice_id,
@@ -353,7 +371,8 @@ impl NoteEvent {
                 cc,
                 (value * 127.0).round().clamp(0.0, 127.0) as u8,
             ]),
-            NoteEvent::PolyVolume { .. }
+            NoteEvent::VoiceTerminated { .. }
+            | NoteEvent::PolyVolume { .. }
             | NoteEvent::PolyPan { .. }
             | NoteEvent::PolyTuning { .. }
             | NoteEvent::PolyVibrato { .. }
@@ -368,6 +387,7 @@ impl NoteEvent {
         match self {
             NoteEvent::NoteOn { timing, .. } => *timing -= samples,
             NoteEvent::NoteOff { timing, .. } => *timing -= samples,
+            NoteEvent::VoiceTerminated { timing, .. } => *timing -= samples,
             NoteEvent::PolyPressure { timing, .. } => *timing -= samples,
             NoteEvent::PolyVolume { timing, .. } => *timing -= samples,
             NoteEvent::PolyPan { timing, .. } => *timing -= samples,
