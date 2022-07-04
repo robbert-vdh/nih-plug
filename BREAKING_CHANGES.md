@@ -8,6 +8,9 @@ code then it will not be listed here.
 
 ## [2022-07-04]
 
+- There is a new `NoteEvent::Choke` event the host can send to a plugin to let
+  it know that it should immediately terminate all sound associated with a voice
+  or a key.
 - There is a new `NoteEvent::VoiceTerminated` event to let the host know a voice
   has been terminated. This needs to be output by CLAP plugins that support
   polyphonic modulation.
