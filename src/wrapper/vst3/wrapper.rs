@@ -1162,6 +1162,11 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                 timing,
                                 event: NoteEvent::NoteOn {
                                     timing,
+                                    voice_id: if event.note_id != -1 {
+                                        Some(event.note_id)
+                                    } else {
+                                        None
+                                    },
                                     channel: event.channel as u8,
                                     note: event.pitch as u8,
                                     velocity: event.velocity,
@@ -1173,6 +1178,11 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                 timing,
                                 event: NoteEvent::NoteOff {
                                     timing,
+                                    voice_id: if event.note_id != -1 {
+                                        Some(event.note_id)
+                                    } else {
+                                        None
+                                    },
                                     channel: event.channel as u8,
                                     note: event.pitch as u8,
                                     velocity: event.velocity,
@@ -1184,6 +1194,11 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                 timing,
                                 event: NoteEvent::PolyPressure {
                                     timing,
+                                    voice_id: if event.note_id != -1 {
+                                        Some(event.note_id)
+                                    } else {
+                                        None
+                                    },
                                     channel: event.channel as u8,
                                     note: event.pitch as u8,
                                     pressure: event.pressure,
@@ -1531,9 +1546,13 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                         // There's also a ppqPos field, but uh how about no
                         vst3_event.sample_offset = event.timing() as i32 + block_start as i32;
 
+                        // `voice_id.onwrap_or(|| ...)` triggers
+                        // https://github.com/rust-lang/rust-clippy/issues/8522
+                        #[allow(clippy::unnecessary_lazy_evaluations)]
                         match event {
                             NoteEvent::NoteOn {
                                 timing: _,
+                                voice_id,
                                 channel,
                                 note,
                                 velocity,
@@ -1547,11 +1566,13 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                     length: 0, // What?
                                     // We'll use this for our note IDs, that way we don't have
                                     // to do anything complicated here
-                                    note_id: ((channel as i32) << 8) | note as i32,
+                                    note_id: voice_id
+                                        .unwrap_or_else(|| ((channel as i32) << 8) | note as i32),
                                 };
                             }
                             NoteEvent::NoteOff {
                                 timing: _,
+                                voice_id,
                                 channel,
                                 note,
                                 velocity,
@@ -1561,12 +1582,14 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                     channel: channel as i16,
                                     pitch: note as i16,
                                     velocity,
-                                    note_id: ((channel as i32) << 8) | note as i32,
+                                    note_id: voice_id
+                                        .unwrap_or_else(|| ((channel as i32) << 8) | note as i32),
                                     tuning: 0.0,
                                 };
                             }
                             NoteEvent::PolyPressure {
                                 timing: _,
+                                voice_id,
                                 channel,
                                 note,
                                 pressure,
@@ -1575,20 +1598,50 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                 vst3_event.event.poly_pressure = PolyPressureEvent {
                                     channel: channel as i16,
                                     pitch: note as i16,
-                                    note_id: ((channel as i32) << 8) | note as i32,
+                                    note_id: voice_id
+                                        .unwrap_or_else(|| ((channel as i32) << 8) | note as i32),
                                     pressure,
                                 };
                             }
-                            event @ (NoteEvent::PolyVolume { channel, note, .. }
-                            | NoteEvent::PolyPan { channel, note, .. }
-                            | NoteEvent::PolyTuning { channel, note, .. }
-                            | NoteEvent::PolyVibrato { channel, note, .. }
-                            | NoteEvent::PolyExpression { channel, note, .. }
-                            | NoteEvent::PolyBrightness { channel, note, .. })
-                                if P::MIDI_OUTPUT >= MidiConfig::Basic =>
-                            {
+                            event @ (NoteEvent::PolyVolume {
+                                voice_id,
+                                channel,
+                                note,
+                                ..
+                            }
+                            | NoteEvent::PolyPan {
+                                voice_id,
+                                channel,
+                                note,
+                                ..
+                            }
+                            | NoteEvent::PolyTuning {
+                                voice_id,
+                                channel,
+                                note,
+                                ..
+                            }
+                            | NoteEvent::PolyVibrato {
+                                voice_id,
+                                channel,
+                                note,
+                                ..
+                            }
+                            | NoteEvent::PolyExpression {
+                                voice_id,
+                                channel,
+                                note,
+                                ..
+                            }
+                            | NoteEvent::PolyBrightness {
+                                voice_id,
+                                channel,
+                                note,
+                                ..
+                            }) if P::MIDI_OUTPUT >= MidiConfig::Basic => {
                                 match NoteExpressionController::translate_event_reverse(
-                                    ((channel as i32) << 8) | note as i32,
+                                    voice_id
+                                        .unwrap_or_else(|| ((channel as i32) << 8) | note as i32),
                                     &event,
                                 ) {
                                     Some(translated_event) => {

@@ -105,7 +105,8 @@ impl NoteExpressionController {
         timing: u32,
         event: &NoteExpressionValueEvent,
     ) -> Option<NoteEvent> {
-        let (_, note, channel) = *self
+        // We're calling it a voice ID, VST3 (and CLAP) calls it a note ID
+        let (note_id, note, channel) = *self
             .note_ids
             .iter()
             .find(|(note_id, _, _)| *note_id == event.note_id)?;
@@ -113,6 +114,7 @@ impl NoteExpressionController {
         match event.type_id {
             VOLUME_EXPRESSION_ID => Some(NoteEvent::PolyVolume {
                 timing,
+                voice_id: Some(note_id),
                 channel,
                 note,
                 // Because expression values in VST3 are always in the `[0, 1]` range, they added a
@@ -121,6 +123,7 @@ impl NoteExpressionController {
             }),
             PAN_EXPRESSION_ID => Some(NoteEvent::PolyPan {
                 timing,
+                voice_id: Some(note_id),
                 channel,
                 note,
                 // Our panning expressions are symmetrical around 0
@@ -128,6 +131,7 @@ impl NoteExpressionController {
             }),
             TUNING_EXPRESSION_ID => Some(NoteEvent::PolyTuning {
                 timing,
+                voice_id: Some(note_id),
                 channel,
                 note,
                 // This denormalized to the same [-120, 120] range used by CLAP and our expression
@@ -136,18 +140,21 @@ impl NoteExpressionController {
             }),
             VIBRATO_EXPRESSION_ID => Some(NoteEvent::PolyVibrato {
                 timing,
+                voice_id: Some(note_id),
                 channel,
                 note,
                 vibrato: event.value as f32,
             }),
             EXPRESSION_EXPRESSION_ID => Some(NoteEvent::PolyBrightness {
                 timing,
+                voice_id: Some(note_id),
                 channel,
                 note,
                 brightness: event.value as f32,
             }),
             BRIGHTNESS_EXPRESSION_ID => Some(NoteEvent::PolyExpression {
                 timing,
+                voice_id: Some(note_id),
                 channel,
                 note,
                 expression: event.value as f32,

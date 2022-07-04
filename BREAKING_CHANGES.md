@@ -11,6 +11,7 @@ code then it will not be listed here.
 - The `CLAP_DESCRIPTION`, `CLAP_MANUAL_URL`, and `CLAP_SUPPORT_URL` associated
   constants from the `ClapPlugin` are now optional and have the type
   `Option<&'static str>` instead of `&'static str`.
+- Most `NoteEvent` variants now have an additional `voice_id` field.
 
 ## [2022-07-02]
 

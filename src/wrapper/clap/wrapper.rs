@@ -909,6 +909,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             let push_successful = match event {
                 NoteEvent::NoteOn {
                     timing: _,
+                    voice_id,
                     channel,
                     note,
                     velocity,
@@ -922,7 +923,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                             // We don't have a way to denote live events
                             flags: 0,
                         },
-                        note_id: -1,
+                        note_id: voice_id.unwrap_or(-1),
                         port_index: 0,
                         channel: channel as i16,
                         key: note as i16,
@@ -933,6 +934,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 }
                 NoteEvent::NoteOff {
                     timing: _,
+                    voice_id,
                     channel,
                     note,
                     velocity,
@@ -945,7 +947,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                             type_: CLAP_EVENT_NOTE_OFF,
                             flags: 0,
                         },
-                        note_id: -1,
+                        note_id: voice_id.unwrap_or(-1),
                         port_index: 0,
                         channel: channel as i16,
                         key: note as i16,
@@ -956,6 +958,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 }
                 NoteEvent::PolyPressure {
                     timing: _,
+                    voice_id,
                     channel,
                     note,
                     pressure,
@@ -969,7 +972,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                             flags: 0,
                         },
                         expression_id: CLAP_NOTE_EXPRESSION_PRESSURE,
-                        note_id: -1,
+                        note_id: voice_id.unwrap_or(-1),
                         port_index: 0,
                         channel: channel as i16,
                         key: note as i16,
@@ -980,6 +983,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 }
                 NoteEvent::PolyVolume {
                     timing: _,
+                    voice_id,
                     channel,
                     note,
                     gain,
@@ -993,7 +997,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                             flags: 0,
                         },
                         expression_id: CLAP_NOTE_EXPRESSION_VOLUME,
-                        note_id: -1,
+                        note_id: voice_id.unwrap_or(-1),
                         port_index: 0,
                         channel: channel as i16,
                         key: note as i16,
@@ -1004,6 +1008,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 }
                 NoteEvent::PolyPan {
                     timing: _,
+                    voice_id,
                     channel,
                     note,
                     pan,
@@ -1017,7 +1022,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                             flags: 0,
                         },
                         expression_id: CLAP_NOTE_EXPRESSION_PAN,
-                        note_id: -1,
+                        note_id: voice_id.unwrap_or(-1),
                         port_index: 0,
                         channel: channel as i16,
                         key: note as i16,
@@ -1028,6 +1033,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 }
                 NoteEvent::PolyTuning {
                     timing: _,
+                    voice_id,
                     channel,
                     note,
                     tuning,
@@ -1041,7 +1047,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                             flags: 0,
                         },
                         expression_id: CLAP_NOTE_EXPRESSION_TUNING,
-                        note_id: -1,
+                        note_id: voice_id.unwrap_or(-1),
                         port_index: 0,
                         channel: channel as i16,
                         key: note as i16,
@@ -1052,6 +1058,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 }
                 NoteEvent::PolyVibrato {
                     timing: _,
+                    voice_id,
                     channel,
                     note,
                     vibrato,
@@ -1065,7 +1072,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                             flags: 0,
                         },
                         expression_id: CLAP_NOTE_EXPRESSION_VIBRATO,
-                        note_id: -1,
+                        note_id: voice_id.unwrap_or(-1),
                         port_index: 0,
                         channel: channel as i16,
                         key: note as i16,
@@ -1076,6 +1083,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 }
                 NoteEvent::PolyExpression {
                     timing: _,
+                    voice_id,
                     channel,
                     note,
                     expression,
@@ -1089,7 +1097,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                             flags: 0,
                         },
                         expression_id: CLAP_NOTE_EXPRESSION_EXPRESSION,
-                        note_id: -1,
+                        note_id: voice_id.unwrap_or(-1),
                         port_index: 0,
                         channel: channel as i16,
                         key: note as i16,
@@ -1100,6 +1108,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 }
                 NoteEvent::PolyBrightness {
                     timing: _,
+                    voice_id,
                     channel,
                     note,
                     brightness,
@@ -1113,7 +1122,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                             flags: 0,
                         },
                         expression_id: CLAP_NOTE_EXPRESSION_BRIGHTNESS,
-                        note_id: -1,
+                        note_id: voice_id.unwrap_or(-1),
                         port_index: 0,
                         channel: channel as i16,
                         key: note as i16,
@@ -1264,6 +1273,11 @@ impl<P: ClapPlugin> Wrapper<P> {
                         // When splitting up the buffer for sample accurate automation all events
                         // should be relative to the block
                         timing: raw_event.time - current_sample_idx as u32,
+                        voice_id: if event.note_id != -1 {
+                            Some(event.note_id)
+                        } else {
+                            None
+                        },
                         channel: event.channel as u8,
                         note: event.key as u8,
                         velocity: event.velocity as f32,
@@ -1277,6 +1291,11 @@ impl<P: ClapPlugin> Wrapper<P> {
                     let event = &*(event as *const clap_event_note);
                     input_events.push_back(NoteEvent::NoteOff {
                         timing: raw_event.time - current_sample_idx as u32,
+                        voice_id: if event.note_id != -1 {
+                            Some(event.note_id)
+                        } else {
+                            None
+                        },
                         channel: event.channel as u8,
                         note: event.key as u8,
                         velocity: event.velocity as f32,
@@ -1293,6 +1312,11 @@ impl<P: ClapPlugin> Wrapper<P> {
                         CLAP_NOTE_EXPRESSION_PRESSURE => {
                             input_events.push_back(NoteEvent::PolyPressure {
                                 timing: raw_event.time - current_sample_idx as u32,
+                                voice_id: if event.note_id != -1 {
+                                    Some(event.note_id)
+                                } else {
+                                    None
+                                },
                                 channel: event.channel as u8,
                                 note: event.key as u8,
                                 pressure: event.value as f32,
@@ -1301,6 +1325,11 @@ impl<P: ClapPlugin> Wrapper<P> {
                         CLAP_NOTE_EXPRESSION_VOLUME => {
                             input_events.push_back(NoteEvent::PolyVolume {
                                 timing: raw_event.time - current_sample_idx as u32,
+                                voice_id: if event.note_id != -1 {
+                                    Some(event.note_id)
+                                } else {
+                                    None
+                                },
                                 channel: event.channel as u8,
                                 note: event.key as u8,
                                 gain: event.value as f32,
@@ -1309,6 +1338,11 @@ impl<P: ClapPlugin> Wrapper<P> {
                         CLAP_NOTE_EXPRESSION_PAN => {
                             input_events.push_back(NoteEvent::PolyPan {
                                 timing: raw_event.time - current_sample_idx as u32,
+                                voice_id: if event.note_id != -1 {
+                                    Some(event.note_id)
+                                } else {
+                                    None
+                                },
                                 channel: event.channel as u8,
                                 note: event.key as u8,
                                 // In CLAP this value goes from [0, 1] instead of [-1, 1]
@@ -1318,6 +1352,11 @@ impl<P: ClapPlugin> Wrapper<P> {
                         CLAP_NOTE_EXPRESSION_TUNING => {
                             input_events.push_back(NoteEvent::PolyTuning {
                                 timing: raw_event.time - current_sample_idx as u32,
+                                voice_id: if event.note_id != -1 {
+                                    Some(event.note_id)
+                                } else {
+                                    None
+                                },
                                 channel: event.channel as u8,
                                 note: event.key as u8,
                                 tuning: event.value as f32,
@@ -1326,6 +1365,11 @@ impl<P: ClapPlugin> Wrapper<P> {
                         CLAP_NOTE_EXPRESSION_VIBRATO => {
                             input_events.push_back(NoteEvent::PolyVibrato {
                                 timing: raw_event.time - current_sample_idx as u32,
+                                voice_id: if event.note_id != -1 {
+                                    Some(event.note_id)
+                                } else {
+                                    None
+                                },
                                 channel: event.channel as u8,
                                 note: event.key as u8,
                                 vibrato: event.value as f32,
@@ -1334,6 +1378,11 @@ impl<P: ClapPlugin> Wrapper<P> {
                         CLAP_NOTE_EXPRESSION_EXPRESSION => {
                             input_events.push_back(NoteEvent::PolyExpression {
                                 timing: raw_event.time - current_sample_idx as u32,
+                                voice_id: if event.note_id != -1 {
+                                    Some(event.note_id)
+                                } else {
+                                    None
+                                },
                                 channel: event.channel as u8,
                                 note: event.key as u8,
                                 expression: event.value as f32,
@@ -1342,6 +1391,11 @@ impl<P: ClapPlugin> Wrapper<P> {
                         CLAP_NOTE_EXPRESSION_BRIGHTNESS => {
                             input_events.push_back(NoteEvent::PolyBrightness {
                                 timing: raw_event.time - current_sample_idx as u32,
+                                voice_id: if event.note_id != -1 {
+                                    Some(event.note_id)
+                                } else {
+                                    None
+                                },
                                 channel: event.channel as u8,
                                 note: event.key as u8,
                                 brightness: event.value as f32,

@@ -30,6 +30,9 @@ pub enum NoteEvent {
     /// A note on event, available on [`MidiConfig::Basic`] and up.
     NoteOn {
         timing: u32,
+        /// A unique identifier for this note, if available. Using this to refer to a note is
+        /// required when allowing overlapping voices for CLAP plugins.
+        voice_id: Option<i32>,
         /// The note's channel, from 0 to 16.
         channel: u8,
         /// The note's MIDI key number, from 0 to 127.
@@ -41,6 +44,9 @@ pub enum NoteEvent {
     /// A note off event, available on [`MidiConfig::Basic`] and up.
     NoteOff {
         timing: u32,
+        /// A unique identifier for this note, if available. Using this to refer to a note is
+        /// required when allowing overlapping voices for CLAP plugins.
+        voice_id: Option<i32>,
         /// The note's channel, from 0 to 16.
         channel: u8,
         /// The note's MIDI key number, from 0 to 127.
@@ -59,6 +65,9 @@ pub enum NoteEvent {
     /// you may manually combine the polyphonic key pressure and MPE channel pressure.
     PolyPressure {
         timing: u32,
+        /// A unique identifier for this note, if available. Using this to refer to a note is
+        /// required when allowing overlapping voices for CLAP plugins.
+        voice_id: Option<i32>,
         /// The note's channel, from 0 to 16.
         channel: u8,
         /// The note's MIDI key number, from 0 to 127.
@@ -70,6 +79,9 @@ pub enum NoteEvent {
     /// support these expressions.
     PolyVolume {
         timing: u32,
+        /// A unique identifier for this note, if available. Using this to refer to a note is
+        /// required when allowing overlapping voices for CLAP plugins.
+        voice_id: Option<i32>,
         /// The note's channel, from 0 to 16.
         channel: u8,
         /// The note's MIDI key number, from 0 to 127.
@@ -81,6 +93,9 @@ pub enum NoteEvent {
     /// support these expressions.
     PolyPan {
         timing: u32,
+        /// A unique identifier for this note, if available. Using this to refer to a note is
+        /// required when allowing overlapping voices for CLAP plugins.
+        voice_id: Option<i32>,
         /// The note's channel, from 0 to 16.
         channel: u8,
         /// The note's MIDI key number, from 0 to 127.
@@ -93,6 +108,9 @@ pub enum NoteEvent {
     /// these expressions.
     PolyTuning {
         timing: u32,
+        /// A unique identifier for this note, if available. Using this to refer to a note is
+        /// required when allowing overlapping voices for CLAP plugins.
+        voice_id: Option<i32>,
         /// The note's channel, from 0 to 16.
         channel: u8,
         /// The note's MIDI key number, from 0 to 127.
@@ -104,6 +122,9 @@ pub enum NoteEvent {
     /// these expressions.
     PolyVibrato {
         timing: u32,
+        /// A unique identifier for this note, if available. Using this to refer to a note is
+        /// required when allowing overlapping voices for CLAP plugins.
+        voice_id: Option<i32>,
         /// The note's channel, from 0 to 16.
         channel: u8,
         /// The note's MIDI key number, from 0 to 127.
@@ -115,6 +136,9 @@ pub enum NoteEvent {
     /// [`MidiConfig::Basic`] and up. Not all hosts may support these expressions.
     PolyExpression {
         timing: u32,
+        /// A unique identifier for this note, if available. Using this to refer to a note is
+        /// required when allowing overlapping voices for CLAP plugins.
+        voice_id: Option<i32>,
         /// The note's channel, from 0 to 16.
         channel: u8,
         /// The note's MIDI key number, from 0 to 127.
@@ -126,6 +150,9 @@ pub enum NoteEvent {
     /// these expressions.
     PolyBrightness {
         timing: u32,
+        /// A unique identifier for this note, if available. Using this to refer to a note is
+        /// required when allowing overlapping voices for CLAP plugins.
+        voice_id: Option<i32>,
         /// The note's channel, from 0 to 16.
         channel: u8,
         /// The note's MIDI key number, from 0 to 127.
@@ -186,6 +213,24 @@ impl NoteEvent {
         }
     }
 
+    /// Returns the event's voice ID, if it has any.
+    pub fn voice_id(&self) -> Option<i32> {
+        match &self {
+            NoteEvent::NoteOn { voice_id, .. } => *voice_id,
+            NoteEvent::NoteOff { voice_id, .. } => *voice_id,
+            NoteEvent::PolyPressure { voice_id, .. } => *voice_id,
+            NoteEvent::PolyVolume { voice_id, .. } => *voice_id,
+            NoteEvent::PolyPan { voice_id, .. } => *voice_id,
+            NoteEvent::PolyTuning { voice_id, .. } => *voice_id,
+            NoteEvent::PolyVibrato { voice_id, .. } => *voice_id,
+            NoteEvent::PolyExpression { voice_id, .. } => *voice_id,
+            NoteEvent::PolyBrightness { voice_id, .. } => *voice_id,
+            NoteEvent::MidiChannelPressure { .. } => None,
+            NoteEvent::MidiPitchBend { .. } => None,
+            NoteEvent::MidiCC { .. } => None,
+        }
+    }
+
     /// Parse MIDI into a [`NoteEvent`]. Will return `Err(event_type)` if the parsing failed.
     pub fn from_midi(timing: u32, midi_data: [u8; 3]) -> Result<Self, u8> {
         // TODO: Maybe add special handling for 14-bit CCs and RPN messages at some
@@ -195,18 +240,21 @@ impl NoteEvent {
         match event_type {
             midi::NOTE_ON => Ok(NoteEvent::NoteOn {
                 timing,
+                voice_id: None,
                 channel,
                 note: midi_data[1],
                 velocity: midi_data[2] as f32 / 127.0,
             }),
             midi::NOTE_OFF => Ok(NoteEvent::NoteOff {
                 timing,
+                voice_id: None,
                 channel,
                 note: midi_data[1],
                 velocity: midi_data[2] as f32 / 127.0,
             }),
             midi::POLYPHONIC_KEY_PRESSURE => Ok(NoteEvent::PolyPressure {
                 timing,
+                voice_id: None,
                 channel,
                 note: midi_data[1],
                 pressure: midi_data[2] as f32 / 127.0,
@@ -239,6 +287,7 @@ impl NoteEvent {
         match self {
             NoteEvent::NoteOn {
                 timing: _,
+                voice_id: _,
                 channel,
                 note,
                 velocity,
@@ -249,6 +298,7 @@ impl NoteEvent {
             ]),
             NoteEvent::NoteOff {
                 timing: _,
+                voice_id: _,
                 channel,
                 note,
                 velocity,
@@ -259,6 +309,7 @@ impl NoteEvent {
             ]),
             NoteEvent::PolyPressure {
                 timing: _,
+                voice_id: _,
                 channel,
                 note,
                 pressure,
@@ -341,6 +392,7 @@ mod tests {
     fn test_note_on_midi_conversion() {
         let event = NoteEvent::NoteOn {
             timing: TIMING,
+            voice_id: None,
             channel: 1,
             note: 2,
             // The value will be rounded in the conversion to MIDI, hence this overly specific value
@@ -357,6 +409,7 @@ mod tests {
     fn test_note_off_midi_conversion() {
         let event = NoteEvent::NoteOff {
             timing: TIMING,
+            voice_id: None,
             channel: 1,
             note: 2,
             velocity: 0.6929134,
@@ -372,6 +425,7 @@ mod tests {
     fn test_poly_pressure_midi_conversion() {
         let event = NoteEvent::PolyPressure {
             timing: TIMING,
+            voice_id: None,
             channel: 1,
             note: 2,
             pressure: 0.6929134,
