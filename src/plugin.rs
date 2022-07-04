@@ -190,18 +190,17 @@ pub trait Plugin: Default + Send + Sync + 'static {
 /// Provides auxiliary metadata needed for a CLAP plugin.
 pub trait ClapPlugin: Plugin {
     /// A unique ID that identifies this particular plugin. This is usually in reverse domain name
-    /// notation, e.g. `com.manufacturer.plugin-name`.
+    /// notation, e.g. `com.manufacturer.plugin-name`. This field is mandatory.
     const CLAP_ID: &'static str;
-    /// A short description for the plugin.
+    /// A short description for the plugin. CLAP specifies this string can be blank or null but
+    /// states "it is safer to make them blank".
     const CLAP_DESCRIPTION: &'static str;
     /// Arbitrary keywords describing the plugin. See the CLAP specification for examples:
     /// <https://github.com/free-audio/clap/blob/main/include/clap/plugin.h>.
     const CLAP_FEATURES: &'static [ClapFeature];
-    /// A URL to the plugin's manual, CLAP does not specify what to do when there is none.
-    //
-    // TODO: CLAP does not specify this, can these manual fields be null pointers?
+    /// A URL to the plugin's manual. As with the description, this string can be blank or null.
     const CLAP_MANUAL_URL: &'static str;
-    /// A URL to the plugin's support page, CLAP does not specify what to do when there is none.
+    /// A URL to the plugin's support page. As with the description, this string can be blank or null.
     const CLAP_SUPPORT_URL: &'static str;
 
     /// If this is set to true, then the plugin will report itself as having a hard realtime
