@@ -1261,6 +1261,8 @@ impl<P: ClapPlugin> Wrapper<P> {
         current_sample_idx: usize,
     ) -> bool {
         let raw_event = &*event;
+        let timing = raw_event.time - current_sample_idx as u32;
+
         match (raw_event.space_id, raw_event.type_) {
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_VALUE) => {
                 let event = &*(event as *const clap_event_param_value);
@@ -1296,7 +1298,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                     input_events.push_back(NoteEvent::NoteOn {
                         // When splitting up the buffer for sample accurate automation all events
                         // should be relative to the block
-                        timing: raw_event.time - current_sample_idx as u32,
+                        timing,
                         voice_id: if event.note_id != -1 {
                             Some(event.note_id)
                         } else {
@@ -1314,7 +1316,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 if P::MIDI_INPUT >= MidiConfig::Basic {
                     let event = &*(event as *const clap_event_note);
                     input_events.push_back(NoteEvent::NoteOff {
-                        timing: raw_event.time - current_sample_idx as u32,
+                        timing,
                         voice_id: if event.note_id != -1 {
                             Some(event.note_id)
                         } else {
@@ -1332,7 +1334,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 if P::MIDI_INPUT >= MidiConfig::Basic {
                     let event = &*(event as *const clap_event_note);
                     input_events.push_back(NoteEvent::Choke {
-                        timing: raw_event.time - current_sample_idx as u32,
+                        timing,
                         voice_id: if event.note_id != -1 {
                             Some(event.note_id)
                         } else {
@@ -1352,7 +1354,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                     match event.expression_id {
                         CLAP_NOTE_EXPRESSION_PRESSURE => {
                             input_events.push_back(NoteEvent::PolyPressure {
-                                timing: raw_event.time - current_sample_idx as u32,
+                                timing,
                                 voice_id: if event.note_id != -1 {
                                     Some(event.note_id)
                                 } else {
@@ -1365,7 +1367,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                         }
                         CLAP_NOTE_EXPRESSION_VOLUME => {
                             input_events.push_back(NoteEvent::PolyVolume {
-                                timing: raw_event.time - current_sample_idx as u32,
+                                timing,
                                 voice_id: if event.note_id != -1 {
                                     Some(event.note_id)
                                 } else {
@@ -1378,7 +1380,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                         }
                         CLAP_NOTE_EXPRESSION_PAN => {
                             input_events.push_back(NoteEvent::PolyPan {
-                                timing: raw_event.time - current_sample_idx as u32,
+                                timing,
                                 voice_id: if event.note_id != -1 {
                                     Some(event.note_id)
                                 } else {
@@ -1392,7 +1394,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                         }
                         CLAP_NOTE_EXPRESSION_TUNING => {
                             input_events.push_back(NoteEvent::PolyTuning {
-                                timing: raw_event.time - current_sample_idx as u32,
+                                timing,
                                 voice_id: if event.note_id != -1 {
                                     Some(event.note_id)
                                 } else {
@@ -1405,7 +1407,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                         }
                         CLAP_NOTE_EXPRESSION_VIBRATO => {
                             input_events.push_back(NoteEvent::PolyVibrato {
-                                timing: raw_event.time - current_sample_idx as u32,
+                                timing,
                                 voice_id: if event.note_id != -1 {
                                     Some(event.note_id)
                                 } else {
@@ -1418,7 +1420,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                         }
                         CLAP_NOTE_EXPRESSION_EXPRESSION => {
                             input_events.push_back(NoteEvent::PolyExpression {
-                                timing: raw_event.time - current_sample_idx as u32,
+                                timing,
                                 voice_id: if event.note_id != -1 {
                                     Some(event.note_id)
                                 } else {
@@ -1431,7 +1433,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                         }
                         CLAP_NOTE_EXPRESSION_BRIGHTNESS => {
                             input_events.push_back(NoteEvent::PolyBrightness {
-                                timing: raw_event.time - current_sample_idx as u32,
+                                timing,
                                 voice_id: if event.note_id != -1 {
                                     Some(event.note_id)
                                 } else {
