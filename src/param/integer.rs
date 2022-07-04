@@ -21,7 +21,7 @@ use super::{Param, ParamFlags, ParamMut};
 //      a partially written to value here. We should probably reconsider this at some point though.
 #[repr(C, align(4))]
 pub struct IntParam {
-    /// The field's current plain, unnormalized value.
+    /// The field's current plain value, after monophonic modulation has been applied.
     pub value: i32,
     /// The field's current value normalized to the `[0, 1]` range.
     normalized_value: f32,

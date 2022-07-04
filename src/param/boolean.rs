@@ -9,7 +9,7 @@ use super::{Param, ParamFlags, ParamMut};
 /// A simple boolean parameter.
 #[repr(C, align(4))]
 pub struct BoolParam {
-    /// The field's current value.
+    /// The field's current value, after monophonic modulation has been applied.
     pub value: bool,
     /// The field's current value normalized to the `[0, 1]` range.
     normalized_value: f32,
