@@ -84,6 +84,26 @@ pub enum NoteEvent {
         /// The note's MIDI key number
         note: u8,
     },
+    /// A polyphonic modulation event, available on [`MidiConfig::Basic`] and up. This will only be
+    /// sent for parameters that were decorated with the `.with_poly_modulation_id()` modifier, and
+    /// only by supported hosts. The
+    PolyModulation {
+        timing: u32,
+        /// The identifier of the voice this polyphonic modulation event should affect. This voice
+        /// should use the values from this and subsequent polyphonic modulation events instead of
+        /// the global value.
+        voice_id: i32,
+        /// The ID that was set for the modulated parameter using the `.with_poly_modulation_id()`
+        /// method.
+        poly_modulation_id: u32,
+        /// The parameter's new normalized value. This value needs to be converted to the plain
+        /// value using `param.preview_plain(event.normalized_value)`, and it should be used **in
+        /// place of** the global value. If the modulated parameter is smoothed, you may want to
+        /// copy the smoother to the affected voice, set this value using
+        /// [`Smoother::set_target()`][crate::prelude::Smoother::set_target()], and then use that
+        /// smoother to produce values for the voice.
+        normalized_value: f32,
+    },
     /// A polyphonic note pressure/aftertouch event, available on [`MidiConfig::Basic`] and up. Not
     /// all hosts may support polyphonic aftertouch.
     ///
@@ -231,6 +251,7 @@ impl NoteEvent {
             NoteEvent::NoteOff { timing, .. } => *timing,
             NoteEvent::Choke { timing, .. } => *timing,
             NoteEvent::VoiceTerminated { timing, .. } => *timing,
+            NoteEvent::PolyModulation { timing, .. } => *timing,
             NoteEvent::PolyPressure { timing, .. } => *timing,
             NoteEvent::PolyVolume { timing, .. } => *timing,
             NoteEvent::PolyPan { timing, .. } => *timing,
@@ -251,6 +272,7 @@ impl NoteEvent {
             NoteEvent::NoteOff { voice_id, .. } => *voice_id,
             NoteEvent::Choke { voice_id, .. } => *voice_id,
             NoteEvent::VoiceTerminated { voice_id, .. } => *voice_id,
+            NoteEvent::PolyModulation { voice_id, .. } => Some(*voice_id),
             NoteEvent::PolyPressure { voice_id, .. } => *voice_id,
             NoteEvent::PolyVolume { voice_id, .. } => *voice_id,
             NoteEvent::PolyPan { voice_id, .. } => *voice_id,
@@ -388,6 +410,7 @@ impl NoteEvent {
             ]),
             NoteEvent::Choke { .. }
             | NoteEvent::VoiceTerminated { .. }
+            | NoteEvent::PolyModulation { .. }
             | NoteEvent::PolyVolume { .. }
             | NoteEvent::PolyPan { .. }
             | NoteEvent::PolyTuning { .. }
@@ -405,6 +428,7 @@ impl NoteEvent {
             NoteEvent::NoteOff { timing, .. } => *timing -= samples,
             NoteEvent::Choke { timing, .. } => *timing -= samples,
             NoteEvent::VoiceTerminated { timing, .. } => *timing -= samples,
+            NoteEvent::PolyModulation { timing, .. } => *timing -= samples,
             NoteEvent::PolyPressure { timing, .. } => *timing -= samples,
             NoteEvent::PolyVolume { timing, .. } => *timing -= samples,
             NoteEvent::PolyPan { timing, .. } => *timing -= samples,
