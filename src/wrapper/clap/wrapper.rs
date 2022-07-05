@@ -37,8 +37,8 @@ use clap_sys::ext::note_ports::{
 use clap_sys::ext::params::{
     clap_host_params, clap_param_info, clap_plugin_params, CLAP_EXT_PARAMS,
     CLAP_PARAM_IS_AUTOMATABLE, CLAP_PARAM_IS_BYPASS, CLAP_PARAM_IS_HIDDEN,
-    CLAP_PARAM_IS_MODULATABLE, CLAP_PARAM_IS_READONLY, CLAP_PARAM_IS_STEPPED,
-    CLAP_PARAM_RESCAN_VALUES,
+    CLAP_PARAM_IS_MODULATABLE, CLAP_PARAM_IS_MODULATABLE_PER_NOTE_ID, CLAP_PARAM_IS_READONLY,
+    CLAP_PARAM_IS_STEPPED, CLAP_PARAM_RESCAN_VALUES,
 };
 use clap_sys::ext::render::{
     clap_plugin_render, clap_plugin_render_mode, CLAP_RENDER_OFFLINE, CLAP_RENDER_REALTIME,
@@ -223,6 +223,10 @@ pub struct Wrapper<P: ClapPlugin> {
     /// having to add a setter function to the parameter (or even worse, have it be completely
     /// untyped).
     pub param_ptr_to_hash: HashMap<ParamPtr, u32>,
+    /// For all polyphonically modulatable parameters, mappings from the parameter hash's hash to
+    /// the parameter's poly modulation ID. These IDs are then passed to the plugin, so it can
+    /// quickly refer to parameter by matching on constant IDs.
+    poly_mod_ids_by_hash: HashMap<u32, u32>,
     /// A queue of parameter changes and gestures that should be output in either the next process
     /// call or in the next parameter flush.
     ///
@@ -404,34 +408,6 @@ impl<P: ClapPlugin> Wrapper<P> {
                 (id, hash, ptr, group)
             })
             .collect();
-        if cfg!(debug_assertions) {
-            let param_map = params.param_map();
-            let param_ids: HashSet<_> = param_id_hashes_ptrs_groups
-                .iter()
-                .map(|(id, _, _, _)| id.clone())
-                .collect();
-            nih_debug_assert_eq!(
-                param_map.len(),
-                param_ids.len(),
-                "The plugin has duplicate parameter IDs, weird things may happen. Consider using \
-                 6 character parameter IDs to avoid collissions.."
-            );
-
-            let mut bypass_param_exists = false;
-            for (_, _, ptr, _) in &param_id_hashes_ptrs_groups {
-                let flags = unsafe { ptr.flags() };
-                let is_bypass = flags.contains(ParamFlags::BYPASS);
-
-                if is_bypass && bypass_param_exists {
-                    nih_debug_assert_failure!(
-                        "Duplicate bypass parameters found, the host will only use the first one"
-                    );
-                }
-
-                bypass_param_exists |= is_bypass;
-            }
-        }
-
         let param_hashes = param_id_hashes_ptrs_groups
             .iter()
             .map(|(_, hash, _, _)| *hash)
@@ -449,9 +425,51 @@ impl<P: ClapPlugin> Wrapper<P> {
             .map(|(id, hash, _, _)| (id.clone(), *hash))
             .collect();
         let param_ptr_to_hash = param_id_hashes_ptrs_groups
-            .into_iter()
-            .map(|(_, hash, ptr, _)| (ptr, hash))
+            .iter()
+            .map(|(_, hash, ptr, _)| (*ptr, *hash))
             .collect();
+        let poly_mod_ids_by_hash: HashMap<u32, u32> = param_id_hashes_ptrs_groups
+            .iter()
+            .filter_map(|(_, hash, ptr, _)| unsafe {
+                ptr.poly_modulation_id().map(|id| (*hash, id))
+            })
+            .collect();
+
+        if cfg!(debug_assertions) {
+            let param_map = params.param_map();
+            let param_ids: HashSet<_> = param_id_hashes_ptrs_groups
+                .iter()
+                .map(|(id, _, _, _)| id.clone())
+                .collect();
+            nih_debug_assert_eq!(
+                param_map.len(),
+                param_ids.len(),
+                "The plugin has duplicate parameter IDs, weird things may happen. Consider using \
+                 6 character parameter IDs to avoid collissions."
+            );
+
+            let poly_mod_ids: HashSet<u32> = poly_mod_ids_by_hash.values().copied().collect();
+            nih_debug_assert_eq!(
+                poly_mod_ids_by_hash.len(),
+                poly_mod_ids.len(),
+                "The plugin has duplicate poly modulation IDs. Polyphonic modulation will not be \
+                 routed to the correct parameter."
+            );
+
+            let mut bypass_param_exists = false;
+            for (_, _, ptr, _) in &param_id_hashes_ptrs_groups {
+                let flags = unsafe { ptr.flags() };
+                let is_bypass = flags.contains(ParamFlags::BYPASS);
+
+                if is_bypass && bypass_param_exists {
+                    nih_debug_assert_failure!(
+                        "Duplicate bypass parameters found, the host will only use the first one"
+                    );
+                }
+
+                bypass_param_exists |= is_bypass;
+            }
+        }
 
         // Query all sensible bus configurations supported by the plugin. We don't do surround or
         // anything beyond stereo right now.
@@ -608,6 +626,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             param_group_by_hash,
             param_id_to_hash,
             param_ptr_to_hash,
+            poly_mod_ids_by_hash,
             output_parameter_events: ArrayQueue::new(OUTPUT_EVENT_QUEUE_CAPACITY),
 
             host_thread_check: AtomicRefCell::new(None),
