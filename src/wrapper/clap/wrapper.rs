@@ -21,6 +21,10 @@ use clap_sys::ext::audio_ports::{
 use clap_sys::ext::audio_ports_config::{
     clap_audio_ports_config, clap_plugin_audio_ports_config, CLAP_EXT_AUDIO_PORTS_CONFIG,
 };
+use clap_sys::ext::draft::voice_info::{
+    clap_plugin_voice_info, clap_voice_info, CLAP_EXT_VOICE_INFO,
+    CLAP_VOICE_INFO_SUPPORTS_OVERLAPPING_NOTES,
+};
 use clap_sys::ext::gui::{
     clap_gui_resize_hints, clap_host_gui, clap_plugin_gui, clap_window, CLAP_EXT_GUI,
     CLAP_WINDOW_API_COCOA, CLAP_WINDOW_API_WIN32, CLAP_WINDOW_API_X11,
@@ -234,6 +238,8 @@ pub struct Wrapper<P: ClapPlugin> {
     clap_plugin_state: clap_plugin_state,
 
     clap_plugin_tail: clap_plugin_tail,
+
+    clap_plugin_voice_info: clap_plugin_voice_info,
 
     /// A queue of tasks that still need to be performed. Because CLAP lets the plugin request a
     /// host callback directly, we don't need to use the OsEventLoop we use in our other plugin
@@ -605,6 +611,10 @@ impl<P: ClapPlugin> Wrapper<P> {
 
             clap_plugin_tail: clap_plugin_tail {
                 get: Some(Self::ext_tail_get),
+            },
+
+            clap_plugin_voice_info: clap_plugin_voice_info {
+                get: Some(Self::ext_voice_info_get),
             },
 
             tasks: ArrayQueue::new(TASK_QUEUE_CAPACITY),
@@ -2201,6 +2211,8 @@ impl<P: ClapPlugin> Wrapper<P> {
             &wrapper.clap_plugin_state as *const _ as *const c_void
         } else if id == CLAP_EXT_TAIL {
             &wrapper.clap_plugin_tail as *const _ as *const c_void
+        } else if id == CLAP_EXT_VOICE_INFO && P::CLAP_POLY_MODULATION_CONFIG.is_some() {
+            &wrapper.clap_plugin_voice_info as *const _ as *const c_void
         } else {
             nih_trace!("Host tried to query unknown extension {:?}", id);
             ptr::null()
@@ -3061,6 +3073,31 @@ impl<P: ClapPlugin> Wrapper<P> {
             ProcessStatus::Tail(samples) => samples,
             ProcessStatus::KeepAlive => u32::MAX,
             _ => 0,
+        }
+    }
+
+    unsafe extern "C" fn ext_voice_info_get(
+        plugin: *const clap_plugin,
+        info: *mut clap_voice_info,
+    ) -> bool {
+        check_null_ptr!(false, plugin, info);
+
+        // TODO: Allow the plugin to set the active voice count
+        match P::CLAP_POLY_MODULATION_CONFIG {
+            Some(config) => {
+                *info = clap_voice_info {
+                    voice_count: config.max_voices,
+                    voice_capacity: config.max_voices,
+                    flags: if config.supports_overlapping_voices {
+                        CLAP_VOICE_INFO_SUPPORTS_OVERLAPPING_NOTES
+                    } else {
+                        0
+                    },
+                };
+
+                true
+            }
+            None => false,
         }
     }
 }
