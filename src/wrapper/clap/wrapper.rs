@@ -22,7 +22,7 @@ use clap_sys::ext::audio_ports_config::{
     clap_audio_ports_config, clap_plugin_audio_ports_config, CLAP_EXT_AUDIO_PORTS_CONFIG,
 };
 use clap_sys::ext::draft::voice_info::{
-    clap_plugin_voice_info, clap_voice_info, CLAP_EXT_VOICE_INFO,
+    clap_host_voice_info, clap_plugin_voice_info, clap_voice_info, CLAP_EXT_VOICE_INFO,
     CLAP_VOICE_INFO_SUPPORTS_OVERLAPPING_NOTES,
 };
 use clap_sys::ext::gui::{
@@ -240,6 +240,11 @@ pub struct Wrapper<P: ClapPlugin> {
     clap_plugin_tail: clap_plugin_tail,
 
     clap_plugin_voice_info: clap_plugin_voice_info,
+    host_voice_info: AtomicRefCell<Option<ClapPtr<clap_host_voice_info>>>,
+    /// If `P::CLAP_POLY_MODULATION_CONFIG` is set, then the plugin can configure the current number
+    /// of active voices using a context method called from the initialization or processing
+    /// context. This defaults to the maximum number of voices.
+    current_voice_capacity: AtomicU32,
 
     /// A queue of tasks that still need to be performed. Because CLAP lets the plugin request a
     /// host callback directly, we don't need to use the OsEventLoop we use in our other plugin
@@ -261,6 +266,8 @@ pub struct Wrapper<P: ClapPlugin> {
 pub enum Task {
     /// Inform the host that the latency has changed.
     LatencyChanged,
+    /// Inform the host that the voice info has changed.
+    VoiceInfoChanged,
     /// Tell the host that it should rescan the current parameter values.
     RescanParamValues,
 }
@@ -350,6 +357,12 @@ impl<P: ClapPlugin> MainThreadExecutor<Task> for Wrapper<P> {
                     }
                 }
                 None => nih_debug_assert_failure!("Host does not support the latency extension"),
+            },
+            Task::VoiceInfoChanged => match &*self.host_voice_info.borrow() {
+                Some(host_voice_info) => {
+                    clap_call! { host_voice_info=>changed(&*self.host_callback) };
+                }
+                None => nih_debug_assert_failure!("Host does not support the voice-info extension"),
             },
             Task::RescanParamValues => match &*self.host_params.borrow() {
                 Some(host_params) => {
@@ -616,6 +629,18 @@ impl<P: ClapPlugin> Wrapper<P> {
             clap_plugin_voice_info: clap_plugin_voice_info {
                 get: Some(Self::ext_voice_info_get),
             },
+            host_voice_info: AtomicRefCell::new(None),
+            current_voice_capacity: AtomicU32::new(
+                P::CLAP_POLY_MODULATION_CONFIG
+                    .map(|c| {
+                        nih_debug_assert!(
+                            c.max_voice_capacity >= 1,
+                            "The maximum voice capacity cannot be zero"
+                        );
+                        c.max_voice_capacity
+                    })
+                    .unwrap_or(1),
+            ),
 
             tasks: ArrayQueue::new(TASK_QUEUE_CAPACITY),
             main_thread_id: thread::current().id(),
@@ -1577,6 +1602,30 @@ impl<P: ClapPlugin> Wrapper<P> {
         }
     }
 
+    pub fn set_current_voice_capacity(&self, capacity: u32) {
+        match P::CLAP_POLY_MODULATION_CONFIG {
+            Some(config) => {
+                let clamped_capacity = capacity.clamp(1, config.max_voice_capacity);
+                nih_debug_assert_eq!(
+                    capacity,
+                    clamped_capacity,
+                    "The current voice capacity must be between 1 and the maximum capacity"
+                );
+
+                if clamped_capacity != self.current_voice_capacity.load(Ordering::Relaxed) {
+                    self.current_voice_capacity
+                        .store(clamped_capacity, Ordering::Relaxed);
+                    let task_posted = self.do_maybe_async(Task::VoiceInfoChanged);
+                    nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+                }
+            }
+            None => nih_debug_assert_failure!(
+                "Configuring the current voice capacity is only possible when \
+                 'ClapPlugin::CLAP_POLY_MODULATION_CONFIG' is set"
+            ),
+        }
+    }
+
     unsafe extern "C" fn init(plugin: *const clap_plugin) -> bool {
         check_null_ptr!(false, plugin);
         let wrapper = &*(plugin as *const Self);
@@ -1588,6 +1637,10 @@ impl<P: ClapPlugin> Wrapper<P> {
             query_host_extension::<clap_host_latency>(&wrapper.host_callback, CLAP_EXT_LATENCY);
         *wrapper.host_params.borrow_mut() =
             query_host_extension::<clap_host_params>(&wrapper.host_callback, CLAP_EXT_PARAMS);
+        *wrapper.host_voice_info.borrow_mut() = query_host_extension::<clap_host_voice_info>(
+            &wrapper.host_callback,
+            CLAP_EXT_VOICE_INFO,
+        );
         *wrapper.host_thread_check.borrow_mut() = query_host_extension::<clap_host_thread_check>(
             &wrapper.host_callback,
             CLAP_EXT_THREAD_CHECK,
@@ -3081,13 +3134,13 @@ impl<P: ClapPlugin> Wrapper<P> {
         info: *mut clap_voice_info,
     ) -> bool {
         check_null_ptr!(false, plugin, info);
+        let wrapper = &*(plugin as *const Self);
 
-        // TODO: Allow the plugin to set the active voice count
         match P::CLAP_POLY_MODULATION_CONFIG {
             Some(config) => {
                 *info = clap_voice_info {
-                    voice_count: config.max_voices,
-                    voice_capacity: config.max_voices,
+                    voice_count: wrapper.current_voice_capacity.load(Ordering::Relaxed),
+                    voice_capacity: config.max_voice_capacity,
                     flags: if config.supports_overlapping_voices {
                         CLAP_VOICE_INFO_SUPPORTS_OVERLAPPING_NOTES
                     } else {

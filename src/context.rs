@@ -21,6 +21,14 @@ pub trait InitContext {
     /// Update the current latency of the plugin. If the plugin is currently processing audio, then
     /// this may cause audio playback to be restarted.
     fn set_latency_samples(&self, samples: u32);
+
+    /// Set the current voice **capacity** for this plugin (so not the number of currently active
+    /// voices). This may only be called if
+    /// [`ClapPlugin::CLAP_POLY_MODULATION_CONFIG`][crate::prelude::ClapPlugin::CLAP_POLY_MODULATION_CONFIG]
+    /// is set. `capacity` must be between 1 and the configured maximum capacity. Changing this at
+    /// runtime allows the host to better optimize polyphonic modulation, or to switch to strictly
+    /// monophonic modulation when dropping the capacity down to 1.
+    fn set_current_voice_capacity(&self, capacity: u32);
 }
 
 /// Contains both context data and callbacks the plugin can use during processing. Most notably this
@@ -81,6 +89,14 @@ pub trait ProcessContext {
     /// Update the current latency of the plugin. If the plugin is currently processing audio, then
     /// this may cause audio playback to be restarted.
     fn set_latency_samples(&self, samples: u32);
+
+    /// Set the current voice **capacity** for this plugin (so not the number of currently active
+    /// voices). This may only be called if
+    /// [`ClapPlugin::CLAP_POLY_MODULATION_CONFIG`][crate::prelude::ClapPlugin::CLAP_POLY_MODULATION_CONFIG]
+    /// is set. `capacity` must be between 1 and the configured maximum capacity. Changing this at
+    /// runtime allows the host to better optimize polyphonic modulation, or to switch to strictly
+    /// monophonic modulation when dropping the capacity down to 1.
+    fn set_current_voice_capacity(&self, capacity: u32);
 
     // TODO: Add this, this works similar to [GuiContext::set_parameter] but it adds the parameter
     //       change to a queue (or directly to the VST3 plugin's parameter output queues) instead of

@@ -120,6 +120,10 @@ impl<P: ClapPlugin> InitContext for WrapperInitContext<'_, P> {
     fn set_latency_samples(&self, samples: u32) {
         self.wrapper.set_latency_samples(samples)
     }
+
+    fn set_current_voice_capacity(&self, capacity: u32) {
+        self.wrapper.set_current_voice_capacity(capacity)
+    }
 }
 
 impl<P: ClapPlugin> ProcessContext for WrapperProcessContext<'_, P> {
@@ -141,5 +145,9 @@ impl<P: ClapPlugin> ProcessContext for WrapperProcessContext<'_, P> {
 
     fn set_latency_samples(&self, samples: u32) {
         self.wrapper.set_latency_samples(samples)
+    }
+
+    fn set_current_voice_capacity(&self, capacity: u32) {
+        self.wrapper.set_current_voice_capacity(capacity)
     }
 }

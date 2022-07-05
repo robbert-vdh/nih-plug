@@ -90,6 +90,10 @@ impl<P: Plugin, B: Backend> InitContext for WrapperInitContext<'_, P, B> {
     fn set_latency_samples(&self, _samples: u32) {
         nih_debug_assert_failure!("TODO: WrapperInitContext::set_latency_samples()");
     }
+
+    fn set_current_voice_capacity(&self, _capacity: u32) {
+        // This is only supported by CLAP
+    }
 }
 
 impl<P: Plugin, B: Backend> ProcessContext for WrapperProcessContext<'_, P, B> {
@@ -119,5 +123,9 @@ impl<P: Plugin, B: Backend> ProcessContext for WrapperProcessContext<'_, P, B> {
 
     fn set_latency_samples(&self, _samples: u32) {
         nih_debug_assert_failure!("TODO: WrapperProcessContext::set_latency_samples()");
+    }
+
+    fn set_current_voice_capacity(&self, _capacity: u32) {
+        // This is only supported by CLAP
     }
 }

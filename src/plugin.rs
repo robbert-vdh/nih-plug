@@ -426,9 +426,9 @@ pub enum ProcessMode {
 /// Configuration for the plugin's polyphonic modulation options, if it supports .
 pub struct PolyModulationConfig {
     /// The maximum number of voices this plugin will ever use. Call the context's
-    /// `set_current_voices()` method during initialization or audio processing to set the number of
-    /// currently active voices.
-    pub max_voices: u32,
+    /// `set_current_voice_capacity()` method during initialization or audio processing to set the
+    /// polyphony limit.
+    pub max_voice_capacity: u32,
     /// If set to `true`, then the host may send note events for the same channel and key, but using
     /// different voice IDs. Bitwig Studio, for instance, can use this to do voice stacking. After
     /// enabling this, you should always prioritize using voice IDs to map note events to voices.

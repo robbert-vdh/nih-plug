@@ -124,6 +124,10 @@ impl<P: Vst3Plugin> InitContext for WrapperInitContext<'_, P> {
     fn set_latency_samples(&self, samples: u32) {
         self.inner.set_latency_samples(samples)
     }
+
+    fn set_current_voice_capacity(&self, _capacity: u32) {
+        // This is only supported by CLAP
+    }
 }
 
 impl<P: Vst3Plugin> ProcessContext for WrapperProcessContext<'_, P> {
@@ -145,5 +149,9 @@ impl<P: Vst3Plugin> ProcessContext for WrapperProcessContext<'_, P> {
 
     fn set_latency_samples(&self, samples: u32) {
         self.inner.set_latency_samples(samples)
+    }
+
+    fn set_current_voice_capacity(&self, _capacity: u32) {
+        // This is only supported by CLAP
     }
 }
