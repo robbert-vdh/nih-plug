@@ -102,7 +102,20 @@ impl<P: Vst3Plugin> IPluginFactory2 for Factory<P> {
         strlcpy(&mut info.category, "Audio Module Class");
         strlcpy(&mut info.name, P::NAME);
         info.class_flags = 1 << 1; // kSimpleModeSupported
-        strlcpy(&mut info.subcategories, P::VST3_CATEGORIES);
+
+        // No idea if any hosts do something with this, but it's part of VST3's example categories
+        // list
+        if P::HARD_REALTIME_ONLY {
+            nih_debug_assert!(!P::VST3_CATEGORIES.ends_with('|'));
+            nih_debug_assert!(!P::VST3_CATEGORIES.contains("OnlyRT"));
+            strlcpy(
+                &mut info.subcategories,
+                &format!("{}|OnlyRT", P::VST3_CATEGORIES),
+            );
+        } else {
+            strlcpy(&mut info.subcategories, P::VST3_CATEGORIES);
+        };
+
         strlcpy(&mut info.vendor, P::VENDOR);
         strlcpy(&mut info.version, P::VERSION);
         strlcpy(&mut info.sdk_version, VST3_SDK_VERSION);
