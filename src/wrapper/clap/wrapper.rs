@@ -2896,6 +2896,9 @@ impl<P: ClapPlugin> Wrapper<P> {
         param_info.flags = 0;
         if automatable && !hidden {
             param_info.flags |= CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_MODULATABLE;
+            if wrapper.poly_mod_ids_by_hash.contains_key(param_hash) {
+                param_info.flags |= CLAP_PARAM_IS_MODULATABLE_PER_NOTE_ID;
+            }
         }
         if hidden {
             param_info.flags |= CLAP_PARAM_IS_HIDDEN | CLAP_PARAM_IS_READONLY;
