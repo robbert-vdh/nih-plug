@@ -1330,6 +1330,39 @@ impl<P: ClapPlugin> Wrapper<P> {
             }
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_MOD) => {
                 let event = &*(event as *const clap_event_param_mod);
+
+                if event.note_id != -1 && P::MIDI_INPUT >= MidiConfig::Basic {
+                    match self.poly_mod_ids_by_hash.get(&event.param_id) {
+                        Some(poly_modulation_id) => {
+                            // To make things simpler (because they already are kind of
+                            // complicated), we'll send the _normalized parameter value_ to the
+                            // plugin. So the plugin doesn't need to add modulation offsets here, as
+                            // that might result in confusing situations when there's also
+                            // monophonic modulation going on.
+                            let param_ptr = self.param_by_hash[&event.param_id];
+                            let normalized_modulated_value = param_ptr.normalized_value()
+                                + (event.amount as f32
+                                    / param_ptr.step_count().unwrap_or(1) as f32);
+
+                            // The host may also add key and channel information here, but it may
+                            // also pass -1. So not having that information here at all seems like
+                            // the safest choice.
+                            input_events.push_back(NoteEvent::PolyModulation {
+                                timing,
+                                voice_id: event.note_id,
+                                poly_modulation_id: *poly_modulation_id,
+                                normalized_value: normalized_modulated_value,
+                            });
+
+                            return true;
+                        }
+                        None => nih_debug_assert_failure!(
+                            "Polyphonic modulation sent for a parameter without a poly modulation \
+                             ID"
+                        ),
+                    }
+                }
+
                 self.update_plain_value_by_hash(
                     event.param_id,
                     ClapParamUpdate::PlainValueMod(event.amount),
@@ -1859,12 +1892,22 @@ impl<P: ClapPlugin> Wrapper<P> {
                             // changes after the current sample if sample accurate automation is
                             // enabled
                             if P::SAMPLE_ACCURATE_AUTOMATION {
-                                matches!(
-                                    ((*next_event).space_id, (*next_event).type_,),
+                                match ((*next_event).space_id, (*next_event).type_) {
                                     (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_VALUE)
-                                        | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_MOD)
-                                        | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_TRANSPORT)
-                                )
+                                    | (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_TRANSPORT) => true,
+                                    (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_MOD) => {
+                                        let next_event =
+                                            &*(next_event as *const clap_event_param_mod);
+
+                                        // The buffer should not be split on polyphonic modulation
+                                        // as those events will be converted to note events
+                                        !(next_event.note_id != -1
+                                            && wrapper
+                                                .poly_mod_ids_by_hash
+                                                .contains_key(&next_event.param_id))
+                                    }
+                                    _ => false,
+                                }
                             } else {
                                 matches!(
                                     ((*next_event).space_id, (*next_event).type_,),
