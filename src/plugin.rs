@@ -19,8 +19,8 @@ use crate::wrapper::clap::features::ClapFeature;
 /// This is super basic, and lots of things I didn't need or want to use yet haven't been
 /// implemented. Notable missing features include:
 ///
-/// - MIDI SysEx and MIDI2 for CLAP, note expressions and MIDI1 are already supported
-/// - Polyphonic modulation for CLAP
+/// - MIDI SysEx and MIDI2 for CLAP, note expressions, polyphonic modulation and MIDI1 are already
+///   supported
 /// - Audio thread thread pools (with host integration in CLAP)
 #[allow(unused_variables)]
 pub trait Plugin: Default + Send + Sync + 'static {
@@ -206,6 +206,9 @@ pub trait ClapPlugin: Plugin {
     /// Keywords describing the plugin. The host may use this to classify the plugin in its plugin
     /// browser.
     const CLAP_FEATURES: &'static [ClapFeature];
+
+    /// If set, this informs the host about the plugin's capabilities for polyphonic modulation.
+    const CLAP_POLY_MODULATION_CONFIG: Option<PolyModulationConfig> = None;
 }
 
 /// Provides auxiliary metadata needed for a VST3 plugin.
@@ -418,4 +421,16 @@ pub enum ProcessMode {
     /// The host will continuously call the process function back to back until all audio has been
     /// processed.
     Offline,
+}
+
+/// Configuration for the plugin's polyphonic modulation options, if it supports .
+pub struct PolyModulationConfig {
+    /// The maximum number of voices this plugin will ever use. Call the context's
+    /// `set_current_voices()` method during initialization or audio processing to set the number of
+    /// currently active voices.
+    pub max_voices: u32,
+    /// If set to `true`, then the host may send note events for the same channel and key, but using
+    /// different voice IDs. Bitwig Studio, for instance, can use this to do voice stacking. After
+    /// enabling this, you should always prioritize using voice IDs to map note events to voices.
+    pub supports_overlapping_voices: bool,
 }

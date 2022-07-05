@@ -293,7 +293,10 @@ impl FloatParam {
 
     /// Enable polyphonic modulation for this parameter. The ID is used to uniquely identify this
     /// parameter in [`NoteEvent::PolyModulation][crate::prelude::NoteEvent::PolyModulation`]
-    /// events, and must thus be unique between _all_ polyphonically modulatable parameters.
+    /// events, and must thus be unique between _all_ polyphonically modulatable parameters. See the
+    /// event's documentation on how to do this. Consider configuring the
+    /// [`ClapPlugin::CLAP_POLY_MODULATION_CONFIG`][crate::prelude::ClapPlugin::CLAP_POLY_MODULATION_CONFIG]
+    /// constant when enabling this.
     ///
     /// # Important
     ///
