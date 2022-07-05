@@ -2934,7 +2934,7 @@ impl<P: ClapPlugin> Wrapper<P> {
     unsafe extern "C" fn ext_render_has_hard_realtime_requirement(
         _plugin: *const clap_plugin,
     ) -> bool {
-        P::CLAP_HARD_REALTIME
+        P::HARD_REALTIME_ONLY
     }
 
     unsafe extern "C" fn ext_render_set(

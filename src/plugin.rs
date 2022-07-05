@@ -80,6 +80,11 @@ pub trait Plugin: Default + Send + Sync + 'static {
     /// every 64 samples.
     const SAMPLE_ACCURATE_AUTOMATION: bool = false;
 
+    /// If this is set to true, then the plugin will report itself as having a hard realtime
+    /// processing requirement when the host asks for it. Supported hosts will never ask the plugin
+    /// to do offline processing.
+    const HARD_REALTIME_ONLY: bool = false;
+
     /// The plugin's parameters. The host will update the parameter values before calling
     /// `process()`. These parameters are identified by strings that should never change when the
     /// plugin receives an update.
@@ -201,13 +206,6 @@ pub trait ClapPlugin: Plugin {
     /// Keywords describing the plugin. The host may use this to classify the plugin in its plugin
     /// browser.
     const CLAP_FEATURES: &'static [ClapFeature];
-
-    /// If this is set to true, then the plugin will report itself as having a hard realtime
-    /// processing requirement when the host asks for it. Supported hosts will never ask the plugin
-    /// to do offline processing.
-    // TODO: Supposedly VST3 also has something similar if you add an `|OnlyRT` category. We should
-    //       move this to the Plugin trait and use that for VST3
-    const CLAP_HARD_REALTIME: bool = false;
 }
 
 /// Provides auxiliary metadata needed for a VST3 plugin.

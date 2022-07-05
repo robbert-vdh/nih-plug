@@ -6,6 +6,12 @@ new and what's changed, this document lists all breaking changes in reverse
 chronological order. If a new feature did not require any changes to existing
 code then it will not be listed here.
 
+## [2022-07-05]
+
+- The `ClapPlugin::CLAP_HARD_REALTIME` constant was moved to the general
+  `Plugin` trait as `Plugin::HARD_REALTIME_ONLY` and best-effort support for
+  VST3 was added.
+
 ## [2022-07-04]
 
 - There is a new `NoteEvent::Choke` event the host can send to a plugin to let
