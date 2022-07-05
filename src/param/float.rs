@@ -64,6 +64,12 @@ pub struct FloatParam {
     /// The parameter value's unit, added after [`value_to_string`][Self::value_to_string] if that
     /// is set. NIH-plug will not automatically add a space before the unit.
     unit: &'static str,
+    /// If this parameter has been marked as polyphonically modulatable, then this will be a unique
+    /// integer identifying the parameter. Because this value is determined by the plugin itself,
+    /// the plugin can easily map
+    /// [`NoteEvent::PolyModulation][crate::prelude::NoteEvent::PolyModulation`] events to the
+    /// correct parameter by pattern matching on a constant.
+    poly_modulation_id: Option<u32>,
     /// Optional custom conversion function from a plain **unnormalized** value to a string.
     value_to_string: Option<Arc<dyn Fn(f32) -> String + Send + Sync>>,
     /// Optional custom conversion function from a string to a plain **unnormalized** value. If the
@@ -97,6 +103,10 @@ impl Param for FloatParam {
 
     fn unit(&self) -> &'static str {
         self.unit
+    }
+
+    fn poly_modulation_id(&self) -> Option<u32> {
+        self.poly_modulation_id
     }
 
     #[inline]
@@ -275,9 +285,24 @@ impl FloatParam {
             step_size: None,
             name: name.into(),
             unit: "",
+            poly_modulation_id: None,
             value_to_string: None,
             string_to_value: None,
         }
+    }
+
+    /// Enable polyphonic modulation for this parameter. The ID is used to uniquely identify this
+    /// parameter in [`NoteEvent::PolyModulation][crate::prelude::NoteEvent::PolyModulation`]
+    /// events, and must thus be unique between _all_ polyphonically modulatable parameters.
+    ///
+    /// # Important
+    ///
+    /// After enabling polyphonic modulation, the plugin **must** start sending
+    /// [`NoteEvent::VoiceTerminated`][crate::prelude::NoteEvent::VoiceEnd] events to the host when
+    /// a voice has fully ended. This allows the host to reuse its modulation resources.
+    pub fn with_poly_modulation_id(mut self, id: u32) -> Self {
+        self.poly_modulation_id = Some(id);
+        self
     }
 
     /// Set up a smoother that can gradually interpolate changes made to this parameter, preventing

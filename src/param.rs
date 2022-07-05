@@ -60,6 +60,21 @@ pub trait Param: Display {
     /// Get the unit label for this parameter, if any.
     fn unit(&self) -> &'static str;
 
+    /// Get this parameter's polyphonic modulation ID. If this is set for a parameter in a CLAP
+    /// plugin, then polyphonic modulation will be enabled for that parameter. Polyphonic modulation
+    /// is sent through [`NoteEvent::PolyModulation][crate::prelude::NoteEvent::PolyModulation`]
+    /// events containing a **normalized** value for this parameter. This value must be converted to
+    /// a plain value using [`preview_plain()`][Self::preview_plain()] before it can be used. The
+    /// plugin should use this value in place of the parameter's normal (smoothed) value for the
+    /// affected note, and it should apply smooth to these values as necessary.
+    ///
+    /// # Important
+    ///
+    /// After enabling polyphonic modulation, the plugin **must** start sending
+    /// [`NoteEvent::VoiceTerminated`][crate::prelude::NoteEvent::VoiceEnd] events to the host when a voice
+    /// has fully ended. This allows the host to reuse its modulation resources.
+    fn poly_modulation_id(&self) -> Option<u32>;
+
     /// Get the unnormalized value for this parameter.
     fn plain_value(&self) -> Self::Plain;
 

@@ -117,6 +117,10 @@ impl<T: Enum + PartialEq> Param for EnumParam<T> {
         self.inner.unit()
     }
 
+    fn poly_modulation_id(&self) -> Option<u32> {
+        self.inner.poly_modulation_id()
+    }
+
     #[inline]
     fn plain_value(&self) -> Self::Plain {
         T::from_index(self.inner.plain_value() as usize)
@@ -193,6 +197,10 @@ impl Param for EnumParamInner {
 
     fn unit(&self) -> &'static str {
         ""
+    }
+
+    fn poly_modulation_id(&self) -> Option<u32> {
+        self.inner.poly_modulation_id()
     }
 
     #[inline]
@@ -324,6 +332,21 @@ impl<T: Enum + PartialEq + 'static> EnumParam<T> {
             },
             _marker: PhantomData,
         }
+    }
+
+    /// Enable polyphonic modulation for this parameter. The ID is used to uniquely identify this
+    /// parameter in [`NoteEvent::PolyModulation][crate::prelude::NoteEvent::PolyModulation`]
+    /// events, and must thus be unique between _all_ polyphonically modulatable parameters. See the
+    /// event's documentation for more information on how to use this.
+    ///
+    /// # Important
+    ///
+    /// After enabling polyphonic modulation, the plugin **must** start sending
+    /// [`NoteEvent::VoiceTerminated`][crate::prelude::NoteEvent::VoiceEnd] events to the host when
+    /// a voice has fully ended. This allows the host to reuse its modulation resources.
+    pub fn with_poly_modulation_id(mut self, id: u32) -> Self {
+        self.inner.inner = self.inner.inner.with_poly_modulation_id(id);
+        self
     }
 
     /// Run a callback whenever this parameter's value changes. The argument passed to this function
