@@ -1,4 +1,6 @@
 use nih_plug::prelude::*;
+use rand::Rng;
+use rand_pcg::Pcg32;
 use std::sync::Arc;
 
 /// The number of simultaneous voices for this synth.
@@ -13,6 +15,9 @@ const MAX_BLOCK_SIZE: usize = 64;
 struct PolyModSynth {
     params: Arc<PolyModSynthParams>,
 
+    /// A pseudo-random number generator. This will always be reseeded with the same seed when the
+    /// synth is reset. That way the output is deterministic when rendering multiple times.
+    prng: Pcg32,
     /// The synth's voices. Inactive voices will be set to `None` values.
     voices: [Option<Voice>; NUM_VOICES as usize],
     /// The next internal voice ID, used only to figure out the oldest voice for voice stealing.
@@ -39,6 +44,15 @@ struct Voice {
     /// The voices internal ID. Each voice has an internal voice ID one higher than the previous
     /// voice. This is used to steal the last voice in case all 16 voices are in use.
     internal_voice_id: u64,
+
+    /// The voice's current phase. This is randomized at the start of the voice
+    phase: f32,
+    /// The phase increment. This is based on the voice's frequency, derived from the note index.
+    /// Since we don't support pitch expressions or pitch bend, this value stays constant for the
+    /// duration of the voice.
+    phase_delta: f32,
+    /// The square root of the note's velocity. This is used as a gain multiplier.
+    velocity_sqrt: f32,
 }
 
 impl Default for PolyModSynth {
@@ -46,6 +60,7 @@ impl Default for PolyModSynth {
         Self {
             params: Arc::new(PolyModSynthParams::default()),
 
+            prng: Pcg32::new(420, 1337),
             // `[None; N]` requires the `Some(T)` to be `Copy`able
             voices: [0; NUM_VOICES as usize].map(|_| None),
             next_internal_voice_id: 0,
@@ -77,6 +92,9 @@ impl Plugin for PolyModSynth {
     // `context.set_current_voice_capacity()` in `initialize()` and in `process()` (when the
     // capacity changes) to inform the host about this.
     fn reset(&mut self) {
+        // This ensures the output is at least somewhat deterministic when rendering to audio
+        self.prng = Pcg32::new(420, 1337);
+
         self.voices.fill(None);
         self.next_internal_voice_id = 0;
     }
@@ -125,6 +143,10 @@ impl Plugin for PolyModSynth {
                                 );
 
                                 // TODO: Add and set the other fields
+                                voice.phase = self.prng.gen();
+                                voice.phase_delta =
+                                    util::midi_note_to_freq(note) / context.transport().sample_rate;
+                                voice.velocity_sqrt = velocity.sqrt();
                             }
                             NoteEvent::NoteOff {
                                 timing,
@@ -211,6 +233,10 @@ impl PolyModSynth {
             internal_voice_id: self.next_internal_voice_id,
             channel,
             note,
+
+            velocity_sqrt: 1.0,
+            phase: 0.0,
+            phase_delta: 0.0,
         };
         self.next_internal_voice_id = self.next_internal_voice_id.wrapping_add(1);
 

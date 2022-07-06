@@ -131,6 +131,7 @@ impl<P: ClapPlugin> ProcessContext for WrapperProcessContext<'_, P> {
         PluginApi::Clap
     }
 
+    #[inline]
     fn transport(&self) -> &Transport {
         &self.transport
     }

@@ -10,3 +10,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 nih_plug = { path = "../../../", features = ["assert_process_allocs"] }
+
+rand = "0.8.5"
+rand_pcg = "0.3.1"

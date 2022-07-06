@@ -101,6 +101,7 @@ impl<P: Plugin, B: Backend> ProcessContext for WrapperProcessContext<'_, P, B> {
         PluginApi::Standalone
     }
 
+    #[inline]
     fn transport(&self) -> &Transport {
         &self.transport
     }

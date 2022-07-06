@@ -135,6 +135,7 @@ impl<P: Vst3Plugin> ProcessContext for WrapperProcessContext<'_, P> {
         PluginApi::Vst3
     }
 
+    #[inline]
     fn transport(&self) -> &Transport {
         &self.transport
     }
