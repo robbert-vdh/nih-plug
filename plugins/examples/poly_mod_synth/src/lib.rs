@@ -34,6 +34,12 @@ struct PolyModSynthParams {
     /// A voice's gain. This can be polyphonically modulated.
     #[id = "gain"]
     gain: FloatParam,
+    /// The amplitude envelope attack time. This is the same for every voice.
+    #[id = "amp_atk"]
+    amp_attack_ms: FloatParam,
+    /// The amplitude envelope release time. This is the same for every voice.
+    #[id = "amp_rel"]
+    amp_release_ms: FloatParam,
 }
 
 /// Data for a single synth voice. In a real synth where performance matter, you may want to use a
@@ -52,6 +58,8 @@ struct Voice {
     /// The voices internal ID. Each voice has an internal voice ID one higher than the previous
     /// voice. This is used to steal the last voice in case all 16 voices are in use.
     internal_voice_id: u64,
+    /// The square root of the note's velocity. This is used as a gain multiplier.
+    velocity_sqrt: f32,
 
     /// The voice's current phase. This is randomized at the start of the voice
     phase: f32,
@@ -59,8 +67,11 @@ struct Voice {
     /// Since we don't support pitch expressions or pitch bend, this value stays constant for the
     /// duration of the voice.
     phase_delta: f32,
-    /// The square root of the note's velocity. This is used as a gain multiplier.
-    velocity_sqrt: f32,
+    /// Whether the key has been released and the voice is in its release stage. The voice will be
+    /// terminated when the amplitude envelope hits 0 while the note is releasing.
+    releasing: bool,
+    /// Fades between 0 and 1 with timings based on the global attack and release settings.
+    amp_envelope: Smoother<f32>,
 
     /// If this voice has polyphonic gain modulation applied, then this contains the normalized
     /// offset and a smoother.
@@ -100,6 +111,31 @@ impl Default for PolyModSynthParams {
             .with_unit(" dB")
             .with_value_to_string(formatters::v2s_f32_gain_to_db(2))
             .with_string_to_value(formatters::s2v_f32_gain_to_db()),
+            amp_attack_ms: FloatParam::new(
+                "Attack",
+                200.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 2000.0,
+                    factor: FloatRange::skew_factor(-1.0),
+                },
+            )
+            // These parameters are global (and they cannot be changed once the voice has started).
+            // They also don't need any smoothing themselves because they affect smoothing
+            // coefficients.
+            .with_step_size(0.1)
+            .with_unit(" ms"),
+            amp_release_ms: FloatParam::new(
+                "Release",
+                100.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 2000.0,
+                    factor: FloatRange::skew_factor(-1.0),
+                },
+            )
+            .with_step_size(0.1)
+            .with_unit(" ms"),
         }
     }
 }
@@ -175,24 +211,28 @@ impl Plugin for PolyModSynth {
                                 velocity,
                             } => {
                                 let initial_phase: f32 = self.prng.gen();
+                                // This starts with the attack portion of the amplitude envelope
+                                let mut amp_envelope = Smoother::new(SmoothingStyle::Exponential(
+                                    self.params.amp_attack_ms.value,
+                                ));
+                                amp_envelope.reset(0.0);
+                                amp_envelope.set_target(sample_rate, 1.0);
+
                                 let voice =
                                     self.start_voice(context, timing, voice_id, channel, note);
-
-                                // TODO: Add and set the other fields
+                                voice.velocity_sqrt = velocity.sqrt();
                                 voice.phase = initial_phase;
                                 voice.phase_delta = util::midi_note_to_freq(note) / sample_rate;
-                                voice.velocity_sqrt = velocity.sqrt();
+                                voice.amp_envelope = amp_envelope;
                             }
                             NoteEvent::NoteOff {
-                                timing,
+                                timing: _,
                                 voice_id,
                                 channel,
                                 note,
                                 velocity: _,
                             } => {
-                                // TODO: This should not immediately terminate the voice. For
-                                //       obvious reasons.
-                                self.terminate_voice(context, timing, voice_id, channel, note);
+                                self.start_release_for_voices(sample_rate, voice_id, channel, note)
                             }
                             NoteEvent::Choke {
                                 timing,
@@ -200,7 +240,7 @@ impl Plugin for PolyModSynth {
                                 channel,
                                 note,
                             } => {
-                                self.terminate_voice(context, timing, voice_id, channel, note);
+                                self.choke_voices(context, timing, voice_id, channel, note);
                             }
                             NoteEvent::PolyModulation {
                                 timing: _,
@@ -326,27 +366,33 @@ impl Plugin for PolyModSynth {
             let block_len = block_end - block_start;
             let mut gain = [0.0; MAX_BLOCK_SIZE];
             let mut voice_gain = [0.0; MAX_BLOCK_SIZE];
+            let mut voice_amp_envelope = [0.0; MAX_BLOCK_SIZE];
             self.params.gain.smoothed.next_block(&mut gain, block_len);
 
             // TODO: Amp envelope
             // TODO: Some form of band limiting
             // TODO: Filter
             for voice in self.voices.iter_mut().filter_map(|v| v.as_mut()) {
-                for (value_idx, sample_idx) in (block_start..block_end).enumerate() {
-                    // Depending on whether the voice has polyphonic modulation applied to it,
-                    // either the global parameter values are used, or the voice's smoother is used
-                    // to generate unique modulated values for that voice
-                    let gain = match &voice.voice_gain {
-                        Some((_, smoother)) => {
-                            smoother.next_block(&mut voice_gain, block_len);
-                            &voice_gain
-                        }
-                        None => &gain,
-                    };
+                // Depending on whether the voice has polyphonic modulation applied to it,
+                // either the global parameter values are used, or the voice's smoother is used
+                // to generate unique modulated values for that voice
+                let gain = match &voice.voice_gain {
+                    Some((_, smoother)) => {
+                        smoother.next_block(&mut voice_gain, block_len);
+                        &voice_gain
+                    }
+                    None => &gain,
+                };
 
-                    // TODO: This should of course take the envelope and probably a poly mod param into account
-                    // TODO: And as mentioned above, basic PolyBLEP or something
-                    let amp = voice.velocity_sqrt * gain[value_idx];
+                // This is an exponential smoother repurposed as an AR envelope with values between
+                // 0 and 1. When a note off event is received, this envelope will start fading out
+                // again. When it reaches 0, we will terminate the voice.
+                voice
+                    .amp_envelope
+                    .next_block(&mut voice_amp_envelope, block_len);
+
+                for (value_idx, sample_idx) in (block_start..block_end).enumerate() {
+                    let amp = voice.velocity_sqrt * gain[value_idx] * voice_amp_envelope[value_idx];
                     let sample = (voice.phase * 2.0 - 1.0) * amp;
 
                     voice.phase += voice.phase_delta;
@@ -356,6 +402,25 @@ impl Plugin for PolyModSynth {
 
                     output[0][sample_idx] += sample;
                     output[1][sample_idx] += sample;
+                }
+            }
+
+            // Terminate voices whose release period has fully ended. This could be done as part of
+            // the previous loop but this is simpler.
+            for voice in self.voices.iter_mut() {
+                match voice {
+                    Some(v) if v.releasing && v.amp_envelope.previous_value() == 0.0 => {
+                        // This event is very important, as it allows the host to manage its own modulation
+                        // voices
+                        context.send_event(NoteEvent::VoiceTerminated {
+                            timing: block_end as u32,
+                            voice_id: Some(v.voice_id),
+                            channel: v.channel,
+                            note: v.note,
+                        });
+                        *voice = None;
+                    }
+                    _ => (),
                 }
             }
 
@@ -392,10 +457,12 @@ impl PolyModSynth {
             internal_voice_id: self.next_internal_voice_id,
             channel,
             note,
-
             velocity_sqrt: 1.0,
+
             phase: 0.0,
             phase_delta: 0.0,
+            releasing: false,
+            amp_envelope: Smoother::none(),
 
             voice_gain: None,
         };
@@ -437,9 +504,48 @@ impl PolyModSynth {
         }
     }
 
-    /// Terminate one or more voice, removing it from the pool and informing the host that the voice
-    /// has ended. If `voice_id` is not provided, then this will terminate all matching voices.
-    fn terminate_voice(
+    /// Start the release process for one or more voice by changing their amplitude envelope. If
+    /// `voice_id` is not provided, then this will terminate all matching voices.
+    fn start_release_for_voices(
+        &mut self,
+        sample_rate: f32,
+        voice_id: Option<i32>,
+        channel: u8,
+        note: u8,
+    ) {
+        for voice in self.voices.iter_mut() {
+            match voice {
+                Some(Voice {
+                    voice_id: candidate_voice_id,
+                    channel: candidate_channel,
+                    note: candidate_note,
+                    releasing,
+                    amp_envelope,
+                    ..
+                }) if voice_id == Some(*candidate_voice_id)
+                    || (channel == *candidate_channel && note == *candidate_note) =>
+                {
+                    *releasing = true;
+                    amp_envelope.style =
+                        SmoothingStyle::Exponential(self.params.amp_release_ms.value);
+                    amp_envelope.set_target(sample_rate, 0.0);
+
+                    // If this targetted a single voice ID, we're done here. Otherwise there may be
+                    // multiple overlapping voices as we enabled support for that in the
+                    // `PolyModulationConfig`.
+                    if voice_id.is_some() {
+                        return;
+                    }
+                }
+                _ => (),
+            }
+        }
+    }
+
+    /// Immediately terminate one or more voice, removing it from the pool and informing the host
+    /// that the voice has ended. If `voice_id` is not provided, then this will terminate all
+    /// matching voices.
+    fn choke_voices(
         &mut self,
         context: &mut impl ProcessContext,
         sample_offset: u32,
@@ -447,7 +553,6 @@ impl PolyModSynth {
         channel: u8,
         note: u8,
     ) {
-        // TODO: If voice ID = none, terminate all matching voices
         for voice in self.voices.iter_mut() {
             match voice {
                 Some(Voice {
@@ -458,8 +563,6 @@ impl PolyModSynth {
                 }) if voice_id == Some(*candidate_voice_id)
                     || (channel == *candidate_channel && note == *candidate_note) =>
                 {
-                    // This event is very important, as it allows the host to manage its own modulation
-                    // voices
                     context.send_event(NoteEvent::VoiceTerminated {
                         timing: sample_offset,
                         // Notice how we always send the terminated voice ID here
@@ -469,9 +572,6 @@ impl PolyModSynth {
                     });
                     *voice = None;
 
-                    // If this targetted a single voice ID, we're done here. Otherwise there may be
-                    // multiple overlapping voices as we enabled support for that in the
-                    // `PolyModulationConfig`.
                     if voice_id.is_some() {
                         return;
                     }
