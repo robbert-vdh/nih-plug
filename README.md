@@ -110,6 +110,7 @@ Scroll down for more information on the plugin framework.
 - Optional sample accurate automation support for VST3 and CLAP that can be
   enabled by setting the `Plugin::SAMPLE_ACCURATE_AUTOMATION` constant to
   `true`.
+- Support for CLAP's polyphonic modulation on a per-parameter basis.
 - Comes with adapters for popular Rust GUI frameworks as well as some basic
   widgets for them that integrate with NIH-plug's parameter system. Currently
   there's support for [egui](nih_plug_egui), [iced](nih_plug_iced) and
