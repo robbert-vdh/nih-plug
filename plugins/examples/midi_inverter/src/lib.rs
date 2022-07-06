@@ -73,6 +73,17 @@ impl Plugin for MidiInverter {
                     note: 127 - note,
                     velocity: 1.0 - velocity,
                 }),
+                NoteEvent::Choke {
+                    timing,
+                    voice_id,
+                    channel,
+                    note,
+                } => context.send_event(NoteEvent::Choke {
+                    timing,
+                    voice_id,
+                    channel: 15 - channel,
+                    note: 127 - note,
+                }),
                 NoteEvent::PolyPressure {
                     timing,
                     voice_id,
