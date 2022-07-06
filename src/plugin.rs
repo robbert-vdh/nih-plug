@@ -222,7 +222,7 @@ pub trait Vst3Plugin: Plugin {
     /// logner than that will be truncated. See the VST3 SDK for examples of common categories:
     /// <https://github.com/steinbergmedia/vst3_pluginterfaces/blob/2ad397ade5b51007860bedb3b01b8afd2c5f6fba/vst/ivstaudioprocessor.h#L49-L90>
     //
-    // TODO: Create a category enum similar to CLapFeature
+    // TODO: Create a category enum similar to ClapFeature
     const VST3_CATEGORIES: &'static str;
 
     /// [`VST3_CLASS_ID`][Self::VST3_CLASS_ID`] in the correct order for the current platform so
