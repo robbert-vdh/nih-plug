@@ -5,10 +5,14 @@ use std::sync::Arc;
 
 /// The number of simultaneous voices for this synth.
 const NUM_VOICES: u32 = 16;
-
 /// The maximum size of an audio block. We'll split up the audio in blocks and render smoothed
 /// values to buffers since these values may need to be reused for multiple voices.
 const MAX_BLOCK_SIZE: usize = 64;
+
+// Polyphonic modulation works by assigning integer IDs to parameters. Pattern matching on these in
+// `PolyModulation` and `MonoAutomation` events makes it possible to easily link these events to the
+// correct parameter.
+const GAIN_POLY_MOD_ID: u32 = 0;
 
 /// A simple polyphonic synthesizer with support for CLAP's polyphonic modulation. See
 /// `NoteEvent::PolyModulation` for another source of information on how to use this.
@@ -25,8 +29,12 @@ struct PolyModSynth {
     next_internal_voice_id: u64,
 }
 
-#[derive(Default, Params)]
-struct PolyModSynthParams {}
+#[derive(Params)]
+struct PolyModSynthParams {
+    /// A voice's gain. This can be polyphonically modulated.
+    #[id = "gain"]
+    gain: FloatParam,
+}
 
 /// Data for a single synth voice. In a real synth where performance matter, you may want to use a
 /// struct of arrays instead of having a struct for each voice.
@@ -53,6 +61,10 @@ struct Voice {
     phase_delta: f32,
     /// The square root of the note's velocity. This is used as a gain multiplier.
     velocity_sqrt: f32,
+
+    /// If this voice has polyphonic gain modulation applied, then this contains the normalized
+    /// offset and a smoother.
+    voice_gain: Option<(f32, Smoother<f32>)>,
 }
 
 impl Default for PolyModSynth {
@@ -64,6 +76,30 @@ impl Default for PolyModSynth {
             // `[None; N]` requires the `Some(T)` to be `Copy`able
             voices: [0; NUM_VOICES as usize].map(|_| None),
             next_internal_voice_id: 0,
+        }
+    }
+}
+
+impl Default for PolyModSynthParams {
+    fn default() -> Self {
+        Self {
+            gain: FloatParam::new(
+                "Gain",
+                util::db_to_gain(-12.0),
+                // Because we're representing gain as decibels the range is already logarithmic
+                FloatRange::Linear {
+                    min: util::db_to_gain(-36.0),
+                    max: util::db_to_gain(0.0),
+                },
+            )
+            // This enables polyphonic mdoulation for this parameter by representing all related
+            // events with this ID. After enabling this, the plugin **must** start sending
+            // `VoiceTerminated` events to the host whenever a voice has ended.
+            .with_poly_modulation_id(GAIN_POLY_MOD_ID)
+            .with_smoother(SmoothingStyle::Logarithmic(5.0))
+            .with_unit(" dB")
+            .with_value_to_string(formatters::v2s_f32_gain_to_db(2))
+            .with_string_to_value(formatters::s2v_f32_gain_to_db()),
         }
     }
 }
@@ -110,6 +146,7 @@ impl Plugin for PolyModSynth {
         // split on note events, it's easier to work with raw audio here and to do the splitting by
         // hand.
         let num_samples = buffer.len();
+        let sample_rate = context.transport().sample_rate;
         let output = buffer.as_slice();
 
         let mut next_event = context.next_event();
@@ -117,7 +154,12 @@ impl Plugin for PolyModSynth {
         let mut block_end: usize = MAX_BLOCK_SIZE.min(num_samples);
         while block_start < num_samples {
             // First of all, handle all note events that happen at the start of the block, and cut
-            // the block short if another event happens before the end of it
+            // the block short if another event happens before the end of it. To handle polyphonic
+            // modulation for new notes properly, we'll keep track of the next internal note index
+            // at the block's start. If we receive polyphonic modulation that matches a voice that
+            // has an internal note ID that's great than or equal to this one, then we should start
+            // the note's smoother at the new value instead of fading in from the global value.
+            let this_sample_internal_voice_id_start = self.next_internal_voice_id;
             'events: loop {
                 match next_event {
                     // If the event happens now, then we'll keep processing events
@@ -138,8 +180,7 @@ impl Plugin for PolyModSynth {
 
                                 // TODO: Add and set the other fields
                                 voice.phase = initial_phase;
-                                voice.phase_delta =
-                                    util::midi_note_to_freq(note) / context.transport().sample_rate;
+                                voice.phase_delta = util::midi_note_to_freq(note) / sample_rate;
                                 voice.velocity_sqrt = velocity.sqrt();
                             }
                             NoteEvent::NoteOff {
@@ -161,18 +202,104 @@ impl Plugin for PolyModSynth {
                             } => {
                                 self.terminate_voice(context, timing, voice_id, channel, note);
                             }
-                            // TODO: Handle poly modulation
                             NoteEvent::PolyModulation {
-                                timing,
+                                timing: _,
                                 voice_id,
                                 poly_modulation_id,
                                 normalized_offset,
-                            } => todo!(),
+                            } => {
+                                // Polyphonic modulation events are matched to voices using the
+                                // voice ID, and to parameters using the poly modulation ID
+                                match self.get_voice_idx(voice_id) {
+                                    Some(voice_idx) => {
+                                        let voice = self.voices[voice_idx].as_mut().unwrap();
+
+                                        match poly_modulation_id {
+                                            GAIN_POLY_MOD_ID => {
+                                                // This should either create a smoother for this
+                                                // modulated parameter or update the existing one.
+                                                // Notice how this uses the parameter's unmodulated
+                                                // normalized value in combination with the normalized
+                                                // offset to create the target plain value
+                                                let target_plain_value = self
+                                                    .params
+                                                    .gain
+                                                    .preview_modulated(normalized_offset);
+                                                let (_, smoother) =
+                                                    voice.voice_gain.get_or_insert_with(|| {
+                                                        (
+                                                            normalized_offset,
+                                                            self.params.gain.smoothed.clone(),
+                                                        )
+                                                    });
+
+                                                // If this `PolyModulation` events happens on the
+                                                // same sample as a voice's `NoteOn` event, then it
+                                                // should immediately use the modulated value
+                                                // instead of slowly fading in
+                                                if voice.internal_voice_id
+                                                    >= this_sample_internal_voice_id_start
+                                                {
+                                                    smoother.reset(target_plain_value);
+                                                } else {
+                                                    smoother.set_target(
+                                                        sample_rate,
+                                                        target_plain_value,
+                                                    );
+                                                }
+                                            }
+                                            n => nih_debug_assert_failure!(
+                                                "Polyphonic modulation sent for unknown poly \
+                                                 modulation ID {}",
+                                                n
+                                            ),
+                                        }
+                                    }
+                                    // TODO: Bitwig sends the polyphonic modulation event before the
+                                    //       NoteOn, and there will also be some more events after
+                                    //       the voice has been terminated
+                                    None => nih_debug_assert_failure!(
+                                        "Polyphonic modulation sent for unknown voice {}",
+                                        voice_id
+                                    ),
+                                }
+                            }
                             NoteEvent::MonoAutomation {
-                                timing,
+                                timing: _,
                                 poly_modulation_id,
                                 normalized_value,
-                            } => todo!(),
+                            } => {
+                                // Modulation always acts as an offset to the parameter's current
+                                // automated value. So if the host sends a new automation value for
+                                // a modulated parameter, the modulated values/smoothing targets
+                                // need to be updated for all polyphonically modulated voices.
+                                for voice in self.voices.iter_mut().filter_map(|v| v.as_mut()) {
+                                    match poly_modulation_id {
+                                        GAIN_POLY_MOD_ID => {
+                                            let (normalized_offset, smoother) =
+                                                match voice.voice_gain.as_mut() {
+                                                    Some((o, s)) => (o, s),
+                                                    // If the voice does not have existing
+                                                    // polyphonic modulation, then there's nothing
+                                                    // to do here. The global automation/monophonic
+                                                    // modulation has already been taken care of by
+                                                    // the framework.
+                                                    None => continue,
+                                                };
+                                            let target_plain_value =
+                                                self.params.gain.preview_plain(
+                                                    normalized_value + *normalized_offset,
+                                                );
+                                            smoother.set_target(sample_rate, target_plain_value);
+                                        }
+                                        n => nih_debug_assert_failure!(
+                                            "Automation event sent for unknown poly modulation ID \
+                                             {}",
+                                            n
+                                        ),
+                                    }
+                                }
+                            }
                             _ => (),
                         };
 
@@ -192,16 +319,36 @@ impl Plugin for PolyModSynth {
             output[0][block_start..block_end].fill(0.0);
             output[1][block_start..block_end].fill(0.0);
 
-            // TODO: Poly modulation
+            // These are the smoothed global parameter values. These are used for voices that do not
+            // have polyphonic modulation applied to them. With a plugin as simple as this it would
+            // be possible to avoid this completely by simply always copying the smoother into the
+            // voice's struct, but that may not be realistic when the plugin has hundreds of
+            // parameters. The `voice_*` arrays are scratch arrays that an individual voice can use.
+            let block_len = block_end - block_start;
+            let mut gain = [0.0; MAX_BLOCK_SIZE];
+            let mut voice_gain = [0.0; MAX_BLOCK_SIZE];
+            self.params.gain.smoothed.next_block(&mut gain, block_len);
+
             // TODO: Amp envelope
             // TODO: Some form of band limiting
             // TODO: Filter
             for voice in self.voices.iter_mut().filter_map(|v| v.as_mut()) {
-                for sample_idx in block_start..block_end {
+                for (value_idx, sample_idx) in (block_start..block_end).enumerate() {
+                    // Depending on whether the voice has polyphonic modulation applied to it,
+                    // either the global parameter values are used, or the voice's smoother is used
+                    // to generate unique modulated values for that voice
+                    let gain = match &voice.voice_gain {
+                        Some((_, smoother)) => {
+                            smoother.next_block(&mut voice_gain, block_len);
+                            &voice_gain
+                        }
+                        None => &gain,
+                    };
+
                     // TODO: This should of course take the envelope and probably a poly mod param into account
                     // TODO: And as mentioned above, basic PolyBLEP or something
-                    let gain = voice.velocity_sqrt;
-                    let sample = (voice.phase * 2.0 - 1.0) * gain;
+                    let amp = voice.velocity_sqrt * gain[value_idx];
+                    let sample = (voice.phase * 2.0 - 1.0) * amp;
 
                     voice.phase += voice.phase_delta;
                     if voice.phase >= 1.0 {
@@ -223,12 +370,12 @@ impl Plugin for PolyModSynth {
 }
 
 impl PolyModSynth {
-    /// Get an active voice by its voice ID, if the voice exists
-    fn get_voice_mut(&mut self, voice_id: i32) -> Option<&mut Voice> {
-        self.voices.iter_mut().find_map(|voice| match voice {
-            Some(voice) if voice.voice_id == voice_id => Some(voice),
-            _ => None,
-        })
+    /// Get the index of a voice by its voice ID, if the voice exists. This does not immediately
+    /// reutnr a reference to the voice to avoid lifetime issues.
+    fn get_voice_idx(&mut self, voice_id: i32) -> Option<usize> {
+        self.voices
+            .iter_mut()
+            .position(|voice| matches!(voice, Some(voice) if voice.voice_id == voice_id))
     }
 
     /// Start a new voice with the given voice ID. If all voices are currently in use, the oldest
@@ -250,6 +397,8 @@ impl PolyModSynth {
             velocity_sqrt: 1.0,
             phase: 0.0,
             phase_delta: 0.0,
+
+            voice_gain: None,
         };
         self.next_internal_voice_id = self.next_internal_voice_id.wrapping_add(1);
 

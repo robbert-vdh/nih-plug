@@ -96,9 +96,9 @@ impl<T: Clone> Clone for Smoother<T> {
         // We can't derive clone because of the atomics, but these atomics are only here to allow
         // Send+Sync interior mutability
         Self {
-            style: self.style.clone(),
+            style: self.style,
             steps_left: AtomicI32::new(self.steps_left.load(Ordering::Relaxed)),
-            step_size: self.step_size.clone(),
+            step_size: self.step_size,
             current: AtomicF32::new(self.current.load(Ordering::Relaxed)),
             target: self.target.clone(),
         }

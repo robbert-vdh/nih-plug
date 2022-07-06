@@ -147,6 +147,14 @@ pub trait Param: Display {
     /// wrappers. This **does** snap to step sizes for continuous parameters (i.e. [`FloatParam`]).
     fn preview_plain(&self, normalized: f32) -> Self::Plain;
 
+    /// Get the plain, unnormalized value for this parameter after polyphonic modulation has been
+    /// applied. This is a convenience method for calling [`preview_plain()`][Self::preview_plain()]
+    /// with `unmodulated_normalized_value() + normalized_offset`.`
+    #[inline]
+    fn preview_modulated(&self, normalized_offset: f32) -> Self::Plain {
+        self.preview_plain(self.unmodulated_normalized_value() + normalized_offset)
+    }
+
     /// Flags to control the parameter's behavior. See [`ParamFlags`].
     fn flags(&self) -> ParamFlags;
 
