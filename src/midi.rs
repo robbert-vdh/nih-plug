@@ -71,6 +71,7 @@ pub enum NoteEvent {
         /// The note's MIDI key number, from 0 to 127.
         note: u8,
     },
+
     /// Sent by the plugin to the host to indicate that a voice has ended. This **needs** to be sent
     /// when a voice terminates when using polyphonic modulation. Otherwise you can ignore this
     /// event.
@@ -86,7 +87,42 @@ pub enum NoteEvent {
     },
     /// A polyphonic modulation event, available on [`MidiConfig::Basic`] and up. This will only be
     /// sent for parameters that were decorated with the `.with_poly_modulation_id()` modifier, and
-    /// only by supported hosts. The
+    /// only by supported hosts. This event contains a _normalized offset value_ for the parameter's
+    /// current, **unmodulated** value. That is, an offset for the current value before monophonic
+    /// modulation is applied, as polyphonic modulation overrides monophonic modulation. There are
+    /// multiple ways to incorporate this polyphonic modulation into a synthesizer, but a simple way
+    /// to incorporate this would work as follows:
+    ///
+    /// - By default, a voice uses the parameter's global value, which may or may not include
+    ///   monophonic modulation. This is `parameter.value` for unsmoothed parameters, and smoothed
+    ///   parameters should use block smoothing so the smoothed values can be reused by multiple
+    ///   voices.
+    /// - If a `PolyModulation` event is emited for the voice, that voice should use the the
+    ///   _normalized offset_ contained within the event to compute the voice's modulated value and
+    ///   use that in place of the global value.
+    ///   - This value can be obtained by calling `param.preview_plain(param.normalized_value() +
+    ///     event.normalized_offset)`. These functions automatically clamp the values as necessary.
+    ///   - If the parameter uses smoothing, then the parameter's smoother can be copied to the
+    ///     voice. [`Smoother::set_target()`][crate::prelude::Smoother::set_target()] can then be
+    ///     used to have the smoother use the modulated value.
+    ///   - One caveat with smoothing is that copying the smoother like this only works correctly if it last
+    ///     produced a value during the sample before the `PolyModulation` event. Otherwise there
+    ///     may still be an audible jump in parameter values. A solution for this would be to first
+    ///     call the [`Smoother::reset()`][crate::prelude::Smoother::reset()] with the current
+    ///     sample's global value before calling `set_target()`.
+    ///   - Finally, if the polyphonic modulation happens on the same sample as the `NoteOn` event,
+    ///     then the smoothing should not start at the current global value. In this case, `reset()`
+    ///     should be called with the voice's modulated value.
+    /// - If a `MonoAutomation` event is emitted for a parameter, then the values or target values
+    ///   (if the parameter uses smoothing) for all voices must be updated. The normalized value
+    ///   from the `MonoAutomation` and the voice's normalized modulation offset must be added and
+    ///   converted back to a plain value. This value can be used directly for unsmoothed
+    ///   parameters, or passed to `set_target()` for smoothed parameters. The global value will
+    ///   have already been updated, so this event only serves as a notification to update
+    ///   polyphonic modulation.
+    /// - When a voice ends, either because the amplitude envelope has hit zero or because the voice
+    ///   was stolen, the plugin must send a `VoiceTerminated` to the host to let it know that it
+    ///   can reuse the resources it used to modulate the value.
     PolyModulation {
         timing: u32,
         /// The identifier of the voice this polyphonic modulation event should affect. This voice
@@ -96,14 +132,24 @@ pub enum NoteEvent {
         /// The ID that was set for the modulated parameter using the `.with_poly_modulation_id()`
         /// method.
         poly_modulation_id: u32,
-        /// The parameter's new normalized value. This value needs to be converted to the plain
-        /// value using `param.preview_plain(event.normalized_value)`, and it should be used **in
-        /// place of** the global value. If the modulated parameter is smoothed, you may want to
-        /// copy the smoother to the affected voice, set this value using
-        /// [`Smoother::set_target()`][crate::prelude::Smoother::set_target()], and then use that
-        /// smoother to produce values for the voice.
+        /// The normalized offset value. See the event's docstring for more information.
+        normalized_offset: f32,
+    },
+    /// A notification to inform the plugin that a polyphonically modulated parameter has received a
+    /// new automation value. This is used in conjuction with the `PolyModulation` event. See that
+    /// event's documentation for more details. The parameter's global value has already been
+    /// updated when this event is emited.
+    MonoAutomation {
+        timing: u32,
+        /// The ID that was set for the modulated parameter using the `.with_poly_modulation_id()`
+        /// method.
+        poly_modulation_id: u32,
+        /// The parameter's new normalized value. This needs to be added to a voice's normalized
+        /// offset to get that voice's modulated normalized value. See the `PolyModulation` event's
+        /// docstring for more information.
         normalized_value: f32,
     },
+
     /// A polyphonic note pressure/aftertouch event, available on [`MidiConfig::Basic`] and up. Not
     /// all hosts may support polyphonic aftertouch.
     ///
@@ -252,6 +298,7 @@ impl NoteEvent {
             NoteEvent::Choke { timing, .. } => *timing,
             NoteEvent::VoiceTerminated { timing, .. } => *timing,
             NoteEvent::PolyModulation { timing, .. } => *timing,
+            NoteEvent::MonoAutomation { timing, .. } => *timing,
             NoteEvent::PolyPressure { timing, .. } => *timing,
             NoteEvent::PolyVolume { timing, .. } => *timing,
             NoteEvent::PolyPan { timing, .. } => *timing,
@@ -273,6 +320,7 @@ impl NoteEvent {
             NoteEvent::Choke { voice_id, .. } => *voice_id,
             NoteEvent::VoiceTerminated { voice_id, .. } => *voice_id,
             NoteEvent::PolyModulation { voice_id, .. } => Some(*voice_id),
+            NoteEvent::MonoAutomation { .. } => None,
             NoteEvent::PolyPressure { voice_id, .. } => *voice_id,
             NoteEvent::PolyVolume { voice_id, .. } => *voice_id,
             NoteEvent::PolyPan { voice_id, .. } => *voice_id,
@@ -411,6 +459,7 @@ impl NoteEvent {
             NoteEvent::Choke { .. }
             | NoteEvent::VoiceTerminated { .. }
             | NoteEvent::PolyModulation { .. }
+            | NoteEvent::MonoAutomation { .. }
             | NoteEvent::PolyVolume { .. }
             | NoteEvent::PolyPan { .. }
             | NoteEvent::PolyTuning { .. }
@@ -429,6 +478,7 @@ impl NoteEvent {
             NoteEvent::Choke { timing, .. } => *timing -= samples,
             NoteEvent::VoiceTerminated { timing, .. } => *timing -= samples,
             NoteEvent::PolyModulation { timing, .. } => *timing -= samples,
+            NoteEvent::MonoAutomation { timing, .. } => *timing -= samples,
             NoteEvent::PolyPressure { timing, .. } => *timing -= samples,
             NoteEvent::PolyVolume { timing, .. } => *timing -= samples,
             NoteEvent::PolyPan { timing, .. } => *timing -= samples,

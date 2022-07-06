@@ -114,6 +114,13 @@ impl<T: Smoothable> Smoother<T> {
         Default::default()
     }
 
+    /// Get the smoother's style. This is useful when a per-voice smoother wants to use the same
+    /// style as a parameter's global smoother.
+    #[inline]
+    pub fn style(&self) -> SmoothingStyle {
+        self.style
+    }
+
     /// The number of steps left until calling [`next()`][Self::next()] will stop yielding new
     /// values.
     #[inline]

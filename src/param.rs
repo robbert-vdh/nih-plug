@@ -62,11 +62,10 @@ pub trait Param: Display {
 
     /// Get this parameter's polyphonic modulation ID. If this is set for a parameter in a CLAP
     /// plugin, then polyphonic modulation will be enabled for that parameter. Polyphonic modulation
-    /// is sent through [`NoteEvent::PolyModulation][crate::prelude::NoteEvent::PolyModulation`]
-    /// events containing a **normalized** value for this parameter. This value must be converted to
-    /// a plain value using [`preview_plain()`][Self::preview_plain()] before it can be used. The
-    /// plugin should use this value in place of the parameter's normal (smoothed) value for the
-    /// affected note, and it should apply smooth to these values as necessary.
+    /// is communicated to the plugin through
+    /// [`NoteEvent::PolyModulation][crate::prelude::NoteEvent::PolyModulation`] and
+    /// [`NoteEvent::MonoAutomation][crate::prelude::NoteEvent::MonoAutomation`] events. See the
+    /// documentation on those events for more information.
     ///
     /// # Important
     ///

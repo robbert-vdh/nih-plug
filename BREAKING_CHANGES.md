@@ -6,6 +6,11 @@ new and what's changed, this document lists all breaking changes in reverse
 chronological order. If a new feature did not require any changes to existing
 code then it will not be listed here.
 
+## [2022-07-06]
+
+- There are new `NoteEvent::PolyModulation` and `NoteEvent::MonoAutomation` as
+  part of polyphonic modulation support for CLAP plugins.
+
 ## [2022-07-05]
 
 - The `ClapPlugin::CLAP_HARD_REALTIME` constant was moved to the general

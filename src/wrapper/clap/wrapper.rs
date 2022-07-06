@@ -1326,6 +1326,24 @@ impl<P: ClapPlugin> Wrapper<P> {
                     self.current_buffer_config.load().map(|c| c.sample_rate),
                 );
 
+                // If the parameter supports polyphonic modulation, then the plugin needs to be
+                // informed that the parmaeter has been monophonicall automated. This allows the
+                // plugin to update all of its polyphonic modulation values, since polyphonic
+                // modulation acts as an offset to the monophonic value.
+                if let Some(poly_modulation_id) = self.poly_mod_ids_by_hash.get(&event.param_id) {
+                    // The modulation offset needs to be normalized to account for modulated
+                    // integer or enum parmaeters
+                    let param_ptr = self.param_by_hash[&event.param_id];
+                    let normalized_value =
+                        event.value as f32 / param_ptr.step_count().unwrap_or(1) as f32;
+
+                    input_events.push_back(NoteEvent::MonoAutomation {
+                        timing,
+                        poly_modulation_id: *poly_modulation_id,
+                        normalized_value,
+                    });
+                }
+
                 true
             }
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_MOD) => {
@@ -1334,15 +1352,11 @@ impl<P: ClapPlugin> Wrapper<P> {
                 if event.note_id != -1 && P::MIDI_INPUT >= MidiConfig::Basic {
                     match self.poly_mod_ids_by_hash.get(&event.param_id) {
                         Some(poly_modulation_id) => {
-                            // To make things simpler (because they already are kind of
-                            // complicated), we'll send the _normalized parameter value_ to the
-                            // plugin. So the plugin doesn't need to add modulation offsets here, as
-                            // that might result in confusing situations when there's also
-                            // monophonic modulation going on.
+                            // The modulation offset needs to be normalized to account for modulated
+                            // integer or enum parmaeters
                             let param_ptr = self.param_by_hash[&event.param_id];
-                            let normalized_modulated_value = param_ptr.normalized_value()
-                                + (event.amount as f32
-                                    / param_ptr.step_count().unwrap_or(1) as f32);
+                            let normalized_offset =
+                                event.amount as f32 / param_ptr.step_count().unwrap_or(1) as f32;
 
                             // The host may also add key and channel information here, but it may
                             // also pass -1. So not having that information here at all seems like
@@ -1351,7 +1365,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                                 timing,
                                 voice_id: event.note_id,
                                 poly_modulation_id: *poly_modulation_id,
-                                normalized_value: normalized_modulated_value,
+                                normalized_offset,
                             });
 
                             return true;
