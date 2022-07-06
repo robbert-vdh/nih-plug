@@ -255,13 +255,12 @@ impl Plugin for PolyModSynth {
                                             ),
                                         }
                                     }
-                                    // TODO: Bitwig sends the polyphonic modulation event before the
-                                    //       NoteOn, and there will also be some more events after
-                                    //       the voice has been terminated
-                                    None => nih_debug_assert_failure!(
-                                        "Polyphonic modulation sent for unknown voice {}",
-                                        voice_id
-                                    ),
+                                    // The host will probably send a modulation event every N
+                                    // samples. This will happen before the voice is active, and of
+                                    // course also after it has been terminated (because the host
+                                    // doesn't know that it will be). Because of that, we won't
+                                    // print any assertion failures here.
+                                    None => (),
                                 }
                             }
                             NoteEvent::MonoAutomation {
