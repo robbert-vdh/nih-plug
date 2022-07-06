@@ -170,9 +170,12 @@ examples.
   [egui](plugins/examples/gain_gui_egui),
   [iced](plugins/examples/gain_gui_iced), and
   [VIZIA](plugins/examples/gain_gui_vizia).
-- [**midi-inverter**](plugins/examples/midi-inverter) takes note/MIDI events and
+- [**midi_inverter**](plugins/examples/midi_inverter) takes note/MIDI events and
   flips around the note, channel, expression, pressure, and CC values. This
   example demonstrates how to receive and output those events.
+- [**poly_mod_synth**](plugins/examples/poly_mod_synth) is a simple polyphonic
+  synthesizer with support for polyphonic modulation in supported CLAP hosts.
+  This demonstrates how polyphonic modulation can be used in NIH-plug.
 - [**sine**](plugins/examples/sine) is a simple test tone generator plugin with
   frequency smoothing that can also make use of MIDI input instead of generating
   a static signal based on the plugin's parameters.

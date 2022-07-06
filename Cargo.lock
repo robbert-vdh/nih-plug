@@ -2935,6 +2935,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "poly_mod_synth"
+version = "0.1.0"
+dependencies = [
+ "nih_plug",
+]
+
+[[package]]
 name = "ppv-lite86"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
