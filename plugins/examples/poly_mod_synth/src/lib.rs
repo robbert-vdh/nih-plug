@@ -110,12 +110,13 @@ impl Plugin for PolyModSynth {
         // num_remaining_samples, next_event_idx - block_start_idx)`. Because blocks also need to be
         // split on note events, it's easier to work with raw audio here and to do the splitting by
         // hand.
+        let num_samples = buffer.len();
         let output = buffer.as_slice();
 
         let mut next_event = context.next_event();
         let mut block_start: usize = 0;
-        let mut block_end: usize = MAX_BLOCK_SIZE.min(output.len());
-        while block_start < output.len() {
+        let mut block_end: usize = MAX_BLOCK_SIZE.min(num_samples);
+        while block_start < num_samples {
             // First of all, handle all note events that happen at the start of the block, and cut
             // the block short if another event happens before the end of it
             'events: loop {
@@ -132,18 +133,12 @@ impl Plugin for PolyModSynth {
                                 note,
                                 velocity,
                             } => {
-                                let voice = self.start_voice(
-                                    context,
-                                    timing,
-                                    voice_id.unwrap_or_else(|| {
-                                        compute_fallback_voice_id(note, channel)
-                                    }),
-                                    channel,
-                                    note,
-                                );
+                                let initial_phase: f32 = self.prng.gen();
+                                let voice =
+                                    self.start_voice(context, timing, voice_id, channel, note);
 
                                 // TODO: Add and set the other fields
-                                voice.phase = self.prng.gen();
+                                voice.phase = initial_phase;
                                 voice.phase_delta =
                                     util::midi_note_to_freq(note) / context.transport().sample_rate;
                                 voice.velocity_sqrt = velocity.sqrt();
@@ -153,21 +148,19 @@ impl Plugin for PolyModSynth {
                                 voice_id,
                                 channel,
                                 note,
-                                velocity,
-                            } => todo!("Have note-off events fade out the notes"),
+                                velocity: _,
+                            } => {
+                                // TODO: This should not immediately terminate the voice. For
+                                //       obvious reasons.
+                                self.terminate_voice(context, timing, voice_id, channel, note);
+                            }
                             NoteEvent::Choke {
                                 timing,
                                 voice_id,
                                 channel,
                                 note,
                             } => {
-                                self.terminate_voice(
-                                    context,
-                                    timing,
-                                    voice_id.unwrap_or_else(|| {
-                                        compute_fallback_voice_id(note, channel)
-                                    }),
-                                );
+                                self.terminate_voice(context, timing, voice_id, channel, note);
                             }
                             // TODO: Handle poly modulation
                             NoteEvent::PolyModulation {
@@ -190,9 +183,9 @@ impl Plugin for PolyModSynth {
                     // short so the next block starts at the event
                     Some(event) if (event.timing() as usize) < block_end => {
                         block_end = event.timing() as usize;
-                        break;
+                        break 'events;
                     }
-                    _ => break,
+                    _ => break 'events,
                 }
             }
 
@@ -200,9 +193,30 @@ impl Plugin for PolyModSynth {
             output[0][block_start..block_end].fill(0.0);
             output[1][block_start..block_end].fill(0.0);
 
+            // TODO: Poly modulation
+            // TODO: Amp envelope
+            // TODO: Some form of band limiting
+            // TODO: Filter
+            for voice in self.voices.iter_mut().filter_map(|v| v.as_mut()) {
+                for sample_idx in block_start..block_end {
+                    // TODO: This should of course take the envelope and probably a poly mod param into account
+                    // TODO: And as mentioned above, basic PolyBLEP or something
+                    let gain = voice.velocity_sqrt;
+                    let sample = (voice.phase * 2.0 - 1.0) * gain;
+
+                    voice.phase += voice.phase_delta;
+                    if voice.phase >= 1.0 {
+                        voice.phase -= 1.0;
+                    }
+
+                    output[0][sample_idx] += sample;
+                    output[1][sample_idx] += sample;
+                }
+            }
+
             // And then just keep processing blocks until we've run out of buffer to fill
             block_start = block_end;
-            block_end = (block_start + MAX_BLOCK_SIZE).min(output.len());
+            block_end = (block_start + MAX_BLOCK_SIZE).min(num_samples);
         }
 
         ProcessStatus::Normal
@@ -224,12 +238,12 @@ impl PolyModSynth {
         &mut self,
         context: &mut impl ProcessContext,
         sample_offset: u32,
-        voice_id: i32,
+        voice_id: Option<i32>,
         channel: u8,
         note: u8,
     ) -> &mut Voice {
         let new_voice = Voice {
-            voice_id,
+            voice_id: voice_id.unwrap_or_else(|| compute_fallback_voice_id(note, channel)),
             internal_voice_id: self.next_internal_voice_id,
             channel,
             note,
@@ -282,23 +296,28 @@ impl PolyModSynth {
         &mut self,
         context: &mut impl ProcessContext,
         sample_offset: u32,
-        voice_id: i32,
+        voice_id: Option<i32>,
+        channel: u8,
+        note: u8,
     ) -> bool {
         for voice in self.voices.iter_mut() {
             match voice {
                 Some(Voice {
-                    voice_id: found_voice_id,
-                    channel,
-                    note,
+                    voice_id: candidate_voice_id,
+                    channel: candidate_channel,
+                    note: candidate_note,
                     ..
-                }) if *found_voice_id == voice_id => {
+                }) if voice_id == Some(*candidate_voice_id)
+                    || (channel == *candidate_channel && note == *candidate_note) =>
+                {
                     // This event is very important, as it allows the host to manage its own modulation
                     // voices
                     context.send_event(NoteEvent::VoiceTerminated {
                         timing: sample_offset,
-                        voice_id: Some(voice_id),
-                        channel: *channel,
-                        note: *note,
+                        // Notice how we always send the terminated voice ID here
+                        voice_id: Some(*candidate_voice_id),
+                        channel,
+                        note,
                     });
                     *voice = None;
 
