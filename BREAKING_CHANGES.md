@@ -9,28 +9,28 @@ code then it will not be listed here.
 ## [2022-07-06]
 
 - The block smoothing API has been reworked. Instead of `Smoother`s having their
-  own built in block buffer, you now need to provide your own mutable slice for
+  own built-in block buffer, you now need to provide your own mutable slice for
   the smoother to fill. This makes the API easier to understand, more flexible,
-  and it allows cloning smoothers without worrying about allocations for use
-  with polyphonic modulation. In addition, the new implementation is much more
-  efficient when the smoothing period has ended before or during the block.
-- There are new `NoteEvent::PolyModulation` and `NoteEvent::MonoAutomation` as
-  part of polyphonic modulation support for CLAP plugins.
+  and it allows cloning smoothers without worrying about allocations.In
+  addition, the new implementation is much more efficient when the smoothing
+  period has ended before or during the block.
+- There are new `NoteEvent::PolyModulation` and `NoteEvent::MonoAutomation`
+  events as part of polyphonic modulation support for CLAP plugins.
 
 ## [2022-07-05]
 
 - The `ClapPlugin::CLAP_HARD_REALTIME` constant was moved to the general
-  `Plugin` trait as `Plugin::HARD_REALTIME_ONLY` and best-effort support for
-  VST3 was added.
+  `Plugin` trait as `Plugin::HARD_REALTIME_ONLY`, and best-effort support for
+  VST3 has been added.
 
 ## [2022-07-04]
 
 - There is a new `NoteEvent::Choke` event the host can send to a plugin to let
   it know that it should immediately terminate all sound associated with a voice
   or a key.
-- There is a new `NoteEvent::VoiceTerminated` event to let the host know a voice
-  has been terminated. This needs to be output by CLAP plugins that support
-  polyphonic modulation.
+- There is a new `NoteEvent::VoiceTerminated` event a plugin can send to let the
+  host know a voice has been terminated. This needs to be output by CLAP plugins
+  that support polyphonic modulation.
 - Most `NoteEvent` variants now have an additional `voice_id` field.
 - The `CLAP_DESCRIPTION`, `CLAP_MANUAL_URL`, and `CLAP_SUPPORT_URL` associated
   constants from the `ClapPlugin` are now optional and have the type
