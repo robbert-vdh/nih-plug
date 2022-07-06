@@ -166,10 +166,6 @@ impl Param for IntParam {
         self.range.unnormalize(normalized)
     }
 
-    fn initialize_block_smoother(&mut self, max_block_size: usize) {
-        self.smoothed.initialize_block_smoother(max_block_size);
-    }
-
     fn flags(&self) -> ParamFlags {
         self.flags
     }

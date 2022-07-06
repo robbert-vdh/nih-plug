@@ -152,10 +152,7 @@ pub trait Plugin: Default + Send + Sync + 'static {
     /// per-sample SIMD or excessive branching. The parameter smoothers can also work in both modes:
     /// use [`Smoother::next()`][crate::prelude::Smoother::next()] for per-sample processing, and
     /// [`Smoother::next_block()`][crate::prelude::Smoother::next_block()] for block-based
-    /// processing. In order to use block-based smoothing, you will need to call
-    /// [`initialize_block_smoothers()`][Self::initialize_block_smoothers()] in your
-    /// [`initialize()`][Self::initialize()] function first to reserve enough capacity in the
-    /// smoothers.
+    /// processing.
     ///
     /// The `context` object contains context information as well as callbacks for working with note
     /// events. The [`AuxiliaryBuffers`] contain the plugin's sidechain input buffers and
@@ -179,17 +176,6 @@ pub trait Plugin: Default + Send + Sync + 'static {
     /// `initialize()` may be called more than once before `deactivate()` is called, for instance
     /// when restoring state while the plugin is still activate.
     fn deactivate(&mut self) {}
-
-    /// Convenience function provided to allocate memory for block-based smoothing for this plugin.
-    /// Since this allocates memory, this should be called in [`initialize()`][Self::initialize()].
-    /// If you are going to use [`Buffer::iter_blocks()`] and want to use parameter smoothing in
-    /// those blocks, then call this function with the same maximum block size first before calling
-    /// [`Smoother::next_block()`][crate::prelude::Smoother::next_block()].
-    fn initialize_block_smoothers(&mut self, max_block_size: usize) {
-        for (_, mut param, _) in self.params().param_map() {
-            unsafe { param.initialize_block_smoother(max_block_size) };
-        }
-    }
 }
 
 /// Provides auxiliary metadata needed for a CLAP plugin.

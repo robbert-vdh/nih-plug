@@ -143,8 +143,6 @@ impl Param for BoolParam {
         normalized > 0.5
     }
 
-    fn initialize_block_smoother(&mut self, _max_block_size: usize) {}
-
     fn flags(&self) -> ParamFlags {
         self.flags
     }

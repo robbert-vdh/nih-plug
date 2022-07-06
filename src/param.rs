@@ -147,11 +147,6 @@ pub trait Param: Display {
     /// wrappers. This **does** snap to step sizes for continuous parameters (i.e. [`FloatParam`]).
     fn preview_plain(&self, normalized: f32) -> Self::Plain;
 
-    /// Allocate memory for block-based smoothing. The
-    /// [`Plugin::initialize_block_smoothers()`][crate::prelude::Plugin::initialize_block_smoothers()] method
-    /// will do this for every smoother.
-    fn initialize_block_smoother(&mut self, max_block_size: usize);
-
     /// Flags to control the parameter's behavior. See [`ParamFlags`].
     fn flags(&self) -> ParamFlags;
 

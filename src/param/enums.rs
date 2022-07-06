@@ -175,10 +175,6 @@ impl<T: Enum + PartialEq> Param for EnumParam<T> {
         T::from_index(self.inner.preview_plain(normalized) as usize)
     }
 
-    fn initialize_block_smoother(&mut self, max_block_size: usize) {
-        self.inner.initialize_block_smoother(max_block_size)
-    }
-
     fn flags(&self) -> ParamFlags {
         self.inner.flags()
     }
@@ -259,10 +255,6 @@ impl Param for EnumParamInner {
 
     fn preview_plain(&self, normalized: f32) -> Self::Plain {
         self.inner.preview_plain(normalized)
-    }
-
-    fn initialize_block_smoother(&mut self, max_block_size: usize) {
-        self.inner.initialize_block_smoother(max_block_size)
     }
 
     fn flags(&self) -> ParamFlags {

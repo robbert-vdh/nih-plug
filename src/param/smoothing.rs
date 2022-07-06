@@ -1,10 +1,7 @@
 //! Utilities to handle smoothing parameter changes over time.
 
 use atomic_float::AtomicF32;
-use atomic_refcell::{AtomicRefCell, AtomicRefMut};
 use std::sync::atomic::{AtomicI32, Ordering};
-
-use crate::buffer::Block;
 
 /// Controls if and how parameters gets smoothed.
 #[derive(Debug, Clone, Copy)]
@@ -55,15 +52,10 @@ pub struct Smoother<T> {
     current: AtomicF32,
     /// The value we're smoothing towards
     target: T,
-
-    /// A dense buffer containing smoothed values for an entire block of audio. Useful when using
-    /// [`Buffer::iter_blocks()`][crate::prelude::Buffer::iter_blocks()] to process small blocks of audio
-    /// multiple times.
-    block_values: AtomicRefCell<Vec<T>>,
 }
 
 /// An iterator that continuously produces smoothed values. Can be used as an alternative to the
-/// built-in block-based smoothing API. Since the iterator itself is infinite, you can use
+/// block-based smoothing API. Since the iterator itself is infinite, you can use
 /// [`Smoother::is_smoothing()`] and [`Smoother::steps_left()`] to get information on the current
 /// smoothing status.
 pub struct SmootherIter<'a, T> {
@@ -85,8 +77,6 @@ impl<T: Smoothable> Default for Smoother<T> {
             step_size: Default::default(),
             current: AtomicF32::new(0.0),
             target: Default::default(),
-
-            block_values: AtomicRefCell::new(Vec::new()),
         }
     }
 }
@@ -141,15 +131,6 @@ impl<T: Smoothable> Smoother<T> {
     #[inline]
     pub fn iter(&self) -> SmootherIter<T> {
         SmootherIter { smoother: self }
-    }
-
-    /// Allocate memory to store smoothed values for an entire block of audio. Call this in
-    /// [`Plugin::initialize()`][crate::prelude::Plugin::initialize()] with the same max block size you are
-    /// going to pass to [`Buffer::iter_blocks()`][crate::prelude::Buffer::iter_blocks()].
-    pub fn initialize_block_smoother(&mut self, max_block_size: usize) {
-        self.block_values
-            .borrow_mut()
-            .resize_with(max_block_size, || T::default());
     }
 
     /// Reset the smoother the specified value.
@@ -248,43 +229,44 @@ impl<T: Smoothable> Smoother<T> {
         T::from_f32(self.current.load(Ordering::Relaxed))
     }
 
-    /// Produce smoothed values for an entire block of audio. Used in conjunction with
-    /// [`Buffer::iter_blocks()`][crate::prelude::Buffer::iter_blocks()]. Make sure to call
-    /// [`Plugin::initialize_block_smoothers()`][crate::prelude::Plugin::initialize_block_smoothers()] with
-    /// the same maximum buffer block size as the one passed to `iter_blocks()` in your
-    /// [`Plugin::initialize()`][crate::prelude::Plugin::initialize()] function first to allocate memory for
-    /// the block smoothing.
-    ///
-    /// Returns a `None` value if the block length exceed's the allocated capacity.
+    /// Produce smoothed values for an entire block of audio. This is useful when iterating the same
+    /// block of audio multiple times. For instance when summing voices for a synthesizer.
+    /// `block_values[..block_len]` will be filled with the smoothed values. This is simply a
+    /// convenient function for [`next_block_exact()`][Self::next_block_exact()] when iterating over
+    /// variable length blocks with a known maximum size.
     ///
     /// # Panics
     ///
-    /// Panics if this function is called again while another block value slice is still alive.
-    pub fn next_block(&self, block: &Block) -> Option<AtomicRefMut<[T]>> {
-        self.next_block_mapped(block, |x| x)
+    /// Panics if `block_len > block_values.len()`.
+    pub fn next_block(&self, block_values: &mut [T], block_len: usize) {
+        self.next_block_exact_mapped(&mut block_values[..block_len], |x| x)
+    }
+
+    /// The same as [`next_block()`][Self::next_block()], but filling the entire slice.
+    pub fn next_block_exact(&self, block_values: &mut [T]) {
+        self.next_block_exact_mapped(block_values, |x| x)
     }
 
     /// The same as [`next_block()`][Self::next_block()], but with a function applied to each
     /// produced value. Useful when applying modulation to a smoothed parameter.
-    pub fn next_block_mapped(
-        &self,
-        block: &Block,
-        mut f: impl FnMut(T) -> T,
-    ) -> Option<AtomicRefMut<[T]>> {
-        let mut block_values = self.block_values.borrow_mut();
-        if block_values.len() < block.len() {
-            return None;
-        }
+    pub fn next_block_mapped(&self, block_values: &mut [T], block_len: usize, f: impl Fn(T) -> T) {
+        self.next_block_exact_mapped(&mut block_values[..block_len], f)
+    }
 
-        // TODO: As a small optimization we could split this up into two loops for the smoothed and
-        //       unsmoothed parts. Another worthwhile optimization would be to remember if the
-        //       buffer is already filled with the target value and [Self::is_smoothing()] is false.
-        //       In that case we wouldn't need to do anything ehre.
-        (&mut block_values[..block.len()]).fill_with(|| f(self.next()));
+    /// The same as [`next_block_exact()`][Self::next_block()], but with a function applied to each
+    /// produced value. Useful when applying modulation to a smoothed parameter.
+    pub fn next_block_exact_mapped(&self, block_values: &mut [T], f: impl Fn(T) -> T) {
+        // `self.next()` will yield the current value if the parameter is no longer smoothing, but
+        // it's a bit of a waste to continuesly call that if only the first couple or none of the
+        // values in `block_values` would require smoothing and the rest don't. Instead, we'll just
+        // smooth the values as necessary, and then reuse the target value for the rest of the
+        // block.
+        let num_smoothed_values = block_values
+            .len()
+            .min(self.steps_left.load(Ordering::Relaxed) as usize);
 
-        Some(AtomicRefMut::map(block_values, |values| {
-            &mut values[..block.len()]
-        }))
+        block_values[..num_smoothed_values].fill_with(|| f(self.next()));
+        block_values[num_smoothed_values..].fill(self.target);
     }
 }
 

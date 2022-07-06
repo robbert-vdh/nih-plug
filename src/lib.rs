@@ -75,9 +75,7 @@
 //!    plugins](https://github.com/robbert-vdh/nih-plug/tree/master/plugins).
 //!  - After calling `.with_smoother()` during an integer or floating point parameter's creation,
 //!    you can use `param.smoothed` to access smoothed values for that parameter. Be sure to check
-//!    out the [`Smoother`][prelude::Smoother] API for more details. If you want to generate entire
-//!    blocks of smoothed values, be sure to call the predefined
-//!    `[Plugin::initialize_block_smoothers()]` method from your plugin's `initialize()` function.
+//!    out the [`Smoother`][prelude::Smoother] API for more details.
 //!
 //! There's a whole lot more to discuss, but once you understand the above you should be able to
 //! figure out the rest by reading through the examples and the API documetnation. Good luck!

@@ -8,6 +8,12 @@ code then it will not be listed here.
 
 ## [2022-07-06]
 
+- The block smoothing API has been reworked. Instead of `Smoother`s having their
+  own built in block buffer, you now need to provide your own mutable slice for
+  the smoother to fill. This makes the API easier to understand, more flexible,
+  and it allows cloning smoothers without worrying about allocations for use
+  with polyphonic modulation. In addition, the new implementation is much more
+  efficient when the smoothing period has ended before or during the block.
 - There are new `NoteEvent::PolyModulation` and `NoteEvent::MonoAutomation` as
   part of polyphonic modulation support for CLAP plugins.
 
