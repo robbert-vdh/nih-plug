@@ -21,7 +21,8 @@ pub use crate::param::smoothing::{Smoothable, Smoother, SmoothingStyle};
 pub use crate::param::{BoolParam, FloatParam, IntParam, Param, ParamFlags};
 pub use crate::plugin::{
     AuxiliaryBuffers, AuxiliaryIOConfig, BufferConfig, BusConfig, ClapPlugin, Editor,
-    ParentWindowHandle, Plugin, PortNames, ProcessMode, ProcessStatus, Vst3Plugin,
+    ParentWindowHandle, Plugin, PolyModulationConfig, PortNames, ProcessMode, ProcessStatus,
+    Vst3Plugin,
 };
 pub use crate::wrapper::clap::features::ClapFeature;
 pub use crate::wrapper::state::PluginState;
