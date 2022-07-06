@@ -36,7 +36,7 @@ pub enum SmoothingStyle {
 #[derive(Debug)]
 pub struct Smoother<T> {
     /// The kind of snoothing that needs to be applied, if any.
-    style: SmoothingStyle,
+    pub style: SmoothingStyle,
     /// The number of steps of smoothing left to take.
     ///
     // This is a signed integer because we can skip multiple steps, which would otherwise make it
@@ -117,13 +117,6 @@ impl<T: Smoothable> Smoother<T> {
     /// Convenience function for not applying any smoothing at all. Same as `Smoother::default`.
     pub fn none() -> Self {
         Default::default()
-    }
-
-    /// Get the smoother's style. This is useful when a per-voice smoother wants to use the same
-    /// style as a parameter's global smoother.
-    #[inline]
-    pub fn style(&self) -> SmoothingStyle {
-        self.style
     }
 
     /// The number of steps left until calling [`next()`][Self::next()] will stop yielding new
