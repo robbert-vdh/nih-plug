@@ -4,19 +4,51 @@ use std::sync::Arc;
 /// The number of simultaneous voices for this synth.
 const NUM_VOICES: u32 = 16;
 
+/// The maximum size of an audio block. We'll split up the audio in blocks and render smoothed
+/// values to buffers since these values may need to be reused for multiple voices.
+const MAX_BLOCK_SIZE: usize = 64;
+
 /// A simple polyphonic synthesizer with support for CLAP's polyphonic modulation. See
 /// `NoteEvent::PolyModulation` for another source of information on how to use this.
 struct PolyModSynth {
     params: Arc<PolyModSynthParams>,
+
+    /// The synth's voices. Inactive voices will be set to `None` values.
+    voices: [Option<Voice>; NUM_VOICES as usize],
+    /// The next internal voice ID, used only to figure out the oldest voice for voice stealing.
+    /// This is incremented by one each time a voice is created.
+    next_internal_voice_id: u64,
 }
 
 #[derive(Default, Params)]
 struct PolyModSynthParams {}
 
+/// Data for a single synth voice. In a real synth where performance matter, you may want to use a
+/// struct of arrays instead of having a struct for each voice.
+#[derive(Debug, Clone)]
+struct Voice {
+    /// The identifier for this voice. Polyphonic modulation events are linked to a voice based on
+    /// these IDs. If the host doesn't provide these IDs, then this is computed through
+    /// `compute_fallback_voice_id()`. In that case polyphonic modulation will not work, but the
+    /// basic note events will still have an effect.
+    voice_id: i32,
+    /// The note's channel, in `0..16`. Only used for the voice terminated event.
+    channel: u8,
+    /// The note's key/note, in `0..128`. Only used for the voice terminated event.
+    note: u8,
+    /// The voices internal ID. Each voice has an internal voice ID one higher than the previous
+    /// voice. This is used to steal the last voice in case all 16 voices are in use.
+    internal_voice_id: u64,
+}
+
 impl Default for PolyModSynth {
     fn default() -> Self {
         Self {
             params: Arc::new(PolyModSynthParams::default()),
+
+            // `[None; N]` requires the `Some(T)` to be `Copy`able
+            voices: [0; NUM_VOICES as usize].map(|_| None),
+            next_internal_voice_id: 0,
         }
     }
 }
@@ -44,22 +76,220 @@ impl Plugin for PolyModSynth {
     // If the synth as a variable number of voices, you will need to call
     // `context.set_current_voice_capacity()` in `initialize()` and in `process()` (when the
     // capacity changes) to inform the host about this.
+    fn reset(&mut self) {
+        self.voices.fill(None);
+        self.next_internal_voice_id = 0;
+    }
 
     fn process(
         &mut self,
-        _buffer: &mut Buffer,
+        buffer: &mut Buffer,
         _aux: &mut AuxiliaryBuffers,
         context: &mut impl ProcessContext,
     ) -> ProcessStatus {
-        // TODO: Split blocks, so something cool
-        while let Some(event) = context.next_event() {
-            match event {
-                _ => (),
+        // NIH-plug has a block-splitting adapter for `Buffer`. While this works great for effect
+        // plugins, for polyphonic synths the block size should be `min(MAX_BLOCK_SIZE,
+        // num_remaining_samples, next_event_idx - block_start_idx)`. Because blocks also need to be
+        // split on note events, it's easier to work with raw audio here and to do the splitting by
+        // hand.
+        let output = buffer.as_slice();
+
+        let mut next_event = context.next_event();
+        let mut block_start: usize = 0;
+        let mut block_end: usize = MAX_BLOCK_SIZE.min(output.len());
+        while block_start < output.len() {
+            // First of all, handle all note events that happen at the start of the block, and cut
+            // the block short if another event happens before the end of it
+            'events: loop {
+                match next_event {
+                    // If the event happens now, then we'll keep processing events
+                    Some(event) if (event.timing() as usize) == block_start => {
+                        // This synth doesn't support any of the polyphonic expression events. A
+                        // real synth plugin however will want to support those.
+                        match event {
+                            NoteEvent::NoteOn {
+                                timing,
+                                voice_id,
+                                channel,
+                                note,
+                                velocity,
+                            } => {
+                                let voice = self.start_voice(
+                                    context,
+                                    timing,
+                                    voice_id.unwrap_or_else(|| {
+                                        compute_fallback_voice_id(note, channel)
+                                    }),
+                                    channel,
+                                    note,
+                                );
+
+                                // TODO: Add and set the other fields
+                            }
+                            NoteEvent::NoteOff {
+                                timing,
+                                voice_id,
+                                channel,
+                                note,
+                                velocity,
+                            } => todo!("Have note-off events fade out the notes"),
+                            NoteEvent::Choke {
+                                timing,
+                                voice_id,
+                                channel,
+                                note,
+                            } => {
+                                self.terminate_voice(
+                                    context,
+                                    timing,
+                                    voice_id.unwrap_or_else(|| {
+                                        compute_fallback_voice_id(note, channel)
+                                    }),
+                                );
+                            }
+                            // TODO: Handle poly modulation
+                            NoteEvent::PolyModulation {
+                                timing,
+                                voice_id,
+                                poly_modulation_id,
+                                normalized_offset,
+                            } => todo!(),
+                            NoteEvent::MonoAutomation {
+                                timing,
+                                poly_modulation_id,
+                                normalized_value,
+                            } => todo!(),
+                            _ => (),
+                        };
+
+                        next_event = context.next_event();
+                    }
+                    // If the event happens before the end of the block, then the block should be cut
+                    // short so the next block starts at the event
+                    Some(event) if (event.timing() as usize) < block_end => {
+                        block_end = event.timing() as usize;
+                        break;
+                    }
+                    _ => break,
+                }
             }
+
+            // We'll start with silence, and then add the output from the active voices
+            output[0][block_start..block_end].fill(0.0);
+            output[1][block_start..block_end].fill(0.0);
+
+            // And then just keep processing blocks until we've run out of buffer to fill
+            block_start = block_end;
+            block_end = (block_start + MAX_BLOCK_SIZE).min(output.len());
         }
 
         ProcessStatus::Normal
     }
+}
+
+impl PolyModSynth {
+    /// Get an active voice by its voice ID, if the voice exists
+    fn get_voice_mut(&mut self, voice_id: i32) -> Option<&mut Voice> {
+        self.voices.iter_mut().find_map(|voice| match voice {
+            Some(voice) if voice.voice_id == voice_id => Some(voice),
+            _ => None,
+        })
+    }
+
+    /// Start a new voice with the given voice ID. If all voices are currently in use, the oldest
+    /// voice will be stolen. Returns a reference to the new voice.
+    fn start_voice(
+        &mut self,
+        context: &mut impl ProcessContext,
+        sample_offset: u32,
+        voice_id: i32,
+        channel: u8,
+        note: u8,
+    ) -> &mut Voice {
+        let new_voice = Voice {
+            voice_id,
+            internal_voice_id: self.next_internal_voice_id,
+            channel,
+            note,
+        };
+        self.next_internal_voice_id = self.next_internal_voice_id.wrapping_add(1);
+
+        // Can't use `.iter_mut().find()` here because nonlexical lifetimes don't apply to return
+        // values
+        match self.voices.iter().position(|voice| voice.is_none()) {
+            Some(free_voice_idx) => {
+                self.voices[free_voice_idx] = Some(new_voice);
+                return self.voices[free_voice_idx].as_mut().unwrap();
+            }
+            None => {
+                // If there is no free voice, find and steal the oldest one
+                // SAFETY: We can skip a lot of checked unwraps here since we already know all voices are in
+                //         use
+                let oldest_voice = unsafe {
+                    self.voices
+                        .iter_mut()
+                        .min_by_key(|voice| voice.as_ref().unwrap_unchecked().internal_voice_id)
+                        .unwrap_unchecked()
+                };
+
+                // The stolen voice needs to be terminated so the host can reuse its modulation
+                // resources
+                {
+                    let oldest_voice = oldest_voice.as_ref().unwrap();
+                    context.send_event(NoteEvent::VoiceTerminated {
+                        timing: sample_offset,
+                        voice_id: Some(oldest_voice.voice_id),
+                        channel: oldest_voice.channel,
+                        note: oldest_voice.note,
+                    });
+                }
+
+                *oldest_voice = Some(new_voice);
+                return oldest_voice.as_mut().unwrap();
+            }
+        }
+    }
+
+    /// Terminate a voice, removing it from the pool and informing the host that the voice has
+    /// ended. Returns whether a voice has actually been terminated.
+    fn terminate_voice(
+        &mut self,
+        context: &mut impl ProcessContext,
+        sample_offset: u32,
+        voice_id: i32,
+    ) -> bool {
+        for voice in self.voices.iter_mut() {
+            match voice {
+                Some(Voice {
+                    voice_id: found_voice_id,
+                    channel,
+                    note,
+                    ..
+                }) if *found_voice_id == voice_id => {
+                    // This event is very important, as it allows the host to manage its own modulation
+                    // voices
+                    context.send_event(NoteEvent::VoiceTerminated {
+                        timing: sample_offset,
+                        voice_id: Some(voice_id),
+                        channel: *channel,
+                        note: *note,
+                    });
+                    *voice = None;
+
+                    return true;
+                }
+                _ => (),
+            }
+        }
+
+        false
+    }
+}
+
+/// Compute a voice ID in case the host doesn't provide them. Polyphonic modulation will not work in
+/// this case, but playing notes will.
+const fn compute_fallback_voice_id(note: u8, channel: u8) -> i32 {
+    note as i32 | ((channel as i32) << 16)
 }
 
 impl ClapPlugin for PolyModSynth {
