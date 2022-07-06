@@ -46,8 +46,8 @@ pub fn gain_to_db(gain: f32) -> f32 {
 
 /// Convert a MIDI note ID to a frequency at A4 = 440 Hz equal temperament and middle C = note 60 =
 /// C4.
-pub fn midi_note_to_freq(pitch: u8) -> f32 {
-    2.0f32.powf((pitch as f32 - 69.0) / 12.0) * 440.0
+pub fn midi_note_to_freq(note: u8) -> f32 {
+    2.0f32.powf((note as f32 - 69.0) / 12.0) * 440.0
 }
 
 #[cfg(test)]
