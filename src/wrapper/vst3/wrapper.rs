@@ -1591,9 +1591,10 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                 };
                             }
                             // VST3 does not support or need these events, but they should also not
-                            // trigger a debug assertion failure in NIH-plug
+                            // trigger a debug assertion failure in NIH-plug. Also notes how this is
+                            // gated by `P::MIDI_INPUT`.
                             NoteEvent::VoiceTerminated { .. }
-                                if P::MIDI_OUTPUT >= MidiConfig::Basic =>
+                                if P::MIDI_INPUT >= MidiConfig::Basic =>
                             {
                                 continue;
                             }

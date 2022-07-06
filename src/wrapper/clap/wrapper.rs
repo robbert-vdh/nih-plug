@@ -1011,12 +1011,14 @@ impl<P: ClapPlugin> Wrapper<P> {
 
                     clap_call! { out=>try_push(out, &event.header) }
                 }
+                // NOTE: This is gated behind `P::MIDI_INPUT`, because this is a merely a hint event
+                //       for the host. It is not output to any other plugin or device.
                 NoteEvent::VoiceTerminated {
                     timing: _,
                     voice_id,
                     channel,
                     note,
-                } if P::MIDI_OUTPUT >= MidiConfig::Basic => {
+                } if P::MIDI_INPUT >= MidiConfig::Basic => {
                     let event = clap_event_note {
                         header: clap_event_header {
                             size: mem::size_of::<clap_event_note>() as u32,
