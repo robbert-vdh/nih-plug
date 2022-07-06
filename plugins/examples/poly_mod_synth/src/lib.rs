@@ -1,6 +1,9 @@
 use nih_plug::prelude::*;
 use std::sync::Arc;
 
+/// The number of simultaneous voices for this synth.
+const NUM_VOICES: u32 = 16;
+
 /// A simple polyphonic synthesizer with support for CLAP's polyphonic modulation. See
 /// `NoteEvent::PolyModulation` for another source of information on how to use this.
 struct PolyModSynth {
@@ -38,6 +41,10 @@ impl Plugin for PolyModSynth {
         self.params.clone()
     }
 
+    // If the synth as a variable number of voices, you will need to call
+    // `context.set_current_voice_capacity()` in `initialize()` and in `process()` (when the
+    // capacity changes) to inform the host about this.
+
     fn process(
         &mut self,
         _buffer: &mut Buffer,
@@ -66,6 +73,16 @@ impl ClapPlugin for PolyModSynth {
         ClapFeature::Synthesizer,
         ClapFeature::Stereo,
     ];
+
+    const CLAP_POLY_MODULATION_CONFIG: Option<PolyModulationConfig> = Some(PolyModulationConfig {
+        // If the plugin's voice capacity changes at runtime (for instance, when switching to a
+        // monophonic mode), then the plugin should inform the host in the `initialize()` function
+        // as well as in the `process()` function if it changes at runtime using
+        // `context.set_current_voice_capacity()`
+        max_voice_capacity: NUM_VOICES,
+        // This enables voice stacking in Bitwig.
+        supports_overlapping_voices: true,
+    });
 }
 
 // The VST3 verison of this plugin isn't too interesting as it will not support polyphonic
