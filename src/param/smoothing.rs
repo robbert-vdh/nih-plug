@@ -33,6 +33,7 @@ pub enum SmoothingStyle {
 //
 // TODO: We need to use atomics here so we can share the params object with the GUI. Is there a
 //       better alternative to allow the process function to mutate these smoothers?
+#[derive(Debug)]
 pub struct Smoother<T> {
     /// The kind of snoothing that needs to be applied, if any.
     style: SmoothingStyle,
@@ -87,6 +88,20 @@ impl<T: Smoothable> Iterator for SmootherIter<'_, T> {
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         Some(self.smoother.next())
+    }
+}
+
+impl<T: Clone> Clone for Smoother<T> {
+    fn clone(&self) -> Self {
+        // We can't derive clone because of the atomics, but these atomics are only here to allow
+        // Send+Sync interior mutability
+        Self {
+            style: self.style.clone(),
+            steps_left: AtomicI32::new(self.steps_left.load(Ordering::Relaxed)),
+            step_size: self.step_size.clone(),
+            current: AtomicF32::new(self.current.load(Ordering::Relaxed)),
+            target: self.target.clone(),
+        }
     }
 }
 
