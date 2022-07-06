@@ -44,7 +44,8 @@ pub enum NoteEvent {
         /// 127 levels available in MIDI.
         velocity: f32,
     },
-    /// A note off event, available on [`MidiConfig::Basic`] and up.
+    /// A note off event, available on [`MidiConfig::Basic`] and up. Bitwig Studio does not provide
+    /// a voice ID for this event.
     NoteOff {
         timing: u32,
         /// A unique identifier for this note, if available. Using this to refer to a note is
