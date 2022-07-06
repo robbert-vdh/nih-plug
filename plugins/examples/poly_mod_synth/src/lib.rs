@@ -289,8 +289,8 @@ impl PolyModSynth {
         }
     }
 
-    /// Terminate a voice, removing it from the pool and informing the host that the voice has
-    /// ended. Returns whether a voice has actually been terminated.
+    /// Terminate one or more voice, removing it from the pool and informing the host that the voice
+    /// has ended. If `voice_id` is not provided, then this will terminate all matching voices.
     fn terminate_voice(
         &mut self,
         context: &mut impl ProcessContext,
@@ -298,7 +298,8 @@ impl PolyModSynth {
         voice_id: Option<i32>,
         channel: u8,
         note: u8,
-    ) -> bool {
+    ) {
+        // TODO: If voice ID = none, terminate all matching voices
         for voice in self.voices.iter_mut() {
             match voice {
                 Some(Voice {
@@ -320,13 +321,16 @@ impl PolyModSynth {
                     });
                     *voice = None;
 
-                    return true;
+                    // If this targetted a single voice ID, we're done here. Otherwise there may be
+                    // multiple overlapping voices as we enabled support for that in the
+                    // `PolyModulationConfig`.
+                    if voice_id.is_some() {
+                        return;
+                    }
                 }
                 _ => (),
             }
         }
-
-        false
     }
 }
 
