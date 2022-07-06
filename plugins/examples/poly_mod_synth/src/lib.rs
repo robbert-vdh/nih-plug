@@ -81,7 +81,6 @@ impl Plugin for PolyModSynth {
 
     // We won't need any MIDI CCs here, we just want notes and polyphonic modulation
     const MIDI_INPUT: MidiConfig = MidiConfig::Basic;
-    const MIDI_OUTPUT: MidiConfig = MidiConfig::Basic;
     const SAMPLE_ACCURATE_AUTOMATION: bool = true;
 
     fn params(&self) -> Arc<dyn Params> {
