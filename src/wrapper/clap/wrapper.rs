@@ -41,7 +41,8 @@ use clap_sys::ext::params::{
     CLAP_PARAM_IS_STEPPED, CLAP_PARAM_RESCAN_VALUES,
 };
 use clap_sys::ext::render::{
-    clap_plugin_render, clap_plugin_render_mode, CLAP_RENDER_OFFLINE, CLAP_RENDER_REALTIME,
+    clap_plugin_render, clap_plugin_render_mode, CLAP_EXT_RENDER, CLAP_RENDER_OFFLINE,
+    CLAP_RENDER_REALTIME,
 };
 use clap_sys::ext::state::{clap_plugin_state, CLAP_EXT_STATE};
 use clap_sys::ext::tail::{clap_plugin_tail, CLAP_EXT_TAIL};
@@ -2338,6 +2339,8 @@ impl<P: ClapPlugin> Wrapper<P> {
             &wrapper.clap_plugin_note_ports as *const _ as *const c_void
         } else if id == CLAP_EXT_PARAMS {
             &wrapper.clap_plugin_params as *const _ as *const c_void
+        } else if id == CLAP_EXT_RENDER {
+            &wrapper.clap_plugin_render as *const _ as *const c_void
         } else if id == CLAP_EXT_STATE {
             &wrapper.clap_plugin_state as *const _ as *const c_void
         } else if id == CLAP_EXT_TAIL {
