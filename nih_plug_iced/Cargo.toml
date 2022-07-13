@@ -62,3 +62,5 @@ crossbeam = "0.8"
 # Upstream doesn't work with the current iced version, this branch also contains
 # additional features
 iced_baseview = { git = "https://github.com/robbert-vdh/iced_baseview.git", branch = "feature/update-baseview", default_features = false }
+# To make the state persistable
+serde = { version = "1.0", features = ["derive"] }

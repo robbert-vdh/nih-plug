@@ -92,7 +92,9 @@
 use baseview::{WindowOpenOptions, WindowScalePolicy};
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel;
+use nih_plug::param::internals::PersistentField;
 use nih_plug::prelude::{Editor, GuiContext, ParentWindowHandle};
+use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -229,11 +231,28 @@ pub trait IcedEditor: 'static + Send + Sync + Sized {
     }
 }
 
-// TODO: Once we add resizing, we may want to be able to remember the GUI size. In that case we need
-//       to make this serializable (only restoring the size of course) so it can be persisted.
+/// State for an `nih_plug_iced` editor.
+#[derive(Serialize, Deserialize)]
 pub struct IcedState {
+    /// The window's size in logical pixels before applying `scale_factor`.
+    #[serde(with = "nih_plug::param::internals::serialize_atomic_cell")]
     size: AtomicCell<(u32, u32)>,
+    /// Whether the editor's window is currently open.
+    #[serde(skip)]
     open: AtomicBool,
+}
+
+impl<'a> PersistentField<'a, IcedState> for Arc<IcedState> {
+    fn set(&self, new_value: IcedState) {
+        self.size.store(new_value.size.load());
+    }
+
+    fn map<F, R>(&self, f: F) -> R
+    where
+        F: Fn(&IcedState) -> R,
+    {
+        f(self)
+    }
 }
 
 impl IcedState {

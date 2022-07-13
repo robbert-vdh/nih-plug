@@ -2435,6 +2435,7 @@ dependencies = [
  "iced_baseview",
  "nih_plug",
  "nih_plug_assets",
+ "serde",
 ]
 
 [[package]]
