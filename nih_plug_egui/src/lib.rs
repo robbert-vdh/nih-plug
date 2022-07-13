@@ -10,8 +10,10 @@ use baseview::{Size, WindowHandle, WindowOpenOptions, WindowScalePolicy};
 use crossbeam::atomic::AtomicCell;
 use egui::Context;
 use egui_baseview::EguiWindow;
+use nih_plug::param::internals::PersistentField;
 use nih_plug::prelude::{Editor, GuiContext, ParamSetter, ParentWindowHandle};
 use parking_lot::RwLock;
+use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -57,11 +59,28 @@ where
     }))
 }
 
-// TODO: Once we add resizing, we may want to be able to remember the GUI size. In that case we need
-//       to make this serializable (only restoring the size of course) so it can be persisted.
+/// State for an `nih_plug_egui` editor.
+#[derive(Serialize, Deserialize)]
 pub struct EguiState {
+    /// The window's size in logical pixels before applying `scale_factor`.
+    #[serde(with = "nih_plug::param::internals::serialize_atomic_cell")]
     size: AtomicCell<(u32, u32)>,
+    /// Whether the editor's window is currently open.
+    #[serde(skip)]
     open: AtomicBool,
+}
+
+impl<'a> PersistentField<'a, EguiState> for Arc<EguiState> {
+    fn set(&self, new_value: EguiState) {
+        self.size.store(new_value.size.load());
+    }
+
+    fn map<F, R>(&self, f: F) -> R
+    where
+        F: Fn(&EguiState) -> R,
+    {
+        f(self)
+    }
 }
 
 impl EguiState {

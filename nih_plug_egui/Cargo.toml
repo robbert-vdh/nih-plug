@@ -21,3 +21,5 @@ egui = "0.17"
 egui-baseview = { git = "https://github.com/robbert-vdh/egui-baseview.git", branch = "fix/update-dependencies" }
 lazy_static = "1.4"
 parking_lot = "0.12"
+# To make the state persistable
+serde = { version = "1.0", features = ["derive"] }
