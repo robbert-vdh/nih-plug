@@ -1965,8 +1965,7 @@ checksum = "112c678d4050afce233f4f2852bb2eb519230b3cf12f33585275537d7e41578d"
 [[package]]
 name = "jack"
 version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce722655a29b13bb98ec7e8ba9dc65d670b9b37c7b1c09775c7f7516811c5a36"
+source = "git+https://github.com/robbert-vdh/rust-jack.git?branch=feature/handle-library-failure#1b4055a7b9f6f6bab7646f3dc10cc9355791d706"
 dependencies = [
  "bitflags",
  "jack-sys",
@@ -1978,8 +1977,7 @@ dependencies = [
 [[package]]
 name = "jack-sys"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9d70559ff166d148ccb750ddd77702af760718f3a752c731add168c22c16a9f"
+source = "git+https://github.com/robbert-vdh/rust-jack.git?branch=feature/handle-library-failure#1b4055a7b9f6f6bab7646f3dc10cc9355791d706"
 dependencies = [
  "bitflags",
  "lazy_static",

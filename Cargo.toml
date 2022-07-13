@@ -90,7 +90,8 @@ anyhow = { version = "1.0", optional = true }
 baseview = { git = "https://github.com/robbert-vdh/baseview.git", branch = "feature/resize", features = ["opengl"], optional = true }
 # All the claps!
 clap = { version = "3.2", features = ["derive"], optional = true }
-jack = { version = "0.10.0", optional = true }
+# The current upstream jack panics when it can't load the JACK library, which breaks the backend fallback
+jack = { git = "https://github.com/robbert-vdh/rust-jack.git", branch = "feature/handle-library-failure", optional = true }
 
 # Used for the `vst3` feature
 vst3-sys = { git = "https://github.com/robbert-vdh/vst3-sys.git", branch = "fix/note-off-event", optional = true }
