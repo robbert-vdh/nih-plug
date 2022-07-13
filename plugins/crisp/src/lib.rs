@@ -41,7 +41,6 @@ const MAX_FILTER_FREQUENCY: f32 = 22_000.0;
 /// since this effect just turns into literal noise at high frequencies.
 struct Crisp {
     params: Arc<CrispParams>,
-    editor_state: Arc<ViziaState>,
 
     /// Needed for computing the filter coefficients.
     sample_rate: f32,
@@ -60,6 +59,11 @@ struct Crisp {
 
 #[derive(Params)]
 struct CrispParams {
+    /// The editor state, saved together with the parameter state so the custom scaling can be
+    /// restored.
+    #[persist = "editor-state"]
+    editor_state: Arc<ViziaState>,
+
     /// On a range of `[0, 1]`, how much of the modulated sound to mix in.
     #[id = "amount"]
     amount: FloatParam,
@@ -128,7 +132,6 @@ impl Default for Crisp {
     fn default() -> Self {
         Self {
             params: Arc::new(CrispParams::default()),
-            editor_state: editor::default_state(),
 
             sample_rate: 1.0,
 
@@ -147,6 +150,8 @@ impl Default for CrispParams {
         let from_f32_hz_then_khz = formatters::s2v_f32_hz_then_khz();
 
         Self {
+            editor_state: editor::default_state(),
+
             amount: FloatParam::new("Amount", 0.35, FloatRange::Linear { min: 0.0, max: 1.0 })
                 .with_smoother(SmoothingStyle::Linear(10.0))
                 .with_unit("%")
@@ -307,7 +312,7 @@ impl Plugin for Crisp {
     }
 
     fn editor(&self) -> Option<Box<dyn Editor>> {
-        editor::create(self.params.clone(), self.editor_state.clone())
+        editor::create(self.params.clone(), self.params.editor_state.clone())
     }
 
     fn accepts_bus_config(&self, config: &BusConfig) -> bool {

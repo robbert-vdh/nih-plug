@@ -46,7 +46,6 @@ const MAX_AUTOMATION_STEP_SIZE: u32 = 512;
 // - A proper GUI
 struct Diopser {
     params: Arc<DiopserParams>,
-    editor_state: Arc<ViziaState>,
 
     /// Needed for computing the filter coefficients.
     sample_rate: f32,
@@ -77,6 +76,11 @@ struct Diopser {
 //       resonance and filter stages parameter ranges in the GUI until the user unlocks.
 #[derive(Params)]
 struct DiopserParams {
+    /// The editor state, saved together with the parameter state so the custom scaling can be
+    /// restored.
+    #[persist = "editor-state"]
+    editor_state: Arc<ViziaState>,
+
     /// The number of all-pass filters applied in series.
     #[id = "stages"]
     filter_stages: IntParam,
@@ -121,7 +125,6 @@ impl Default for Diopser {
 
         Self {
             params: Arc::new(DiopserParams::new(should_update_filters.clone())),
-            editor_state: editor::default_state(),
 
             sample_rate: 1.0,
 
@@ -139,6 +142,8 @@ impl Default for Diopser {
 impl DiopserParams {
     fn new(should_update_filters: Arc<AtomicBool>) -> Self {
         Self {
+            editor_state: editor::default_state(),
+
             filter_stages: IntParam::new(
                 "Filter Stages",
                 0,
@@ -252,7 +257,7 @@ impl Plugin for Diopser {
     }
 
     fn editor(&self) -> Option<Box<dyn Editor>> {
-        editor::create(self.params.clone(), self.editor_state.clone())
+        editor::create(self.params.clone(), self.params.editor_state.clone())
     }
 
     fn accepts_bus_config(&self, config: &BusConfig) -> bool {
@@ -307,7 +312,7 @@ impl Plugin for Diopser {
         }
 
         // Compute a spectrum for the GUI if needed
-        if self.editor_state.is_open() {
+        if self.params.editor_state.is_open() {
             self.spectrum_input.compute(buffer);
         }
 

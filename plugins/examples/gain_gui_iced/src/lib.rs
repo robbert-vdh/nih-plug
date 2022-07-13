@@ -8,7 +8,6 @@ mod editor;
 /// This is mostly identical to the gain example, minus some fluff, and with a GUI.
 struct Gain {
     params: Arc<GainParams>,
-    editor_state: Arc<IcedState>,
 
     /// Needed to normalize the peak meter's response based on the sample rate.
     peak_meter_decay_weight: f32,
@@ -22,6 +21,11 @@ struct Gain {
 
 #[derive(Params)]
 struct GainParams {
+    /// The editor state, saved together with the parameter state so the custom scaling can be
+    /// restored.
+    #[persist = "editor-state"]
+    editor_state: Arc<IcedState>,
+
     #[id = "gain"]
     pub gain: FloatParam,
 }
@@ -30,7 +34,6 @@ impl Default for Gain {
     fn default() -> Self {
         Self {
             params: Arc::new(GainParams::default()),
-            editor_state: editor::default_state(),
 
             peak_meter_decay_weight: 1.0,
             peak_meter: Arc::new(AtomicF32::new(util::MINUS_INFINITY_DB)),
@@ -41,6 +44,8 @@ impl Default for Gain {
 impl Default for GainParams {
     fn default() -> Self {
         Self {
+            editor_state: editor::default_state(),
+
             gain: FloatParam::new(
                 "Gain",
                 0.0,
@@ -77,7 +82,7 @@ impl Plugin for Gain {
         editor::create(
             self.params.clone(),
             self.peak_meter.clone(),
-            self.editor_state.clone(),
+            self.params.editor_state.clone(),
         )
     }
 
@@ -116,7 +121,7 @@ impl Plugin for Gain {
 
             // To save resources, a plugin can (and probably should!) only perform expensive
             // calculations that are only displayed on the GUI while the GUI is open
-            if self.editor_state.is_open() {
+            if self.params.editor_state.is_open() {
                 amplitude = (amplitude / num_samples as f32).abs();
                 let current_peak_meter = self.peak_meter.load(std::sync::atomic::Ordering::Relaxed);
                 let new_peak_meter = if amplitude > current_peak_meter {
