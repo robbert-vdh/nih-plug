@@ -2445,6 +2445,7 @@ dependencies = [
  "crossbeam",
  "nih_plug",
  "nih_plug_assets",
+ "serde",
  "vizia",
 ]
 

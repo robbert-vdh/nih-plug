@@ -13,6 +13,8 @@ nih_plug_assets = { git = "https://github.com/robbert-vdh/nih_plug_assets.git" }
 
 baseview = { git = "https://github.com/robbert-vdh/baseview.git", branch = "feature/resize" }
 crossbeam = "0.8"
+# To make the state persistable
+serde = { version = "1.0", features = ["derive"] }
 # This fork contains changed for better keyboard modifier handling and DPI
 # scaling, window scaling, and a lot more fixes and improvements
 vizia = { git = "https://github.com/robbert-vdh/vizia.git", branch = "patched", default_features = false, features = ["baseview", "clipboard", "x11"] }

@@ -5,7 +5,9 @@
 
 use baseview::{WindowHandle, WindowScalePolicy};
 use crossbeam::atomic::AtomicCell;
+use nih_plug::param::internals::PersistentField;
 use nih_plug::prelude::{Editor, GuiContext, ParentWindowHandle};
+use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use vizia::prelude::*;
@@ -70,19 +72,34 @@ where
     }))
 }
 
-/// State for a `nih_plug_vizia` editor. The scale factor can be manipulated at runtime by changing
+/// State for an `nih_plug_vizia` editor. The scale factor can be manipulated at runtime by changing
 /// `cx.user_scale_factor`.
-///
-/// # TODO
-///
-/// Make this serializable so it can be persisted.
+#[derive(Serialize, Deserialize)]
 pub struct ViziaState {
     /// The window's size in logical pixels before applying `scale_factor`.
+    #[serde(with = "nih_plug::param::internals::serialize_atomic_cell")]
     size: AtomicCell<(u32, u32)>,
     /// A scale factor that should be applied to `size` separate from from any system HiDPI scaling.
     /// This can be used to allow GUIs to be scaled uniformly.
+    #[serde(with = "nih_plug::param::internals::serialize_atomic_cell")]
     scale_factor: AtomicCell<f64>,
+    /// Whether the editor's window is currently open.
+    #[serde(skip)]
     open: AtomicBool,
+}
+
+impl<'a> PersistentField<'a, ViziaState> for Arc<ViziaState> {
+    fn set(&self, new_value: ViziaState) {
+        self.size.store(new_value.size.load());
+        self.scale_factor.store(new_value.scale_factor.load());
+    }
+
+    fn map<F, R>(&self, f: F) -> R
+    where
+        F: Fn(&ViziaState) -> R,
+    {
+        f(self)
+    }
 }
 
 impl ViziaState {

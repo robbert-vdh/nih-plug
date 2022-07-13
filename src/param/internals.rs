@@ -10,6 +10,29 @@ pub use serde_json::from_str as deserialize_field;
 /// Re-export for use in the [`Params`] proc-macro.
 pub use serde_json::to_string as serialize_field;
 
+/// Can be used with the `#[serde(with = "nih_plug::param::internals::serialize_atomic_cell")]`
+/// attribute to serialize `AtomicCell<T>`s.
+pub mod serialize_atomic_cell {
+    use crossbeam::atomic::AtomicCell;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<S, T>(cell: &AtomicCell<T>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+        T: Serialize + Copy,
+    {
+        cell.load().serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D, T>(deserializer: D) -> Result<AtomicCell<T>, D::Error>
+    where
+        D: Deserializer<'de>,
+        T: Deserialize<'de> + Copy,
+    {
+        T::deserialize(deserializer).map(AtomicCell::new)
+    }
+}
+
 /// Describes a struct containing parameters and other persistent fields.
 ///
 /// This trait can be derived on a struct containing [`FloatParam`][super::FloatParam] and other
