@@ -33,7 +33,7 @@ mod wrapper;
 /// ```ignore
 /// // src/main.rs
 ///
-/// use plugin_name::prelude::*;
+/// use nih_plug::prelude::*;
 ///
 /// use plugin_name::PluginName;
 ///
