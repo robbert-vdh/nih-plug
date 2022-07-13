@@ -35,6 +35,7 @@ members = [
   "plugins/loudness_war_winner",
   "plugins/puberty_simulator",
   "plugins/safety_limiter",
+  "plugins/spectral_compressor",
 ]
 
 [features]

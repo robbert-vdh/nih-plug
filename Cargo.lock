@@ -3618,6 +3618,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "spectral_compressor"
+version = "0.1.0"
+dependencies = [
+ "nih_plug",
+ "nih_plug_vizia",
+]
+
+[[package]]
 name = "spirv"
 version = "0.2.0+1.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

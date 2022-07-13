@@ -66,6 +66,10 @@ Scroll down for more information on the plugin framework.
   again when the input returns back to safe levels. Made for personal use during
   plugin development and intense sound design sessions, but maybe you'll find it
   useful too!
+- [**Spectral Compressor**](plugins/spectral_compressor) can squash anything
+  into pink noise, apply simultaneous upwards and downwards compressor to
+  dynamically match the sidechain signal's spectrum, and a lot more. Have you
+  ever wondered what a 16384 band OTT would sound like? Neither have I.
 
 ## Framework
 

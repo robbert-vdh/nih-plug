@@ -21,3 +21,6 @@ name = "Puberty Simulator"
 
 [safety_limiter]
 name = "Safety Limiter"
+
+[spectral_compressor]
+name = "Spectral Compressor"
