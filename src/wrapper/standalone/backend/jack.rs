@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use atomic_refcell::AtomicRefCell;
 use crossbeam::channel;
 use jack::{
-    AudioIn, AudioOut, Client, ClientOptions, ClosureProcessHandler, Control, MidiIn, MidiOut, Port,
+    AsyncClient, AudioIn, AudioOut, Client, ClientOptions, ClosureProcessHandler, Control, MidiIn,
+    MidiOut, Port,
 };
+use parking_lot::Mutex;
 
 use super::super::config::WrapperConfig;
 use super::Backend;
@@ -22,9 +23,9 @@ pub struct Jack {
     client: Option<Client>,
 
     inputs: Arc<Vec<Port<AudioIn>>>,
-    outputs: Arc<AtomicRefCell<Vec<Port<AudioOut>>>>,
+    outputs: Arc<Mutex<Vec<Port<AudioOut>>>>,
     midi_input: Option<Arc<Port<MidiIn>>>,
-    midi_output: Option<Arc<AtomicRefCell<Port<MidiOut>>>>,
+    midi_output: Option<Arc<Mutex<Port<MidiOut>>>>,
 }
 
 /// A simple message to tell the audio thread to shut down, since the actual processing happens in
@@ -46,7 +47,7 @@ impl Backend for Jack {
         let mut buffer = Buffer::default();
         unsafe {
             buffer.with_raw_vec(|output_slices| {
-                output_slices.resize_with(self.outputs.borrow().len(), || &mut []);
+                output_slices.resize_with(self.outputs.lock().len(), || &mut []);
             })
         }
 
@@ -97,7 +98,7 @@ impl Backend for Jack {
 
             // Just like all of the plugin backends, we need to grab the output slices and copy the
             // inputs to the outputs
-            let mut outputs = outputs.borrow_mut();
+            let mut outputs = outputs.lock();
             for (input, output) in inputs.iter().zip(outputs.iter_mut()) {
                 // XXX: Since the JACK bindings let us do this, presumably these two can't alias,
                 //      right?
@@ -127,7 +128,7 @@ impl Backend for Jack {
             output_events.clear();
             if cb(&mut buffer, transport, &input_events, &mut output_events) {
                 if let Some(midi_output) = &midi_output {
-                    let mut midi_output = midi_output.borrow_mut();
+                    let mut midi_output = midi_output.lock();
                     let mut midi_writer = midi_output.writer(ps);
                     for event in output_events.drain(..) {
                         let timing = event.timing();
@@ -147,8 +148,14 @@ impl Backend for Jack {
                 Control::Quit
             }
         });
-        // TODO: What can go wrong here that would cause an error?
+
+        // PipeWire lets us connect the ports whenever we want, but JACK2 is very strict and only
+        // allows us to connect the ports when the client is active. And the connections will
+        // disappear when the client is deactivated. Fun.
         let async_client = client.activate_async((), process_handler).unwrap();
+        if let Err(err) = self.connect_ports(&async_client) {
+            nih_error!("Error connecting JACK ports: {err}")
+        }
 
         // The process callback happens on another thread, so we need to block this thread until we
         // get the request to shut down or until the process callback runs into an error
@@ -185,16 +192,12 @@ impl Jack {
             inputs.push(client.register_port(&format!("input_{port_no}"), AudioIn)?);
         }
 
+        // We can't immediately connect the outputs. Or well we can with PipeWire, but JACK2 says
+        // no. So the connections are made just after activating the client in the `run()` function
+        // above.
         let mut outputs = Vec::new();
         for port_no in 1..config.output_channels + 1 {
-            let port = client.register_port(&format!("output_{port_no}"), AudioOut)?;
-
-            // We don't connect the inputs automatically to avoid feedback loops, but this should be
-            // safe. And if this fails, then that's fine.
-            let system_playback_port_name = &format!("system:playback_{port_no}");
-            let _ = client.connect_ports_by_name(&port.name()?, system_playback_port_name);
-
-            outputs.push(port);
+            outputs.push(client.register_port(&format!("output_{port_no}"), AudioOut)?);
         }
 
         let midi_input = if P::MIDI_INPUT >= MidiConfig::Basic {
@@ -204,52 +207,74 @@ impl Jack {
         };
 
         let midi_output = if P::MIDI_OUTPUT >= MidiConfig::Basic {
-            Some(Arc::new(AtomicRefCell::new(
+            Some(Arc::new(Mutex::new(
                 client.register_port("midi_output", MidiOut)?,
             )))
         } else {
             None
         };
 
-        // This option can either be set to a single port all inputs should be connected to, or a
-        // comma separated list of ports
-        if let Some(port_name) = &config.connect_jack_inputs {
-            if port_name.contains(',') {
-                for (port_name, input) in port_name.split(',').zip(&inputs) {
-                    if let Err(err) = client.connect_ports_by_name(port_name, &input.name()?) {
-                        nih_error!("Could not connect to '{port_name}': {err}");
-                        break;
-                    }
-                }
-            } else {
-                for input in &inputs {
-                    if let Err(err) = client.connect_ports_by_name(port_name, &input.name()?) {
-                        nih_error!("Could not connect to '{port_name}': {err}");
-                        break;
-                    }
-                }
-            }
-        }
-
-        if let (Some(port), Some(port_name)) = (&midi_input, &config.connect_jack_midi_input) {
-            if let Err(err) = client.connect_ports_by_name(port_name, &port.name()?) {
-                nih_error!("Could not connect to '{port_name}': {err}");
-            }
-        }
-        if let (Some(port), Some(port_name)) = (&midi_output, &config.connect_jack_midi_output) {
-            if let Err(err) = client.connect_ports_by_name(&port.borrow().name()?, port_name) {
-                nih_error!("Could not connect to '{port_name}': {err}");
-            }
-        }
-
         Ok(Self {
             config,
             client: Some(client),
 
             inputs: Arc::new(inputs),
-            outputs: Arc::new(AtomicRefCell::new(outputs)),
+            outputs: Arc::new(Mutex::new(outputs)),
             midi_input,
             midi_output,
         })
+    }
+
+    /// With JACK2 ports can only be connected while the client is active, and they'll be
+    /// disconnected automatically on deactivation. So we need to call this as part of the `run()`
+    /// function above.
+    fn connect_ports<N, P>(&self, async_client: &AsyncClient<N, P>) -> Result<()> {
+        let client = async_client.as_client();
+
+        // We don't connect the inputs automatically to avoid feedback loops, but this should be
+        // safe. And if this fails, then that's fine.
+        for (i, output) in self.outputs.lock().iter().enumerate() {
+            // The system ports are 1-indexed
+            let port_no = i + 1;
+
+            let system_playback_port_name = &format!("system:playback_{port_no}");
+            let _ = client.connect_ports_by_name(&output.name()?, system_playback_port_name);
+        }
+
+        // This option can either be set to a single port all inputs should be connected to, or a
+        // comma separated list of ports
+        if let Some(port_name) = &self.config.connect_jack_inputs {
+            if port_name.contains(',') {
+                for (port_name, input) in port_name.split(',').zip(self.inputs.iter()) {
+                    if let Err(err) = client.connect_ports_by_name(port_name, &input.name()?) {
+                        nih_error!("Could not connect to '{port_name}': {err}");
+                    }
+                }
+            } else {
+                for input in self.inputs.iter() {
+                    if let Err(err) = client.connect_ports_by_name(port_name, &input.name()?) {
+                        nih_error!("Could not connect to '{port_name}': {err}");
+                        break;
+                    }
+                }
+            }
+        }
+
+        if let (Some(port), Some(port_name)) =
+            (&self.midi_input, &self.config.connect_jack_midi_input)
+        {
+            if let Err(err) = client.connect_ports_by_name(port_name, &port.name()?) {
+                nih_error!("Could not connect to '{port_name}': {err}");
+            }
+        }
+        if let (Some(port), Some(port_name)) =
+            (&self.midi_output, &self.config.connect_jack_midi_output)
+        {
+            if let Err(err) = client.connect_ports_by_name(&port.lock().name()?, port_name) {
+                nih_error!("Could not connect to '{port_name}': {err}");
+            }
+        }
+
+        Ok(())
     }
 }
