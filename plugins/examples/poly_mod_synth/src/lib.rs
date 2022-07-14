@@ -199,7 +199,7 @@ impl Plugin for PolyModSynth {
             'events: loop {
                 match next_event {
                     // If the event happens now, then we'll keep processing events
-                    Some(event) if (event.timing() as usize) == block_start => {
+                    Some(event) if (event.timing() as usize) <= block_start => {
                         // This synth doesn't support any of the polyphonic expression events. A
                         // real synth plugin however will want to support those.
                         match event {

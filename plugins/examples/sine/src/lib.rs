@@ -153,7 +153,7 @@ impl Plugin for Sine {
             let sine = if self.params.use_midi.value {
                 // Act on the next MIDI event
                 while let Some(event) = next_event {
-                    if event.timing() != sample_id as u32 {
+                    if event.timing() > sample_id as u32 {
                         break;
                     }
 
