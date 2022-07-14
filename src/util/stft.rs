@@ -245,6 +245,16 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
         self.current_pos = 0;
     }
 
+    /// The number of channels this `StftHelper` was configured for
+    pub fn num_channels(&self) -> usize {
+        self.main_input_ring_buffers.len()
+    }
+
+    /// The maximum block size supported by this `StftHelper`.
+    pub fn max_block_size(&self) -> usize {
+        self.main_input_ring_buffers.capacity()
+    }
+
     /// The amount of latency introduced when processing audio throug hthis [`StftHelper`].
     pub fn latency_samples(&self) -> u32 {
         self.main_input_ring_buffers[0].len() as u32
