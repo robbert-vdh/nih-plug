@@ -84,6 +84,10 @@ struct SpectralCompressorParams {
     /// applying the output gain. In other words, the dry signal is not gained in any way.
     #[id = "dry_wet"]
     dry_wet_ratio: FloatParam,
+    /// Sets the 0-20 Hz bin to 0 since this won't have a lot of semantic meaning anymore after this
+    /// plugin and it will thus just eat up headroom.
+    #[id = "dc_filter"]
+    dc_filter: BoolParam,
 }
 
 impl Default for SpectralCompressor {
@@ -134,6 +138,7 @@ impl Default for SpectralCompressorParams {
                 .with_unit("%")
                 .with_value_to_string(formatters::v2s_f32_percentage(0))
                 .with_string_to_value(formatters::s2v_f32_percentage()),
+            dc_filter: BoolParam::new("DC Filter", true),
         }
     }
 }
@@ -224,6 +229,8 @@ impl Plugin for SpectralCompressor {
             // FIXME: Use the parameter
             // [self.params.window_size_order.value as usize - MIN_WINDOW_ORDER];
             [DEFAULT_WINDOW_ORDER - MIN_WINDOW_ORDER];
+        let num_bins = self.complex_fft_buffer.len();
+        let sample_rate = context.transport().sample_rate;
 
         // The overlap gain compensation is based on a squared Hann window, which will sum perfectly
         // at four times overlap or higher. We'll apply a regular Hann window before the analysis
@@ -257,6 +264,16 @@ impl Plugin for SpectralCompressor {
                     .unwrap();
 
                 // TODO: Do the thing
+
+                // The DC and other low frequency bins doesn't contain much semantic meaning anymore
+                // after all of this, so it only ends up consuming headroom.
+                if self.params.dc_filter.value {
+                    // The Hann window function spreads the DC signal out slightly, so we'll clear
+                    // all 0-20 Hz bins for this.
+                    let highest_dcish_bin_idx =
+                        (20.0 / ((sample_rate / 2.0) / num_bins as f32)).floor() as usize;
+                    self.complex_fft_buffer[..highest_dcish_bin_idx + 1].fill(Complex32::default());
+                }
 
                 // Inverse FFT back into the scratch buffer. This will be added to a ring buffer
                 // which gets written back to the host at a one block delay.
