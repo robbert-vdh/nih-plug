@@ -117,13 +117,25 @@ pub fn main_with_args(command_name: &str, args: impl IntoIterator<Item = String>
 }
 
 /// Change the current directory into the Cargo workspace's root.
+///
+/// This is using a heuristic to find the workspace root, walking up directories
+/// from `CARGO_MANIFEST_DIR` until another `Cargo.toml` is found, and assuming
+/// that is the active workspace.
 pub fn chdir_workspace_root() -> Result<()> {
     let xtask_project_dir = std::env::var("CARGO_MANIFEST_DIR")
         .context("'$CARGO_MANIFEST_DIR' was not set, are you running this binary directly?")?;
-    let project_root = Path::new(&xtask_project_dir).parent().context(
-        "'$CARGO_MANIFEST_DIR' has an unexpected value, are you running this binary directly?",
-    )?;
-    std::env::set_current_dir(project_root).context("Could not change to project root directory")
+    let mut current_dir = Path::new(&xtask_project_dir);
+    loop {
+        let maybe_project_root = current_dir.parent().context(
+            "'$CARGO_MANIFEST_DIR' has an unexpected value, are you running this binary directly?",
+        )?;
+        if maybe_project_root.join("Cargo.toml").exists() {
+            std::env::set_current_dir(maybe_project_root)
+                .context("Could not change to project root directory")?;
+            return Ok(());
+        }
+        current_dir = maybe_project_root;
+    }
 }
 
 /// Build one or more packages using the provided `cargo build` arguments. This should be caleld
