@@ -6,19 +6,19 @@ struct Gain {
     params: Arc<GainParams>,
 }
 
-/// The [`Params`] derive macro gathers all of the information needed for the wrapepr to know about
+/// The [`Params`] derive macro gathers all of the information needed for the wrapper to know about
 /// the plugin's parameters, persistent serializable fields, and nested parameter groups. You can
-/// aslo easily implement [`Params`] by hand if you want to, for instance, have multiple instances
+/// also easily implement [`Params`] by hand if you want to, for instance, have multiple instances
 /// of a parameters struct for multiple identical oscillators/filters/envelopes.
 #[derive(Params)]
 struct GainParams {
     /// The parameter's ID is used to identify the parameter in the wrappred plugin API. As long as
     /// these IDs remain constant, you can rename and reorder these fields as you wish. The
-    /// parameters are exposed to the host in the same order thye were defined in.
+    /// parameters are exposed to the host in the same order they were defined.
     #[id = "gain"]
     pub gain: FloatParam,
 
-    /// This field isn't used in this exampleq, but anything written to the vector would be restored
+    /// This field isn't used in this example, but anything written to the vector would be restored
     /// together with a preset/state file saved for this plugin. This can be useful for storing
     /// things like sample data.
     #[persist = "industry_secrets"]
@@ -70,8 +70,8 @@ impl Default for GainParams {
             // This is actually redundant, because a step size of two decimal places already
             // causes the parameter to shown rounded
             .with_value_to_string(formatters::v2s_f32_rounded(2)),
-            // Persisted fields can be intialized like any other fields, and they'll keep their when
-            // restoring the plugin's state.
+            // Persisted fields can be intialized like any other fields, and they'll keep their
+            // values when restoring the plugin's state.
             random_data: RwLock::new(Vec::new()),
             sub_params: SubParams {
                 nested_parameter: FloatParam::new(
@@ -124,8 +124,8 @@ impl Plugin for Gain {
     }
 
     // This plugin doesn't need any special initialization, but if you need to do anything expensive
-    // then this would be the place. State is kept around while when the host reconfigures the
-    // plugin. If we did need special initialization, we could implement the `initialize()` and/or
+    // then this would be the place. State is kept around when the host reconfigures the
+    // plugin. If we do need special initialization, we could implement the `initialize()` and/or
     // `reset()` methods
 
     fn process(
