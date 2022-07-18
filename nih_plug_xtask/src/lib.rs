@@ -124,28 +124,29 @@ pub fn main_with_args(command_name: &str, args: impl IntoIterator<Item = String>
 pub fn chdir_workspace_root() -> Result<()> {
     let xtask_project_dir = std::env::var("CARGO_MANIFEST_DIR")
         .context("'$CARGO_MANIFEST_DIR' was not set, are you running this binary directly?")?;
-    let project_root = Path::new(&xtask_project_dir).parent().context(
+    let workspace_root = Path::new(&xtask_project_dir).parent().context(
         "'$CARGO_MANIFEST_DIR' has an unexpected value, are you running this binary directly?",
     )?;
 
-    // If `project_root` is not actually the project's root because this xtask binary's `Cargo.toml`
+    // If `workspace_root` is not actually the workspace's root because this xtask binary's `Cargo.toml`
     // file is in a sub-subdirectory, then we'll walk up the directory stack until we hopefully find
     // it.
-    let project_root = if project_root.join("Cargo.toml").exists() {
-        project_root
+    let workspace_root = if workspace_root.join("Cargo.toml").exists() {
+        workspace_root
     } else {
-        let mut project_root_candidate = project_root;
+        let mut workspace_root_candidate = workspace_root;
         loop {
-            project_root_candidate = project_root_candidate
+            workspace_root_candidate = workspace_root_candidate
                 .parent()
                 .context("Reached the file system root without finding a parent Cargo.toml file")?;
-            if project_root_candidate.join("Cargo.toml").exists() {
-                break project_root_candidate;
+            if workspace_root_candidate.join("Cargo.toml").exists() {
+                break workspace_root_candidate;
             }
         }
     };
 
-    std::env::set_current_dir(project_root).context("Could not change to project root directory")
+    std::env::set_current_dir(workspace_root)
+        .context("Could not change to workspace root directory")
 }
 
 /// Build one or more packages using the provided `cargo build` arguments. This should be caleld
