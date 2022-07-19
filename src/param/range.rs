@@ -20,15 +20,19 @@ pub enum FloatRange {
         factor: f32,
         center: f32,
     },
+    /// A reversed range that goes from high to low instead of from low to high.
+    Reversed(&'static FloatRange),
 }
 
 /// A distribution for an integer parameter's range. All range endpoints are inclusive. Only linear
 /// ranges are supported for integers since hosts expect discrete parameters to have a fixed step
 /// size.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum IntRange {
     /// The values are uniformly distributed between `min` and `max`.
     Linear { min: i32, max: i32 },
+    /// A reversed range that goes from high to low instead of from low to high.
+    Reversed(&'static IntRange),
 }
 
 impl FloatRange {
@@ -42,7 +46,7 @@ impl FloatRange {
     /// Normalize a plain, unnormalized value. Will be clamped to the bounds of the range if the
     /// normalized value exceeds `[0, 1]`.
     pub fn normalize(&self, plain: f32) -> f32 {
-        match &self {
+        match self {
             FloatRange::Linear { min, max } => (plain.clamp(*min, *max) - min) / (max - min),
             FloatRange::Skewed { min, max, factor } => {
                 ((plain.clamp(*min, *max) - min) / (max - min)).powf(*factor)
@@ -73,6 +77,7 @@ impl FloatRange {
                     (1.0 - inverted_scaled_proportion.powf(*factor)) * 0.5
                 }
             }
+            FloatRange::Reversed(range) => 1.0 - range.normalize(plain),
         }
     }
 
@@ -80,7 +85,7 @@ impl FloatRange {
     /// would exceed that range.
     pub fn unnormalize(&self, normalized: f32) -> f32 {
         let normalized = normalized.clamp(0.0, 1.0);
-        match &self {
+        match self {
             FloatRange::Linear { min, max } => (normalized * (max - min)) + min,
             FloatRange::Skewed { min, max, factor } => {
                 (normalized.powf(factor.recip()) * (max - min)) + min
@@ -104,36 +109,57 @@ impl FloatRange {
 
                 (skewed_proportion * (max - min)) + min
             }
+            FloatRange::Reversed(range) => range.unnormalize(1.0 - normalized),
         }
     }
 
-    /// The minimum value in this range.
-    pub fn min(&self) -> f32 {
+    /// The range's previous discrete step from a certain value with a certain step size. If the step
+    /// size is not set, then the normalized range is split into 100 segments instead.
+    pub fn previous_step(&self, from: f32, step_size: Option<f32>) -> f32 {
+        // This one's slightly more involved than the integer version. We'll split the normalized
+        // range up into 100 segments, but if `self.step_size` is set then we'll use that. Ideally
+        // we might want to split the range up into at most 100 segments, falling back to the step
+        // size if the total number of steps would be smaller than that, but since ranges can be
+        // nonlienar that's a bit difficult to pull off.
+        // TODO: At some point, implement the above mentioned step size quantization
         match self {
-            FloatRange::Linear { min, .. }
-            | FloatRange::Skewed { min, .. }
-            | FloatRange::SymmetricalSkewed { min, .. } => *min,
+            FloatRange::Linear { min, max }
+            | FloatRange::Skewed { min, max, .. }
+            | FloatRange::SymmetricalSkewed { min, max, .. } => match step_size {
+                Some(step_size) => from - step_size,
+                None => self.unnormalize(self.normalize(from) - 0.01),
+            }
+            .clamp(*min, *max),
+            FloatRange::Reversed(range) => range.next_step(from, step_size),
         }
     }
 
-    /// The maximum value in this range.
-    pub fn max(&self) -> f32 {
+    /// The range's next discrete step from a certain value with a certain step size. If the step
+    /// size is not set, then the normalized range is split into 100 segments instead.
+    pub fn next_step(&self, from: f32, step_size: Option<f32>) -> f32 {
+        // See above
         match self {
-            FloatRange::Linear { max, .. }
-            | FloatRange::Skewed { max, .. }
-            | FloatRange::SymmetricalSkewed { max, .. } => *max,
+            FloatRange::Linear { min, max }
+            | FloatRange::Skewed { min, max, .. }
+            | FloatRange::SymmetricalSkewed { min, max, .. } => match step_size {
+                Some(step_size) => from + step_size,
+                None => self.unnormalize(self.normalize(from) + 0.01),
+            }
+            .clamp(*min, *max),
+            FloatRange::Reversed(range) => range.previous_step(from, step_size),
         }
     }
 
     /// Snap a vlue to a step size, clamping to the minimum and maximum value of the range.
     pub fn snap_to_step(&self, value: f32, step_size: f32) -> f32 {
-        let (min, max) = match &self {
-            FloatRange::Linear { min, max } => (min, max),
-            FloatRange::Skewed { min, max, .. } => (min, max),
-            FloatRange::SymmetricalSkewed { min, max, .. } => (min, max),
-        };
-
-        ((value / step_size).round() * step_size).clamp(*min, *max)
+        match self {
+            FloatRange::Linear { min, max }
+            | FloatRange::Skewed { min, max, .. }
+            | FloatRange::SymmetricalSkewed { min, max, .. } => {
+                ((value / step_size).round() * step_size).clamp(*min, *max)
+            }
+            FloatRange::Reversed(range) => range.snap_to_step(value, step_size),
+        }
     }
 }
 
@@ -141,8 +167,9 @@ impl IntRange {
     /// Normalize a plain, unnormalized value. Will be clamped to the bounds of the range if the
     /// normalized value exceeds `[0, 1]`.
     pub fn normalize(&self, plain: i32) -> f32 {
-        match &self {
+        match self {
             IntRange::Linear { min, max } => (plain - min) as f32 / (max - min) as f32,
+            IntRange::Reversed(range) => 1.0 - range.normalize(plain),
         }
         .clamp(0.0, 1.0)
     }
@@ -151,22 +178,25 @@ impl IntRange {
     /// would exceed that range.
     pub fn unnormalize(&self, normalized: f32) -> i32 {
         let normalized = normalized.clamp(0.0, 1.0);
-        match &self {
+        match self {
             IntRange::Linear { min, max } => (normalized * (max - min) as f32).round() as i32 + min,
+            IntRange::Reversed(range) => range.unnormalize(1.0 - normalized),
         }
     }
 
-    /// The minimum value in this range.
-    pub fn min(&self) -> i32 {
+    /// The range's previous discrete step from a certain value.
+    pub fn previous_step(&self, from: i32) -> i32 {
         match self {
-            IntRange::Linear { min, .. } => *min,
+            IntRange::Linear { min, max } => (from - 1).clamp(*min, *max),
+            IntRange::Reversed(range) => range.next_step(from),
         }
     }
 
-    /// The maximum value in this range.
-    pub fn max(&self) -> i32 {
+    /// The range's next discrete step from a certain value.
+    pub fn next_step(&self, from: i32) -> i32 {
         match self {
-            IntRange::Linear { max, .. } => *max,
+            IntRange::Linear { min, max } => (from + 1).clamp(*min, *max),
+            IntRange::Reversed(range) => range.previous_step(from),
         }
     }
 
@@ -174,6 +204,15 @@ impl IntRange {
     pub fn step_count(&self) -> usize {
         match self {
             IntRange::Linear { min, max } => (max - min) as usize,
+            IntRange::Reversed(range) => range.step_count(),
+        }
+    }
+
+    /// If this range is wrapped in an adapter, like `Reversed`, then return the wrapped range.
+    pub fn inner_range(&self) -> Self {
+        match self {
+            IntRange::Linear { .. } => *self,
+            IntRange::Reversed(range) => range.inner_range(),
         }
     }
 }
@@ -182,18 +221,18 @@ impl IntRange {
 mod tests {
     use super::*;
 
-    fn make_linear_float_range() -> FloatRange {
+    const fn make_linear_float_range() -> FloatRange {
         FloatRange::Linear {
             min: 10.0,
             max: 20.0,
         }
     }
 
-    fn make_linear_int_range() -> IntRange {
+    const fn make_linear_int_range() -> IntRange {
         IntRange::Linear { min: -10, max: 10 }
     }
 
-    fn make_skewed_float_range(factor: f32) -> FloatRange {
+    const fn make_skewed_float_range(factor: f32) -> FloatRange {
         FloatRange::Skewed {
             min: 10.0,
             max: 20.0,
@@ -201,7 +240,7 @@ mod tests {
         }
     }
 
-    fn make_symmetrical_skewed_float_range(factor: f32) -> FloatRange {
+    const fn make_symmetrical_skewed_float_range(factor: f32) -> FloatRange {
         FloatRange::SymmetricalSkewed {
             min: 10.0,
             max: 20.0,
@@ -305,6 +344,70 @@ mod tests {
         fn range_unnormalize_float() {
             let range = make_symmetrical_skewed_float_range(FloatRange::skew_factor(-2.0));
             assert_eq!(range.unnormalize(0.951801), 17.5);
+        }
+    }
+
+    mod reversed_linear {
+        use super::*;
+
+        #[test]
+        fn range_normalize_int() {
+            const WRAPPED_RANGE: IntRange = make_linear_int_range();
+            let range = IntRange::Reversed(&WRAPPED_RANGE);
+            assert_eq!(range.normalize(-5), 1.0 - 0.25);
+        }
+
+        #[test]
+        fn range_unnormalize_int() {
+            const WRAPPED_RANGE: IntRange = make_linear_int_range();
+            let range = IntRange::Reversed(&WRAPPED_RANGE);
+            assert_eq!(range.unnormalize(1.0 - 0.75), 5);
+        }
+
+        #[test]
+        fn range_unnormalize_int_rounding() {
+            const WRAPPED_RANGE: IntRange = make_linear_int_range();
+            let range = IntRange::Reversed(&WRAPPED_RANGE);
+            assert_eq!(range.unnormalize(1.0 - 0.73), 5);
+        }
+    }
+
+    mod reversed_skewed {
+        use super::*;
+
+        #[test]
+        fn range_normalize_float() {
+            const WRAPPED_RANGE: FloatRange = make_skewed_float_range(0.25);
+            let range = FloatRange::Reversed(&WRAPPED_RANGE);
+            assert_eq!(range.normalize(17.5), 1.0 - 0.9306049);
+        }
+
+        #[test]
+        fn range_unnormalize_float() {
+            const WRAPPED_RANGE: FloatRange = make_skewed_float_range(0.25);
+            let range = FloatRange::Reversed(&WRAPPED_RANGE);
+            assert_eq!(range.unnormalize(1.0 - 0.9306049), 17.5);
+        }
+
+        #[test]
+        fn range_normalize_linear_equiv_float() {
+            const WRAPPED_LINEAR_RANGE: FloatRange = make_linear_float_range();
+            const WRAPPED_SKEWED_RANGE: FloatRange = make_skewed_float_range(1.0);
+            let linear_range = FloatRange::Reversed(&WRAPPED_LINEAR_RANGE);
+            let skewed_range = FloatRange::Reversed(&WRAPPED_SKEWED_RANGE);
+            assert_eq!(linear_range.normalize(17.5), skewed_range.normalize(17.5));
+        }
+
+        #[test]
+        fn range_unnormalize_linear_equiv_float() {
+            const WRAPPED_LINEAR_RANGE: FloatRange = make_linear_float_range();
+            const WRAPPED_SKEWED_RANGE: FloatRange = make_skewed_float_range(1.0);
+            let linear_range = FloatRange::Reversed(&WRAPPED_LINEAR_RANGE);
+            let skewed_range = FloatRange::Reversed(&WRAPPED_SKEWED_RANGE);
+            assert_eq!(
+                linear_range.unnormalize(0.25),
+                skewed_range.unnormalize(0.25)
+            );
         }
     }
 }

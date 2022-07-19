@@ -6,6 +6,12 @@ new and what's changed, this document lists all breaking changes in reverse
 chronological order. If a new feature did not require any changes to existing
 code then it will not be listed here.
 
+## [2022-07-18]
+
+- `IntRange` and `FloatRange` no longer have min/max methods and instead have
+  next/previous step methods. This is for better compatibility with the new
+  reversed ranges.
+
 ## [2022-07-06]
 
 - The block smoothing API has been reworked. Instead of `Smoother`s having their

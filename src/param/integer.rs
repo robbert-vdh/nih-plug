@@ -131,11 +131,11 @@ impl Param for IntParam {
     }
 
     fn previous_step(&self, from: Self::Plain) -> Self::Plain {
-        (from - 1).clamp(self.range.min(), self.range.max())
+        self.range.previous_step(from)
     }
 
     fn next_step(&self, from: Self::Plain) -> Self::Plain {
-        (from + 1).clamp(self.range.min(), self.range.max())
+        self.range.next_step(from)
     }
 
     fn normalized_value_to_string(&self, normalized: f32, include_unit: bool) -> String {
