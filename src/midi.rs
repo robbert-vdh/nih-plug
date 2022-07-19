@@ -293,7 +293,7 @@ pub enum NoteEvent {
 impl NoteEvent {
     /// Returns the sample within the current buffer this event belongs to.
     pub fn timing(&self) -> u32 {
-        match &self {
+        match self {
             NoteEvent::NoteOn { timing, .. } => *timing,
             NoteEvent::NoteOff { timing, .. } => *timing,
             NoteEvent::Choke { timing, .. } => *timing,
@@ -315,7 +315,7 @@ impl NoteEvent {
 
     /// Returns the event's voice ID, if it has any.
     pub fn voice_id(&self) -> Option<i32> {
-        match &self {
+        match self {
             NoteEvent::NoteOn { voice_id, .. } => *voice_id,
             NoteEvent::NoteOff { voice_id, .. } => *voice_id,
             NoteEvent::Choke { voice_id, .. } => *voice_id,

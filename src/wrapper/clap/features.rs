@@ -47,7 +47,7 @@ pub enum ClapFeature {
 
 impl ClapFeature {
     pub fn as_str(&self) -> &'static str {
-        match &self {
+        match self {
             ClapFeature::Instrument => "instrument",
             ClapFeature::AudioEffect => "audio-effect",
             ClapFeature::NoteEffect => "note-effect",
