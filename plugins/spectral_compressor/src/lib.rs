@@ -20,6 +20,7 @@ use realfft::num_complex::Complex32;
 use realfft::{ComplexToReal, RealFftPlanner, RealToComplex};
 use std::sync::Arc;
 
+mod dry_wet_mixer;
 mod editor;
 
 const MIN_WINDOW_ORDER: usize = 6;
@@ -51,6 +52,8 @@ struct SpectralCompressor {
     /// Contains a Hann window function of the current window length, passed to the overlap-add
     /// helper. Allocated with a `MAX_WINDOW_SIZE` initial capacity.
     window_function: Vec<f32>,
+    /// A mixer to mix the dry signal back into the processed signal with latency compensation.
+    dry_wet_mixer: dry_wet_mixer::DryWetMixer,
 
     /// The algorithms for the FFT and IFFT operations, for each supported order so we can switch
     /// between them without replanning or allocations. Initialized during `initialize()`.
@@ -96,9 +99,10 @@ impl Default for SpectralCompressor {
             params: Arc::new(SpectralCompressorParams::default()),
             editor_state: editor::default_state(),
 
-            // These two will be set to the correct values in the initialize function
+            // These three will be set to the correct values in the initialize function
             stft: util::StftHelper::new(Self::DEFAULT_NUM_OUTPUTS as usize, MAX_WINDOW_SIZE, 0),
             window_function: Vec::with_capacity(MAX_WINDOW_SIZE),
+            dry_wet_mixer: dry_wet_mixer::DryWetMixer::new(0, 0, 0),
 
             // This is initialized later since we don't want to do non-trivial computations before
             // the plugin is initialized
@@ -136,6 +140,7 @@ impl Default for SpectralCompressorParams {
             auto_makeup_gain: BoolParam::new("Auto Makeup Gain", true),
             dry_wet_ratio: FloatParam::new("Mix", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 })
                 .with_unit("%")
+                .with_smoother(SmoothingStyle::Linear(15.0))
                 .with_value_to_string(formatters::v2s_f32_percentage(0))
                 .with_string_to_value(formatters::s2v_f32_percentage()),
             dc_filter: BoolParam::new("DC Filter", true),
@@ -172,7 +177,7 @@ impl Plugin for SpectralCompressor {
     fn initialize(
         &mut self,
         bus_config: &BusConfig,
-        _buffer_config: &BufferConfig,
+        buffer_config: &BufferConfig,
         context: &mut impl InitContext,
     ) -> bool {
         // This plugin can accept any number of channels, so we need to resize channel-dependent
@@ -180,6 +185,12 @@ impl Plugin for SpectralCompressor {
         if self.stft.num_channels() != bus_config.num_output_channels as usize {
             self.stft = util::StftHelper::new(self.stft.num_channels(), MAX_WINDOW_SIZE, 0);
         }
+
+        self.dry_wet_mixer.resize(
+            bus_config.num_output_channels as usize,
+            buffer_config.max_buffer_size as usize,
+            MAX_WINDOW_SIZE,
+        );
 
         // Planning with RustFFT is very fast, but it will still allocate we we'll plan all of the
         // FFTs we might need in advance
@@ -204,6 +215,10 @@ impl Plugin for SpectralCompressor {
         context.set_latency_samples(self.stft.latency_samples());
 
         true
+    }
+
+    fn reset(&mut self) {
+        self.dry_wet_mixer.reset();
     }
 
     fn process(
@@ -244,7 +259,10 @@ impl Plugin for SpectralCompressor {
             util::db_to_gain(self.params.input_gain_db.value) * gain_compensation.sqrt();
         let output_gain =
             util::db_to_gain(self.params.output_gain_db.value) * gain_compensation.sqrt();
-        // TODO: Mix in the dry signal
+        // TODO: Auto makeup gain
+
+        // This is mixed in later with latency compensation applied
+        self.dry_wet_mixer.write_dry(buffer);
 
         self.stft
             .process_overlap_add(buffer, overlap_times, |_channel_idx, real_fft_buffer| {
@@ -290,6 +308,17 @@ impl Plugin for SpectralCompressor {
                     *sample *= window_sample * output_gain;
                 }
             });
+
+        self.dry_wet_mixer.mix_in_dry(
+            buffer,
+            self.params
+                .dry_wet_ratio
+                .smoothed
+                .next_step(buffer.len() as u32),
+            // The dry and wet signals are in phase, so we can do a linear mix
+            dry_wet_mixer::MixingStyle::Linear,
+            self.stft.latency_samples() as usize,
+        );
 
         ProcessStatus::Normal
     }
