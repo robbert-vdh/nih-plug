@@ -174,7 +174,7 @@ impl Default for SpectralCompressorParams {
             // TODO: Set nicer default values for these things
             // As explained above, these offsets are relative to the target curve
             downwards_threshold_offset_db: FloatParam::new(
-                "Downwards Threshold Offset",
+                "Downwards Offset",
                 0.0,
                 FloatRange::Linear {
                     min: -50.0,
@@ -184,7 +184,7 @@ impl Default for SpectralCompressorParams {
             .with_unit(" dB")
             .with_step_size(0.1),
             upwards_threshold_offset_db: FloatParam::new(
-                "Upwards Threshold Offset",
+                "Upwards Offset",
                 0.0,
                 FloatRange::Linear {
                     min: -50.0,
