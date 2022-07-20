@@ -34,7 +34,7 @@ impl Model for Data {}
 
 // Makes sense to also define this here, makes it a bit easier to keep track of
 pub(crate) fn default_state() -> Arc<ViziaState> {
-    ViziaState::from_size(380, 270)
+    ViziaState::from_size(380, 390)
 }
 
 pub(crate) fn create(
@@ -56,16 +56,16 @@ pub(crate) fn create(
                 .height(Pixels(50.0))
                 .child_top(Stretch(1.0))
                 .child_bottom(Pixels(0.0))
-                // Make this more or less align with the parameters column
-                .right(Percentage(12.0));
+                .right(Pixels(10.0));
 
-            // See the Crisp generic UI for an example using a ScrollView
-            GenericUi::new(cx, Data::params)
-                .width(Percentage(100.0))
-                .height(Auto)
-                .child_top(Pixels(5.0));
+            ScrollView::new(cx, 0.0, 0.0, false, true, |cx| {
+                // This looks better if it's flush at the top, and then we'll just add some padding
+                // at the top of the scroll view
+                GenericUi::new(cx, Data::params).child_top(Pixels(0.0));
+            })
+            .width(Percentage(100.0))
+            .top(Pixels(5.0));
         })
-        .width(Percentage(100.0))
         .row_between(Pixels(0.0))
         .child_left(Stretch(1.0))
         .child_right(Stretch(1.0));
