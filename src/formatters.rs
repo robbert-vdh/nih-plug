@@ -36,6 +36,30 @@ pub fn s2v_f32_percentage() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> {
     })
 }
 
+/// Format a positive number as a compression ratio. A value of 4 will be formatted as `4.0:1` while
+/// 0.25 is formatted as `1:4.0`.
+pub fn v2s_compression_ratio(digits: usize) -> Arc<dyn Fn(f32) -> String + Send + Sync> {
+    Arc::new(move |value| {
+        if value >= 1.0 {
+            format!("{:.digits$}:1", value)
+        } else {
+            format!("1:{:.digits$}", value.recip())
+        }
+    })
+}
+
+/// Parse a `x:y` compression ratio back to a floating point number. Used in conjunction with
+/// [`v2s_compression_ratio()`].
+pub fn s2v_compression_ratio() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> {
+    Arc::new(|string| {
+        let (numerator, denominator) = string.trim().split_once(':')?;
+        let numerator: f32 = numerator.trim().parse().ok()?;
+        let denominator: f32 = denominator.trim().parse().ok()?;
+
+        Some(numerator / denominator)
+    })
+}
+
 /// Turn an `f32` value from voltage gain to decibels using the semantics described in
 /// [`util::gain_to_db()]. You should use either `" dB"` or `" dBFS"` for the parameter's unit.
 pub fn v2s_f32_gain_to_db(digits: usize) -> Arc<dyn Fn(f32) -> String + Send + Sync> {
