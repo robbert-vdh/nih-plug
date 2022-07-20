@@ -107,10 +107,8 @@ impl Default for SafetyLimiterParams {
             threshold_gain: FloatParam::new(
                 "Threshold",
                 util::db_to_gain(0.00),
-                // This parameter mostly exists to allow small peaks through, so no need to go below
-                // 0 dBFS
                 FloatRange::Linear {
-                    min: util::db_to_gain(0.0),
+                    min: util::db_to_gain(-24.0),
                     max: util::db_to_gain(12.0),
                 },
             )
