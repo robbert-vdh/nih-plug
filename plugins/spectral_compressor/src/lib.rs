@@ -90,6 +90,14 @@ struct SpectralCompressorParams {
     #[id = "dc_filter"]
     dc_filter: BoolParam,
 
+    /// The size of the FFT window as a power of two (to prevent invalid inputs).
+    #[id = "stft_window"]
+    window_size_order: IntParam,
+    /// The amount of overlap to use in the overlap-add algorithm as a power of two (again to
+    /// prevent invalid inputs).
+    #[id = "stft_overlap"]
+    overlap_times_order: IntParam,
+
     /// Parameters controlling the compressor thresholds and curves.
     #[nested = "threhold"]
     threhold: compressor_bank::ThresholdParams,
@@ -141,6 +149,27 @@ impl Default for SpectralCompressorParams {
                 .with_value_to_string(formatters::v2s_f32_percentage(0))
                 .with_string_to_value(formatters::s2v_f32_percentage()),
             dc_filter: BoolParam::new("DC Filter", true),
+
+            window_size_order: IntParam::new(
+                "Window Size",
+                DEFAULT_WINDOW_ORDER as i32,
+                IntRange::Linear {
+                    min: MIN_WINDOW_ORDER as i32,
+                    max: MAX_WINDOW_ORDER as i32,
+                },
+            )
+            .with_value_to_string(formatters::v2s_i32_power_of_two())
+            .with_string_to_value(formatters::s2v_i32_power_of_two()),
+            overlap_times_order: IntParam::new(
+                "Window Overlap",
+                DEFAULT_OVERLAP_ORDER as i32,
+                IntRange::Linear {
+                    min: MIN_OVERLAP_ORDER as i32,
+                    max: MAX_OVERLAP_ORDER as i32,
+                },
+            )
+            .with_value_to_string(formatters::v2s_i32_power_of_two())
+            .with_string_to_value(formatters::s2v_i32_power_of_two()),
 
             threhold: compressor_bank::ThresholdParams::default(),
             compressors: compressor_bank::CompressorBankParams::default(),
@@ -209,8 +238,7 @@ impl Plugin for SpectralCompressor {
             );
         }
 
-        // TODO: Fetch from a parameter
-        let window_size = DEFAULT_WINDOW_SIZE;
+        let window_size = self.window_size();
         self.resize_for_window(window_size);
         context.set_latency_samples(self.stft.latency_samples());
 
@@ -229,10 +257,8 @@ impl Plugin for SpectralCompressor {
     ) -> ProcessStatus {
         // If the window size has changed since the last process call, reset the buffers and chance
         // our latency. All of these buffers already have enough capacity so this won't allocate.
-        // TODO: Fetch from a parameter
-        let overlap_times = DEFAULT_OVERLAP_TIMES;
-        // TODO: Fetch from a parameter
-        let window_size = DEFAULT_WINDOW_SIZE;
+        let window_size = self.window_size();
+        let overlap_times = self.overlap_times();
         if self.window_function.len() != window_size {
             self.resize_for_window(window_size);
             context.set_latency_samples(self.stft.latency_samples());
@@ -241,9 +267,7 @@ impl Plugin for SpectralCompressor {
         // These plans have already been made during initialization we can switch between versions
         // without reallocating
         let fft_plan = &mut self.plan_for_order.as_mut().unwrap()
-            // FIXME: Use the parameter
-            // [self.params.window_size_order.value as usize - MIN_WINDOW_ORDER];
-            [DEFAULT_WINDOW_ORDER - MIN_WINDOW_ORDER];
+            [self.params.window_size_order.value as usize - MIN_WINDOW_ORDER];
         let num_bins = self.complex_fft_buffer.len();
         let sample_rate = context.transport().sample_rate;
 
@@ -327,6 +351,14 @@ impl Plugin for SpectralCompressor {
 }
 
 impl SpectralCompressor {
+    fn window_size(&self) -> usize {
+        1 << self.params.window_size_order.value as usize
+    }
+
+    fn overlap_times(&self) -> usize {
+        1 << self.params.overlap_times_order.value as usize
+    }
+
     /// `window_size` should not exceed `MAX_WINDOW_SIZE` or this will allocate.
     fn resize_for_window(&mut self, window_size: usize) {
         // The FFT algorithms for this window size have already been planned in
