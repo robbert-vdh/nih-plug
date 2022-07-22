@@ -47,14 +47,14 @@ pub struct CompressorBank {
     downwards_thresholds: Vec<f32>,
     /// Upwards compressor thresholds, in linear space.
     upwards_thresholds: Vec<f32>,
-    /// Downwards compressor ratios. At 1.0 the cmopressor won't do anything. If
-    /// [`CompressorBankParams::high_freq_ratio_rolloff`] is set to 1.0, then this will be the same
-    /// for each compressor.
-    downwards_ratios: Vec<f32>,
-    /// Upwards compressor ratios. At 1.0 the cmopressor won't do anything. If
-    /// [`CompressorBankParams::high_freq_ratio_rolloff`] is set to 1.0, then this will be the same
-    /// for each compressor.
-    upwards_ratios: Vec<f32>,
+    /// The reciprocals of the downwards compressor ratios. At 1.0 the cmopressor won't do anything.
+    /// If [`CompressorBankParams::high_freq_ratio_rolloff`] is set to 1.0, then this will be the
+    /// same for each compressor. We're doing the compression in linear space to avoid a logarithm,
+    /// so the division by the ratio becomes an nth-root, or exponentation by the reciprocal of the
+    /// ratio.
+    downwards_ratio_recips: Vec<f32>,
+    /// The same as `downwards_ratio_recipss`, but for the upwards compression.
+    upwards_ratio_recips: Vec<f32>,
 
     /// The current envelope value for this bin, in linear space. Indexed by
     /// `[channel_idx][compressor_idx]`.
@@ -353,8 +353,8 @@ impl CompressorBank {
 
             downwards_thresholds: Vec::with_capacity(complex_buffer_len),
             upwards_thresholds: Vec::with_capacity(complex_buffer_len),
-            downwards_ratios: Vec::with_capacity(complex_buffer_len),
-            upwards_ratios: Vec::with_capacity(complex_buffer_len),
+            downwards_ratio_recips: Vec::with_capacity(complex_buffer_len),
+            upwards_ratio_recips: Vec::with_capacity(complex_buffer_len),
 
             envelopes: vec![Vec::with_capacity(complex_buffer_len); num_channels],
             window_size: 0,
@@ -374,10 +374,10 @@ impl CompressorBank {
             .reserve_exact(complex_buffer_len.saturating_sub(self.downwards_thresholds.len()));
         self.upwards_thresholds
             .reserve_exact(complex_buffer_len.saturating_sub(self.upwards_thresholds.len()));
-        self.downwards_ratios
-            .reserve_exact(complex_buffer_len.saturating_sub(self.downwards_ratios.len()));
-        self.upwards_ratios
-            .reserve_exact(complex_buffer_len.saturating_sub(self.upwards_ratios.len()));
+        self.downwards_ratio_recips
+            .reserve_exact(complex_buffer_len.saturating_sub(self.downwards_ratio_recips.len()));
+        self.upwards_ratio_recips
+            .reserve_exact(complex_buffer_len.saturating_sub(self.upwards_ratio_recips.len()));
 
         self.envelopes.resize_with(num_channels, Vec::new);
         for envelopes in self.envelopes.iter_mut() {
@@ -402,8 +402,8 @@ impl CompressorBank {
 
         self.downwards_thresholds.resize(complex_buffer_len, 1.0);
         self.upwards_thresholds.resize(complex_buffer_len, 1.0);
-        self.downwards_ratios.resize(complex_buffer_len, 1.0);
-        self.upwards_ratios.resize(complex_buffer_len, 1.0);
+        self.downwards_ratio_recips.resize(complex_buffer_len, 1.0);
+        self.upwards_ratio_recips.resize(complex_buffer_len, 1.0);
 
         for envelopes in self.envelopes.iter_mut() {
             envelopes.resize(complex_buffer_len, 0.0);
@@ -560,16 +560,20 @@ impl CompressorBank {
         {
             // If the high-frequency rolloff is enabled then higher frequency bins will have their
             // ratios reduced to reduce harshness. This follows the octave scale.
-            let target_ratio = compressor.downwards_ratio.value;
+            let target_ratio_recip = compressor.downwards_ratio.value.recip();
             if high_freq_ratio_rolloff == 1.0 {
-                self.downwards_ratios.fill(target_ratio);
+                self.downwards_ratio_recips.fill(target_ratio_recip);
             } else {
-                for (log2_freq, ratio) in
-                    self.log2_freqs.iter().zip(self.downwards_ratios.iter_mut())
+                for (log2_freq, ratio) in self
+                    .log2_freqs
+                    .iter()
+                    .zip(self.downwards_ratio_recips.iter_mut())
                 {
                     // This is scaled by octaves since we're calculating this in log space
                     let octave_fraction = log2_freq / log2_nyquist_freq;
-                    *ratio = target_ratio * (1.0 - (octave_fraction * high_freq_ratio_rolloff));
+                    // Division because we're dealing with the reciprocal here
+                    *ratio =
+                        target_ratio_recip / (1.0 - (octave_fraction * high_freq_ratio_rolloff));
                 }
             }
         }
@@ -579,14 +583,18 @@ impl CompressorBank {
             .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
             .is_ok()
         {
-            let target_ratio = compressor.upwards_ratio.value;
+            let target_ratio_recip = compressor.upwards_ratio.value.recip();
             if high_freq_ratio_rolloff == 1.0 {
-                self.upwards_ratios.fill(target_ratio);
+                self.upwards_ratio_recips.fill(target_ratio_recip);
             } else {
-                for (log2_freq, ratio) in self.log2_freqs.iter().zip(self.upwards_ratios.iter_mut())
+                for (log2_freq, ratio) in self
+                    .log2_freqs
+                    .iter()
+                    .zip(self.upwards_ratio_recips.iter_mut())
                 {
                     let octave_fraction = log2_freq / log2_nyquist_freq;
-                    *ratio = target_ratio * (1.0 - (octave_fraction * high_freq_ratio_rolloff));
+                    *ratio =
+                        target_ratio_recip / (1.0 - (octave_fraction * high_freq_ratio_rolloff));
                 }
             }
         }
