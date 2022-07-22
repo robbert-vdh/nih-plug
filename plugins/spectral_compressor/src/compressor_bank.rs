@@ -586,7 +586,7 @@ impl CompressorBank {
                 .iter()
                 .zip(self.downwards_thresholds.iter_mut())
             {
-                let offset = log2_center_freq - log2_freq;
+                let offset = log2_freq - log2_center_freq;
                 let threshold_db = intercept + (slope * offset) + (curve * offset * offset);
                 // This threshold may never reach zero as it's used in divisions to get a gain ratio
                 // above the threshold
@@ -605,7 +605,7 @@ impl CompressorBank {
                 .iter()
                 .zip(self.upwards_thresholds.iter_mut())
             {
-                let offset = log2_center_freq - log2_freq;
+                let offset = log2_freq - log2_center_freq;
                 let threshold_db = intercept + (slope * offset) + (curve * offset * offset);
                 *threshold = util::db_to_gain(threshold_db).max(f32::EPSILON);
             }
