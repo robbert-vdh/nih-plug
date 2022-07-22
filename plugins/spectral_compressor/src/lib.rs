@@ -20,6 +20,7 @@ use realfft::num_complex::Complex32;
 use realfft::{ComplexToReal, RealFftPlanner, RealToComplex};
 use std::sync::Arc;
 
+mod compressor_bank;
 mod dry_wet_mixer;
 mod editor;
 
@@ -96,27 +97,8 @@ struct SpectralCompressorParams {
     //
     // TODO: Sidechaining
     //
-    /// The downwards compression threshold relative to the target curve.
-    #[id = "thresh_down_off"]
-    downwards_threshold_offset_db: FloatParam,
-    #[id = "thresh_up_off"]
-    /// The upwards compression threshold relative to the target curve.
-    upwards_threshold_offset_db: FloatParam,
-    /// The downwards compression ratio. At 1.0 the downwards compressor is disengaged.
-    #[id = "ratio_down"]
-    downwards_ratio: FloatParam,
-    /// The upwards compression ratio. At 1.0 the upwards compressor is disengaged.
-    #[id = "ratio_up"]
-    upwards_ratio: FloatParam,
-    // TODO: High frequency ratio falloff, make the compression milder for higher frequencies to make it less piercing
-    /// The compressor's attack time in milliseconds. Controls both upwards and downwards
-    /// compression.
-    #[id = "attack"]
-    compressor_attack_ms: FloatParam,
-    /// The compressor's release time in milliseconds. Controls both upwards and downwards
-    /// compression.
-    #[id = "release"]
-    compressor_release_ms: FloatParam,
+    #[nested = "compressors"]
+    compressors: compressor_bank::CompressorBankParams,
 }
 
 impl Default for SpectralCompressor {
@@ -141,6 +123,8 @@ impl Default for SpectralCompressor {
 impl Default for SpectralCompressorParams {
     fn default() -> Self {
         Self {
+            // TODO: Do still enable per-block smoothing for these settings, because why not
+
             // We don't need any smoothing for these parameters as the overlap-add process will
             // already act as a form of smoothing
             input_gain_db: FloatParam::new(
@@ -171,75 +155,7 @@ impl Default for SpectralCompressorParams {
                 .with_string_to_value(formatters::s2v_f32_percentage()),
             dc_filter: BoolParam::new("DC Filter", true),
 
-            // TODO: Set nicer default values for these things
-            // As explained above, these offsets are relative to the target curve
-            downwards_threshold_offset_db: FloatParam::new(
-                "Downwards Offset",
-                0.0,
-                FloatRange::Linear {
-                    min: -50.0,
-                    max: 50.0,
-                },
-            )
-            .with_unit(" dB")
-            .with_step_size(0.1),
-            upwards_threshold_offset_db: FloatParam::new(
-                "Upwards Offset",
-                0.0,
-                FloatRange::Linear {
-                    min: -50.0,
-                    max: 50.0,
-                },
-            )
-            .with_unit(" dB")
-            .with_step_size(0.1),
-            downwards_ratio: FloatParam::new(
-                "Downwards Ratio",
-                1.0,
-                FloatRange::Skewed {
-                    min: 1.0,
-                    max: 300.0,
-                    factor: FloatRange::skew_factor(-2.0),
-                },
-            )
-            .with_step_size(0.1)
-            .with_value_to_string(formatters::v2s_compression_ratio(1))
-            .with_string_to_value(formatters::s2v_compression_ratio()),
-            upwards_ratio: FloatParam::new(
-                "Upwards Ratio",
-                1.0,
-                FloatRange::Skewed {
-                    min: 1.0,
-                    max: 300.0,
-                    factor: FloatRange::skew_factor(-2.0),
-                },
-            )
-            .with_step_size(0.1)
-            .with_value_to_string(formatters::v2s_compression_ratio(1))
-            .with_string_to_value(formatters::s2v_compression_ratio()),
-            compressor_attack_ms: FloatParam::new(
-                "Attack",
-                150.0,
-                FloatRange::Skewed {
-                    // TODO: Make sure to handle 0 attack and release times in the compressor
-                    min: 0.0,
-                    max: 10_000.0,
-                    factor: FloatRange::skew_factor(-2.0),
-                },
-            )
-            .with_unit(" ms")
-            .with_step_size(0.1),
-            compressor_release_ms: FloatParam::new(
-                "Release",
-                300.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 10_000.0,
-                    factor: FloatRange::skew_factor(-2.0),
-                },
-            )
-            .with_unit(" ms")
-            .with_step_size(0.1),
+            compressors: compressor_bank::CompressorBankParams::default(),
         }
     }
 }
