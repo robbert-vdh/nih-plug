@@ -45,14 +45,14 @@ pub struct CompressorBank {
 
     /// Downwards compressor thresholds, in linear space.
     downwards_thresholds: Vec<f32>,
-    /// Upwards compressor thresholds, in linear space.
-    upwards_thresholds: Vec<f32>,
     /// The reciprocals of the downwards compressor ratios. At 1.0 the cmopressor won't do anything.
     /// If [`CompressorBankParams::high_freq_ratio_rolloff`] is set to 1.0, then this will be the
     /// same for each compressor. We're doing the compression in linear space to avoid a logarithm,
     /// so the division by the ratio becomes an nth-root, or exponentation by the reciprocal of the
     /// ratio.
     downwards_ratio_recips: Vec<f32>,
+    /// Upwards compressor thresholds, in linear space.
+    upwards_thresholds: Vec<f32>,
     /// The same as `downwards_ratio_recipss`, but for the upwards compression.
     upwards_ratio_recips: Vec<f32>,
 
@@ -98,9 +98,22 @@ pub struct CompressorBankParams {
     /// The downwards compression threshold relative to the target curve.
     #[id = "thresh_down_off"]
     downwards_threshold_offset_db: FloatParam,
+    /// The downwards compression ratio. At 1.0 the downwards compressor is disengaged.
+    #[id = "ratio_down"]
+    downwards_ratio: FloatParam,
+    /// The downwards compression knee width, in decibels.
+    #[id = "knee_down"]
+    downwards_knee_width_db: FloatParam,
+
     /// The upwards compression threshold relative to the target curve.
     #[id = "thresh_up_off"]
     upwards_threshold_offset_db: FloatParam,
+    /// The upwards compression ratio. At 1.0 the upwards compressor is disengaged.
+    #[id = "ratio_up"]
+    upwards_ratio: FloatParam,
+    /// The upwards compression knee width, in decibels.
+    #[id = "knee_up"]
+    upwards_knee_width_db: FloatParam,
 
     /// A `[0, 1]` scaling factor that causes the compressors for the higher registers to have lower
     /// ratios than the compressors for the lower registers. The scaling is applied logarithmically
@@ -111,19 +124,6 @@ pub struct CompressorBankParams {
     ///       separate controls for both
     #[id = "ratio_hi_freq_rolloff"]
     high_freq_ratio_rolloff: FloatParam,
-    /// The downwards compression ratio. At 1.0 the downwards compressor is disengaged.
-    #[id = "ratio_down"]
-    downwards_ratio: FloatParam,
-    /// The upwards compression ratio. At 1.0 the upwards compressor is disengaged.
-    #[id = "ratio_up"]
-    upwards_ratio: FloatParam,
-
-    /// The downwards compression knee width, in decibels.
-    #[id = "knee_down_off"]
-    downwards_knee_width_db: FloatParam,
-    /// The upwards compression knee width, in decibels.
-    #[id = "knee_up_off"]
-    upwards_knee_width_db: FloatParam,
 
     /// The compressor's attack time in milliseconds. Controls both upwards and downwards
     /// compression.
@@ -241,27 +241,6 @@ impl CompressorBankParams {
             .with_callback(set_update_downwards_thresholds)
             .with_unit(" dB")
             .with_step_size(0.1),
-            upwards_threshold_offset_db: FloatParam::new(
-                "Upwards Offset",
-                0.0,
-                FloatRange::Linear {
-                    min: -50.0,
-                    max: 50.0,
-                },
-            )
-            .with_callback(set_update_upwards_thresholds)
-            .with_unit(" dB")
-            .with_step_size(0.1),
-
-            high_freq_ratio_rolloff: FloatParam::new(
-                "High-freq Ratio Rolloff",
-                0.5,
-                FloatRange::Linear { min: 0.0, max: 1.0 },
-            )
-            .with_callback(set_update_both_ratios)
-            .with_unit("%")
-            .with_value_to_string(formatters::v2s_f32_percentage(0))
-            .with_string_to_value(formatters::s2v_f32_percentage()),
             downwards_ratio: FloatParam::new(
                 "Downwards Ratio",
                 1.0,
@@ -275,6 +254,29 @@ impl CompressorBankParams {
             .with_step_size(0.01)
             .with_value_to_string(formatters::v2s_compression_ratio(2))
             .with_string_to_value(formatters::s2v_compression_ratio()),
+            downwards_knee_width_db: FloatParam::new(
+                "Downwards Knee",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 36.0,
+                    factor: FloatRange::skew_factor(-1.0),
+                },
+            )
+            .with_unit(" dB")
+            .with_step_size(0.1),
+
+            upwards_threshold_offset_db: FloatParam::new(
+                "Upwards Offset",
+                0.0,
+                FloatRange::Linear {
+                    min: -50.0,
+                    max: 50.0,
+                },
+            )
+            .with_callback(set_update_upwards_thresholds)
+            .with_unit(" dB")
+            .with_step_size(0.1),
             upwards_ratio: FloatParam::new(
                 "Upwards Ratio",
                 1.0,
@@ -288,18 +290,6 @@ impl CompressorBankParams {
             .with_step_size(0.01)
             .with_value_to_string(formatters::v2s_compression_ratio(2))
             .with_string_to_value(formatters::s2v_compression_ratio()),
-
-            downwards_knee_width_db: FloatParam::new(
-                "Downwards Knee",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 36.0,
-                    factor: FloatRange::skew_factor(-1.0),
-                },
-            )
-            .with_unit(" dB")
-            .with_step_size(0.1),
             upwards_knee_width_db: FloatParam::new(
                 "Upwards Knee",
                 0.0,
@@ -311,6 +301,16 @@ impl CompressorBankParams {
             )
             .with_unit(" dB")
             .with_step_size(0.1),
+
+            high_freq_ratio_rolloff: FloatParam::new(
+                "High-freq Ratio Rolloff",
+                0.5,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_callback(set_update_both_ratios)
+            .with_unit("%")
+            .with_value_to_string(formatters::v2s_f32_percentage(0))
+            .with_string_to_value(formatters::s2v_f32_percentage()),
 
             compressor_attack_ms: FloatParam::new(
                 "Attack",
@@ -353,8 +353,8 @@ impl CompressorBank {
             log2_freqs: Vec::with_capacity(complex_buffer_len),
 
             downwards_thresholds: Vec::with_capacity(complex_buffer_len),
-            upwards_thresholds: Vec::with_capacity(complex_buffer_len),
             downwards_ratio_recips: Vec::with_capacity(complex_buffer_len),
+            upwards_thresholds: Vec::with_capacity(complex_buffer_len),
             upwards_ratio_recips: Vec::with_capacity(complex_buffer_len),
 
             envelopes: vec![Vec::with_capacity(complex_buffer_len); num_channels],
@@ -373,10 +373,10 @@ impl CompressorBank {
 
         self.downwards_thresholds
             .reserve_exact(complex_buffer_len.saturating_sub(self.downwards_thresholds.len()));
-        self.upwards_thresholds
-            .reserve_exact(complex_buffer_len.saturating_sub(self.upwards_thresholds.len()));
         self.downwards_ratio_recips
             .reserve_exact(complex_buffer_len.saturating_sub(self.downwards_ratio_recips.len()));
+        self.upwards_thresholds
+            .reserve_exact(complex_buffer_len.saturating_sub(self.upwards_thresholds.len()));
         self.upwards_ratio_recips
             .reserve_exact(complex_buffer_len.saturating_sub(self.upwards_ratio_recips.len()));
 
@@ -402,8 +402,8 @@ impl CompressorBank {
         }
 
         self.downwards_thresholds.resize(complex_buffer_len, 1.0);
-        self.upwards_thresholds.resize(complex_buffer_len, 1.0);
         self.downwards_ratio_recips.resize(complex_buffer_len, 1.0);
+        self.upwards_thresholds.resize(complex_buffer_len, 1.0);
         self.upwards_ratio_recips.resize(complex_buffer_len, 1.0);
 
         for envelopes in self.envelopes.iter_mut() {
