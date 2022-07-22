@@ -34,6 +34,10 @@ pub struct CompressorBank {
     /// The same as `should_update_downwards_ratios`, but for upwards ratios.
     pub should_update_upwards_ratios: Arc<AtomicBool>,
 
+    /// For each compressor bin, `log2(freq)` where `freq` is the frequency associated with that
+    /// compressor. This is precomputed since all update functions need it.
+    log2_freqs: Vec<f32>,
+
     /// Downwards compressor thresholds, in linear space.
     downwards_thresholds: Vec<f32>,
     /// Upwards compressor thresholds, in linear space.
@@ -336,6 +340,8 @@ impl CompressorBank {
             should_update_downwards_ratios: Arc::new(AtomicBool::new(true)),
             should_update_upwards_ratios: Arc::new(AtomicBool::new(true)),
 
+            log2_freqs: Vec::with_capacity(complex_buffer_len),
+
             downwards_thresholds: Vec::with_capacity(complex_buffer_len),
             upwards_thresholds: Vec::with_capacity(complex_buffer_len),
             downwards_ratios: Vec::with_capacity(complex_buffer_len),
@@ -349,6 +355,9 @@ impl CompressorBank {
     /// `.reset_for_size()` method to clear the buffers and set the current window size.
     pub fn update_capacity(&mut self, num_channels: usize, max_window_size: usize) {
         let complex_buffer_len = max_window_size / 2 + 1;
+
+        self.log2_freqs
+            .reserve_exact(complex_buffer_len.saturating_sub(self.log2_freqs.len()));
 
         self.downwards_thresholds
             .reserve_exact(complex_buffer_len.saturating_sub(self.downwards_thresholds.len()));
@@ -365,11 +374,20 @@ impl CompressorBank {
         }
     }
 
-    /// Resize the number of compressors to match the current window size.
+    /// Resize the number of compressors to match the current window size. Also precomputes the
+    /// 2-log frequencies for each bin.
     ///
     /// If the window size is larger than the maximum window size, then this will allocate.
-    pub fn resize(&mut self, window_size: usize) {
+    pub fn resize(&mut self, buffer_config: &BufferConfig, window_size: usize) {
         let complex_buffer_len = window_size / 2 + 1;
+
+        // These 2-log frequencies are needed when updating the compressor parameters, so we'll just
+        // precompute them to avoid having to repeat the same expensive computations all the time
+        self.log2_freqs.resize(complex_buffer_len, 0.0);
+        for (i, log2_freq) in self.log2_freqs.iter_mut().enumerate() {
+            let freq = (i as f32 / window_size as f32) * buffer_config.sample_rate;
+            *log2_freq = freq.log2();
+        }
 
         self.downwards_thresholds.resize(complex_buffer_len, 1.0);
         self.upwards_thresholds.resize(complex_buffer_len, 1.0);

@@ -48,6 +48,9 @@ struct SpectralCompressor {
     params: Arc<SpectralCompressorParams>,
     editor_state: Arc<ViziaState>,
 
+    /// The current buffer config, used for updating the compressors.
+    buffer_config: BufferConfig,
+
     /// An adapter that performs most of the overlap-add algorithm for us.
     stft: util::StftHelper,
     /// Contains a Hann window function of the current window length, passed to the overlap-add
@@ -121,6 +124,13 @@ impl Default for SpectralCompressor {
         SpectralCompressor {
             params: Arc::new(SpectralCompressorParams::new(&compressor_bank)),
             editor_state: editor::default_state(),
+
+            buffer_config: BufferConfig {
+                sample_rate: 1.0,
+                min_buffer_size: None,
+                max_buffer_size: 0,
+                process_mode: ProcessMode::Realtime,
+            },
 
             // These three will be set to the correct values in the initialize function
             stft: util::StftHelper::new(Self::DEFAULT_NUM_OUTPUTS as usize, MAX_WINDOW_SIZE, 0),
@@ -222,6 +232,9 @@ impl Plugin for SpectralCompressor {
         buffer_config: &BufferConfig,
         context: &mut impl InitContext,
     ) -> bool {
+        // Needed to update the compressors later
+        self.buffer_config = *buffer_config;
+
         // This plugin can accept any number of channels, so we need to resize channel-dependent
         // data structures accordinly
         if self.stft.num_channels() != bus_config.num_output_channels as usize {
@@ -284,7 +297,6 @@ impl Plugin for SpectralCompressor {
         let fft_plan = &mut self.plan_for_order.as_mut().unwrap()
             [self.params.window_size_order.value as usize - MIN_WINDOW_ORDER];
         let num_bins = self.complex_fft_buffer.len();
-        let sample_rate = context.transport().sample_rate;
 
         // The overlap gain compensation is based on a squared Hann window, which will sum perfectly
         // at four times overlap or higher. We'll apply a regular Hann window before the analysis
@@ -329,8 +341,9 @@ impl Plugin for SpectralCompressor {
                 if self.params.dc_filter.value {
                     // The Hann window function spreads the DC signal out slightly, so we'll clear
                     // all 0-20 Hz bins for this.
-                    let highest_dcish_bin_idx =
-                        (20.0 / ((sample_rate / 2.0) / num_bins as f32)).floor() as usize;
+                    let highest_dcish_bin_idx = (20.0
+                        / ((self.buffer_config.sample_rate / 2.0) / num_bins as f32))
+                        .floor() as usize;
                     self.complex_fft_buffer[..highest_dcish_bin_idx + 1].fill(Complex32::default());
                 }
 
@@ -386,7 +399,8 @@ impl SpectralCompressor {
             .resize(window_size / 2 + 1, Complex32::default());
 
         // This also causes the thresholds and ratios to be updated on the next STFT process cycle.
-        self.compressor_bank.resize(window_size);
+        self.compressor_bank
+            .resize(&self.buffer_config, window_size);
     }
 }
 
