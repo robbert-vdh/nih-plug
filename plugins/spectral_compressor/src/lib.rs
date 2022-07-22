@@ -298,6 +298,10 @@ impl Plugin for SpectralCompressor {
         let fft_plan = &mut self.plan_for_order.as_mut().unwrap()
             [self.params.window_size_order.value as usize - MIN_WINDOW_ORDER];
         let num_bins = self.complex_fft_buffer.len();
+        // The Hann window function spreads the DC signal out slightly, so we'll clear
+        // all 0-20 Hz bins for this.
+        let highest_dcish_bin_idx =
+            (20.0 / ((self.buffer_config.sample_rate / 2.0) / num_bins as f32)).floor() as usize;
 
         // The overlap gain compensation is based on a squared Hann window, which will sum perfectly
         // at four times overlap or higher. We'll apply a regular Hann window before the analysis
@@ -335,16 +339,17 @@ impl Plugin for SpectralCompressor {
                     .process_with_scratch(real_fft_buffer, &mut self.complex_fft_buffer, &mut [])
                     .unwrap();
 
-                // TODO: Do the thing
+                // This is where the magic happens
+                self.compressor_bank.process(
+                    &mut self.complex_fft_buffer,
+                    (&self.params.threhold, &self.params.compressors),
+                    overlap_times,
+                    highest_dcish_bin_idx,
+                );
 
                 // The DC and other low frequency bins doesn't contain much semantic meaning anymore
                 // after all of this, so it only ends up consuming headroom.
                 if self.params.dc_filter.value {
-                    // The Hann window function spreads the DC signal out slightly, so we'll clear
-                    // all 0-20 Hz bins for this.
-                    let highest_dcish_bin_idx = (20.0
-                        / ((self.buffer_config.sample_rate / 2.0) / num_bins as f32))
-                        .floor() as usize;
                     self.complex_fft_buffer[..highest_dcish_bin_idx + 1].fill(Complex32::default());
                 }
 

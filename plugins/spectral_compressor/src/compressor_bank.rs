@@ -18,6 +18,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use nih_plug::prelude::*;
+use realfft::num_complex::Complex32;
 
 /// Type alias for the compressor parameters. These two are split up so the parameter list/tree
 /// looks a bit nicer.
@@ -58,7 +59,12 @@ pub struct CompressorBank {
     /// The current envelope value for this bin, in linear space. Indexed by
     /// `[channel_idx][compressor_idx]`.
     envelopes: Vec<Vec<f32>>,
-    // TODO: Parameters for the envelope followers so we can actuall ydo soemthing useful.
+    /// The window size this compressor bank was configured for. This is used to compute the
+    /// coefficients for the envelope followers in the process function.
+    window_size: usize,
+    /// The sample rate this compressor bank was configured for. This is used to compute the
+    /// coefficients for the envelope followers in the process function.
+    sample_rate: f32,
 }
 
 #[derive(Params)]
@@ -352,6 +358,8 @@ impl CompressorBank {
             upwards_ratios: Vec::with_capacity(complex_buffer_len),
 
             envelopes: vec![Vec::with_capacity(complex_buffer_len); num_channels],
+            window_size: 0,
+            sample_rate: 1.0,
         }
     }
 
@@ -402,6 +410,9 @@ impl CompressorBank {
             envelopes.resize(complex_buffer_len, 0.0);
         }
 
+        self.window_size = window_size;
+        self.sample_rate = buffer_config.sample_rate;
+
         // The compressors need to be updated on the next processing cycle
         self.should_update_downwards_thresholds
             .store(true, Ordering::SeqCst);
@@ -418,6 +429,42 @@ impl CompressorBank {
         for envelopes in self.envelopes.iter_mut() {
             envelopes.fill(0.0);
         }
+    }
+
+    /// Apply the magnitude compression to a buffer of FFT bins. The compressors are first updated
+    /// if needed. The overlap amount is needed to compute the effective sample rate. The
+    /// `skip_bins_below` argument is used to avoid compressing DC bins, or the neighbouring bins
+    /// the DC signal may have been convolved into because of the Hann window function.
+    pub fn process(
+        &mut self,
+        buffer: &mut [Complex32],
+        params @ (_, compressor): CompressorParams,
+        overlap_times: usize,
+        skip_bins_below: usize,
+    ) {
+        assert_eq!(buffer.len(), self.log2_freqs.len());
+
+        self.update_if_needed(params);
+
+        // The coefficient the old envelope value is multiplied by when the current rectified sample
+        // value is above the envelope's value. The 0 to 1 step response retains 36.8% of the old
+        // value after the attack time has elapsed, and current value is 63.2% of the way towards 1.
+        // The effective sample rate needs to compensate for the periodic nature of the STFT
+        // operation. Since with a 2048 sample window and 4x overlap, you'd run this function once
+        // for every 512 samples.
+        let effective_sample_rate =
+            self.sample_rate / (self.window_size as f32 / overlap_times as f32);
+        let attack_retention = (compressor.compressor_attack_ms.value / 1000.0
+            * effective_sample_rate)
+            .recip()
+            .exp();
+        // The same as `attack_retention`, but for the release phase of the envelope follower
+        let release_retention = (compressor.compressor_release_ms.value / 1000.0
+            * effective_sample_rate)
+            .recip()
+            .exp();
+
+        // TODO: Actually compress things
     }
 
     /// Update the compressors if needed. This is called just before processing, and the compressors
