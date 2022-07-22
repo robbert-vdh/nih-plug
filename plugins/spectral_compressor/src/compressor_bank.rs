@@ -19,17 +19,17 @@ use nih_plug::prelude::*;
 #[derive(Params)]
 pub struct ThresholdParams {
     // TODO: Sidechaining
-    /// The compressor threshold at the center frequency. When sidechaining is enabled, the input
-    /// signal is gained by the inverse of this value. This replaces the input gain in the original
-    /// Spectral Compressor. In the polynomial below, this is the intercept.
-    #[id = "input_db"]
-    threshold_db: FloatParam,
     /// The center frqeuency for the target curve when sidechaining is not enabled. The curve is a
     /// polynomial `threshold_db + curve_slope*x + curve_curve*(x^2)` that evaluates to a decibel
     /// value, where `x = log2(center_frequency) - log2(bin_frequency)`. In other words, this is
     /// evaluated in the log/log domain for decibels and octaves.
     #[id = "thresh_center_freq"]
     center_frequency: FloatParam,
+    /// The compressor threshold at the center frequency. When sidechaining is enabled, the input
+    /// signal is gained by the inverse of this value. This replaces the input gain in the original
+    /// Spectral Compressor. In the polynomial above, this is the intercept.
+    #[id = "input_db"]
+    threshold_db: FloatParam,
     /// The slope for the curve, in the log/log domain. See the polynomial above.
     #[id = "thresh_curve_slope"]
     curve_slope: FloatParam,
@@ -86,6 +86,20 @@ pub struct CompressorBankParams {
 impl Default for ThresholdParams {
     fn default() -> Self {
         ThresholdParams {
+            center_frequency: FloatParam::new(
+                "Threshold Center",
+                500.0,
+                FloatRange::Skewed {
+                    min: 20.0,
+                    max: 20_000.0,
+                    factor: FloatRange::skew_factor(-2.0),
+                },
+            )
+            // This includes the unit
+            .with_value_to_string(formatters::v2s_f32_hz_then_khz(0))
+            .with_string_to_value(formatters::s2v_f32_hz_then_khz()),
+            // These are polynomial coefficients that are evaluated in the log/log domain
+            // (octaves/decibels). The threshold is the intercept.
             threshold_db: FloatParam::new(
                 "Global Threshold",
                 0.0,
@@ -96,20 +110,6 @@ impl Default for ThresholdParams {
             )
             .with_unit(" dB")
             .with_step_size(0.1),
-            center_frequency: FloatParam::new(
-                "Threshold Center",
-                500.0,
-                FloatRange::Skewed {
-                    min: 20.0,
-                    max: 20_000.0,
-                    factor: FloatRange::skew_factor(-1.0),
-                },
-            )
-            // This includes the unit
-            .with_value_to_string(formatters::v2s_f32_hz_then_khz(0))
-            .with_string_to_value(formatters::s2v_f32_hz_then_khz()),
-            // These are polynomial coefficients that are evaluated in the log/log domain
-            // (octaves/decibels). The threshold is the intercept.
             curve_slope: FloatParam::new(
                 "Threshold Slope",
                 0.0,
@@ -128,7 +128,7 @@ impl Default for ThresholdParams {
                     max: 24.0,
                 },
             )
-            .with_unit(" dB/oct^2")
+            .with_unit(" dB/oct²")
             .with_step_size(0.1),
         }
     }
