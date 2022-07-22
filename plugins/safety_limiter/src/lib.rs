@@ -107,9 +107,10 @@ impl Default for SafetyLimiterParams {
             threshold_gain: FloatParam::new(
                 "Threshold",
                 util::db_to_gain(0.00),
-                FloatRange::Linear {
+                FloatRange::Skewed {
                     min: util::db_to_gain(-24.0),
                     max: util::db_to_gain(12.0),
+                    factor: FloatRange::skew_factor(-1.0),
                 },
             )
             .with_unit(" dB")
