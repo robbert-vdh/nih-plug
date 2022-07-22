@@ -19,7 +19,6 @@ use nih_plug::prelude::*;
 #[derive(Params)]
 pub struct CompressorBankParams {
     // TODO: Target curve options
-    // TODO: High frequency ratio falloff, make the compression milder for higher frequencies to make it less piercing
     /// The downwards compression threshold relative to the target curve.
     #[id = "thresh_down_off"]
     downwards_threshold_offset_db: FloatParam,
@@ -27,6 +26,14 @@ pub struct CompressorBankParams {
     #[id = "thresh_up_off"]
     upwards_threshold_offset_db: FloatParam,
 
+    /// A `[0, 1]` scaling factor that causes the compressors for the higher registers to have lower
+    /// ratios than the compressors for the lower registers. The scaling is applied logarithmically
+    /// rather than linearly over the compressors.
+    ///
+    /// TODO: Decide on whether or not this should only apply on upwards ratios, or if we may need
+    ///       separate controls for both
+    #[id = "ratio_hi_freq_rolloff"]
+    high_freq_ratio_rolloff: FloatParam,
     /// The downwards compression ratio. At 1.0 the downwards compressor is disengaged.
     #[id = "ratio_down"]
     downwards_ratio: FloatParam,
@@ -77,6 +84,14 @@ impl Default for CompressorBankParams {
             .with_unit(" dB")
             .with_step_size(0.1),
 
+            high_freq_ratio_rolloff: FloatParam::new(
+                "High-freq Ratio Rolloff",
+                0.5,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_unit("%")
+            .with_value_to_string(formatters::v2s_f32_percentage(0))
+            .with_string_to_value(formatters::s2v_f32_percentage()),
             downwards_ratio: FloatParam::new(
                 "Downwards Ratio",
                 1.0,
