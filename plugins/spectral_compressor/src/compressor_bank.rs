@@ -18,19 +18,29 @@ use nih_plug::prelude::*;
 
 #[derive(Params)]
 pub struct CompressorBankParams {
+    // TODO: Target curve options
+    // TODO: High frequency ratio falloff, make the compression milder for higher frequencies to make it less piercing
     /// The downwards compression threshold relative to the target curve.
     #[id = "thresh_down_off"]
     downwards_threshold_offset_db: FloatParam,
-    #[id = "thresh_up_off"]
     /// The upwards compression threshold relative to the target curve.
+    #[id = "thresh_up_off"]
     upwards_threshold_offset_db: FloatParam,
+
     /// The downwards compression ratio. At 1.0 the downwards compressor is disengaged.
     #[id = "ratio_down"]
     downwards_ratio: FloatParam,
     /// The upwards compression ratio. At 1.0 the upwards compressor is disengaged.
     #[id = "ratio_up"]
     upwards_ratio: FloatParam,
-    // TODO: High frequency ratio falloff, make the compression milder for higher frequencies to make it less piercing
+
+    /// The downwards compression knee width, in decibels.
+    #[id = "knee_down_off"]
+    downwards_knee_width_db: FloatParam,
+    /// The upwards compression knee width, in decibels.
+    #[id = "knee_up_off"]
+    upwards_knee_width_db: FloatParam,
+
     /// The compressor's attack time in milliseconds. Controls both upwards and downwards
     /// compression.
     #[id = "attack"]
@@ -66,6 +76,7 @@ impl Default for CompressorBankParams {
             )
             .with_unit(" dB")
             .with_step_size(0.1),
+
             downwards_ratio: FloatParam::new(
                 "Downwards Ratio",
                 1.0,
@@ -90,6 +101,30 @@ impl Default for CompressorBankParams {
             .with_step_size(0.1)
             .with_value_to_string(formatters::v2s_compression_ratio(1))
             .with_string_to_value(formatters::s2v_compression_ratio()),
+
+            downwards_knee_width_db: FloatParam::new(
+                "Downwards Knee",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 36.0,
+                    factor: FloatRange::skew_factor(-1.0),
+                },
+            )
+            .with_unit(" dB")
+            .with_step_size(0.1),
+            upwards_knee_width_db: FloatParam::new(
+                "Upwards Knee",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 36.0,
+                    factor: FloatRange::skew_factor(-1.0),
+                },
+            )
+            .with_unit(" dB")
+            .with_step_size(0.1),
+
             compressor_attack_ms: FloatParam::new(
                 "Attack",
                 150.0,
