@@ -52,7 +52,7 @@ impl GenericUi {
                     Some(step_count) if step_count <= 1 => {
                         ParamSliderStyle::CurrentStepLabeled { even: true }
                     }
-                    Some(step_count) if step_count <= 64 => {
+                    Some(step_count) if step_count <= 2 => {
                         ParamSliderStyle::CurrentStep { even: true }
                     }
                     Some(_) => ParamSliderStyle::FromLeft,
