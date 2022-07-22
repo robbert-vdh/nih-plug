@@ -323,7 +323,7 @@ impl Plugin for SpectralCompressor {
         self.dry_wet_mixer.write_dry(buffer);
 
         self.stft
-            .process_overlap_add(buffer, overlap_times, |_channel_idx, real_fft_buffer| {
+            .process_overlap_add(buffer, overlap_times, |channel_idx, real_fft_buffer| {
                 // We'll window the input with a Hann function to avoid spectral leakage. The input
                 // gain here also contains a compensation factor for the forward FFT to make the
                 // compressor thresholds make more sense.
@@ -342,6 +342,7 @@ impl Plugin for SpectralCompressor {
                 // This is where the magic happens
                 self.compressor_bank.process(
                     &mut self.complex_fft_buffer,
+                    channel_idx,
                     (&self.params.threhold, &self.params.compressors),
                     overlap_times,
                     highest_dcish_bin_idx,

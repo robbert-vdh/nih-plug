@@ -438,14 +438,28 @@ impl CompressorBank {
     pub fn process(
         &mut self,
         buffer: &mut [Complex32],
-        params @ (_, compressor): CompressorParams,
+        channel_idx: usize,
+        params: CompressorParams,
         overlap_times: usize,
         skip_bins_below: usize,
     ) {
         assert_eq!(buffer.len(), self.log2_freqs.len());
 
         self.update_if_needed(params);
+        self.update_envelopes(buffer, channel_idx, params, overlap_times, skip_bins_below);
 
+        // TODO: Actually compress things
+    }
+
+    /// Update the envelope followers based on the bin magnetudes.
+    fn update_envelopes(
+        &mut self,
+        buffer: &mut [Complex32],
+        channel_idx: usize,
+        (_, compressor): CompressorParams,
+        overlap_times: usize,
+        skip_bins_below: usize,
+    ) {
         // The coefficient the old envelope value is multiplied by when the current rectified sample
         // value is above the envelope's value. The 0 to 1 step response retains 36.8% of the old
         // value after the attack time has elapsed, and current value is 63.2% of the way towards 1.
@@ -454,17 +468,31 @@ impl CompressorBank {
         // for every 512 samples.
         let effective_sample_rate =
             self.sample_rate / (self.window_size as f32 / overlap_times as f32);
-        let attack_retention = (compressor.compressor_attack_ms.value / 1000.0
+        let attack_old_t = (compressor.compressor_attack_ms.value / 1000.0 * effective_sample_rate)
+            .recip()
+            .exp();
+        let attack_new_t = 1.0 - attack_old_t;
+        // The same as `attack_old_t`, but for the release phase of the envelope follower
+        let release_old_t = (compressor.compressor_release_ms.value / 1000.0
             * effective_sample_rate)
             .recip()
             .exp();
-        // The same as `attack_retention`, but for the release phase of the envelope follower
-        let release_retention = (compressor.compressor_release_ms.value / 1000.0
-            * effective_sample_rate)
-            .recip()
-            .exp();
+        let release_new_t = 1.0 - release_old_t;
 
-        // TODO: Actually compress things
+        for (bin, envelope) in buffer
+            .iter()
+            .zip(self.envelopes[channel_idx].iter_mut())
+            .skip(skip_bins_below)
+        {
+            let magnitude = bin.norm();
+            if *envelope > magnitude {
+                // Release stage
+                *envelope = (release_old_t * *envelope) + (release_new_t * magnitude);
+            } else {
+                // Attack stage
+                *envelope = (attack_old_t * *envelope) + (attack_new_t * magnitude);
+            }
+        }
     }
 
     /// Update the compressors if needed. This is called just before processing, and the compressors
