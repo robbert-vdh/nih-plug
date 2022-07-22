@@ -470,18 +470,14 @@ impl CompressorBank {
         let attack_old_t = if compressor.compressor_attack_ms.value == 0.0 {
             0.0
         } else {
-            (compressor.compressor_attack_ms.value / 1000.0 * effective_sample_rate)
-                .recip()
-                .exp()
+            (-1.0 / (compressor.compressor_attack_ms.value / 1000.0 * effective_sample_rate)).exp()
         };
         let attack_new_t = 1.0 - attack_old_t;
         // The same as `attack_old_t`, but for the release phase of the envelope follower
         let release_old_t = if compressor.compressor_release_ms.value == 0.0 {
             0.0
         } else {
-            (compressor.compressor_release_ms.value / 1000.0 * effective_sample_rate)
-                .recip()
-                .exp()
+            (-1.0 / (compressor.compressor_release_ms.value / 1000.0 * effective_sample_rate)).exp()
         };
         let release_new_t = 1.0 - release_old_t;
 
