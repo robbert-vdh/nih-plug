@@ -271,8 +271,8 @@ impl CompressorBankParams {
                 },
             )
             .with_callback(set_update_downwards_ratios)
-            .with_step_size(0.1)
-            .with_value_to_string(formatters::v2s_compression_ratio(1))
+            .with_step_size(0.01)
+            .with_value_to_string(formatters::v2s_compression_ratio(2))
             .with_string_to_value(formatters::s2v_compression_ratio()),
             upwards_ratio: FloatParam::new(
                 "Upwards Ratio",
@@ -284,8 +284,8 @@ impl CompressorBankParams {
                 },
             )
             .with_callback(set_update_upwards_ratios)
-            .with_step_size(0.1)
-            .with_value_to_string(formatters::v2s_compression_ratio(1))
+            .with_step_size(0.01)
+            .with_value_to_string(formatters::v2s_compression_ratio(2))
             .with_string_to_value(formatters::s2v_compression_ratio()),
 
             downwards_knee_width_db: FloatParam::new(
