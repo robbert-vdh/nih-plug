@@ -104,7 +104,8 @@ pub struct CompressorBankParams {
 
     /// A `[0, 1]` scaling factor that causes the compressors for the higher registers to have lower
     /// ratios than the compressors for the lower registers. The scaling is applied logarithmically
-    /// rather than linearly over the compressors.
+    /// rather than linearly over the compressors. If this is set to 1.0, then the ratios will be
+    /// the same for every compressor.
     ///
     /// TODO: Decide on whether or not this should only apply on upwards ratios, or if we may need
     ///       separate controls for both
@@ -446,8 +447,7 @@ impl CompressorBank {
 
         self.update_if_needed(params);
         self.update_envelopes(buffer, channel_idx, params, overlap_times, skip_bins_below);
-
-        // TODO: Actually compress things
+        self.compress(buffer, channel_idx, params, skip_bins_below);
     }
 
     /// Update the envelope followers based on the bin magnetudes.
@@ -494,6 +494,66 @@ impl CompressorBank {
                 // Attack stage
                 *envelope = (attack_old_t * *envelope) + (attack_new_t * magnitude);
             }
+        }
+    }
+
+    /// Actually do the thing. [`Self::update_envelopes()`] must have been called before calling
+    /// this.
+    fn compress(
+        &self,
+        buffer: &mut [Complex32],
+        channel_idx: usize,
+        (_, compressor): CompressorParams,
+        skip_bins_below: usize,
+    ) {
+        // Well I'm not sure at all why this scaling works, but it does. With higher knee
+        // bandwidths, the middle values needs to be pushed more towards the post-knee threshold
+        // than with lower knee values.
+        let downwards_knee_scaling_factor =
+            ((compressor.downwards_knee_width_db.value * 2.0) + 2.0).log2() - 1.0;
+        let upwards_knee_scaling_factor =
+            ((compressor.upwards_knee_width_db.value * 2.0) + 2.0).log2() - 1.0;
+
+        // Is this what they mean by zip and and ship it?
+        let downwards_values = self
+            .downwards_thresholds
+            .iter()
+            .zip(self.downwards_ratio_recips.iter());
+        let upwards_values = self
+            .upwards_thresholds
+            .iter()
+            .zip(self.upwards_ratio_recips.iter());
+        for (
+            ((bin, envelope), (downwards_threshold, downwards_ratio_recip)),
+            (upwards_threshold, upwards_ratio_recip),
+        ) in buffer
+            .iter_mut()
+            .zip(self.envelopes[channel_idx].iter())
+            .zip(downwards_values)
+            .zip(upwards_values)
+            .skip(skip_bins_below)
+        {
+            // This works by computing a scaling factor, and then scaling the bin magnitudes by that.
+            let mut scale = 1.0;
+
+            // All compression happens in the linear domain to save a logarithm
+            if *downwards_ratio_recip != 1.0 {
+                // TODO: We need the knee starts and ends on this struct
+                // TODO: As mentioned above, soft knee, replace the threshold
+                if envelope > downwards_threshold {
+                    // Because we're working in the linear domain, we care about the ratio between
+                    // the threshold and the envelope's current value. And log-space division
+                    // becomes linear-space exponentiation by the reciprocal, or taking the nth
+                    // root.
+                    let threshold_ratio = *envelope / *downwards_threshold;
+                    scale /= threshold_ratio / threshold_ratio.powf(*downwards_ratio_recip);
+                }
+            }
+
+            // TODO: More stuff
+            // TODO: Upwards compression
+
+            *bin *= scale;
         }
     }
 
