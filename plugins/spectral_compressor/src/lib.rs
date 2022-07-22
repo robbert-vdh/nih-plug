@@ -73,9 +73,6 @@ struct Plan {
 
 #[derive(Params)]
 struct SpectralCompressorParams {
-    /// Gain applied just before the DFT as part of the STFT process.
-    #[id = "input_db"]
-    input_gain_db: FloatParam,
     /// Makeup gain applied after the IDFT in the STFT process. If automatic makeup gain is enabled,
     /// then this acts as an offset on top of that.
     #[id = "output_db"]
@@ -93,10 +90,10 @@ struct SpectralCompressorParams {
     #[id = "dc_filter"]
     dc_filter: BoolParam,
 
-    // TODO: Custom target curves for the non-sidechained version
-    //
-    // TODO: Sidechaining
-    //
+    /// Parameters controlling the compressor thresholds and curves.
+    #[nested = "threhold"]
+    threhold: compressor_bank::ThresholdParams,
+    /// Parameters for the compressor bank.
     #[nested = "compressors"]
     compressors: compressor_bank::CompressorBankParams,
 }
@@ -127,16 +124,6 @@ impl Default for SpectralCompressorParams {
 
             // We don't need any smoothing for these parameters as the overlap-add process will
             // already act as a form of smoothing
-            input_gain_db: FloatParam::new(
-                "Input Gain",
-                0.0,
-                FloatRange::Linear {
-                    min: -50.0,
-                    max: 50.0,
-                },
-            )
-            .with_unit(" dB")
-            .with_step_size(0.1),
             output_gain_db: FloatParam::new(
                 "Output Gain",
                 0.0,
@@ -155,6 +142,7 @@ impl Default for SpectralCompressorParams {
                 .with_string_to_value(formatters::s2v_f32_percentage()),
             dc_filter: BoolParam::new("DC Filter", true),
 
+            threhold: compressor_bank::ThresholdParams::default(),
             compressors: compressor_bank::CompressorBankParams::default(),
         }
     }
@@ -266,9 +254,11 @@ impl Plugin for SpectralCompressor {
             ((overlap_times as f32 / 4.0) * 1.5).recip() / window_size as f32;
 
         // We'll apply the square root of the total gain compensation at the DFT and the IDFT
-        // stages. That way the compressor threshold values make much more sense.
-        let input_gain =
-            util::db_to_gain(self.params.input_gain_db.value) * gain_compensation.sqrt();
+        // stages. That way the compressor threshold values make much more sense. This version of
+        // Spectral Compressor does not have in input gain option and instead has the curve
+        // threshold option. When sidechaining is enabled this is used to gain up the sidechain
+        // signal instead.
+        let input_gain = gain_compensation.sqrt();
         let output_gain =
             util::db_to_gain(self.params.output_gain_db.value) * gain_compensation.sqrt();
         // TODO: Auto makeup gain

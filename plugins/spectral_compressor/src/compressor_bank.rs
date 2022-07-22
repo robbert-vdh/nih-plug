@@ -17,6 +17,31 @@
 use nih_plug::prelude::*;
 
 #[derive(Params)]
+pub struct ThresholdParams {
+    // TODO: Sidechaining
+    /// The compressor threshold at the center frequency. When sidechaining is enabled, the input
+    /// signal is gained by the inverse of this value. This replaces the input gain in the original
+    /// Spectral Compressor. In the polynomial below, this is the intercept.
+    #[id = "input_db"]
+    threshold_db: FloatParam,
+    /// The center frqeuency for the target curve when sidechaining is not enabled. The curve is a
+    /// polynomial `threshold_db + curve_slope*x + curve_curve*(x^2)` that evaluates to a decibel
+    /// value, where `x = log2(center_frequency) - log2(bin_frequency)`. In other words, this is
+    /// evaluated in the log/log domain for decibels and octaves.
+    #[id = "thresh_center_freq"]
+    center_frequency: FloatParam,
+    /// The slope for the curve, in the log/log domain. See the polynomial above.
+    #[id = "thresh_curve_slope"]
+    curve_slope: FloatParam,
+    /// The, uh, 'curve' for the curve, in the logarithmic domain. This is the third coefficient in
+    /// the quadratic polynomial and controls the parabolic behavior. Positive values turn the curve
+    /// into a v-shaped curve, while negative values attenuate everything outside of the center
+    /// frequency. See the polynomial above.
+    #[id = "thresh_curve_curve"]
+    curve_curve: FloatParam,
+}
+
+#[derive(Params)]
 pub struct CompressorBankParams {
     // TODO: Target curve options
     /// The downwards compression threshold relative to the target curve.
@@ -58,9 +83,60 @@ pub struct CompressorBankParams {
     compressor_release_ms: FloatParam,
 }
 
+impl Default for ThresholdParams {
+    fn default() -> Self {
+        ThresholdParams {
+            threshold_db: FloatParam::new(
+                "Global Threshold",
+                0.0,
+                FloatRange::Linear {
+                    min: -50.0,
+                    max: 50.0,
+                },
+            )
+            .with_unit(" dB")
+            .with_step_size(0.1),
+            center_frequency: FloatParam::new(
+                "Threshold Center",
+                500.0,
+                FloatRange::Skewed {
+                    min: 20.0,
+                    max: 20_000.0,
+                    factor: FloatRange::skew_factor(-1.0),
+                },
+            )
+            // This includes the unit
+            .with_value_to_string(formatters::v2s_f32_hz_then_khz(0))
+            .with_string_to_value(formatters::s2v_f32_hz_then_khz()),
+            // These are polynomial coefficients that are evaluated in the log/log domain
+            // (octaves/decibels). The threshold is the intercept.
+            curve_slope: FloatParam::new(
+                "Threshold Slope",
+                0.0,
+                FloatRange::Linear {
+                    min: -24.0,
+                    max: 24.0,
+                },
+            )
+            .with_unit(" dB/oct")
+            .with_step_size(0.1),
+            curve_curve: FloatParam::new(
+                "Threshold Curve",
+                0.0,
+                FloatRange::Linear {
+                    min: -24.0,
+                    max: 24.0,
+                },
+            )
+            .with_unit(" dB/oct^2")
+            .with_step_size(0.1),
+        }
+    }
+}
+
 impl Default for CompressorBankParams {
     fn default() -> Self {
-        Self {
+        CompressorBankParams {
             // TODO: Set nicer default values for these things
             // As explained above, these offsets are relative to the target curve
             downwards_threshold_offset_db: FloatParam::new(
