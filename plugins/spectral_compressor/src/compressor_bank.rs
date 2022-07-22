@@ -19,6 +19,10 @@ use std::sync::Arc;
 
 use nih_plug::prelude::*;
 
+/// Type alias for the compressor parameters. These two are split up so the parameter list/tree
+/// looks a bit nicer.
+pub type CompressorParams<'a> = (&'a ThresholdParams, &'a CompressorBankParams);
+
 /// A bank of compressors so each FFT bin can be compressed individually. The vectors in this struct
 /// will have a capacity of `MAX_WINDOW_SIZE / 2 + 1` and a size that matches the current complex
 /// FFT buffer size. This is stored as a struct of arrays to make SIMD-ing easier in the future.
@@ -418,7 +422,50 @@ impl CompressorBank {
 
     /// Update the compressors if needed. This is called just before processing, and the compressors
     /// are updated in accordance to the atomic flags set on this struct.
-    fn update_if_needed(&mut self) {
-        //
+    fn update_if_needed(&mut self, (threshold, compressor): CompressorParams) {
+        // The threshold curve is a polynomial in log-log (decibels-octaves) space. The reuslt from
+        // evaluating this needs to be converted to linear gain for the compressors.
+        let intercept = threshold.threshold_db.value;
+        // The cheeky 3 additional dB/octave attenuation is to match pink noise with the default
+        // settings
+        let slope = threshold.curve_slope.value - 3.0;
+        let curve = threshold.curve_curve.value;
+        let log2_center_freq = threshold.center_frequency.value.log2();
+
+        if self
+            .should_update_downwards_thresholds
+            .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
+            .is_ok()
+        {
+            let intercept = intercept + compressor.downwards_threshold_offset_db.value;
+            for (log2_freq, threshold) in self
+                .log2_freqs
+                .iter()
+                .zip(self.downwards_thresholds.iter_mut())
+            {
+                let offset = log2_center_freq - log2_freq;
+                let threshold_db = intercept + (slope * offset) + (curve * offset * offset);
+                *threshold = util::db_to_gain(threshold_db)
+            }
+        }
+
+        if self
+            .should_update_upwards_thresholds
+            .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
+            .is_ok()
+        {
+            let intercept = intercept + compressor.upwards_threshold_offset_db.value;
+            for (log2_freq, threshold) in self
+                .log2_freqs
+                .iter()
+                .zip(self.upwards_thresholds.iter_mut())
+            {
+                let offset = log2_center_freq - log2_freq;
+                let threshold_db = intercept + (slope * offset) + (curve * offset * offset);
+                *threshold = util::db_to_gain(threshold_db)
+            }
+        }
+
+        // TODO: Ratios
     }
 }

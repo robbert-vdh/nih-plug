@@ -151,7 +151,8 @@ impl SpectralCompressorParams {
     /// or ratio parameters causes the passed compressor bank's parameters to be updated.
     pub fn new(compressor_bank: &compressor_bank::CompressorBank) -> Self {
         SpectralCompressorParams {
-            // TODO: Do still enable per-block smoothing for these settings, because why not
+            // TODO: Do still enable per-block smoothing for these settings, because why not. This
+            //       will require updating the compressor bank.
 
             // We don't need any smoothing for these parameters as the overlap-add process will
             // already act as a form of smoothing
