@@ -315,7 +315,6 @@ impl CompressorBankParams {
                 "Attack",
                 150.0,
                 FloatRange::Skewed {
-                    // TODO: Make sure to handle 0 attack and release times in the compressor
                     min: 0.0,
                     max: 10_000.0,
                     factor: FloatRange::skew_factor(-2.0),
@@ -468,15 +467,22 @@ impl CompressorBank {
         // for every 512 samples.
         let effective_sample_rate =
             self.sample_rate / (self.window_size as f32 / overlap_times as f32);
-        let attack_old_t = (compressor.compressor_attack_ms.value / 1000.0 * effective_sample_rate)
-            .recip()
-            .exp();
+        let attack_old_t = if compressor.compressor_attack_ms.value == 0.0 {
+            0.0
+        } else {
+            (compressor.compressor_attack_ms.value / 1000.0 * effective_sample_rate)
+                .recip()
+                .exp()
+        };
         let attack_new_t = 1.0 - attack_old_t;
         // The same as `attack_old_t`, but for the release phase of the envelope follower
-        let release_old_t = (compressor.compressor_release_ms.value / 1000.0
-            * effective_sample_rate)
-            .recip()
-            .exp();
+        let release_old_t = if compressor.compressor_release_ms.value == 0.0 {
+            0.0
+        } else {
+            (compressor.compressor_release_ms.value / 1000.0 * effective_sample_rate)
+                .recip()
+                .exp()
+        };
         let release_new_t = 1.0 - release_old_t;
 
         for (bin, envelope) in buffer
