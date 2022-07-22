@@ -179,8 +179,8 @@ impl ThresholdParams {
                 "Threshold Slope",
                 0.0,
                 FloatRange::Linear {
-                    min: -24.0,
-                    max: 24.0,
+                    min: -36.0,
+                    max: 36.0,
                 },
             )
             .with_callback(set_update_both_thresholds.clone())
