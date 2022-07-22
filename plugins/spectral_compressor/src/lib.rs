@@ -55,6 +55,9 @@ struct SpectralCompressor {
     window_function: Vec<f32>,
     /// A mixer to mix the dry signal back into the processed signal with latency compensation.
     dry_wet_mixer: dry_wet_mixer::DryWetMixer,
+    /// Spectral per-bin upwards and downwards compressors with soft-knee settings. This is where
+    /// the magic happens.
+    compressor_bank: compressor_bank::CompressorBank,
 
     /// The algorithms for the FFT and IFFT operations, for each supported order so we can switch
     /// between them without replanning or allocations. Initialized during `initialize()`.
@@ -108,14 +111,22 @@ struct SpectralCompressorParams {
 
 impl Default for SpectralCompressor {
     fn default() -> Self {
-        Self {
-            params: Arc::new(SpectralCompressorParams::default()),
+        // Changing any of the compressor threshold or ratio parameters will set an atomic flag in
+        // this object that causes the compressor thresholds and ratios to be recalcualted
+        let compressor_bank = compressor_bank::CompressorBank::new(
+            Self::DEFAULT_NUM_OUTPUTS as usize,
+            MAX_WINDOW_SIZE,
+        );
+
+        SpectralCompressor {
+            params: Arc::new(SpectralCompressorParams::new(&compressor_bank)),
             editor_state: editor::default_state(),
 
             // These three will be set to the correct values in the initialize function
             stft: util::StftHelper::new(Self::DEFAULT_NUM_OUTPUTS as usize, MAX_WINDOW_SIZE, 0),
             window_function: Vec::with_capacity(MAX_WINDOW_SIZE),
             dry_wet_mixer: dry_wet_mixer::DryWetMixer::new(0, 0, 0),
+            compressor_bank,
 
             // This is initialized later since we don't want to do non-trivial computations before
             // the plugin is initialized
@@ -125,9 +136,11 @@ impl Default for SpectralCompressor {
     }
 }
 
-impl Default for SpectralCompressorParams {
-    fn default() -> Self {
-        Self {
+impl SpectralCompressorParams {
+    /// Create a new [`SpectralCompressorParams`] object. Changing any of the compressor threshold
+    /// or ratio parameters causes the passed compressor bank's parameters to be updated.
+    pub fn new(compressor_bank: &compressor_bank::CompressorBank) -> Self {
+        SpectralCompressorParams {
             // TODO: Do still enable per-block smoothing for these settings, because why not
 
             // We don't need any smoothing for these parameters as the overlap-add process will
@@ -171,8 +184,8 @@ impl Default for SpectralCompressorParams {
             .with_value_to_string(formatters::v2s_i32_power_of_two())
             .with_string_to_value(formatters::s2v_i32_power_of_two()),
 
-            threhold: compressor_bank::ThresholdParams::default(),
-            compressors: compressor_bank::CompressorBankParams::default(),
+            threhold: compressor_bank::ThresholdParams::new(compressor_bank),
+            compressors: compressor_bank::CompressorBankParams::new(compressor_bank),
         }
     }
 }
@@ -214,12 +227,13 @@ impl Plugin for SpectralCompressor {
         if self.stft.num_channels() != bus_config.num_output_channels as usize {
             self.stft = util::StftHelper::new(self.stft.num_channels(), MAX_WINDOW_SIZE, 0);
         }
-
         self.dry_wet_mixer.resize(
             bus_config.num_output_channels as usize,
             buffer_config.max_buffer_size as usize,
             MAX_WINDOW_SIZE,
         );
+        self.compressor_bank
+            .update_capacity(bus_config.num_output_channels as usize, MAX_WINDOW_SIZE);
 
         // Planning with RustFFT is very fast, but it will still allocate we we'll plan all of the
         // FFTs we might need in advance
@@ -247,6 +261,7 @@ impl Plugin for SpectralCompressor {
 
     fn reset(&mut self) {
         self.dry_wet_mixer.reset();
+        self.compressor_bank.reset();
     }
 
     fn process(
@@ -369,6 +384,9 @@ impl SpectralCompressor {
         util::window::hann_in_place(&mut self.window_function);
         self.complex_fft_buffer
             .resize(window_size / 2 + 1, Complex32::default());
+
+        // This also causes the thresholds and ratios to be updated on the next STFT process cycle.
+        self.compressor_bank.resize(window_size);
     }
 }
 

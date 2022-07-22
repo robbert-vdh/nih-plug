@@ -14,7 +14,33 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+
 use nih_plug::prelude::*;
+
+/// A bank of compressors so each FFT bin can be compressed individually. The vectors in this struct
+/// will have a capacity of `MAX_WINDOW_SIZE / 2 + 1` and a size that matches the current complex
+/// FFT buffer size. This is stored as a struct of arrays to make SIMD-ing easier in the future.
+pub struct CompressorBank {
+    // TODO: The thresholds and ratios need to be split up in downwards and upwards variants
+    /// If set, then the thresholds should be updated on the next processing cycle. Can be set from
+    /// a parameter value change listener, and is also set when calling `.reset_for_size`.
+    pub should_update_thresholds: Arc<AtomicBool>,
+    /// If set, then the ratios should be updated on the next processing cycle. Can be set from a
+    /// parameter value change listener, and is also set when calling `.reset_for_size`.
+    pub should_update_ratios: Arc<AtomicBool>,
+
+    /// Compressor thresholds, in linear space.
+    thresholds: Vec<f32>,
+    /// Compressor ratios. If [`CompressorBankParams::high_freq_ratio_rolloff`] is set to 1.0, then
+    /// this will be the same for each compressor.
+    ratios: Vec<f32>,
+    /// The current envelope value for this bin, in linear space. Indexed by
+    /// `[channel_idx][compressor_idx]`.
+    envelopes: Vec<Vec<f32>>,
+    // TODO: Parameters for the envelope followers so we can actuall ydo soemthing useful.
+}
 
 #[derive(Params)]
 pub struct ThresholdParams {
@@ -83,8 +109,14 @@ pub struct CompressorBankParams {
     compressor_release_ms: FloatParam,
 }
 
-impl Default for ThresholdParams {
-    fn default() -> Self {
+impl ThresholdParams {
+    /// Create a new [`ThresholdParams`] object. Changing any of the threshold parameters causes the
+    /// passed compressor bank's thresholds to be updated.
+    pub fn new(compressor_bank: &CompressorBank) -> Self {
+        let should_update_thresholds = compressor_bank.should_update_thresholds.clone();
+        let set_update_thresholds =
+            Arc::new(move |_| should_update_thresholds.store(true, Ordering::SeqCst));
+
         ThresholdParams {
             center_frequency: FloatParam::new(
                 "Threshold Center",
@@ -95,6 +127,7 @@ impl Default for ThresholdParams {
                     factor: FloatRange::skew_factor(-2.0),
                 },
             )
+            .with_callback(set_update_thresholds.clone())
             // This includes the unit
             .with_value_to_string(formatters::v2s_f32_hz_then_khz(0))
             .with_string_to_value(formatters::s2v_f32_hz_then_khz()),
@@ -108,6 +141,7 @@ impl Default for ThresholdParams {
                     max: 50.0,
                 },
             )
+            .with_callback(set_update_thresholds.clone())
             .with_unit(" dB")
             .with_step_size(0.1),
             curve_slope: FloatParam::new(
@@ -118,6 +152,7 @@ impl Default for ThresholdParams {
                     max: 24.0,
                 },
             )
+            .with_callback(set_update_thresholds.clone())
             .with_unit(" dB/oct")
             .with_step_size(0.1),
             curve_curve: FloatParam::new(
@@ -128,14 +163,24 @@ impl Default for ThresholdParams {
                     max: 24.0,
                 },
             )
+            .with_callback(set_update_thresholds)
             .with_unit(" dB/oct²")
             .with_step_size(0.1),
         }
     }
 }
 
-impl Default for CompressorBankParams {
-    fn default() -> Self {
+impl CompressorBankParams {
+    /// Create a new [`CompressorBankParams`] object. Changing any of the threshold or ratio
+    /// parameters causes the passed compressor bank's parameters to be updated.
+    pub fn new(compressor_bank: &CompressorBank) -> Self {
+        let should_update_thresholds = compressor_bank.should_update_thresholds.clone();
+        let set_update_thresholds =
+            Arc::new(move |_| should_update_thresholds.store(true, Ordering::SeqCst));
+        let should_update_ratios = compressor_bank.should_update_ratios.clone();
+        let set_update_ratios =
+            Arc::new(move |_| should_update_ratios.store(true, Ordering::SeqCst));
+
         CompressorBankParams {
             // TODO: Set nicer default values for these things
             // As explained above, these offsets are relative to the target curve
@@ -147,6 +192,7 @@ impl Default for CompressorBankParams {
                     max: 50.0,
                 },
             )
+            .with_callback(set_update_thresholds.clone())
             .with_unit(" dB")
             .with_step_size(0.1),
             upwards_threshold_offset_db: FloatParam::new(
@@ -157,6 +203,7 @@ impl Default for CompressorBankParams {
                     max: 50.0,
                 },
             )
+            .with_callback(set_update_thresholds)
             .with_unit(" dB")
             .with_step_size(0.1),
 
@@ -165,6 +212,7 @@ impl Default for CompressorBankParams {
                 0.5,
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             )
+            .with_callback(set_update_ratios.clone())
             .with_unit("%")
             .with_value_to_string(formatters::v2s_f32_percentage(0))
             .with_string_to_value(formatters::s2v_f32_percentage()),
@@ -177,6 +225,7 @@ impl Default for CompressorBankParams {
                     factor: FloatRange::skew_factor(-2.0),
                 },
             )
+            .with_callback(set_update_ratios.clone())
             .with_step_size(0.1)
             .with_value_to_string(formatters::v2s_compression_ratio(1))
             .with_string_to_value(formatters::s2v_compression_ratio()),
@@ -189,6 +238,7 @@ impl Default for CompressorBankParams {
                     factor: FloatRange::skew_factor(-2.0),
                 },
             )
+            .with_callback(set_update_ratios)
             .with_step_size(0.1)
             .with_value_to_string(formatters::v2s_compression_ratio(1))
             .with_string_to_value(formatters::s2v_compression_ratio()),
@@ -240,5 +290,67 @@ impl Default for CompressorBankParams {
             .with_unit(" ms")
             .with_step_size(0.1),
         }
+    }
+}
+
+impl CompressorBank {
+    /// Set up the compressor for the given channel count and maximum FFT window size. The
+    /// compressors won't be initialized yet.
+    pub fn new(num_channels: usize, max_window_size: usize) -> Self {
+        let complex_buffer_len = max_window_size / 2 + 1;
+
+        CompressorBank {
+            should_update_thresholds: Arc::new(AtomicBool::new(true)),
+            should_update_ratios: Arc::new(AtomicBool::new(true)),
+
+            thresholds: Vec::with_capacity(complex_buffer_len),
+            ratios: Vec::with_capacity(complex_buffer_len),
+            envelopes: vec![Vec::with_capacity(complex_buffer_len); num_channels],
+        }
+    }
+
+    /// Change the capacities of the internal buffers to fit new parameters. Use the
+    /// `.reset_for_size()` method to clear the buffers and set the current window size.
+    pub fn update_capacity(&mut self, num_channels: usize, max_window_size: usize) {
+        let complex_buffer_len = max_window_size / 2 + 1;
+
+        self.thresholds
+            .reserve_exact(complex_buffer_len.saturating_sub(self.thresholds.len()));
+        self.ratios
+            .reserve_exact(complex_buffer_len.saturating_sub(self.ratios.len()));
+        self.envelopes.resize_with(num_channels, Vec::new);
+        for envelopes in self.envelopes.iter_mut() {
+            envelopes.reserve_exact(complex_buffer_len.saturating_sub(envelopes.len()));
+        }
+    }
+
+    /// Resize the number of compressors to match the current window size.
+    ///
+    /// If the window size is larger than the maximum window size, then this will allocate.
+    pub fn resize(&mut self, window_size: usize) {
+        let complex_buffer_len = window_size / 2 + 1;
+
+        self.thresholds.resize(complex_buffer_len, 1.0);
+        self.ratios.resize(complex_buffer_len, 1.0);
+        for envelopes in self.envelopes.iter_mut() {
+            envelopes.resize(complex_buffer_len, 0.0);
+        }
+
+        // The compressors need to be updated on the next processing cycle
+        self.should_update_thresholds.store(true, Ordering::SeqCst);
+        self.should_update_ratios.store(true, Ordering::SeqCst);
+    }
+
+    /// Clear out the envelope followers.
+    pub fn reset(&mut self) {
+        for envelopes in self.envelopes.iter_mut() {
+            envelopes.fill(0.0);
+        }
+    }
+
+    /// Update the compressors if needed. This is called just before processing, and the compressors
+    /// are updated in accordance to the atomic flags set on this struct.
+    fn update_if_needed(&mut self) {
+        //
     }
 }

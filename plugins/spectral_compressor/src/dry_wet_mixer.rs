@@ -50,7 +50,7 @@ impl DryWetMixer {
         }
     }
 
-    /// Resize the itnernal buffers to fit new parameters.
+    /// Resize the internal buffers to fit new parameters.
     pub fn resize(&mut self, num_channels: usize, max_block_size: usize, max_latency: usize) {
         let delay_line_len = (max_block_size + max_latency).next_power_of_two();
 
