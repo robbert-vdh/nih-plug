@@ -432,6 +432,12 @@ impl CompressorBank {
         let curve = threshold.curve_curve.value;
         let log2_center_freq = threshold.center_frequency.value.log2();
 
+        let high_freq_ratio_rolloff = compressor.high_freq_ratio_rolloff.value;
+        let log2_nyquist_freq = self
+            .log2_freqs
+            .last()
+            .expect("The CompressorBank has not yet been resized");
+
         if self
             .should_update_downwards_thresholds
             .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
@@ -466,6 +472,42 @@ impl CompressorBank {
             }
         }
 
-        // TODO: Ratios
+        if self
+            .should_update_downwards_ratios
+            .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
+            .is_ok()
+        {
+            // If the high-frequency rolloff is enabled then higher frequency bins will have their
+            // ratios reduced to reduce harshness. This follows the octave scale.
+            let target_ratio = compressor.downwards_ratio.value;
+            if high_freq_ratio_rolloff == 1.0 {
+                self.downwards_ratios.fill(target_ratio);
+            } else {
+                for (log2_freq, ratio) in
+                    self.log2_freqs.iter().zip(self.downwards_ratios.iter_mut())
+                {
+                    // This is scaled by octaves since we're calculating this in log space
+                    let octave_fraction = log2_freq / log2_nyquist_freq;
+                    *ratio = target_ratio * (1.0 - (octave_fraction * high_freq_ratio_rolloff));
+                }
+            }
+        }
+
+        if self
+            .should_update_upwards_ratios
+            .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
+            .is_ok()
+        {
+            let target_ratio = compressor.upwards_ratio.value;
+            if high_freq_ratio_rolloff == 1.0 {
+                self.upwards_ratios.fill(target_ratio);
+            } else {
+                for (log2_freq, ratio) in self.log2_freqs.iter().zip(self.upwards_ratios.iter_mut())
+                {
+                    let octave_fraction = log2_freq / log2_nyquist_freq;
+                    *ratio = target_ratio * (1.0 - (octave_fraction * high_freq_ratio_rolloff));
+                }
+            }
+        }
     }
 }
