@@ -34,7 +34,7 @@ impl Model for Data {}
 
 // Makes sense to also define this here, makes it a bit easier to keep track of
 pub(crate) fn default_state() -> Arc<ViziaState> {
-    ViziaState::from_size(400, 500)
+    ViziaState::from_size(680, 535)
 }
 
 pub(crate) fn create(
@@ -49,6 +49,11 @@ pub(crate) fn create(
 
         ResizeHandle::new(cx);
 
+        // There's no real 'grid' layout, the 4x4 grid should have even column widths and row
+        // heights
+        const LEFT_COLUMN_WIDTH: Units = Pixels(330.0);
+        const RIGHT_COLUMN_WIDTH: Units = Pixels(330.0);
+
         VStack::new(cx, |cx| {
             Label::new(cx, "Spectral Compressor")
                 .font(assets::NOTO_SANS_THIN)
@@ -56,18 +61,118 @@ pub(crate) fn create(
                 .height(Pixels(50.0))
                 .child_top(Stretch(1.0))
                 .child_bottom(Pixels(0.0))
-                .right(Pixels(10.0));
+                .right(Pixels(15.0))
+                .bottom(Pixels(-5.0));
 
-            ScrollView::new(cx, 0.0, 0.0, false, true, |cx| {
-                // This looks better if it's flush at the top, and then we'll just add some padding
-                // at the top of the scroll view
-                GenericUi::new(cx, Data::params).child_top(Pixels(0.0));
+            HStack::new(cx, |cx| {
+                VStack::new(cx, |cx| {
+                    Label::new(cx, "Globals")
+                        .font(assets::NOTO_SANS_THIN)
+                        .font_size(30.0 * POINT_SCALE)
+                        .left(Stretch(1.0))
+                        .right(Pixels(10.0))
+                        .bottom(Pixels(-10.0));
+
+                    GenericUi::new(cx, Data::params.map(|p| p.global.clone()));
+                })
+                .width(LEFT_COLUMN_WIDTH)
+                .height(Auto);
+
+                VStack::new(cx, |cx| {
+                    Label::new(cx, "Threshold")
+                        .font(assets::NOTO_SANS_THIN)
+                        .font_size(30.0 * POINT_SCALE)
+                        .left(Stretch(1.0))
+                        .right(Pixels(10.0))
+                        .bottom(Pixels(-10.0));
+
+                    GenericUi::new(cx, Data::params.map(|p| p.threshold.clone()));
+                })
+                .width(RIGHT_COLUMN_WIDTH)
+                .height(Auto);
             })
-            .width(Percentage(100.0))
-            .top(Pixels(5.0));
+            .height(Auto)
+            .width(Stretch(1.0));
+
+            HStack::new(cx, |cx| {
+                VStack::new(cx, |cx| {
+                    Label::new(cx, "Downwards")
+                        .font(assets::NOTO_SANS_THIN)
+                        .font_size(30.0 * POINT_SCALE)
+                        .left(Stretch(1.0))
+                        .right(Pixels(10.0))
+                        .bottom(Pixels(-10.0));
+
+                    // We don't want to show the 'Downwards' prefix here, but it should still be in
+                    // the parameter name so the parameter list makes sense
+                    let downwards_compressor_params =
+                        Data::params.map(|p| p.compressors.downwards.clone());
+                    GenericUi::new_custom(
+                        cx,
+                        downwards_compressor_params.clone(),
+                        move |cx, param_ptr| {
+                            let downwards_compressor_params = downwards_compressor_params.clone();
+                            HStack::new(cx, move |cx| {
+                                Label::new(
+                                    cx,
+                                    unsafe { param_ptr.name() }
+                                        .strip_prefix("Downwards ")
+                                        .expect("Expected parameter name prefix, this is a bug"),
+                                )
+                                .class("label");
+
+                                GenericUi::draw_widget(cx, downwards_compressor_params, param_ptr);
+                            })
+                            .class("row");
+                        },
+                    );
+                })
+                .width(LEFT_COLUMN_WIDTH)
+                .height(Auto);
+
+                VStack::new(cx, |cx| {
+                    Label::new(cx, "Upwards")
+                        .font(assets::NOTO_SANS_THIN)
+                        .font_size(30.0 * POINT_SCALE)
+                        .left(Stretch(1.0))
+                        .right(Pixels(10.0))
+                        .bottom(Pixels(-10.0));
+
+                    let upwards_compressor_params =
+                        Data::params.map(|p| p.compressors.upwards.clone());
+                    GenericUi::new_custom(
+                        cx,
+                        upwards_compressor_params.clone(),
+                        move |cx, param_ptr| {
+                            let upwards_compressor_params = upwards_compressor_params.clone();
+                            HStack::new(cx, move |cx| {
+                                Label::new(
+                                    cx,
+                                    unsafe { param_ptr.name() }
+                                        .strip_prefix("Upwards ")
+                                        .expect("Expected parameter name prefix, this is a bug"),
+                                )
+                                .class("label");
+
+                                GenericUi::draw_widget(cx, upwards_compressor_params, param_ptr);
+                            })
+                            .class("row");
+                        },
+                    );
+                })
+                .width(RIGHT_COLUMN_WIDTH)
+                .height(Auto);
+            })
+            .height(Auto)
+            .width(Stretch(1.0));
         })
-        .row_between(Pixels(0.0))
+        .row_between(Pixels(10.0))
         .child_left(Stretch(1.0))
         .child_right(Stretch(1.0));
     })
 }
+
+// /// A [`ParamSlider`] row very similar to what [`GenericUi`] would produce.
+// fn param_row(cx: &mut Context) {
+//     VStack::new(cx, content)
+// }
