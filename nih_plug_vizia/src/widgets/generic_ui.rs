@@ -1,9 +1,8 @@
 //! Generic UIs for NIH-plug using VIZIA.
 
-use std::sync::Arc;
-
 use nih_plug::prelude::{ParamFlags, ParamPtr, Params};
 use vizia::prelude::*;
+use vizia::state::StaticLens;
 
 use super::{ParamSlider, ParamSliderExt, ParamSliderStyle};
 
@@ -25,9 +24,10 @@ impl GenericUi {
     /// })
     /// .width(Percentage(100.0));
     ///```
-    pub fn new<L, Ps>(cx: &mut Context, params: L) -> Handle<'_, GenericUi>
+    pub fn new<L, PsRef, Ps>(cx: &mut Context, params: L) -> Handle<'_, GenericUi>
     where
-        L: Lens<Target = Arc<Ps>> + Copy,
+        L: Lens<Target = PsRef>,
+        PsRef: AsRef<Ps> + 'static,
         Ps: Params + 'static,
     {
         // Basic styling is done in the `theme.css` style sheet
@@ -38,12 +38,13 @@ impl GenericUi {
 
                 // TODO: Come up with a less hacky way to iterate over the mapping like this while
                 //       keeping the clean interface on the `ParamSlider` widget
+                let dummy = StaticLens::new(&());
                 unsafe {
                     match param_ptr {
-                        ParamPtr::FloatParam(p) => ParamSlider::new(cx, params, move |_| &*p),
-                        ParamPtr::IntParam(p) => ParamSlider::new(cx, params, move |_| &*p),
-                        ParamPtr::BoolParam(p) => ParamSlider::new(cx, params, move |_| &*p),
-                        ParamPtr::EnumParam(p) => ParamSlider::new(cx, params, move |_| &*p),
+                        ParamPtr::FloatParam(p) => ParamSlider::new(cx, dummy, move |_| &*p),
+                        ParamPtr::IntParam(p) => ParamSlider::new(cx, dummy, move |_| &*p),
+                        ParamPtr::BoolParam(p) => ParamSlider::new(cx, dummy, move |_| &*p),
+                        ParamPtr::EnumParam(p) => ParamSlider::new(cx, dummy, move |_| &*p),
                     }
                 }
                 .set_style(match unsafe { param_ptr.step_count() } {
@@ -68,13 +69,14 @@ impl GenericUi {
 
     /// Creates a new [`GenericUi`] for all provided parameters using a custom closure that receives
     /// a function that should draw some widget for each parameter.
-    pub fn new_custom<L, Ps>(
+    pub fn new_custom<L, PsRef, Ps>(
         cx: &mut Context,
         params: L,
         mut make_widget: impl FnMut(&mut Context, ParamPtr),
     ) -> Handle<Self>
     where
-        L: Lens<Target = Arc<Ps>> + Copy,
+        L: Lens<Target = PsRef>,
+        PsRef: AsRef<Ps> + 'static,
         Ps: Params + 'static,
     {
         // Basic styling is done in the `theme.css` style sheet
