@@ -36,32 +36,7 @@ impl GenericUi {
                 // Align this on the right
                 Label::new(cx, unsafe { param_ptr.name() }).class("label");
 
-                // TODO: Come up with a less hacky way to iterate over the mapping like this while
-                //       keeping the clean interface on the `ParamSlider` widget
-                let dummy = StaticLens::new(&());
-                unsafe {
-                    match param_ptr {
-                        ParamPtr::FloatParam(p) => ParamSlider::new(cx, dummy, move |_| &*p),
-                        ParamPtr::IntParam(p) => ParamSlider::new(cx, dummy, move |_| &*p),
-                        ParamPtr::BoolParam(p) => ParamSlider::new(cx, dummy, move |_| &*p),
-                        ParamPtr::EnumParam(p) => ParamSlider::new(cx, dummy, move |_| &*p),
-                    }
-                }
-                .set_style(match unsafe { param_ptr.step_count() } {
-                    // This looks nice for boolean values, but it's too crowded for anything beyond
-                    // that without making the widget wider
-                    Some(step_count) if step_count <= 1 => {
-                        ParamSliderStyle::CurrentStepLabeled { even: true }
-                    }
-                    Some(step_count) if step_count <= 2 => {
-                        ParamSliderStyle::CurrentStep { even: true }
-                    }
-                    Some(_) => ParamSliderStyle::FromLeft,
-                    // This is already the default, but continuous parameters should be drawn from
-                    // the center if the default is also centered, or from the left if it is not
-                    None => ParamSliderStyle::Centered,
-                })
-                .class("widget");
+                Self::draw_widget(cx, param_ptr);
             })
             .class("row");
         })
@@ -93,6 +68,35 @@ impl GenericUi {
                 make_widget(cx, param_ptr);
             }
         })
+    }
+
+    /// The standard widget drawing function. This can be used together with `.new_custom()` to only
+    /// draw the labels differently.
+    pub fn draw_widget(cx: &mut Context, param_ptr: ParamPtr) {
+        // TODO: Come up with a less hacky way to iterate over the mapping like this while
+        //       keeping the clean interface on the `ParamSlider` widget
+        let dummy = StaticLens::new(&());
+        unsafe {
+            match param_ptr {
+                ParamPtr::FloatParam(p) => ParamSlider::new(cx, dummy, move |_| &*p),
+                ParamPtr::IntParam(p) => ParamSlider::new(cx, dummy, move |_| &*p),
+                ParamPtr::BoolParam(p) => ParamSlider::new(cx, dummy, move |_| &*p),
+                ParamPtr::EnumParam(p) => ParamSlider::new(cx, dummy, move |_| &*p),
+            }
+        }
+        .set_style(match unsafe { param_ptr.step_count() } {
+            // This looks nice for boolean values, but it's too crowded for anything beyond
+            // that without making the widget wider
+            Some(step_count) if step_count <= 1 => {
+                ParamSliderStyle::CurrentStepLabeled { even: true }
+            }
+            Some(step_count) if step_count <= 2 => ParamSliderStyle::CurrentStep { even: true },
+            Some(_) => ParamSliderStyle::FromLeft,
+            // This is already the default, but continuous parameters should be drawn from
+            // the center if the default is also centered, or from the left if it is not
+            None => ParamSliderStyle::Centered,
+        })
+        .class("widget");
     }
 }
 
