@@ -78,15 +78,15 @@ struct Plan {
 }
 
 #[derive(Params)]
-struct SpectralCompressorParams {
+pub struct SpectralCompressorParams {
     /// Global parameters. These could just live in this struct but I wanted a separate generic UI
     /// just for these.
     #[nested = "global"]
     global: GlobalParams,
 
     /// Parameters controlling the compressor thresholds and curves.
-    #[nested = "threhold"]
-    threhold: compressor_bank::ThresholdParams,
+    #[nested = "threshold"]
+    threshold: compressor_bank::ThresholdParams,
     /// Parameters for the compressor bank.
     #[nested = "compressors"]
     compressors: compressor_bank::CompressorBankParams,
@@ -118,6 +118,15 @@ struct GlobalParams {
     /// prevent invalid inputs).
     #[id = "stft_overlap"]
     overlap_times_order: IntParam,
+
+    /// The compressor's attack time in milliseconds. Controls both upwards and downwards
+    /// compression.
+    #[id = "attack"]
+    compressor_attack_ms: FloatParam,
+    /// The compressor's release time in milliseconds. Controls both upwards and downwards
+    /// compression.
+    #[id = "release"]
+    compressor_release_ms: FloatParam,
 }
 
 impl Default for SpectralCompressor {
@@ -197,6 +206,29 @@ impl Default for GlobalParams {
             )
             .with_value_to_string(formatters::v2s_i32_power_of_two())
             .with_string_to_value(formatters::s2v_i32_power_of_two()),
+
+            compressor_attack_ms: FloatParam::new(
+                "Attack",
+                150.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 10_000.0,
+                    factor: FloatRange::skew_factor(-2.0),
+                },
+            )
+            .with_unit(" ms")
+            .with_step_size(0.1),
+            compressor_release_ms: FloatParam::new(
+                "Release",
+                300.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 10_000.0,
+                    factor: FloatRange::skew_factor(-2.0),
+                },
+            )
+            .with_unit(" ms")
+            .with_step_size(0.1),
         }
     }
 }
@@ -210,7 +242,7 @@ impl SpectralCompressorParams {
             //       will require updating the compressor bank.
             global: GlobalParams::default(),
 
-            threhold: compressor_bank::ThresholdParams::new(compressor_bank),
+            threshold: compressor_bank::ThresholdParams::new(compressor_bank),
             compressors: compressor_bank::CompressorBankParams::new(compressor_bank),
         }
     }
@@ -358,7 +390,7 @@ impl Plugin for SpectralCompressor {
                 self.compressor_bank.process(
                     &mut self.complex_fft_buffer,
                     channel_idx,
-                    (&self.params.threhold, &self.params.compressors),
+                    &self.params,
                     overlap_times,
                     highest_dcish_bin_idx,
                 );

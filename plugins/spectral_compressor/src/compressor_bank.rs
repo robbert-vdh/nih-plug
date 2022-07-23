@@ -14,15 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use nih_plug::prelude::*;
+use realfft::num_complex::Complex32;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use nih_plug::prelude::*;
-use realfft::num_complex::Complex32;
-
-/// Type alias for the compressor parameters. These two are split up so the parameter list/tree
-/// looks a bit nicer.
-pub type CompressorParams<'a> = (&'a ThresholdParams, &'a CompressorBankParams);
+use crate::SpectralCompressorParams;
 
 /// A bank of compressors so each FFT bin can be compressed individually. The vectors in this struct
 /// will have a capacity of `MAX_WINDOW_SIZE / 2 + 1` and a size that matches the current complex
@@ -124,15 +121,6 @@ pub struct CompressorBankParams {
     ///       separate controls for both
     #[id = "ratio_hi_freq_rolloff"]
     high_freq_ratio_rolloff: FloatParam,
-
-    /// The compressor's attack time in milliseconds. Controls both upwards and downwards
-    /// compression.
-    #[id = "attack"]
-    compressor_attack_ms: FloatParam,
-    /// The compressor's release time in milliseconds. Controls both upwards and downwards
-    /// compression.
-    #[id = "release"]
-    compressor_release_ms: FloatParam,
 }
 
 impl ThresholdParams {
@@ -311,29 +299,6 @@ impl CompressorBankParams {
             .with_unit("%")
             .with_value_to_string(formatters::v2s_f32_percentage(0))
             .with_string_to_value(formatters::s2v_f32_percentage()),
-
-            compressor_attack_ms: FloatParam::new(
-                "Attack",
-                150.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 10_000.0,
-                    factor: FloatRange::skew_factor(-2.0),
-                },
-            )
-            .with_unit(" ms")
-            .with_step_size(0.1),
-            compressor_release_ms: FloatParam::new(
-                "Release",
-                300.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 10_000.0,
-                    factor: FloatRange::skew_factor(-2.0),
-                },
-            )
-            .with_unit(" ms")
-            .with_step_size(0.1),
         }
     }
 }
@@ -439,7 +404,7 @@ impl CompressorBank {
         &mut self,
         buffer: &mut [Complex32],
         channel_idx: usize,
-        params: CompressorParams,
+        params: &SpectralCompressorParams,
         overlap_times: usize,
         skip_bins_below: usize,
     ) {
@@ -455,7 +420,7 @@ impl CompressorBank {
         &mut self,
         buffer: &mut [Complex32],
         channel_idx: usize,
-        (_, compressor): CompressorParams,
+        params: &SpectralCompressorParams,
         overlap_times: usize,
         skip_bins_below: usize,
     ) {
@@ -467,17 +432,19 @@ impl CompressorBank {
         // for every 512 samples.
         let effective_sample_rate =
             self.sample_rate / (self.window_size as f32 / overlap_times as f32);
-        let attack_old_t = if compressor.compressor_attack_ms.value == 0.0 {
+        let attack_old_t = if params.global.compressor_attack_ms.value == 0.0 {
             0.0
         } else {
-            (-1.0 / (compressor.compressor_attack_ms.value / 1000.0 * effective_sample_rate)).exp()
+            (-1.0 / (params.global.compressor_attack_ms.value / 1000.0 * effective_sample_rate))
+                .exp()
         };
         let attack_new_t = 1.0 - attack_old_t;
         // The same as `attack_old_t`, but for the release phase of the envelope follower
-        let release_old_t = if compressor.compressor_release_ms.value == 0.0 {
+        let release_old_t = if params.global.compressor_release_ms.value == 0.0 {
             0.0
         } else {
-            (-1.0 / (compressor.compressor_release_ms.value / 1000.0 * effective_sample_rate)).exp()
+            (-1.0 / (params.global.compressor_release_ms.value / 1000.0 * effective_sample_rate))
+                .exp()
         };
         let release_new_t = 1.0 - release_old_t;
 
@@ -503,16 +470,16 @@ impl CompressorBank {
         &self,
         buffer: &mut [Complex32],
         channel_idx: usize,
-        (_, compressor): CompressorParams,
+        params: &SpectralCompressorParams,
         skip_bins_below: usize,
     ) {
         // Well I'm not sure at all why this scaling works, but it does. With higher knee
         // bandwidths, the middle values needs to be pushed more towards the post-knee threshold
         // than with lower knee values.
         let downwards_knee_scaling_factor =
-            ((compressor.downwards_knee_width_db.value * 2.0) + 2.0).log2() - 1.0;
+            ((params.compressors.downwards_knee_width_db.value * 2.0) + 2.0).log2() - 1.0;
         let upwards_knee_scaling_factor =
-            ((compressor.upwards_knee_width_db.value * 2.0) + 2.0).log2() - 1.0;
+            ((params.compressors.upwards_knee_width_db.value * 2.0) + 2.0).log2() - 1.0;
 
         // Is this what they mean by zip and and ship it?
         let downwards_values = self
@@ -559,17 +526,17 @@ impl CompressorBank {
 
     /// Update the compressors if needed. This is called just before processing, and the compressors
     /// are updated in accordance to the atomic flags set on this struct.
-    fn update_if_needed(&mut self, (threshold, compressor): CompressorParams) {
+    fn update_if_needed(&mut self, params: &SpectralCompressorParams) {
         // The threshold curve is a polynomial in log-log (decibels-octaves) space. The reuslt from
         // evaluating this needs to be converted to linear gain for the compressors.
-        let intercept = threshold.threshold_db.value;
+        let intercept = params.threshold.threshold_db.value;
         // The cheeky 3 additional dB/octave attenuation is to match pink noise with the default
         // settings
-        let slope = threshold.curve_slope.value - 3.0;
-        let curve = threshold.curve_curve.value;
-        let log2_center_freq = threshold.center_frequency.value.log2();
+        let slope = params.threshold.curve_slope.value - 3.0;
+        let curve = params.threshold.curve_curve.value;
+        let log2_center_freq = params.threshold.center_frequency.value.log2();
 
-        let high_freq_ratio_rolloff = compressor.high_freq_ratio_rolloff.value;
+        let high_freq_ratio_rolloff = params.compressors.high_freq_ratio_rolloff.value;
         let log2_nyquist_freq = self
             .log2_freqs
             .last()
@@ -580,7 +547,7 @@ impl CompressorBank {
             .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
             .is_ok()
         {
-            let intercept = intercept + compressor.downwards_threshold_offset_db.value;
+            let intercept = intercept + params.compressors.downwards_threshold_offset_db.value;
             for (log2_freq, threshold) in self
                 .log2_freqs
                 .iter()
@@ -599,7 +566,7 @@ impl CompressorBank {
             .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
             .is_ok()
         {
-            let intercept = intercept + compressor.upwards_threshold_offset_db.value;
+            let intercept = intercept + params.compressors.upwards_threshold_offset_db.value;
             for (log2_freq, threshold) in self
                 .log2_freqs
                 .iter()
@@ -618,7 +585,7 @@ impl CompressorBank {
         {
             // If the high-frequency rolloff is enabled then higher frequency bins will have their
             // ratios reduced to reduce harshness. This follows the octave scale.
-            let target_ratio_recip = compressor.downwards_ratio.value.recip();
+            let target_ratio_recip = params.compressors.downwards_ratio.value.recip();
             if high_freq_ratio_rolloff == 0.0 {
                 self.downwards_ratio_recips.fill(target_ratio_recip);
             } else {
@@ -641,7 +608,7 @@ impl CompressorBank {
             .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
             .is_ok()
         {
-            let target_ratio_recip = compressor.upwards_ratio.value.recip();
+            let target_ratio_recip = params.compressors.upwards_ratio.value.recip();
             if high_freq_ratio_rolloff == 0.0 {
                 self.upwards_ratio_recips.fill(target_ratio_recip);
             } else {
