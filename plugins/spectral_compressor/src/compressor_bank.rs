@@ -89,38 +89,43 @@ pub struct ThresholdParams {
     threshold_db: FloatParam,
 }
 
-#[derive(Params)]
+/// Contains the compressor parameters for both the upwards and downwards compressor banks. This has
+/// a manual `Params` trait implementation to avoid copy-pasting the parameters between the two
+/// compressors and making mistakes that way
 pub struct CompressorBankParams {
-    // TODO: Target curve options
-    /// The downwards compression threshold relative to the target curve.
-    #[id = "thresh_down_off"]
-    downwards_threshold_offset_db: FloatParam,
-    /// The downwards compression ratio. At 1.0 the downwards compressor is disengaged.
-    #[id = "ratio_down"]
-    downwards_ratio: FloatParam,
-    /// The downwards compression knee width, in decibels.
-    #[id = "knee_down"]
-    downwards_knee_width_db: FloatParam,
+    downwards: CompressorParams,
+    upwards: CompressorParams,
+}
 
-    /// The upwards compression threshold relative to the target curve.
-    #[id = "thresh_up_off"]
-    upwards_threshold_offset_db: FloatParam,
-    /// The upwards compression ratio. At 1.0 the upwards compressor is disengaged.
-    #[id = "ratio_up"]
-    upwards_ratio: FloatParam,
-    /// The upwards compression knee width, in decibels.
-    #[id = "knee_up"]
-    upwards_knee_width_db: FloatParam,
+/// This struct contains the parameters for either the upward or downward compressors. The `Params`
+/// trait is implemented manually to avoid copy-pasting. Both versions will have a parameter ID and
+/// a parameter name prefix to distinguish them.
+pub struct CompressorParams {
+    /// The compression threshold relative to the target curve.
+    threshold_offset_db: FloatParam,
+    /// The compression ratio. At 1.0 the compressor is disengaged.
+    ratio: FloatParam,
+    /// The compression knee width, in decibels.
+    knee_width_db: FloatParam,
 
     /// A `[0, 1]` scaling factor that causes the compressors for the higher registers to have lower
     /// ratios than the compressors for the lower registers. The scaling is applied logarithmically
     /// rather than linearly over the compressors. If this is set to 1.0, then the ratios will be
     /// the same for every compressor.
-    ///
-    /// TODO: Decide on whether or not this should only apply on upwards ratios, or if we may need
-    ///       separate controls for both
-    #[id = "ratio_hi_freq_rolloff"]
     high_freq_ratio_rolloff: FloatParam,
+}
+
+unsafe impl Params for CompressorBankParams {
+    fn param_map(&self) -> Vec<(String, ParamPtr, String)> {
+        // The `Params` trait here is implemented manually as an alternative to copy-pasting all of
+        // the parameters and potentially making mistakes
+        let mut param_map = self
+            .downwards
+            .param_map_with_prefix("downwards_", "downwards");
+        param_map.append(&mut self.upwards.param_map_with_prefix("upwards_", "upwards"));
+
+        param_map
+    }
 }
 
 impl ThresholdParams {
@@ -190,47 +195,55 @@ impl ThresholdParams {
 }
 
 impl CompressorBankParams {
-    /// Create a new [`CompressorBankParams`] object. Changing any of the threshold or ratio
-    /// parameters causes the passed compressor bank's parameters to be updated.
-    pub fn new(compressor_bank: &CompressorBank) -> Self {
-        let should_update_downwards_thresholds =
-            compressor_bank.should_update_downwards_thresholds.clone();
-        let set_update_downwards_thresholds =
-            Arc::new(move |_| should_update_downwards_thresholds.store(true, Ordering::SeqCst));
-        let should_update_upwards_thresholds =
-            compressor_bank.should_update_upwards_thresholds.clone();
-        let set_update_upwards_thresholds =
-            Arc::new(move |_| should_update_upwards_thresholds.store(true, Ordering::SeqCst));
-        let should_update_downwards_ratios = compressor_bank.should_update_downwards_ratios.clone();
-        let set_update_downwards_ratios =
-            Arc::new(move |_| should_update_downwards_ratios.store(true, Ordering::SeqCst));
-        let should_update_upwards_ratios = compressor_bank.should_update_upwards_ratios.clone();
-        let set_update_upwards_ratios =
-            Arc::new(move |_| should_update_upwards_ratios.store(true, Ordering::SeqCst));
-
-        let should_update_downwards_ratios = compressor_bank.should_update_downwards_ratios.clone();
-        let should_update_upwards_ratios = compressor_bank.should_update_upwards_ratios.clone();
-        let set_update_both_ratios = Arc::new(move |_| {
-            should_update_downwards_ratios.store(true, Ordering::SeqCst);
-            should_update_upwards_ratios.store(true, Ordering::SeqCst);
-        });
-
+    /// Create compressor bank parameter objects for both the downwards and upwards compressors of
+    /// `compressor`. Changing the ratio and threshold parameters will cause the compressor to
+    /// recompute its values on the next processing cycle.
+    pub fn new(compressor: &CompressorBank) -> Self {
         CompressorBankParams {
+            downwards: CompressorParams::new(
+                "Downwards",
+                compressor.should_update_downwards_thresholds.clone(),
+                compressor.should_update_downwards_ratios.clone(),
+            ),
+            upwards: CompressorParams::new(
+                "Upwards",
+                compressor.should_update_upwards_thresholds.clone(),
+                compressor.should_update_upwards_ratios.clone(),
+            ),
+        }
+    }
+}
+
+impl CompressorParams {
+    /// Create a new [`CompressorBankParams`] object with a prefix for all parameter names. Changing
+    /// any of the threshold or ratio parameters causes the passed atomics to be updated. These
+    /// should be taken from a [`CompressorBank`] so the parameters are linked to it.
+    pub fn new(
+        name_prefix: &str,
+        should_update_thresholds: Arc<AtomicBool>,
+        should_update_ratios: Arc<AtomicBool>,
+    ) -> Self {
+        let set_update_thresholds =
+            Arc::new(move |_| should_update_thresholds.store(true, Ordering::SeqCst));
+        let set_update_ratios =
+            Arc::new(move |_| should_update_ratios.store(true, Ordering::SeqCst));
+
+        CompressorParams {
             // TODO: Set nicer default values for these things
             // As explained above, these offsets are relative to the target curve
-            downwards_threshold_offset_db: FloatParam::new(
-                "Downwards Offset",
+            threshold_offset_db: FloatParam::new(
+                format!("{name_prefix} Offset"),
                 0.0,
                 FloatRange::Linear {
                     min: -50.0,
                     max: 50.0,
                 },
             )
-            .with_callback(set_update_downwards_thresholds)
+            .with_callback(set_update_thresholds)
             .with_unit(" dB")
             .with_step_size(0.1),
-            downwards_ratio: FloatParam::new(
-                "Downwards Ratio",
+            ratio: FloatParam::new(
+                format!("{name_prefix} Ratio"),
                 1.0,
                 FloatRange::Skewed {
                     min: 1.0,
@@ -238,68 +251,67 @@ impl CompressorBankParams {
                     factor: FloatRange::skew_factor(-2.0),
                 },
             )
-            .with_callback(set_update_downwards_ratios)
+            .with_callback(set_update_ratios.clone())
             .with_step_size(0.01)
             .with_value_to_string(formatters::v2s_compression_ratio(2))
             .with_string_to_value(formatters::s2v_compression_ratio()),
-            downwards_knee_width_db: FloatParam::new(
-                "Downwards Knee",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 36.0,
-                    factor: FloatRange::skew_factor(-1.0),
-                },
-            )
-            .with_unit(" dB")
-            .with_step_size(0.1),
-
-            upwards_threshold_offset_db: FloatParam::new(
-                "Upwards Offset",
-                0.0,
-                FloatRange::Linear {
-                    min: -50.0,
-                    max: 50.0,
-                },
-            )
-            .with_callback(set_update_upwards_thresholds)
-            .with_unit(" dB")
-            .with_step_size(0.1),
-            upwards_ratio: FloatParam::new(
-                "Upwards Ratio",
-                1.0,
-                FloatRange::Skewed {
-                    min: 1.0,
-                    max: 300.0,
-                    factor: FloatRange::skew_factor(-2.0),
-                },
-            )
-            .with_callback(set_update_upwards_ratios)
-            .with_step_size(0.01)
-            .with_value_to_string(formatters::v2s_compression_ratio(2))
-            .with_string_to_value(formatters::s2v_compression_ratio()),
-            upwards_knee_width_db: FloatParam::new(
-                "Upwards Knee",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 36.0,
-                    factor: FloatRange::skew_factor(-1.0),
-                },
-            )
-            .with_unit(" dB")
-            .with_step_size(0.1),
-
             high_freq_ratio_rolloff: FloatParam::new(
-                "High-freq Ratio Rolloff",
+                format!("{name_prefix} Hi-Freq Rolloff"),
                 0.5,
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             )
-            .with_callback(set_update_both_ratios)
+            .with_callback(set_update_ratios)
             .with_unit("%")
             .with_value_to_string(formatters::v2s_f32_percentage(0))
             .with_string_to_value(formatters::s2v_f32_percentage()),
+            knee_width_db: FloatParam::new(
+                format!("{name_prefix} Knee"),
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 36.0,
+                    factor: FloatRange::skew_factor(-1.0),
+                },
+            )
+            .with_unit(" dB")
+            .with_step_size(0.1),
         }
+    }
+
+    /// Create a parameter map for this object with a given prefix and group name.
+    ///
+    /// # Safety
+    ///
+    /// While this function in and of itself it not unsafe (it just creates pointers), these
+    /// pointers can only be safely dereferences and passed to functions that will derefernce them
+    /// if this object is not moved.
+    pub fn param_map_with_prefix(
+        &self,
+        prefix: &str,
+        group: &str,
+    ) -> Vec<(String, ParamPtr, String)> {
+        vec![
+            (
+                format!("{prefix}threshold_offset"),
+                self.threshold_offset_db.as_ptr(),
+                String::from(group),
+            ),
+            (
+                format!("{prefix}ratio"),
+                self.ratio.as_ptr(),
+                String::from(group),
+            ),
+            (
+                format!("{prefix}knee"),
+                self.knee_width_db.as_ptr(),
+                String::from(group),
+            ),
+            (
+                format!("{prefix}high_freq_rolloff"),
+                self.high_freq_ratio_rolloff.as_ptr(),
+                String::from(group),
+            ),
+        ]
     }
 }
 
@@ -477,9 +489,9 @@ impl CompressorBank {
         // bandwidths, the middle values needs to be pushed more towards the post-knee threshold
         // than with lower knee values.
         let downwards_knee_scaling_factor =
-            ((params.compressors.downwards_knee_width_db.value * 2.0) + 2.0).log2() - 1.0;
+            ((params.compressors.downwards.knee_width_db.value * 2.0) + 2.0).log2() - 1.0;
         let upwards_knee_scaling_factor =
-            ((params.compressors.upwards_knee_width_db.value * 2.0) + 2.0).log2() - 1.0;
+            ((params.compressors.upwards.knee_width_db.value * 2.0) + 2.0).log2() - 1.0;
 
         // Is this what they mean by zip and and ship it?
         let downwards_values = self
@@ -536,7 +548,10 @@ impl CompressorBank {
         let curve = params.threshold.curve_curve.value;
         let log2_center_freq = params.threshold.center_frequency.value.log2();
 
-        let high_freq_ratio_rolloff = params.compressors.high_freq_ratio_rolloff.value;
+        let downwards_high_freq_ratio_rolloff =
+            params.compressors.downwards.high_freq_ratio_rolloff.value;
+        let upwards_high_freq_ratio_rolloff =
+            params.compressors.upwards.high_freq_ratio_rolloff.value;
         let log2_nyquist_freq = self
             .log2_freqs
             .last()
@@ -547,7 +562,7 @@ impl CompressorBank {
             .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
             .is_ok()
         {
-            let intercept = intercept + params.compressors.downwards_threshold_offset_db.value;
+            let intercept = intercept + params.compressors.downwards.threshold_offset_db.value;
             for (log2_freq, threshold) in self
                 .log2_freqs
                 .iter()
@@ -566,7 +581,7 @@ impl CompressorBank {
             .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
             .is_ok()
         {
-            let intercept = intercept + params.compressors.upwards_threshold_offset_db.value;
+            let intercept = intercept + params.compressors.upwards.threshold_offset_db.value;
             for (log2_freq, threshold) in self
                 .log2_freqs
                 .iter()
@@ -585,8 +600,8 @@ impl CompressorBank {
         {
             // If the high-frequency rolloff is enabled then higher frequency bins will have their
             // ratios reduced to reduce harshness. This follows the octave scale.
-            let target_ratio_recip = params.compressors.downwards_ratio.value.recip();
-            if high_freq_ratio_rolloff == 0.0 {
+            let target_ratio_recip = params.compressors.downwards.ratio.value.recip();
+            if downwards_high_freq_ratio_rolloff == 0.0 {
                 self.downwards_ratio_recips.fill(target_ratio_recip);
             } else {
                 for (log2_freq, ratio) in self
@@ -595,7 +610,7 @@ impl CompressorBank {
                     .zip(self.downwards_ratio_recips.iter_mut())
                 {
                     let octave_fraction = log2_freq / log2_nyquist_freq;
-                    let rolloff_t = octave_fraction * high_freq_ratio_rolloff;
+                    let rolloff_t = octave_fraction * downwards_high_freq_ratio_rolloff;
                     // If the octave fraction times the rolloff amount is high, then this should get
                     // closer to `high_freq_ratio_rolloff` (which is in [0, 1]).
                     *ratio = (target_ratio_recip * (1.0 - rolloff_t)) + rolloff_t;
@@ -608,8 +623,8 @@ impl CompressorBank {
             .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
             .is_ok()
         {
-            let target_ratio_recip = params.compressors.upwards_ratio.value.recip();
-            if high_freq_ratio_rolloff == 0.0 {
+            let target_ratio_recip = params.compressors.upwards.ratio.value.recip();
+            if upwards_high_freq_ratio_rolloff == 0.0 {
                 self.upwards_ratio_recips.fill(target_ratio_recip);
             } else {
                 for (log2_freq, ratio) in self
@@ -618,7 +633,7 @@ impl CompressorBank {
                     .zip(self.upwards_ratio_recips.iter_mut())
                 {
                     let octave_fraction = log2_freq / log2_nyquist_freq;
-                    let rolloff_t = octave_fraction * high_freq_ratio_rolloff;
+                    let rolloff_t = octave_fraction * upwards_high_freq_ratio_rolloff;
                     *ratio = (target_ratio_recip * (1.0 - rolloff_t)) + rolloff_t;
                 }
             }

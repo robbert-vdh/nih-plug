@@ -87,11 +87,12 @@ pub struct SpectralCompressorParams {
     /// Parameters controlling the compressor thresholds and curves.
     #[nested = "threshold"]
     threshold: compressor_bank::ThresholdParams,
-    /// Parameters for the compressor bank.
+    /// Parameters for the upwards and downwards compressors.
     #[nested = "compressors"]
     compressors: compressor_bank::CompressorBankParams,
 }
 
+/// Global parameters controlling the output stage and all compressors.
 #[derive(Params)]
 struct GlobalParams {
     /// Makeup gain applied after the IDFT in the STFT process. If automatic makeup gain is enabled,
