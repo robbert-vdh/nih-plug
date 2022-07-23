@@ -79,14 +79,16 @@ struct Plan {
 
 #[derive(Params)]
 pub struct SpectralCompressorParams {
+    // NOTE: These `Arc`s are only here temporarily to work around Vizia's Lens requirements so we
+    // can use the generic UIs
     /// Global parameters. These could just live in this struct but I wanted a separate generic UI
     /// just for these.
     #[nested = "global"]
-    global: GlobalParams,
+    global: Arc<GlobalParams>,
 
     /// Parameters controlling the compressor thresholds and curves.
     #[nested = "threshold"]
-    threshold: compressor_bank::ThresholdParams,
+    threshold: Arc<compressor_bank::ThresholdParams>,
     /// Parameters for the upwards and downwards compressors.
     #[nested = "compressors"]
     compressors: compressor_bank::CompressorBankParams,
@@ -241,9 +243,9 @@ impl SpectralCompressorParams {
         SpectralCompressorParams {
             // TODO: Do still enable per-block smoothing for these settings, because why not. This
             //       will require updating the compressor bank.
-            global: GlobalParams::default(),
+            global: Arc::new(GlobalParams::default()),
 
-            threshold: compressor_bank::ThresholdParams::new(compressor_bank),
+            threshold: Arc::new(compressor_bank::ThresholdParams::new(compressor_bank)),
             compressors: compressor_bank::CompressorBankParams::new(compressor_bank),
         }
     }

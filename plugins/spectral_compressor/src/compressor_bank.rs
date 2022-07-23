@@ -93,9 +93,9 @@ pub struct ThresholdParams {
 #[derive(Params)]
 pub struct CompressorBankParams {
     #[nested = "downwards"]
-    pub downwards: CompressorParams,
+    pub downwards: Arc<CompressorParams>,
     #[nested = "upwards"]
-    pub upwards: CompressorParams,
+    pub upwards: Arc<CompressorParams>,
 }
 
 /// This struct contains the parameters for either the upward or downward compressors. The `Params`
@@ -217,18 +217,18 @@ impl CompressorBankParams {
     /// recompute its values on the next processing cycle.
     pub fn new(compressor: &CompressorBank) -> Self {
         CompressorBankParams {
-            downwards: CompressorParams::new(
+            downwards: Arc::new(CompressorParams::new(
                 "downwards_",
                 "Downwards",
                 compressor.should_update_downwards_thresholds.clone(),
                 compressor.should_update_downwards_ratios.clone(),
-            ),
-            upwards: CompressorParams::new(
+            )),
+            upwards: Arc::new(CompressorParams::new(
                 "upwards_",
                 "Upwards",
                 compressor.should_update_upwards_thresholds.clone(),
                 compressor.should_update_upwards_ratios.clone(),
-            ),
+            )),
         }
     }
 }
