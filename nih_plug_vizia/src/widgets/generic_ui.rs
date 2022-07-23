@@ -2,7 +2,6 @@
 
 use nih_plug::prelude::{ParamFlags, ParamPtr, Params};
 use vizia::prelude::*;
-use vizia::state::StaticLens;
 
 use super::{ParamSlider, ParamSliderExt, ParamSliderStyle};
 
@@ -26,17 +25,18 @@ impl GenericUi {
     ///```
     pub fn new<L, PsRef, Ps>(cx: &mut Context, params: L) -> Handle<'_, GenericUi>
     where
-        L: Lens<Target = PsRef>,
+        L: Lens<Target = PsRef> + Clone,
         PsRef: AsRef<Ps> + 'static,
         Ps: Params + 'static,
     {
         // Basic styling is done in the `theme.css` style sheet
-        Self::new_custom(cx, params, |cx, param_ptr| {
-            HStack::new(cx, |cx| {
+        Self::new_custom(cx, params.clone(), move |cx, param_ptr| {
+            let params = params.clone();
+            HStack::new(cx, move |cx| {
                 // Align this on the right
                 Label::new(cx, unsafe { param_ptr.name() }).class("label");
 
-                Self::draw_widget(cx, param_ptr);
+                Self::draw_widget(cx, params, param_ptr);
             })
             .class("row");
         })
@@ -72,16 +72,18 @@ impl GenericUi {
 
     /// The standard widget drawing function. This can be used together with `.new_custom()` to only
     /// draw the labels differently.
-    pub fn draw_widget(cx: &mut Context, param_ptr: ParamPtr) {
-        // TODO: Come up with a less hacky way to iterate over the mapping like this while
-        //       keeping the clean interface on the `ParamSlider` widget
-        let dummy = StaticLens::new(&());
+    pub fn draw_widget<L, PsRef, Ps>(cx: &mut Context, params: L, param_ptr: ParamPtr)
+    where
+        L: Lens<Target = PsRef>,
+        PsRef: AsRef<Ps> + 'static,
+        Ps: Params + 'static,
+    {
         unsafe {
             match param_ptr {
-                ParamPtr::FloatParam(p) => ParamSlider::new(cx, dummy, move |_| &*p),
-                ParamPtr::IntParam(p) => ParamSlider::new(cx, dummy, move |_| &*p),
-                ParamPtr::BoolParam(p) => ParamSlider::new(cx, dummy, move |_| &*p),
-                ParamPtr::EnumParam(p) => ParamSlider::new(cx, dummy, move |_| &*p),
+                ParamPtr::FloatParam(p) => ParamSlider::new(cx, params, move |_| &*p),
+                ParamPtr::IntParam(p) => ParamSlider::new(cx, params, move |_| &*p),
+                ParamPtr::BoolParam(p) => ParamSlider::new(cx, params, move |_| &*p),
+                ParamPtr::EnumParam(p) => ParamSlider::new(cx, params, move |_| &*p),
             }
         }
         .set_style(match unsafe { param_ptr.step_count() } {
