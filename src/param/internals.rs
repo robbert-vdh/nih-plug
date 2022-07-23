@@ -1,6 +1,7 @@
 //! Implementation details for the parameter management.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use super::{Param, ParamFlags, ParamMut};
 
@@ -93,6 +94,21 @@ pub unsafe trait Params: 'static + Send + Sync {
     /// under the hood.
     #[allow(unused_variables)]
     fn deserialize_fields(&self, serialized: &BTreeMap<String, String>) {}
+}
+
+/// This may be useful when building generic UIs using nested `Params` objects.
+unsafe impl<P: Params> Params for Arc<P> {
+    fn param_map(&self) -> Vec<(String, ParamPtr, String)> {
+        self.as_ref().param_map()
+    }
+
+    fn serialize_fields(&self) -> BTreeMap<String, String> {
+        self.as_ref().serialize_fields()
+    }
+
+    fn deserialize_fields(&self, serialized: &BTreeMap<String, String>) {
+        self.as_ref().deserialize_fields(serialized)
+    }
 }
 
 /// Internal pointers to parameters. This is an implementation detail used by the wrappers for type
