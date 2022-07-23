@@ -79,6 +79,21 @@ struct Plan {
 
 #[derive(Params)]
 struct SpectralCompressorParams {
+    /// Global parameters. These could just live in this struct but I wanted a separate generic UI
+    /// just for these.
+    #[nested = "global"]
+    global: GlobalParams,
+
+    /// Parameters controlling the compressor thresholds and curves.
+    #[nested = "threhold"]
+    threhold: compressor_bank::ThresholdParams,
+    /// Parameters for the compressor bank.
+    #[nested = "compressors"]
+    compressors: compressor_bank::CompressorBankParams,
+}
+
+#[derive(Params)]
+struct GlobalParams {
     /// Makeup gain applied after the IDFT in the STFT process. If automatic makeup gain is enabled,
     /// then this acts as an offset on top of that.
     #[id = "output_db"]
@@ -103,13 +118,6 @@ struct SpectralCompressorParams {
     /// prevent invalid inputs).
     #[id = "stft_overlap"]
     overlap_times_order: IntParam,
-
-    /// Parameters controlling the compressor thresholds and curves.
-    #[nested = "threhold"]
-    threhold: compressor_bank::ThresholdParams,
-    /// Parameters for the compressor bank.
-    #[nested = "compressors"]
-    compressors: compressor_bank::CompressorBankParams,
 }
 
 impl Default for SpectralCompressor {
@@ -146,14 +154,9 @@ impl Default for SpectralCompressor {
     }
 }
 
-impl SpectralCompressorParams {
-    /// Create a new [`SpectralCompressorParams`] object. Changing any of the compressor threshold
-    /// or ratio parameters causes the passed compressor bank's parameters to be updated.
-    pub fn new(compressor_bank: &compressor_bank::CompressorBank) -> Self {
-        SpectralCompressorParams {
-            // TODO: Do still enable per-block smoothing for these settings, because why not. This
-            //       will require updating the compressor bank.
-
+impl Default for GlobalParams {
+    fn default() -> Self {
+        GlobalParams {
             // We don't need any smoothing for these parameters as the overlap-add process will
             // already act as a form of smoothing
             output_gain_db: FloatParam::new(
@@ -194,6 +197,18 @@ impl SpectralCompressorParams {
             )
             .with_value_to_string(formatters::v2s_i32_power_of_two())
             .with_string_to_value(formatters::s2v_i32_power_of_two()),
+        }
+    }
+}
+
+impl SpectralCompressorParams {
+    /// Create a new [`SpectralCompressorParams`] object. Changing any of the compressor threshold
+    /// or ratio parameters causes the passed compressor bank's parameters to be updated.
+    pub fn new(compressor_bank: &compressor_bank::CompressorBank) -> Self {
+        SpectralCompressorParams {
+            // TODO: Do still enable per-block smoothing for these settings, because why not. This
+            //       will require updating the compressor bank.
+            global: GlobalParams::default(),
 
             threhold: compressor_bank::ThresholdParams::new(compressor_bank),
             compressors: compressor_bank::CompressorBankParams::new(compressor_bank),
@@ -296,7 +311,7 @@ impl Plugin for SpectralCompressor {
         // These plans have already been made during initialization we can switch between versions
         // without reallocating
         let fft_plan = &mut self.plan_for_order.as_mut().unwrap()
-            [self.params.window_size_order.value as usize - MIN_WINDOW_ORDER];
+            [self.params.global.window_size_order.value as usize - MIN_WINDOW_ORDER];
         let num_bins = self.complex_fft_buffer.len();
         // The Hann window function spreads the DC signal out slightly, so we'll clear
         // all 0-20 Hz bins for this.
@@ -316,7 +331,7 @@ impl Plugin for SpectralCompressor {
         // signal instead.
         let input_gain = gain_compensation.sqrt();
         let output_gain =
-            util::db_to_gain(self.params.output_gain_db.value) * gain_compensation.sqrt();
+            util::db_to_gain(self.params.global.output_gain_db.value) * gain_compensation.sqrt();
         // TODO: Auto makeup gain
 
         // This is mixed in later with latency compensation applied
@@ -350,7 +365,7 @@ impl Plugin for SpectralCompressor {
 
                 // The DC and other low frequency bins doesn't contain much semantic meaning anymore
                 // after all of this, so it only ends up consuming headroom.
-                if self.params.dc_filter.value {
+                if self.params.global.dc_filter.value {
                     self.complex_fft_buffer[..highest_dcish_bin_idx + 1].fill(Complex32::default());
                 }
 
@@ -373,6 +388,7 @@ impl Plugin for SpectralCompressor {
         self.dry_wet_mixer.mix_in_dry(
             buffer,
             self.params
+                .global
                 .dry_wet_ratio
                 .smoothed
                 .next_step(buffer.len() as u32),
@@ -387,11 +403,11 @@ impl Plugin for SpectralCompressor {
 
 impl SpectralCompressor {
     fn window_size(&self) -> usize {
-        1 << self.params.window_size_order.value as usize
+        1 << self.params.global.window_size_order.value as usize
     }
 
     fn overlap_times(&self) -> usize {
-        1 << self.params.overlap_times_order.value as usize
+        1 << self.params.global.overlap_times_order.value as usize
     }
 
     /// `window_size` should not exceed `MAX_WINDOW_SIZE` or this will allocate.
