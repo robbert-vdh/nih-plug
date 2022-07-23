@@ -102,7 +102,7 @@ impl ParamSlider {
     /// See [`ParamSliderExt`] for additonal options.
     pub fn new<L, Params, P, F>(cx: &mut Context, params: L, params_to_param: F) -> Handle<Self>
     where
-        L: Lens<Target = Params> + Copy,
+        L: Lens<Target = Params> + Clone,
         F: 'static + Fn(&Params) -> &P + Copy,
         Params: 'static,
         P: Param,
@@ -113,12 +113,15 @@ impl ParamSlider {
         // We need to do a bit of a nasty and erase the lifetime bound by going through the raw
         // GuiContext and a ParamPtr.
         let param_ptr = params
+            .clone()
             .map(move |params| params_to_param(params).as_ptr())
             .get(cx);
         let default_value = params
+            .clone()
             .map(move |params| params_to_param(params).default_normalized_value())
             .get(cx);
         let step_count = params
+            .clone()
             .map(move |params| params_to_param(params).step_count())
             .get(cx);
 
@@ -146,27 +149,32 @@ impl ParamSlider {
                 // label with the slider. Creating the textbox based on
                 // `ParamSliderInternal::text_input_active` lets us focus the textbox when it gets
                 // created.
+                let params = params.clone();
                 Binding::new(
                     cx,
                     ParamSliderInternal::text_input_active,
                     move |cx, text_input_active| {
                         // Can't use `.to_string()` here as that would include the modulation.
-                        let param_display_value_lens = params.map(move |params| {
+                        let param_display_value_lens = params.clone().map(move |params| {
                             let param = params_to_param(params);
                             param.normalized_value_to_string(
                                 param.unmodulated_normalized_value(),
                                 true,
                             )
                         });
-                        let param_preview_display_value_lens = |normalized_value| {
-                            params.map(move |params| {
-                                params_to_param(params)
-                                    .normalized_value_to_string(normalized_value, true)
-                            })
+                        let param_preview_display_value_lens = {
+                            let params = params.clone();
+                            move |normalized_value| {
+                                params.clone().map(move |params| {
+                                    params_to_param(params)
+                                        .normalized_value_to_string(normalized_value, true)
+                                })
+                            }
                         };
-                        let unmodulated_normalized_param_value_lens = params.map(move |params| {
-                            params_to_param(params).unmodulated_normalized_value()
-                        });
+                        let unmodulated_normalized_param_value_lens =
+                            params.clone().map(move |params| {
+                                params_to_param(params).unmodulated_normalized_value()
+                            });
 
                         // The resulting tuple `(start_t, delta)` corresponds to the start and the
                         // signed width of the bar. `start_t` is in `[0, 1]`, and `delta` is in
@@ -220,7 +228,7 @@ impl ParamSlider {
                         // plugins with hosts that support this), then this is the difference
                         // between the 'true' value and the current value after modulation has been
                         // applied.
-                        let modulation_start_delta_lens = params.map(move |params| {
+                        let modulation_start_delta_lens = params.clone().map(move |params| {
                             match style {
                                 // Don't show modulation for stepped parameters since it wouldn't
                                 // make a lot of sense visually
