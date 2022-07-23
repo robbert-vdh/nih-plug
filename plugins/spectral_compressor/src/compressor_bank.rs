@@ -279,7 +279,7 @@ impl CompressorParams {
             .with_string_to_value(formatters::s2v_compression_ratio()),
             high_freq_ratio_rolloff: FloatParam::new(
                 format!("{name_prefix} Hi-Freq Rolloff"),
-                0.5,
+                0.0,
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             )
             .with_callback(set_update_ratios)
