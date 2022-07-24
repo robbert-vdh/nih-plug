@@ -175,7 +175,7 @@ impl ThresholdParams {
         ThresholdParams {
             threshold_db: FloatParam::new(
                 "Global Threshold",
-                -20.0,
+                0.0,
                 FloatRange::Linear {
                     min: -100.0,
                     max: 20.0,
