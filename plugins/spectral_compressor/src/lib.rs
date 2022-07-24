@@ -351,8 +351,13 @@ impl Plugin for SpectralCompressor {
         // The Hann window function spreads the DC signal out slightly, so we'll clear all 0-20 Hz
         // bins for this. With small window sizes you probably don't want this as it would result in
         // a significant low-pass filter. When it's disabled, the DC bin will also be compressed.
-        let first_non_dc_bin_idx = if self.params.global.dc_filter.value {
-            (20.0 / ((self.buffer_config.sample_rate / 2.0) / num_bins as f32)).floor() as usize + 1
+        let first_non_dc_bin_idx =
+            (20.0 / ((self.buffer_config.sample_rate / 2.0) / num_bins as f32)).floor() as usize
+                + 1;
+        // Never compress the first bin on larger window sizes even if the DC filter is disabled
+        let dont_compress_below_bin_idx = if self.params.global.dc_filter.value || window_size > 256
+        {
+            first_non_dc_bin_idx
         } else {
             0
         };
@@ -399,13 +404,14 @@ impl Plugin for SpectralCompressor {
                     channel_idx,
                     &self.params,
                     overlap_times,
-                    first_non_dc_bin_idx,
+                    dont_compress_below_bin_idx,
                 );
 
                 // The DC and other low frequency bins doesn't contain much semantic meaning anymore
-                // after all of this, so it only ends up consuming headroom. If the DC filter is
-                // disabled then this won't do anything.
-                self.complex_fft_buffer[..first_non_dc_bin_idx].fill(Complex32::default());
+                // after all of this, so it only ends up consuming headroom.
+                if self.params.global.dc_filter.value {
+                    self.complex_fft_buffer[..first_non_dc_bin_idx].fill(Complex32::default());
+                }
 
                 // Inverse FFT back into the scratch buffer. This will be added to a ring buffer
                 // which gets written back to the host at a one block delay.
