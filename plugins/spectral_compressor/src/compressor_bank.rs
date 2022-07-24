@@ -306,7 +306,8 @@ impl CompressorParams {
                 if param_id_prefix == UPWARDS_NAME_PREFIX {
                     0.75
                 } else {
-                    0.0
+                    // These basically work in the opposite way
+                    0.25
                 },
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             )
