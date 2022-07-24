@@ -171,10 +171,10 @@ impl ThresholdParams {
         ThresholdParams {
             threshold_db: FloatParam::new(
                 "Global Threshold",
-                0.0,
+                -20.0,
                 FloatRange::Linear {
-                    min: -50.0,
-                    max: 50.0,
+                    min: -100.0,
+                    max: 20.0,
                 },
             )
             .with_callback(set_update_both_thresholds.clone())
