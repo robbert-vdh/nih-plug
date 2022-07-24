@@ -102,10 +102,10 @@ pub struct ThresholdParams {
 /// Contains the compressor parameters for both the upwards and downwards compressor banks.
 #[derive(Params)]
 pub struct CompressorBankParams {
-    #[nested = "downwards"]
-    pub downwards: Arc<CompressorParams>,
     #[nested = "upwards"]
     pub upwards: Arc<CompressorParams>,
+    #[nested = "downwards"]
+    pub downwards: Arc<CompressorParams>,
 }
 
 /// This struct contains the parameters for either the upward or downward compressors. The `Params`

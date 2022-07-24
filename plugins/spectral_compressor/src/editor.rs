@@ -107,41 +107,6 @@ pub(crate) fn create(
 
             HStack::new(cx, |cx| {
                 VStack::new(cx, |cx| {
-                    Label::new(cx, "Downwards")
-                        .font(assets::NOTO_SANS_THIN)
-                        .font_size(30.0 * POINT_SCALE)
-                        .left(Stretch(1.0))
-                        .right(Pixels(10.0))
-                        .bottom(Pixels(-10.0));
-
-                    // We don't want to show the 'Downwards' prefix here, but it should still be in
-                    // the parameter name so the parameter list makes sense
-                    let downwards_compressor_params =
-                        Data::params.map(|p| p.compressors.downwards.clone());
-                    GenericUi::new_custom(
-                        cx,
-                        downwards_compressor_params.clone(),
-                        move |cx, param_ptr| {
-                            let downwards_compressor_params = downwards_compressor_params.clone();
-                            HStack::new(cx, move |cx| {
-                                Label::new(
-                                    cx,
-                                    unsafe { param_ptr.name() }
-                                        .strip_prefix("Downwards ")
-                                        .expect("Expected parameter name prefix, this is a bug"),
-                                )
-                                .class("label");
-
-                                GenericUi::draw_widget(cx, downwards_compressor_params, param_ptr);
-                            })
-                            .class("row");
-                        },
-                    );
-                })
-                .width(LEFT_COLUMN_WIDTH)
-                .height(Auto);
-
-                VStack::new(cx, |cx| {
                     Label::new(cx, "Upwards")
                         .font(assets::NOTO_SANS_THIN)
                         .font_size(30.0 * POINT_SCALE)
@@ -149,6 +114,8 @@ pub(crate) fn create(
                         .right(Pixels(10.0))
                         .bottom(Pixels(-10.0));
 
+                    // We don't want to show the 'Upwards' prefix here, but it should still be in
+                    // the parameter name so the parameter list makes sense
                     let upwards_compressor_params =
                         Data::params.map(|p| p.compressors.upwards.clone());
                     GenericUi::new_custom(
@@ -172,6 +139,39 @@ pub(crate) fn create(
                     );
                 })
                 .width(RIGHT_COLUMN_WIDTH)
+                .height(Auto);
+
+                VStack::new(cx, |cx| {
+                    Label::new(cx, "Downwards")
+                        .font(assets::NOTO_SANS_THIN)
+                        .font_size(30.0 * POINT_SCALE)
+                        .left(Stretch(1.0))
+                        .right(Pixels(10.0))
+                        .bottom(Pixels(-10.0));
+
+                    let downwards_compressor_params =
+                        Data::params.map(|p| p.compressors.downwards.clone());
+                    GenericUi::new_custom(
+                        cx,
+                        downwards_compressor_params.clone(),
+                        move |cx, param_ptr| {
+                            let downwards_compressor_params = downwards_compressor_params.clone();
+                            HStack::new(cx, move |cx| {
+                                Label::new(
+                                    cx,
+                                    unsafe { param_ptr.name() }
+                                        .strip_prefix("Downwards ")
+                                        .expect("Expected parameter name prefix, this is a bug"),
+                                )
+                                .class("label");
+
+                                GenericUi::draw_widget(cx, downwards_compressor_params, param_ptr);
+                            })
+                            .class("row");
+                        },
+                    );
+                })
+                .width(LEFT_COLUMN_WIDTH)
                 .height(Auto);
             })
             .height(Auto)
