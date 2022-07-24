@@ -402,7 +402,8 @@ impl CompressorBank {
         // These 2-log frequencies are needed when updating the compressor parameters, so we'll just
         // precompute them to avoid having to repeat the same expensive computations all the time
         self.log2_freqs.resize(complex_buffer_len, 0.0);
-        for (i, log2_freq) in self.log2_freqs.iter_mut().enumerate() {
+        // The first one should always stay at zero, `0.0f32.log2() == NaN`.
+        for (i, log2_freq) in self.log2_freqs.iter_mut().enumerate().skip(1) {
             let freq = (i as f32 / window_size as f32) * buffer_config.sample_rate;
             *log2_freq = freq.log2();
         }

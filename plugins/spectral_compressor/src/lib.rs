@@ -348,10 +348,14 @@ impl Plugin for SpectralCompressor {
         let fft_plan = &mut self.plan_for_order.as_mut().unwrap()
             [self.params.global.window_size_order.value as usize - MIN_WINDOW_ORDER];
         let num_bins = self.complex_fft_buffer.len();
-        // The Hann window function spreads the DC signal out slightly, so we'll clear
-        // all 0-20 Hz bins for this.
-        let highest_dcish_bin_idx =
-            (20.0 / ((self.buffer_config.sample_rate / 2.0) / num_bins as f32)).floor() as usize;
+        // The Hann window function spreads the DC signal out slightly, so we'll clear all 0-20 Hz
+        // bins for this. With small window sizes you probably don't want this as it would result in
+        // a significant low-pass filter. When it's disabled, the DC bin will also be compressed.
+        let first_non_dc_bin_idx = if self.params.global.dc_filter.value {
+            (20.0 / ((self.buffer_config.sample_rate / 2.0) / num_bins as f32)).floor() as usize + 1
+        } else {
+            0
+        };
 
         // The overlap gain compensation is based on a squared Hann window, which will sum perfectly
         // at four times overlap or higher. We'll apply a regular Hann window before the analysis
@@ -395,14 +399,13 @@ impl Plugin for SpectralCompressor {
                     channel_idx,
                     &self.params,
                     overlap_times,
-                    highest_dcish_bin_idx + 1,
+                    first_non_dc_bin_idx,
                 );
 
                 // The DC and other low frequency bins doesn't contain much semantic meaning anymore
-                // after all of this, so it only ends up consuming headroom.
-                if self.params.global.dc_filter.value {
-                    self.complex_fft_buffer[..highest_dcish_bin_idx + 1].fill(Complex32::default());
-                }
+                // after all of this, so it only ends up consuming headroom. If the DC filter is
+                // disabled then this won't do anything.
+                self.complex_fft_buffer[..first_non_dc_bin_idx].fill(Complex32::default());
 
                 // Inverse FFT back into the scratch buffer. This will be added to a ring buffer
                 // which gets written back to the host at a one block delay.
