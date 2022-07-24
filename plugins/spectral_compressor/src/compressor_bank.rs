@@ -198,9 +198,11 @@ impl ThresholdParams {
             curve_curve: FloatParam::new(
                 "Threshold Curve",
                 0.0,
-                FloatRange::Linear {
+                FloatRange::SymmetricalSkewed {
                     min: -24.0,
                     max: 24.0,
+                    factor: FloatRange::skew_factor(-1.0),
+                    center: 0.0,
                 },
             )
             .with_callback(set_update_both_thresholds.clone())
