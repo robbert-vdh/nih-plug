@@ -110,7 +110,7 @@ impl Default for SafetyLimiterParams {
                 FloatRange::Skewed {
                     min: util::db_to_gain(-24.0),
                     max: util::db_to_gain(12.0),
-                    factor: FloatRange::skew_factor(-1.0),
+                    factor: FloatRange::gain_skew_factor(-24.0, 12.0),
                 },
             )
             .with_unit(" dB")
