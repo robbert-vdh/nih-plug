@@ -205,26 +205,26 @@ impl ThresholdParams {
                 FloatRange::SymmetricalSkewed {
                     min: -36.0,
                     max: 36.0,
-                    factor: FloatRange::skew_factor(-1.0),
+                    factor: FloatRange::skew_factor(-2.0),
                     center: 0.0,
                 },
             )
             .with_callback(set_update_both_thresholds.clone())
             .with_unit(" dB/oct")
-            .with_step_size(0.1),
+            .with_step_size(0.01),
             curve_curve: FloatParam::new(
                 "Threshold Curve",
                 0.0,
                 FloatRange::SymmetricalSkewed {
                     min: -24.0,
                     max: 24.0,
-                    factor: FloatRange::skew_factor(-1.0),
+                    factor: FloatRange::skew_factor(-2.0),
                     center: 0.0,
                 },
             )
             .with_callback(set_update_both_thresholds)
             .with_unit(" dB/oct²")
-            .with_step_size(0.1),
+            .with_step_size(0.01),
         }
     }
 }
