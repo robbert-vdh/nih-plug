@@ -546,19 +546,39 @@ impl CompressorBank {
 
             // All compression happens in the linear domain to save a logarithm
             if *downwards_ratio_recip != 1.0 {
-                // TODO: We need the knee starts and ends on this struct
-                // TODO: As mentioned above, soft knee, replace the threshold
-                if envelope > downwards_threshold {
+                // The soft-knee option will fade in the compression curve when reaching the knee
+                // start until it mtaches the hard-knee curve at the knee-end
+                if envelope >= downwards_knee_end {
                     // Because we're working in the linear domain, we care about the ratio between
                     // the threshold and the envelope's current value. And log-space division
                     // becomes linear-space exponentiation by the reciprocal, or taking the nth
                     // root.
-                    let threshold_ratio = *envelope / *downwards_threshold;
+                    let threshold_ratio = envelope / downwards_threshold;
                     scale /= threshold_ratio / threshold_ratio.powf(*downwards_ratio_recip);
+                } else if envelope >= downwards_knee_start {
+                    // When the knee width is set to 0 dB, `downwards_knee_start ==
+                    // downwards_knee_end` and this branch is never hit
+                    let linear_knee_width = downwards_knee_end - downwards_knee_start;
+                    let raw_knee_t = (envelope - downwards_knee_start) / linear_knee_width;
+                    nih_debug_assert!((0.0..=1.0).contains(&raw_knee_t));
+
+                    // TODO: Apart from a small discontinuety in the derivative/slope at the start
+                    //       of the knee this equation does exaclty what you'd expect it to, but it
+                    //       feels a bit weird. Should probably look for a cleaner way to calculate
+                    //       this soft knee in linear-space at some point.
+                    let knee_t = (1.0 - raw_knee_t).powf(downwards_knee_scaling_factor);
+                    nih_debug_assert!((0.0..=1.0).contains(&knee_t));
+
+                    // We'll linearly interpolate between compression at the knee start and at the
+                    // actual threshold based on `knee_t`
+                    let knee_ratio = envelope / downwards_knee_start;
+                    let threshold_ratio = envelope / downwards_threshold;
+                    scale /= (knee_t * (knee_ratio / knee_ratio.powf(*downwards_ratio_recip)))
+                        + ((1.0 - knee_t)
+                            * (threshold_ratio / threshold_ratio.powf(*downwards_ratio_recip)));
                 }
             }
 
-            // TODO: More stuff
             // TODO: Upwards compression
 
             *bin *= scale;
