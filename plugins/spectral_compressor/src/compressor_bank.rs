@@ -21,6 +21,10 @@ use std::sync::Arc;
 
 use crate::SpectralCompressorParams;
 
+// These are the parameter ID prefixes used for the downwards and upwards cmpression parameters.
+const DOWNWARDS_NAME_PREFIX: &str = "downwards_";
+const UPWARDS_NAME_PREFIX: &str = "upwards_";
+
 /// A bank of compressors so each FFT bin can be compressed individually. The vectors in this struct
 /// will have a capacity of `MAX_WINDOW_SIZE / 2 + 1` and a size that matches the current complex
 /// FFT buffer size. This is stored as a struct of arrays to make SIMD-ing easier in the future.
@@ -232,13 +236,13 @@ impl CompressorBankParams {
     pub fn new(compressor: &CompressorBank) -> Self {
         CompressorBankParams {
             downwards: Arc::new(CompressorParams::new(
-                "downwards_",
+                DOWNWARDS_NAME_PREFIX,
                 "Downwards",
                 compressor.should_update_downwards_thresholds.clone(),
                 compressor.should_update_downwards_ratios.clone(),
             )),
             upwards: Arc::new(CompressorParams::new(
-                "upwards_",
+                UPWARDS_NAME_PREFIX,
                 "Upwards",
                 compressor.should_update_upwards_thresholds.clone(),
                 compressor.should_update_upwards_ratios.clone(),
@@ -269,7 +273,13 @@ impl CompressorParams {
             // As explained above, these offsets are relative to the target curve
             threshold_offset_db: FloatParam::new(
                 format!("{name_prefix} Offset"),
-                0.0,
+                // TODO: Bit of a hacky way to set the default values differently for upwards and
+                //       downwards compressors
+                if param_id_prefix == UPWARDS_NAME_PREFIX {
+                    -20.0
+                } else {
+                    0.0
+                },
                 FloatRange::Linear {
                     min: -50.0,
                     max: 50.0,
@@ -293,7 +303,11 @@ impl CompressorParams {
             .with_string_to_value(formatters::s2v_compression_ratio()),
             high_freq_ratio_rolloff: FloatParam::new(
                 format!("{name_prefix} Hi-Freq Rolloff"),
-                0.0,
+                if param_id_prefix == UPWARDS_NAME_PREFIX {
+                    0.75
+                } else {
+                    0.0
+                },
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             )
             .with_callback(set_update_ratios)
@@ -302,7 +316,7 @@ impl CompressorParams {
             .with_string_to_value(formatters::s2v_f32_percentage()),
             knee_width_db: FloatParam::new(
                 format!("{name_prefix} Knee"),
-                0.0,
+                6.0,
                 FloatRange::Skewed {
                     min: 0.0,
                     max: 36.0,
