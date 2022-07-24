@@ -50,8 +50,10 @@ impl ParamUnits {
     where
         I: Iterator<Item = (u32, &'a str)> + Clone,
     {
-        // First we'll build a unit for each unique parameter
-        let unique_group_names: HashSet<&str> = groups
+        // First we'll build a unit for each unique parameter group. We need to be careful here to
+        // expand `foo/bar/baz` into `foo/bar/baz`, `foo/bar` and `foo`, in case the parent groups
+        // don't contain any parameters and thus aren't present in `groups`.
+        let unique_group_names: HashSet<String> = groups
             .clone()
             .into_iter()
             .filter_map(|(_, group_name)| {
@@ -62,12 +64,26 @@ impl ParamUnits {
                     None
                 }
             })
+            .flat_map(|group_name| {
+                // This is the expansion mentioned above
+                let mut expanded_group = String::new();
+                let mut expanded_groups = Vec::new();
+                for component in group_name.split('/') {
+                    if !expanded_group.is_empty() {
+                        expanded_group.push('/');
+                    }
+                    expanded_group.push_str(component);
+                    expanded_groups.push(expanded_group.clone());
+                }
+
+                expanded_groups
+            })
             .collect();
         let mut groups_units: Vec<(&str, ParamUnit)> = unique_group_names
-            .into_iter()
+            .iter()
             .map(|group_name| {
                 (
-                    group_name,
+                    group_name.as_str(),
                     ParamUnit {
                         name: match group_name.rfind('/') {
                             Some(sep_pos) => group_name[sep_pos + 1..].to_string(),
