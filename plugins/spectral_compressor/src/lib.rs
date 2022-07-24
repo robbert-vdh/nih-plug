@@ -354,13 +354,6 @@ impl Plugin for SpectralCompressor {
         let first_non_dc_bin_idx =
             (20.0 / ((self.buffer_config.sample_rate / 2.0) / num_bins as f32)).floor() as usize
                 + 1;
-        // Never compress the first bin on larger window sizes even if the DC filter is disabled
-        let dont_compress_below_bin_idx = if self.params.global.dc_filter.value || window_size > 256
-        {
-            first_non_dc_bin_idx
-        } else {
-            0
-        };
 
         // The overlap gain compensation is based on a squared Hann window, which will sum perfectly
         // at four times overlap or higher. We'll apply a regular Hann window before the analysis
@@ -404,7 +397,7 @@ impl Plugin for SpectralCompressor {
                     channel_idx,
                     &self.params,
                     overlap_times,
-                    dont_compress_below_bin_idx,
+                    first_non_dc_bin_idx,
                 );
 
                 // The DC and other low frequency bins doesn't contain much semantic meaning anymore
