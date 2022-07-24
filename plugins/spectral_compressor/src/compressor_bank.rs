@@ -186,7 +186,7 @@ impl ThresholdParams {
             .with_step_size(0.1),
             center_frequency: FloatParam::new(
                 "Threshold Center",
-                500.0,
+                420.0,
                 FloatRange::Skewed {
                     min: 20.0,
                     max: 20_000.0,
