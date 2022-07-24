@@ -273,13 +273,7 @@ impl CompressorParams {
             // As explained above, these offsets are relative to the target curve
             threshold_offset_db: FloatParam::new(
                 format!("{name_prefix} Offset"),
-                // TODO: Bit of a hacky way to set the default values differently for upwards and
-                //       downwards compressors
-                if param_id_prefix == UPWARDS_NAME_PREFIX {
-                    -20.0
-                } else {
-                    0.0
-                },
+                0.0,
                 FloatRange::Linear {
                     min: -50.0,
                     max: 50.0,
@@ -303,6 +297,8 @@ impl CompressorParams {
             .with_string_to_value(formatters::s2v_compression_ratio()),
             high_freq_ratio_rolloff: FloatParam::new(
                 format!("{name_prefix} Hi-Freq Rolloff"),
+                // TODO: Bit of a hacky way to set the default values differently for upwards and
+                //       downwards compressors
                 if param_id_prefix == UPWARDS_NAME_PREFIX {
                     0.75
                 } else {
