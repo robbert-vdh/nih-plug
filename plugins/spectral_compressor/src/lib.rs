@@ -395,7 +395,7 @@ impl Plugin for SpectralCompressor {
                     channel_idx,
                     &self.params,
                     overlap_times,
-                    highest_dcish_bin_idx,
+                    highest_dcish_bin_idx + 1,
                 );
 
                 // The DC and other low frequency bins doesn't contain much semantic meaning anymore
