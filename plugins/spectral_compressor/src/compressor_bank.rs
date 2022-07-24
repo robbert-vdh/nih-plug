@@ -42,14 +42,24 @@ pub struct CompressorBank {
 
     /// Downwards compressor thresholds, in linear space.
     downwards_thresholds: Vec<f32>,
+    /// The start (lower end) of the downwards's knee range, in linear space. This is calculated in
+    /// decibel/log space and then converted to gain to keep everything in linear space.
+    downwards_knee_starts: Vec<f32>,
+    /// The end (upper end) of the downwards's knee range, in linear space.
+    downwards_knee_ends: Vec<f32>,
     /// The reciprocals of the downwards compressor ratios. At 1.0 the cmopressor won't do anything.
     /// If [`CompressorBankParams::high_freq_ratio_rolloff`] is set to 1.0, then this will be the
     /// same for each compressor. We're doing the compression in linear space to avoid a logarithm,
     /// so the division by the ratio becomes an nth-root, or exponentation by the reciprocal of the
     /// ratio.
     downwards_ratio_recips: Vec<f32>,
+
     /// Upwards compressor thresholds, in linear space.
     upwards_thresholds: Vec<f32>,
+    /// The start (lower end) of the upwards's knee range, in linear space.
+    upwards_knee_starts: Vec<f32>,
+    /// The end (upper end) of the upwards's knee range, in linear space.
+    upwards_knee_ends: Vec<f32>,
     /// The same as `downwards_ratio_recipss`, but for the upwards compression.
     upwards_ratio_recips: Vec<f32>,
 
@@ -316,8 +326,13 @@ impl CompressorBank {
             log2_freqs: Vec::with_capacity(complex_buffer_len),
 
             downwards_thresholds: Vec::with_capacity(complex_buffer_len),
+            downwards_knee_starts: Vec::with_capacity(complex_buffer_len),
+            downwards_knee_ends: Vec::with_capacity(complex_buffer_len),
             downwards_ratio_recips: Vec::with_capacity(complex_buffer_len),
+
             upwards_thresholds: Vec::with_capacity(complex_buffer_len),
+            upwards_knee_starts: Vec::with_capacity(complex_buffer_len),
+            upwards_knee_ends: Vec::with_capacity(complex_buffer_len),
             upwards_ratio_recips: Vec::with_capacity(complex_buffer_len),
 
             envelopes: vec![Vec::with_capacity(complex_buffer_len); num_channels],
@@ -338,10 +353,19 @@ impl CompressorBank {
             .reserve_exact(complex_buffer_len.saturating_sub(self.downwards_thresholds.len()));
         self.downwards_ratio_recips
             .reserve_exact(complex_buffer_len.saturating_sub(self.downwards_ratio_recips.len()));
+        self.downwards_knee_starts
+            .reserve_exact(complex_buffer_len.saturating_sub(self.downwards_knee_starts.len()));
+        self.downwards_knee_ends
+            .reserve_exact(complex_buffer_len.saturating_sub(self.downwards_knee_ends.len()));
+
         self.upwards_thresholds
             .reserve_exact(complex_buffer_len.saturating_sub(self.upwards_thresholds.len()));
         self.upwards_ratio_recips
             .reserve_exact(complex_buffer_len.saturating_sub(self.upwards_ratio_recips.len()));
+        self.upwards_knee_starts
+            .reserve_exact(complex_buffer_len.saturating_sub(self.upwards_knee_starts.len()));
+        self.upwards_knee_ends
+            .reserve_exact(complex_buffer_len.saturating_sub(self.upwards_knee_ends.len()));
 
         self.envelopes.resize_with(num_channels, Vec::new);
         for envelopes in self.envelopes.iter_mut() {
@@ -366,8 +390,13 @@ impl CompressorBank {
 
         self.downwards_thresholds.resize(complex_buffer_len, 1.0);
         self.downwards_ratio_recips.resize(complex_buffer_len, 1.0);
+        self.downwards_knee_starts.resize(complex_buffer_len, 1.0);
+        self.downwards_knee_ends.resize(complex_buffer_len, 1.0);
+
         self.upwards_thresholds.resize(complex_buffer_len, 1.0);
         self.upwards_ratio_recips.resize(complex_buffer_len, 1.0);
+        self.upwards_knee_starts.resize(complex_buffer_len, 1.0);
+        self.upwards_knee_ends.resize(complex_buffer_len, 1.0);
 
         for envelopes in self.envelopes.iter_mut() {
             envelopes.resize(complex_buffer_len, 0.0);
@@ -480,24 +509,38 @@ impl CompressorBank {
             ((params.compressors.upwards.knee_width_db.value * 2.0) + 2.0).log2() - 1.0;
 
         // Is this what they mean by zip and and ship it?
+        let downwards_knees = self
+            .downwards_knee_starts
+            .iter()
+            .zip(self.downwards_knee_ends.iter());
         let downwards_values = self
             .downwards_thresholds
             .iter()
-            .zip(self.downwards_ratio_recips.iter());
+            .zip(self.downwards_ratio_recips.iter())
+            .zip(downwards_knees);
+        let upwards_knees = self
+            .upwards_knee_starts
+            .iter()
+            .zip(self.upwards_knee_ends.iter());
         let upwards_values = self
             .upwards_thresholds
             .iter()
-            .zip(self.upwards_ratio_recips.iter());
-        for (
-            ((bin, envelope), (downwards_threshold, downwards_ratio_recip)),
-            (upwards_threshold, upwards_ratio_recip),
-        ) in buffer
+            .zip(self.upwards_ratio_recips.iter())
+            .zip(upwards_knees);
+        for (((bin, envelope), downwards_values), upwards_values) in buffer
             .iter_mut()
             .zip(self.envelopes[channel_idx].iter())
             .zip(downwards_values)
             .zip(upwards_values)
             .skip(skip_bins_below)
         {
+            let (
+                (downwards_threshold, downwards_ratio_recip),
+                (downwards_knee_start, downwards_knee_end),
+            ) = downwards_values;
+            let ((upwards_threshold, upwards_ratio_recip), (upwards_knee_start, upwards_knee_end)) =
+                upwards_values;
+
             // This works by computing a scaling factor, and then scaling the bin magnitudes by that.
             let mut scale = 1.0;
 
@@ -549,16 +592,28 @@ impl CompressorBank {
             .is_ok()
         {
             let intercept = intercept + params.compressors.downwards.threshold_offset_db.value;
-            for (log2_freq, threshold) in self
+            for ((log2_freq, threshold), (knee_start, knee_end)) in self
                 .log2_freqs
                 .iter()
                 .zip(self.downwards_thresholds.iter_mut())
+                .zip(
+                    self.downwards_knee_starts
+                        .iter_mut()
+                        .zip(self.downwards_knee_ends.iter_mut()),
+                )
             {
                 let offset = log2_freq - log2_center_freq;
                 let threshold_db = intercept + (slope * offset) + (curve * offset * offset);
-                // This threshold may never reach zero as it's used in divisions to get a gain ratio
+                let knee_start_db =
+                    threshold_db - (params.compressors.downwards.knee_width_db.value / 2.0);
+                let knee_end_db =
+                    threshold_db + (params.compressors.downwards.knee_width_db.value / 2.0);
+
+                // This threshold must never reach zero as it's used in divisions to get a gain ratio
                 // above the threshold
                 *threshold = util::db_to_gain(threshold_db).max(f32::EPSILON);
+                *knee_start = util::db_to_gain(knee_start_db).max(f32::EPSILON);
+                *knee_end = util::db_to_gain(knee_end_db).max(f32::EPSILON);
             }
         }
 
@@ -568,14 +623,26 @@ impl CompressorBank {
             .is_ok()
         {
             let intercept = intercept + params.compressors.upwards.threshold_offset_db.value;
-            for (log2_freq, threshold) in self
+            for ((log2_freq, threshold), (knee_start, knee_end)) in self
                 .log2_freqs
                 .iter()
                 .zip(self.upwards_thresholds.iter_mut())
+                .zip(
+                    self.upwards_knee_starts
+                        .iter_mut()
+                        .zip(self.upwards_knee_ends.iter_mut()),
+                )
             {
                 let offset = log2_freq - log2_center_freq;
                 let threshold_db = intercept + (slope * offset) + (curve * offset * offset);
+                let knee_start_db =
+                    threshold_db - (params.compressors.upwards.knee_width_db.value / 2.0);
+                let knee_end_db =
+                    threshold_db + (params.compressors.upwards.knee_width_db.value / 2.0);
+
                 *threshold = util::db_to_gain(threshold_db).max(f32::EPSILON);
+                *knee_start = util::db_to_gain(knee_start_db).max(f32::EPSILON);
+                *knee_end = util::db_to_gain(knee_end_db).max(f32::EPSILON);
             }
         }
 
