@@ -55,7 +55,10 @@ jobs:
           # FIXME: Needed for SIMD. Diopser can be compiled without SIMD support
           #        though, we'd actually need to test whether both versions
           #        compile
-          toolchain: nightly
+          # FIXME: The latest nightly won't produce the symbols needed for CLAP:
+          #        https://github.com/rust-lang/rust/pull/93718
+          #        https://github.com/rust-lang/rust/issues/99596
+          toolchain: nightly-2022-07-15
           profile: minimal
           default: true
           # The macOS AArch64 build is done from an x86_64 macOS CI runner, so
