@@ -87,6 +87,17 @@ pub(crate) fn create(
                         .bottom(Pixels(-10.0));
 
                     GenericUi::new(cx, Data::params.map(|p| p.threshold.clone()));
+
+                    Label::new(
+                        cx,
+                        "Parameter ranges and overal gain staging are still subject to change. If \
+                         you use this in a project, make sure to bounce things to audio just in \
+                         case they'll sound different later.",
+                    )
+                    .left(Pixels(15.0))
+                    .right(Pixels(5.0))
+                    .top(Pixels(5.0))
+                    .width(Stretch(1.0));
                 })
                 .width(RIGHT_COLUMN_WIDTH)
                 .height(Auto);
