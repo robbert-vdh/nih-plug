@@ -63,7 +63,13 @@ pub fn s2v_compression_ratio() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync>
 /// Turn an `f32` value from voltage gain to decibels using the semantics described in
 /// [`util::gain_to_db()]. You should use either `" dB"` or `" dBFS"` for the parameter's unit.
 pub fn v2s_f32_gain_to_db(digits: usize) -> Arc<dyn Fn(f32) -> String + Send + Sync> {
-    Arc::new(move |value| format!("{:.digits$}", util::gain_to_db(value)))
+    Arc::new(move |value| {
+        // Never print -0.0 since that just looks weird and confusing
+        let value_db = util::gain_to_db(value);
+        let value_db = if value_db.abs() < 1e-6 { 0.0 } else { value_db };
+
+        format!("{:.digits$}", value_db)
+    })
 }
 
 /// Parse a decibel value to a linear voltage gain ratio. Handles the `dB` or `dBFS` units for you.
