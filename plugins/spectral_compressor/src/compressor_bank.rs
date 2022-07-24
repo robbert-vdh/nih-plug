@@ -504,11 +504,13 @@ impl CompressorBank {
     ) {
         // Well I'm not sure at all why this scaling works, but it does. With higher knee
         // bandwidths, the middle values needs to be pushed more towards the post-knee threshold
-        // than with lower knee values.
+        // than with lower knee values. These scaling factors are used as exponents.
         let downwards_knee_scaling_factor =
             ((params.compressors.downwards.knee_width_db.value * 2.0) + 2.0).log2() - 1.0;
+        // Note the square root here, since the curve needs to go the other way for the upwards
+        // version.
         let upwards_knee_scaling_factor =
-            ((params.compressors.upwards.knee_width_db.value * 2.0) + 2.0).log2() - 1.0;
+            (((params.compressors.upwards.knee_width_db.value * 2.0) + 2.0).log2() - 1.0).sqrt();
 
         // Is this what they mean by zip and and ship it?
         let downwards_knees = self
@@ -536,17 +538,14 @@ impl CompressorBank {
             .zip(upwards_values)
             .skip(skip_bins_below)
         {
-            let (
-                (downwards_threshold, downwards_ratio_recip),
-                (downwards_knee_start, downwards_knee_end),
-            ) = downwards_values;
-            let ((upwards_threshold, upwards_ratio_recip), (upwards_knee_start, upwards_knee_end)) =
-                upwards_values;
-
             // This works by computing a scaling factor, and then scaling the bin magnitudes by that.
             let mut scale = 1.0;
 
             // All compression happens in the linear domain to save a logarithm
+            let (
+                (downwards_threshold, downwards_ratio_recip),
+                (downwards_knee_start, downwards_knee_end),
+            ) = downwards_values;
             if *downwards_ratio_recip != 1.0 {
                 // The soft-knee option will fade in the compression curve when reaching the knee
                 // start until it mtaches the hard-knee curve at the knee-end
@@ -565,7 +564,7 @@ impl CompressorBank {
                     nih_debug_assert!((0.0..=1.0).contains(&raw_knee_t));
 
                     // TODO: Apart from a small discontinuety in the derivative/slope at the start
-                    //       of the knee this equation does exaclty what you'd expect it to, but it
+                    //       of the knee this equation does exactly what you'd expect it to, but it
                     //       feels a bit weird. Should probably look for a cleaner way to calculate
                     //       this soft knee in linear-space at some point.
                     let knee_t = (1.0 - raw_knee_t).powf(downwards_knee_scaling_factor);
@@ -581,7 +580,35 @@ impl CompressorBank {
                 }
             }
 
-            // TODO: Upwards compression
+            // Upwards compression should not happen when the signal is _too_ quiet as we'd only be
+            // amplifying noise
+            let ((upwards_threshold, upwards_ratio_recip), (upwards_knee_start, upwards_knee_end)) =
+                upwards_values;
+            if *upwards_ratio_recip != 1.0 && *envelope > 1e-6 {
+                // This goes the other way around compared to the downwards compression
+                if envelope <= upwards_knee_start {
+                    // Notice how these ratios are reversed here
+                    let threshold_ratio = upwards_threshold / envelope;
+                    scale /= threshold_ratio.powf(*upwards_ratio_recip) / threshold_ratio;
+                } else if envelope <= upwards_knee_end {
+                    // When the knee width is set to 0 dB, `upwards_knee_start == upwards_knee_end`
+                    // and this branch is never hit
+                    let linear_knee_width = upwards_knee_end - upwards_knee_start;
+                    let raw_knee_t = (envelope - upwards_knee_start) / linear_knee_width;
+                    nih_debug_assert!((0.0..=1.0).contains(&raw_knee_t));
+
+                    // TODO: Some note the downwards version
+                    let knee_t = (1.0 - raw_knee_t).powf(upwards_knee_scaling_factor);
+                    nih_debug_assert!((0.0..=1.0).contains(&knee_t));
+
+                    // The ratios are again inverted here compared to the downwards version
+                    let knee_ratio = upwards_knee_start / envelope;
+                    let threshold_ratio = upwards_threshold / envelope;
+                    scale /= (knee_t * (knee_ratio.powf(*upwards_ratio_recip) / knee_ratio))
+                        + ((1.0 - knee_t)
+                            * (threshold_ratio.powf(*upwards_ratio_recip) / threshold_ratio));
+                }
+            }
 
             *bin *= scale;
         }
