@@ -69,11 +69,13 @@ pub use nih_dbg;
 #[macro_export]
 macro_rules! nih_debug_assert {
     ($cond:expr $(,)?) => (
+        #[allow(clippy::neg_cmp_op_on_partial_ord)]
         if cfg!(debug_assertions) && !$cond {
             $crate::util::permit_alloc(|| $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($cond))));
         }
     );
     ($cond:expr, $format:expr $(, $($args:tt)*)?) => (
+        #[allow(clippy::neg_cmp_op_on_partial_ord)]
         if cfg!(debug_assertions) && !$cond {
             $crate::util::permit_alloc(|| $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($cond), ", ", $format), $($($args)*)?));
         }
