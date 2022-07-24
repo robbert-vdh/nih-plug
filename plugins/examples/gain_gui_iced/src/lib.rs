@@ -46,17 +46,20 @@ impl Default for GainParams {
         Self {
             editor_state: editor::default_state(),
 
+            // See the main gain example for more details
             gain: FloatParam::new(
                 "Gain",
-                0.0,
-                FloatRange::Linear {
-                    min: -30.0,
-                    max: 30.0,
+                util::db_to_gain(0.0),
+                FloatRange::Skewed {
+                    min: util::db_to_gain(-30.0),
+                    max: util::db_to_gain(30.0),
+                    factor: FloatRange::gain_skew_factor(-30.0, 30.0),
                 },
             )
-            .with_smoother(SmoothingStyle::Linear(50.0))
-            .with_step_size(0.01)
-            .with_unit(" dB"),
+            .with_smoother(SmoothingStyle::Logarithmic(50.0))
+            .with_unit(" dB")
+            .with_value_to_string(formatters::v2s_f32_gain_to_db(2))
+            .with_string_to_value(formatters::s2v_f32_gain_to_db()),
         }
     }
 }
@@ -115,7 +118,7 @@ impl Plugin for Gain {
 
             let gain = self.params.gain.smoothed.next();
             for sample in channel_samples {
-                *sample *= util::db_to_gain(gain);
+                *sample *= gain;
                 amplitude += *sample;
             }
 
