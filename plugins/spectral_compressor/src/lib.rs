@@ -98,9 +98,9 @@ pub struct SpectralCompressorParams {
 #[derive(Params)]
 struct GlobalParams {
     /// Makeup gain applied after the IDFT in the STFT process. If automatic makeup gain is enabled,
-    /// then this acts as an offset on top of that.
-    #[id = "output_db"]
-    output_gain_db: FloatParam,
+    /// then this acts as an offset on top of that. This is stored as linear gain.
+    #[id = "output"]
+    output_gain: FloatParam,
     // TODO: Bring this back, and with values that make more sense
     // /// Try to automatically compensate for gain differences with different input gain, threshold, and ratio values.
     // #[id = "auto_makeup"]
@@ -171,16 +171,18 @@ impl Default for GlobalParams {
         GlobalParams {
             // We don't need any smoothing for these parameters as the overlap-add process will
             // already act as a form of smoothing
-            output_gain_db: FloatParam::new(
+            output_gain: FloatParam::new(
                 "Output Gain",
-                0.0,
-                FloatRange::Linear {
-                    min: -50.0,
-                    max: 50.0,
+                util::db_to_gain(0.0),
+                FloatRange::Skewed {
+                    min: util::db_to_gain(-50.0),
+                    max: util::db_to_gain(50.0),
+                    factor: FloatRange::gain_skew_factor(-50.0, 50.0),
                 },
             )
             .with_unit(" dB")
-            .with_step_size(0.1),
+            .with_value_to_string(formatters::v2s_f32_gain_to_db(2))
+            .with_string_to_value(formatters::s2v_f32_gain_to_db()),
             // auto_makeup_gain: BoolParam::new("Auto Makeup Gain", true),
             dry_wet_ratio: FloatParam::new("Mix", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 })
                 .with_unit("%")
@@ -367,8 +369,7 @@ impl Plugin for SpectralCompressor {
         // threshold option. When sidechaining is enabled this is used to gain up the sidechain
         // signal instead.
         let input_gain = gain_compensation.sqrt();
-        let output_gain =
-            util::db_to_gain(self.params.global.output_gain_db.value) * gain_compensation.sqrt();
+        let output_gain = self.params.global.output_gain.value * gain_compensation.sqrt();
         // TODO: Auto makeup gain
 
         // This is mixed in later with latency compensation applied
