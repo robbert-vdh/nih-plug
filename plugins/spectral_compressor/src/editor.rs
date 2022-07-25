@@ -94,9 +94,9 @@ pub(crate) fn create(
                          you use this in a project, make sure to bounce things to audio just in \
                          case they'll sound different later.",
                     )
+                    .font_size(15.0 * POINT_SCALE)
                     .left(Pixels(15.0))
                     .right(Pixels(5.0))
-                    .top(Pixels(5.0))
                     .width(Stretch(1.0));
                 })
                 .width(RIGHT_COLUMN_WIDTH)
