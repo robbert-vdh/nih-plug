@@ -590,6 +590,11 @@ impl CompressorBank {
 
     /// Actually do the thing. [`Self::update_envelopes()`] must have been called before calling
     /// this.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the buffer does not have the same length as the one that was passed to the last
+    /// `resize()` call.
     fn compress(
         &self,
         buffer: &mut [Complex32],
@@ -607,40 +612,30 @@ impl CompressorBank {
         let upwards_knee_scaling_factor =
             compute_knee_scaling_factor(params.compressors.upwards.knee_width_db.value).sqrt();
 
-        // Is this what they mean by zip and and ship it?
-        let downwards_knees = self
-            .downwards_knee_starts
-            .iter()
-            .zip(self.downwards_knee_ends.iter());
-        let downwards_values = self
-            .downwards_thresholds
-            .iter()
-            .zip(self.downwards_ratio_recips.iter())
-            .zip(downwards_knees);
-        let upwards_knees = self
-            .upwards_knee_starts
-            .iter()
-            .zip(self.upwards_knee_ends.iter());
-        let upwards_values = self
-            .upwards_thresholds
-            .iter()
-            .zip(self.upwards_ratio_recips.iter())
-            .zip(upwards_knees);
-        for (((bin, envelope), downwards_values), upwards_values) in buffer
+        assert!(self.downwards_thresholds.len() == buffer.len());
+        assert!(self.downwards_ratio_recips.len() == buffer.len());
+        assert!(self.downwards_knee_starts.len() == buffer.len());
+        assert!(self.downwards_knee_ends.len() == buffer.len());
+        assert!(self.upwards_thresholds.len() == buffer.len());
+        assert!(self.upwards_ratio_recips.len() == buffer.len());
+        assert!(self.upwards_knee_starts.len() == buffer.len());
+        assert!(self.upwards_knee_ends.len() == buffer.len());
+        for (bin_idx, (bin, envelope)) in buffer
             .iter_mut()
             .zip(self.envelopes[channel_idx].iter())
-            .zip(downwards_values)
-            .zip(upwards_values)
+            .enumerate()
             .skip(skip_bins_below)
         {
             // This works by computing a scaling factor, and then scaling the bin magnitudes by that.
             let mut scale = 1.0;
 
             // All compression happens in the linear domain to save a logarithm
-            let (
-                (downwards_threshold, downwards_ratio_recip),
-                (downwards_knee_start, downwards_knee_end),
-            ) = downwards_values;
+            // SAFETY: These sizes were asserted above
+            let downwards_threshold = unsafe { self.downwards_thresholds.get_unchecked(bin_idx) };
+            let downwards_ratio_recip =
+                unsafe { self.downwards_ratio_recips.get_unchecked(bin_idx) };
+            let downwards_knee_start = unsafe { self.downwards_knee_starts.get_unchecked(bin_idx) };
+            let downwards_knee_end = unsafe { self.downwards_knee_ends.get_unchecked(bin_idx) };
             if *downwards_ratio_recip != 1.0 {
                 scale *= compress_downwards(
                     *envelope,
@@ -654,8 +649,10 @@ impl CompressorBank {
 
             // Upwards compression should not happen when the signal is _too_ quiet as we'd only be
             // amplifying noise
-            let ((upwards_threshold, upwards_ratio_recip), (upwards_knee_start, upwards_knee_end)) =
-                upwards_values;
+            let upwards_threshold = unsafe { self.upwards_thresholds.get_unchecked(bin_idx) };
+            let upwards_ratio_recip = unsafe { self.upwards_ratio_recips.get_unchecked(bin_idx) };
+            let upwards_knee_start = unsafe { self.upwards_knee_starts.get_unchecked(bin_idx) };
+            let upwards_knee_end = unsafe { self.upwards_knee_ends.get_unchecked(bin_idx) };
             if *upwards_ratio_recip != 1.0 && *envelope > 1e-6 {
                 scale *= compress_upwards(
                     *envelope,
