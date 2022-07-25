@@ -675,8 +675,12 @@ impl CompressorBank {
         // evaluating this needs to be converted to linear gain for the compressors.
         let intercept = params.threshold.threshold_db.value;
         // The cheeky 3 additional dB/octave attenuation is to match pink noise with the default
-        // settings
-        let slope = params.threshold.curve_slope.value - 3.0;
+        // settings. When using sidechaining we explicitly don't want this because the curve should
+        // be a flat offset to the sidechain input at the default settings.
+        let slope = match params.threshold.mode.value() {
+            ThresholdMode::Internal => params.threshold.curve_slope.value - 3.0,
+            ThresholdMode::Sidechain => params.threshold.curve_slope.value,
+        };
         let curve = params.threshold.curve_curve.value;
         let log2_center_freq = params.threshold.center_frequency.value.log2();
 
