@@ -249,58 +249,53 @@ impl Plugin for PolyModSynth {
                                 normalized_offset,
                             } => {
                                 // Polyphonic modulation events are matched to voices using the
-                                // voice ID, and to parameters using the poly modulation ID
-                                match self.get_voice_idx(voice_id) {
-                                    Some(voice_idx) => {
-                                        let voice = self.voices[voice_idx].as_mut().unwrap();
+                                // voice ID, and to parameters using the poly modulation ID. The
+                                // host will probably send a modulation event every N samples. This
+                                // will happen before the voice is active, and of course also after
+                                // it has been terminated (because the host doesn't know that it
+                                // will be). Because of that, we won't print any assertion failures
+                                // when we can't find the voice index here.
+                                if let Some(voice_idx) = self.get_voice_idx(voice_id) {
+                                    let voice = self.voices[voice_idx].as_mut().unwrap();
 
-                                        match poly_modulation_id {
-                                            GAIN_POLY_MOD_ID => {
-                                                // This should either create a smoother for this
-                                                // modulated parameter or update the existing one.
-                                                // Notice how this uses the parameter's unmodulated
-                                                // normalized value in combination with the normalized
-                                                // offset to create the target plain value
-                                                let target_plain_value = self
-                                                    .params
-                                                    .gain
-                                                    .preview_modulated(normalized_offset);
-                                                let (_, smoother) =
-                                                    voice.voice_gain.get_or_insert_with(|| {
-                                                        (
-                                                            normalized_offset,
-                                                            self.params.gain.smoothed.clone(),
-                                                        )
-                                                    });
+                                    match poly_modulation_id {
+                                        GAIN_POLY_MOD_ID => {
+                                            // This should either create a smoother for this
+                                            // modulated parameter or update the existing one.
+                                            // Notice how this uses the parameter's unmodulated
+                                            // normalized value in combination with the normalized
+                                            // offset to create the target plain value
+                                            let target_plain_value = self
+                                                .params
+                                                .gain
+                                                .preview_modulated(normalized_offset);
+                                            let (_, smoother) =
+                                                voice.voice_gain.get_or_insert_with(|| {
+                                                    (
+                                                        normalized_offset,
+                                                        self.params.gain.smoothed.clone(),
+                                                    )
+                                                });
 
-                                                // If this `PolyModulation` events happens on the
-                                                // same sample as a voice's `NoteOn` event, then it
-                                                // should immediately use the modulated value
-                                                // instead of slowly fading in
-                                                if voice.internal_voice_id
-                                                    >= this_sample_internal_voice_id_start
-                                                {
-                                                    smoother.reset(target_plain_value);
-                                                } else {
-                                                    smoother.set_target(
-                                                        sample_rate,
-                                                        target_plain_value,
-                                                    );
-                                                }
+                                            // If this `PolyModulation` events happens on the
+                                            // same sample as a voice's `NoteOn` event, then it
+                                            // should immediately use the modulated value
+                                            // instead of slowly fading in
+                                            if voice.internal_voice_id
+                                                >= this_sample_internal_voice_id_start
+                                            {
+                                                smoother.reset(target_plain_value);
+                                            } else {
+                                                smoother
+                                                    .set_target(sample_rate, target_plain_value);
                                             }
-                                            n => nih_debug_assert_failure!(
-                                                "Polyphonic modulation sent for unknown poly \
-                                                 modulation ID {}",
-                                                n
-                                            ),
                                         }
+                                        n => nih_debug_assert_failure!(
+                                            "Polyphonic modulation sent for unknown poly \
+                                             modulation ID {}",
+                                            n
+                                        ),
                                     }
-                                    // The host will probably send a modulation event every N
-                                    // samples. This will happen before the voice is active, and of
-                                    // course also after it has been terminated (because the host
-                                    // doesn't know that it will be). Because of that, we won't
-                                    // print any assertion failures here.
-                                    None => (),
                                 }
                             }
                             NoteEvent::MonoAutomation {
