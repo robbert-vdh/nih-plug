@@ -124,14 +124,13 @@ pub struct CompressorParams {
     pub threshold_offset_db: FloatParam,
     /// The compression ratio. At 1.0 the compressor is disengaged.
     pub ratio: FloatParam,
-    /// The compression knee width, in decibels.
-    pub knee_width_db: FloatParam,
-
     /// A `[0, 1]` scaling factor that causes the compressors for the higher registers to have lower
     /// ratios than the compressors for the lower registers. The scaling is applied logarithmically
     /// rather than linearly over the compressors. If this is set to 1.0, then the ratios will be
     /// the same for every compressor.
     pub high_freq_ratio_rolloff: FloatParam,
+    /// The compression knee width, in decibels.
+    pub knee_width_db: FloatParam,
 }
 
 unsafe impl Params for CompressorParams {
@@ -146,13 +145,13 @@ unsafe impl Params for CompressorParams {
             ),
             (format!("{prefix}ratio"), self.ratio.as_ptr(), String::new()),
             (
-                format!("{prefix}knee"),
-                self.knee_width_db.as_ptr(),
+                format!("{prefix}high_freq_rolloff"),
+                self.high_freq_ratio_rolloff.as_ptr(),
                 String::new(),
             ),
             (
-                format!("{prefix}high_freq_rolloff"),
-                self.high_freq_ratio_rolloff.as_ptr(),
+                format!("{prefix}knee"),
+                self.knee_width_db.as_ptr(),
                 String::new(),
             ),
         ]
