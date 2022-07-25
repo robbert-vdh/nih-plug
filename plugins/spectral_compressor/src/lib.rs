@@ -52,7 +52,7 @@ struct SpectralCompressor {
     buffer_config: BufferConfig,
 
     /// An adapter that performs most of the overlap-add algorithm for us.
-    stft: util::StftHelper,
+    stft: util::StftHelper<1>,
     /// Contains a Hann window function of the current window length, passed to the overlap-add
     /// helper. Allocated with a `MAX_WINDOW_SIZE` initial capacity.
     window_function: Vec<f32>,
@@ -263,6 +263,10 @@ impl Plugin for SpectralCompressor {
 
     const DEFAULT_NUM_INPUTS: u32 = 2;
     const DEFAULT_NUM_OUTPUTS: u32 = 2;
+    const DEFAULT_AUX_INPUTS: Option<AuxiliaryIOConfig> = Some(AuxiliaryIOConfig {
+        num_busses: 1,
+        num_channels: 2,
+    });
 
     const SAMPLE_ACCURATE_AUTOMATION: bool = true;
 
@@ -275,8 +279,11 @@ impl Plugin for SpectralCompressor {
     }
 
     fn accepts_bus_config(&self, config: &BusConfig) -> bool {
-        // We can support any channel layout
-        config.num_input_channels == config.num_output_channels && config.num_input_channels > 0
+        // We can support any channel layout as long as the number of channels is consistent
+        config.num_input_channels == config.num_output_channels
+            && config.num_input_channels > 0
+            && config.aux_input_busses.num_busses == 1
+            && config.aux_input_busses.num_channels == config.num_input_channels
     }
 
     fn initialize(
@@ -333,7 +340,7 @@ impl Plugin for SpectralCompressor {
     fn process(
         &mut self,
         buffer: &mut Buffer,
-        _aux: &mut AuxiliaryBuffers,
+        aux: &mut AuxiliaryBuffers,
         context: &mut impl ProcessContext,
     ) -> ProcessStatus {
         // If the window size has changed since the last process call, reset the buffers and chance
@@ -375,53 +382,59 @@ impl Plugin for SpectralCompressor {
         // This is mixed in later with latency compensation applied
         self.dry_wet_mixer.write_dry(buffer);
 
-        self.stft
-            .process_overlap_add(buffer, overlap_times, |channel_idx, real_fft_buffer| {
-                // We'll window the input with a Hann function to avoid spectral leakage. The input
-                // gain here also contains a compensation factor for the forward FFT to make the
-                // compressor thresholds make more sense.
-                for (sample, window_sample) in real_fft_buffer.iter_mut().zip(&self.window_function)
-                {
-                    *sample *= window_sample * input_gain;
-                }
-
-                // RustFFT doesn't actually need a scratch buffer here, so we'll pass an empty
-                // buffer instead
-                fft_plan
-                    .r2c_plan
-                    .process_with_scratch(real_fft_buffer, &mut self.complex_fft_buffer, &mut [])
-                    .unwrap();
-
-                // This is where the magic happens
-                self.compressor_bank.process(
-                    &mut self.complex_fft_buffer,
-                    channel_idx,
-                    &self.params,
-                    overlap_times,
-                    first_non_dc_bin_idx,
-                );
-
-                // The DC and other low frequency bins doesn't contain much semantic meaning anymore
-                // after all of this, so it only ends up consuming headroom.
-                if self.params.global.dc_filter.value {
-                    self.complex_fft_buffer[..first_non_dc_bin_idx].fill(Complex32::default());
-                }
-
-                // Inverse FFT back into the scratch buffer. This will be added to a ring buffer
-                // which gets written back to the host at a one block delay.
-                fft_plan
-                    .c2r_plan
-                    .process_with_scratch(&mut self.complex_fft_buffer, real_fft_buffer, &mut [])
-                    .unwrap();
-
-                // Apply the window function once more to reduce time domain aliasing. The gain
-                // compensation compensates for the squared Hann window that would be applied if we
-                // didn't do any processing at all as well as the FFT+IFFT itself.
-                for (sample, window_sample) in real_fft_buffer.iter_mut().zip(&self.window_function)
-                {
-                    *sample *= window_sample * output_gain;
-                }
-            });
+        match self.params.threshold.mode.value() {
+            compressor_bank::ThresholdMode::Internal => self.stft.process_overlap_add(
+                buffer,
+                overlap_times,
+                |channel_idx, real_fft_buffer| {
+                    process_stft_main(
+                        channel_idx,
+                        real_fft_buffer,
+                        &mut self.complex_fft_buffer,
+                        fft_plan,
+                        &self.window_function,
+                        &self.params,
+                        &mut self.compressor_bank,
+                        input_gain,
+                        output_gain,
+                        overlap_times,
+                        first_non_dc_bin_idx,
+                    )
+                },
+            ),
+            compressor_bank::ThresholdMode::Sidechain => self.stft.process_overlap_add_sidechain(
+                buffer,
+                [&aux.inputs[0]],
+                overlap_times,
+                |channel_idx, sidechain_buffer_idx, real_fft_buffer| {
+                    if sidechain_buffer_idx.is_some() {
+                        process_stft_sidechain(
+                            channel_idx,
+                            real_fft_buffer,
+                            &mut self.complex_fft_buffer,
+                            fft_plan,
+                            &self.window_function,
+                            &mut self.compressor_bank,
+                            input_gain,
+                        );
+                    } else {
+                        process_stft_main(
+                            channel_idx,
+                            real_fft_buffer,
+                            &mut self.complex_fft_buffer,
+                            fft_plan,
+                            &self.window_function,
+                            &self.params,
+                            &mut self.compressor_bank,
+                            input_gain,
+                            output_gain,
+                            overlap_times,
+                            first_non_dc_bin_idx,
+                        )
+                    }
+                },
+            ),
+        }
 
         self.dry_wet_mixer.mix_in_dry(
             buffer,
@@ -463,6 +476,96 @@ impl SpectralCompressor {
         self.compressor_bank
             .resize(&self.buffer_config, window_size);
     }
+}
+
+// These separate functions are needed to avoid having to either duplicate the main process function
+// or always do the sidechain STFT. You can't do partial borrows and call `&mut self` methods at the
+// same time.
+
+/// The main process function inside of the STFT callback. If the sidechaining option is
+/// enabled, another callback will run just before this to set up the siddechain frequency
+/// spectrum magnitudes.
+#[allow(clippy::too_many_arguments)]
+fn process_stft_main(
+    channel_idx: usize,
+    real_fft_buffer: &mut [f32],
+    complex_fft_buffer: &mut [Complex32],
+    fft_plan: &mut Plan,
+    window_function: &[f32],
+    params: &SpectralCompressorParams,
+    compressor_bank: &mut compressor_bank::CompressorBank,
+    input_gain: f32,
+    output_gain: f32,
+    overlap_times: usize,
+    first_non_dc_bin_idx: usize,
+) {
+    // We'll window the input with a Hann function to avoid spectral leakage. The input gain
+    // here also contains a compensation factor for the forward FFT to make the compressor
+    // thresholds make more sense.
+    for (sample, window_sample) in real_fft_buffer.iter_mut().zip(window_function) {
+        *sample *= window_sample * input_gain;
+    }
+
+    // RustFFT doesn't actually need a scratch buffer here, so we'll pass an empty buffer
+    // instead
+    fft_plan
+        .r2c_plan
+        .process_with_scratch(real_fft_buffer, complex_fft_buffer, &mut [])
+        .unwrap();
+
+    // This is where the magic happens
+    compressor_bank.process(
+        complex_fft_buffer,
+        channel_idx,
+        params,
+        overlap_times,
+        first_non_dc_bin_idx,
+    );
+
+    // The DC and other low frequency bins doesn't contain much semantic meaning anymore
+    // after all of this, so it only ends up consuming headroom.
+    if params.global.dc_filter.value {
+        complex_fft_buffer[..first_non_dc_bin_idx].fill(Complex32::default());
+    }
+
+    // Inverse FFT back into the scratch buffer. This will be added to a ring buffer
+    // which gets written back to the host at a one block delay.
+    fft_plan
+        .c2r_plan
+        .process_with_scratch(complex_fft_buffer, real_fft_buffer, &mut [])
+        .unwrap();
+
+    // Apply the window function once more to reduce time domain aliasing. The gain
+    // compensation compensates for the squared Hann window that would be applied if we
+    // didn't do any processing at all as well as the FFT+IFFT itself.
+    for (sample, window_sample) in real_fft_buffer.iter_mut().zip(window_function) {
+        *sample *= window_sample * output_gain;
+    }
+}
+
+/// The analysis process function inside of the STFT callback used to compute the frequency
+/// spectrum magnitudes from the sidechain input if the sidechaining option is enabled. All
+/// sidechain channels will be processed before processing the main input
+fn process_stft_sidechain(
+    channel_idx: usize,
+    real_fft_buffer: &mut [f32],
+    complex_fft_buffer: &mut [Complex32],
+    fft_plan: &mut Plan,
+    window_function: &[f32],
+    compressor_bank: &mut compressor_bank::CompressorBank,
+    input_gain: f32,
+) {
+    // The sidechain input should be gained, scaled, and windowed the exact same was as the
+    // main input as it's used for analysis
+    for (sample, window_sample) in real_fft_buffer.iter_mut().zip(window_function) {
+        *sample *= window_sample * input_gain;
+    }
+
+    fft_plan
+        .r2c_plan
+        .process_with_scratch(real_fft_buffer, complex_fft_buffer, &mut [])
+        .unwrap();
+    compressor_bank.process_sidechain(complex_fft_buffer, channel_idx);
 }
 
 impl ClapPlugin for SpectralCompressor {

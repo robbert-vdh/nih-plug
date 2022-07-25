@@ -70,6 +70,10 @@ pub struct CompressorBank {
     /// The current envelope value for this bin, in linear space. Indexed by
     /// `[channel_idx][compressor_idx]`.
     envelopes: Vec<Vec<f32>>,
+    /// When sidechaining is enabled, this contains the per-channel frqeuency spectrum magnitudes
+    /// for the current block. The compressor thresholds and knee values are multiplied by these
+    /// values to get the effective thresholds.
+    sidechain_spectrum_magnitudes: Vec<Vec<f32>>,
     /// The window size this compressor bank was configured for. This is used to compute the
     /// coefficients for the envelope followers in the process function.
     window_size: usize,
@@ -391,6 +395,10 @@ impl CompressorBank {
             upwards_ratio_recips: Vec::with_capacity(complex_buffer_len),
 
             envelopes: vec![Vec::with_capacity(complex_buffer_len); num_channels],
+            sidechain_spectrum_magnitudes: vec![
+                Vec::with_capacity(complex_buffer_len);
+                num_channels
+            ],
             window_size: 0,
             sample_rate: 1.0,
         }
@@ -426,6 +434,12 @@ impl CompressorBank {
         for envelopes in self.envelopes.iter_mut() {
             envelopes.reserve_exact(complex_buffer_len.saturating_sub(envelopes.len()));
         }
+
+        self.sidechain_spectrum_magnitudes
+            .resize_with(num_channels, Vec::new);
+        for magnitudes in self.sidechain_spectrum_magnitudes.iter_mut() {
+            magnitudes.reserve_exact(complex_buffer_len.saturating_sub(magnitudes.len()));
+        }
     }
 
     /// Resize the number of compressors to match the current window size. Also precomputes the
@@ -458,6 +472,10 @@ impl CompressorBank {
             envelopes.resize(complex_buffer_len, 0.0);
         }
 
+        for magnitudes in self.sidechain_spectrum_magnitudes.iter_mut() {
+            magnitudes.resize(complex_buffer_len, 0.0);
+        }
+
         self.window_size = window_size;
         self.sample_rate = buffer_config.sample_rate;
 
@@ -477,6 +495,8 @@ impl CompressorBank {
         for envelopes in self.envelopes.iter_mut() {
             envelopes.fill(0.0);
         }
+
+        // Sidechain data doesn't need to be reset as it will be overwritten immediately before use
     }
 
     /// Apply the magnitude compression to a buffer of FFT bins. The compressors are first updated
@@ -491,11 +511,20 @@ impl CompressorBank {
         overlap_times: usize,
         skip_bins_below: usize,
     ) {
-        assert_eq!(buffer.len(), self.log2_freqs.len());
+        nih_debug_assert_eq!(buffer.len(), self.log2_freqs.len());
 
         self.update_if_needed(params);
         self.update_envelopes(buffer, channel_idx, params, overlap_times, skip_bins_below);
         self.compress(buffer, channel_idx, params, skip_bins_below);
+    }
+
+    /// Set the sidechain frequency spectrum magnitudes just before a [`process()`][Self::process()]
+    /// call. These will be multiplied with the existing compressor thresholds and knee values to
+    /// get the effective values for use with sidechaining.
+    pub fn process_sidechain(&mut self, sc_buffer: &mut [Complex32], channel_idx: usize) {
+        nih_debug_assert_eq!(sc_buffer.len(), self.log2_freqs.len());
+
+        self.update_sidechain_spectra(sc_buffer, channel_idx);
     }
 
     /// Update the envelope followers based on the bin magnetudes.
@@ -544,6 +573,18 @@ impl CompressorBank {
                 // Attack stage
                 *envelope = (attack_old_t * *envelope) + (attack_new_t * magnitude);
             }
+        }
+    }
+
+    /// Update the spectral data using the sidechain input
+    fn update_sidechain_spectra(&mut self, sc_buffer: &mut [Complex32], channel_idx: usize) {
+        nih_debug_assert!(channel_idx < self.sidechain_spectrum_magnitudes.len());
+
+        for (bin, magnitude) in sc_buffer
+            .iter()
+            .zip(self.sidechain_spectrum_magnitudes[channel_idx].iter_mut())
+        {
+            *magnitude = bin.norm();
         }
     }
 
