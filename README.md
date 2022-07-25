@@ -68,8 +68,9 @@ Scroll down for more information on the plugin framework.
   useful too!
 - [**Spectral Compressor**](plugins/spectral_compressor) can squash anything
   into pink noise, apply simultaneous upwards and downwards compressor to
-  dynamically match the sidechain signal's spectrum, and a lot more. Have you
-  ever wondered what a 16384 band OTT would sound like? Neither have I.
+  dynamically match the sidechain signal's spectrum and morph one sound into
+  another, and lots more. Have you ever wondered what a 16384 band OTT would
+  sound like? Neither have I.
 
 ## Framework
 

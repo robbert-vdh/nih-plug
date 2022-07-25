@@ -515,7 +515,12 @@ impl CompressorBank {
 
         self.update_if_needed(params);
         self.update_envelopes(buffer, channel_idx, params, overlap_times, skip_bins_below);
-        self.compress(buffer, channel_idx, params, skip_bins_below);
+        match params.threshold.mode.value() {
+            ThresholdMode::Internal => self.compress(buffer, channel_idx, params, skip_bins_below),
+            ThresholdMode::Sidechain => {
+                self.compress_sidechain(buffer, channel_idx, params, skip_bins_below)
+            }
+        };
     }
 
     /// Set the sidechain frequency spectrum magnitudes just before a [`process()`][Self::process()]
@@ -660,6 +665,107 @@ impl CompressorBank {
                     *upwards_ratio_recip,
                     *upwards_knee_start,
                     *upwards_knee_end,
+                    upwards_knee_scaling_factor,
+                );
+            }
+
+            *bin *= scale;
+        }
+    }
+
+    /// The same as [`compress()`][Self::compress()], but multiplying the threshold and knee values
+    /// with the sidehcain gains.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the buffer does not have the same length as the one that was passed to the last
+    /// `resize()` call.
+    fn compress_sidechain(
+        &self,
+        buffer: &mut [Complex32],
+        channel_idx: usize,
+        params: &SpectralCompressorParams,
+        skip_bins_below: usize,
+    ) {
+        // See `compress` for more details
+        let downwards_knee_scaling_factor =
+            compute_knee_scaling_factor(params.compressors.downwards.knee_width_db.value);
+        let upwards_knee_scaling_factor =
+            compute_knee_scaling_factor(params.compressors.upwards.knee_width_db.value).sqrt();
+
+        // For the channel linking
+        let num_channels = self.sidechain_spectrum_magnitudes.len() as f32;
+        let other_channels_t = params.threshold.sc_channel_link.value / num_channels;
+        let this_channel_t = 1.0 - (other_channels_t * (num_channels - 1.0));
+
+        assert!(self.sidechain_spectrum_magnitudes[channel_idx].len() == buffer.len());
+        assert!(self.downwards_thresholds.len() == buffer.len());
+        assert!(self.downwards_ratio_recips.len() == buffer.len());
+        assert!(self.downwards_knee_starts.len() == buffer.len());
+        assert!(self.downwards_knee_ends.len() == buffer.len());
+        assert!(self.upwards_thresholds.len() == buffer.len());
+        assert!(self.upwards_ratio_recips.len() == buffer.len());
+        assert!(self.upwards_knee_starts.len() == buffer.len());
+        assert!(self.upwards_knee_ends.len() == buffer.len());
+        for (bin_idx, (bin, envelope)) in buffer
+            .iter_mut()
+            .zip(self.envelopes[channel_idx].iter())
+            .enumerate()
+            .skip(skip_bins_below)
+        {
+            // The idea here is that we scale the compressor thresholds/knee values by the sidechain
+            // signal, thus sort of creating a dynamic multiband compressor
+            let sidechain_scale: f32 = self
+                .sidechain_spectrum_magnitudes
+                .iter()
+                .enumerate()
+                .map(|(sidechain_channel_idx, magnitudes)| {
+                    let t = if sidechain_channel_idx == channel_idx {
+                        this_channel_t
+                    } else {
+                        other_channels_t
+                    };
+
+                    unsafe { magnitudes.get_unchecked(bin_idx) * t }
+                })
+                .sum();
+
+            let mut scale = 1.0;
+
+            // Notice how the threshold and knee values are scaled here
+            let downwards_threshold =
+                unsafe { self.downwards_thresholds.get_unchecked(bin_idx) * sidechain_scale };
+            let downwards_ratio_recip =
+                unsafe { self.downwards_ratio_recips.get_unchecked(bin_idx) };
+            let downwards_knee_start =
+                unsafe { self.downwards_knee_starts.get_unchecked(bin_idx) * sidechain_scale };
+            let downwards_knee_end =
+                unsafe { self.downwards_knee_ends.get_unchecked(bin_idx) * sidechain_scale };
+            if *downwards_ratio_recip != 1.0 {
+                scale *= compress_downwards(
+                    *envelope,
+                    downwards_threshold,
+                    *downwards_ratio_recip,
+                    downwards_knee_start,
+                    downwards_knee_end,
+                    downwards_knee_scaling_factor,
+                );
+            }
+
+            let upwards_threshold =
+                unsafe { self.upwards_thresholds.get_unchecked(bin_idx) * sidechain_scale };
+            let upwards_ratio_recip = unsafe { self.upwards_ratio_recips.get_unchecked(bin_idx) };
+            let upwards_knee_start =
+                unsafe { self.upwards_knee_starts.get_unchecked(bin_idx) * sidechain_scale };
+            let upwards_knee_end =
+                unsafe { self.upwards_knee_ends.get_unchecked(bin_idx) * sidechain_scale };
+            if *upwards_ratio_recip != 1.0 && *envelope > 1e-6 {
+                scale *= compress_upwards(
+                    *envelope,
+                    upwards_threshold,
+                    *upwards_ratio_recip,
+                    upwards_knee_start,
+                    upwards_knee_end,
                     upwards_knee_scaling_factor,
                 );
             }
