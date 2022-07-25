@@ -80,7 +80,6 @@ pub struct CompressorBank {
 
 #[derive(Params)]
 pub struct ThresholdParams {
-    // TODO: Sidechaining
     /// The compressor threshold at the center frequency. When sidechaining is enabled, the input
     /// signal is gained by the inverse of this value. This replaces the input gain in the original
     /// Spectral Compressor. In the polynomial below, this is the intercept.
@@ -101,6 +100,35 @@ pub struct ThresholdParams {
     /// frequency. See the polynomial above.
     #[id = "thresh_curve_curve"]
     pub curve_curve: FloatParam,
+
+    /// Controls the type of threshold that should be used. Check [`ThresholdMode`] for more
+    /// information.
+    #[id = "thresh_mode"]
+    pub mode: EnumParam<ThresholdMode>,
+    /// A `[0, 1]` parameter that controls how much of the other channels should be mixed in when
+    /// computing the channel gain value that is then multiplied with he thresholds and knee values
+    /// to the the compression parameters when using the sidechain modes.
+    #[id = "thresh_sc_link"]
+    pub sc_channel_link: FloatParam,
+}
+
+/// The type of threshold to use.
+#[derive(Enum, Debug, PartialEq, Eq)]
+pub enum ThresholdMode {
+    /// Configure the thresholds to offset pink noise. This means that the slope will receive an
+    /// additional -3 dB/octave slope.
+    #[id = "internal"]
+    #[name = "Pink Noise"]
+    Internal,
+    /// Dynamically reconfigure the thresholds based on a sidechain input. The -3 dB/octave slope
+    /// offset is not applied here so the curve stays true to the sidechain input at the default
+    /// settings. This works by simply multiplying the sidechain gain levels with the precomputed
+    /// threshold, knee start, and knee end values. The sidechain channel linking option determines
+    /// how how much of the other channel values to mix in before multiplying the sidechain gain
+    /// values with the thresholds.
+    #[id = "sidechain"]
+    #[name = "Sidechain"]
+    Sidechain,
 }
 
 /// Contains the compressor parameters for both the upwards and downwards compressor banks.
@@ -221,9 +249,22 @@ impl ThresholdParams {
                     center: 0.0,
                 },
             )
-            .with_callback(set_update_both_thresholds)
+            .with_callback(set_update_both_thresholds.clone())
             .with_unit(" dB/oct²")
             .with_step_size(0.01),
+
+            mode: EnumParam::new("Mode", ThresholdMode::Internal)
+                // Not the most efficient way to do this, but it's a bit cleaner than the
+                // alternative
+                .with_callback(Arc::new(move |_| set_update_both_thresholds(0.0))),
+            sc_channel_link: FloatParam::new(
+                "SC Channel Link",
+                0.0,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_unit("%")
+            .with_value_to_string(formatters::v2s_f32_percentage(0))
+            .with_string_to_value(formatters::s2v_f32_percentage()),
         }
     }
 }
