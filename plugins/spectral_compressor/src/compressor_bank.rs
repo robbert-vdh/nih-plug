@@ -728,7 +728,9 @@ impl CompressorBank {
 
                     unsafe { magnitudes.get_unchecked(bin_idx) * t }
                 })
-                .sum();
+                .sum::<f32>()
+                // The thresholds may never reach zero as they are used in divisions
+                .max(f32::EPSILON);
 
             let mut scale = 1.0;
 
