@@ -601,11 +601,11 @@ impl CompressorBank {
         // bandwidths, the middle values needs to be pushed more towards the post-knee threshold
         // than with lower knee values. These scaling factors are used as exponents.
         let downwards_knee_scaling_factor =
-            ((params.compressors.downwards.knee_width_db.value * 2.0) + 2.0).log2() - 1.0;
+            compute_knee_scaling_factor(params.compressors.downwards.knee_width_db.value);
         // Note the square root here, since the curve needs to go the other way for the upwards
-        // version.
+        // version
         let upwards_knee_scaling_factor =
-            (((params.compressors.upwards.knee_width_db.value * 2.0) + 2.0).log2() - 1.0).sqrt();
+            compute_knee_scaling_factor(params.compressors.upwards.knee_width_db.value).sqrt();
 
         // Is this what they mean by zip and and ship it?
         let downwards_knees = self
@@ -802,6 +802,13 @@ impl CompressorBank {
             }
         }
     }
+}
+
+/// Get the knee scaling factor for converting a linear `[0, 1]` knee range into the correct curve
+/// for the soft knee. This is used to blend between compression at the knee start to compression at
+/// the actual threshold. For upwards compression this needs an additional square root.
+fn compute_knee_scaling_factor(downwards_knee_width_db: f32) -> f32 {
+    ((downwards_knee_width_db * 2.0) + 2.0).log2() - 1.0
 }
 
 /// Get the compression scaling factor for downwards compression with the supplied parameters. The
