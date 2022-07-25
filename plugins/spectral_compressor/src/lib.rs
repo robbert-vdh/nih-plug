@@ -84,23 +84,23 @@ pub struct SpectralCompressorParams {
     /// Global parameters. These could just live in this struct but I wanted a separate generic UI
     /// just for these.
     #[nested = "global"]
-    global: Arc<GlobalParams>,
+    pub global: Arc<GlobalParams>,
 
     /// Parameters controlling the compressor thresholds and curves.
     #[nested = "threshold"]
-    threshold: Arc<compressor_bank::ThresholdParams>,
+    pub threshold: Arc<compressor_bank::ThresholdParams>,
     /// Parameters for the upwards and downwards compressors.
     #[nested = "compressors"]
-    compressors: compressor_bank::CompressorBankParams,
+    pub compressors: compressor_bank::CompressorBankParams,
 }
 
 /// Global parameters controlling the output stage and all compressors.
 #[derive(Params)]
-struct GlobalParams {
+pub struct GlobalParams {
     /// Makeup gain applied after the IDFT in the STFT process. If automatic makeup gain is enabled,
     /// then this acts as an offset on top of that. This is stored as linear gain.
     #[id = "output"]
-    output_gain: FloatParam,
+    pub output_gain: FloatParam,
     // TODO: Bring this back, and with values that make more sense
     // /// Try to automatically compensate for gain differences with different input gain, threshold, and ratio values.
     // #[id = "auto_makeup"]
@@ -108,28 +108,28 @@ struct GlobalParams {
     /// How much of the dry signal to mix in with the processed signal. The mixing is done after
     /// applying the output gain. In other words, the dry signal is not gained in any way.
     #[id = "dry_wet"]
-    dry_wet_ratio: FloatParam,
+    pub dry_wet_ratio: FloatParam,
     /// Sets the 0-20 Hz bin to 0 since this won't have a lot of semantic meaning anymore after this
     /// plugin and it will thus just eat up headroom.
     #[id = "dc_filter"]
-    dc_filter: BoolParam,
+    pub dc_filter: BoolParam,
 
     /// The size of the FFT window as a power of two (to prevent invalid inputs).
     #[id = "stft_window"]
-    window_size_order: IntParam,
+    pub window_size_order: IntParam,
     /// The amount of overlap to use in the overlap-add algorithm as a power of two (again to
     /// prevent invalid inputs).
     #[id = "stft_overlap"]
-    overlap_times_order: IntParam,
+    pub overlap_times_order: IntParam,
 
     /// The compressor's attack time in milliseconds. Controls both upwards and downwards
     /// compression.
     #[id = "attack"]
-    compressor_attack_ms: FloatParam,
+    pub compressor_attack_ms: FloatParam,
     /// The compressor's release time in milliseconds. Controls both upwards and downwards
     /// compression.
     #[id = "release"]
-    compressor_release_ms: FloatParam,
+    pub compressor_release_ms: FloatParam,
 }
 
 impl Default for SpectralCompressor {

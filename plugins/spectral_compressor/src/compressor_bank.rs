@@ -85,22 +85,22 @@ pub struct ThresholdParams {
     /// signal is gained by the inverse of this value. This replaces the input gain in the original
     /// Spectral Compressor. In the polynomial below, this is the intercept.
     #[id = "tresh_global"]
-    threshold_db: FloatParam,
+    pub threshold_db: FloatParam,
     /// The center frqeuency for the target curve when sidechaining is not enabled. The curve is a
     /// polynomial `threshold_db + curve_slope*x + curve_curve*(x^2)` that evaluates to a decibel
     /// value, where `x = log2(center_frequency) - log2(bin_frequency)`. In other words, this is
     /// evaluated in the log/log domain for decibels and octaves.
     #[id = "thresh_center_freq"]
-    center_frequency: FloatParam,
+    pub center_frequency: FloatParam,
     /// The slope for the curve, in the log/log domain. See the polynomial above.
     #[id = "thresh_curve_slope"]
-    curve_slope: FloatParam,
+    pub curve_slope: FloatParam,
     /// The, uh, 'curve' for the curve, in the logarithmic domain. This is the third coefficient in
     /// the quadratic polynomial and controls the parabolic behavior. Positive values turn the curve
     /// into a v-shaped curve, while negative values attenuate everything outside of the center
     /// frequency. See the polynomial above.
     #[id = "thresh_curve_curve"]
-    curve_curve: FloatParam,
+    pub curve_curve: FloatParam,
 }
 
 /// Contains the compressor parameters for both the upwards and downwards compressor banks.
@@ -121,17 +121,17 @@ pub struct CompressorParams {
     param_id_prefix: &'static str,
 
     /// The compression threshold relative to the target curve.
-    threshold_offset_db: FloatParam,
+    pub threshold_offset_db: FloatParam,
     /// The compression ratio. At 1.0 the compressor is disengaged.
-    ratio: FloatParam,
+    pub ratio: FloatParam,
     /// The compression knee width, in decibels.
-    knee_width_db: FloatParam,
+    pub knee_width_db: FloatParam,
 
     /// A `[0, 1]` scaling factor that causes the compressors for the higher registers to have lower
     /// ratios than the compressors for the lower registers. The scaling is applied logarithmically
     /// rather than linearly over the compressors. If this is set to 1.0, then the ratios will be
     /// the same for every compressor.
-    high_freq_ratio_rolloff: FloatParam,
+    pub high_freq_ratio_rolloff: FloatParam,
 }
 
 unsafe impl Params for CompressorParams {
