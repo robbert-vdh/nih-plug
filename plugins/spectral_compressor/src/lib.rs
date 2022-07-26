@@ -189,7 +189,7 @@ impl Default for GlobalParams {
                 .with_smoother(SmoothingStyle::Linear(15.0))
                 .with_value_to_string(formatters::v2s_f32_percentage(0))
                 .with_string_to_value(formatters::s2v_f32_percentage()),
-            dc_filter: BoolParam::new("DC Filter", true),
+            dc_filter: BoolParam::new("DC Filter", filter),
 
             window_size_order: IntParam::new(
                 "Window Size",
