@@ -475,6 +475,7 @@ impl SpectralCompressor {
         // This also causes the thresholds and ratios to be updated on the next STFT process cycle.
         self.compressor_bank
             .resize(&self.buffer_config, window_size);
+        self.compressor_bank.reset();
     }
 }
 

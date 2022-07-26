@@ -25,6 +25,11 @@ use crate::SpectralCompressorParams;
 const DOWNWARDS_NAME_PREFIX: &str = "downwards_";
 const UPWARDS_NAME_PREFIX: &str = "upwards_";
 
+/// The envelopes are initialized to the RMS value of a unity sine wave to make sure extreme upwards
+/// compression doesn't cause pops when switching between window sizes and when deactivating and
+/// reactivating the plugin.
+const ENVELOPE_INIT_VALUE: f32 = std::f32::consts::FRAC_1_SQRT_2;
+
 /// A bank of compressors so each FFT bin can be compressed individually. The vectors in this struct
 /// will have a capacity of `MAX_WINDOW_SIZE / 2 + 1` and a size that matches the current complex
 /// FFT buffer size. This is stored as a struct of arrays to make SIMD-ing easier in the future.
@@ -469,7 +474,7 @@ impl CompressorBank {
         self.upwards_knee_ends.resize(complex_buffer_len, 1.0);
 
         for envelopes in self.envelopes.iter_mut() {
-            envelopes.resize(complex_buffer_len, 0.0);
+            envelopes.resize(complex_buffer_len, ENVELOPE_INIT_VALUE);
         }
 
         for magnitudes in self.sidechain_spectrum_magnitudes.iter_mut() {
@@ -493,7 +498,7 @@ impl CompressorBank {
     /// Clear out the envelope followers.
     pub fn reset(&mut self) {
         for envelopes in self.envelopes.iter_mut() {
-            envelopes.fill(0.0);
+            envelopes.fill(ENVELOPE_INIT_VALUE);
         }
 
         // Sidechain data doesn't need to be reset as it will be overwritten immediately before use
