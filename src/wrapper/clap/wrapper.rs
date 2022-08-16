@@ -1212,6 +1212,29 @@ impl<P: ClapPlugin> Wrapper<P> {
 
                     clap_call! { out=>try_push(out, &event.header) }
                 }
+                NoteEvent::MidiProgramChange {
+                    timing: _,
+                    channel,
+                    program,
+                } if P::MIDI_OUTPUT >= MidiConfig::MidiCCs => {
+                    let event = clap_event_midi {
+                        header: clap_event_header {
+                            size: mem::size_of::<clap_event_midi>() as u32,
+                            time,
+                            space_id: CLAP_CORE_EVENT_SPACE_ID,
+                            type_: CLAP_EVENT_MIDI,
+                            flags: 0,
+                        },
+                        port_index: 0,
+                        data: [
+                            midi::PROGRAM_CHANGE | channel as u8,
+                            program,
+                            0,
+                        ],
+                    };
+
+                    clap_call! { out=>try_push(out, &event.header) }
+                }
                 NoteEvent::MidiChannelPressure {
                     timing: _,
                     channel,
