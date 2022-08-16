@@ -256,6 +256,14 @@ pub enum NoteEvent {
         /// The note's brightness amount, from 0 to 1.
         brightness: f32,
     },
+    /// A MIDI program change event, available on [`MidiConfig::MidiCCs`] and up.
+    MidiProgramChange {
+        timing: u32,
+        /// The affected channel, from 0 to 16.
+        channel: u8,
+        /// The program number.
+        program: u8,
+    },
     /// A MIDI channel pressure event, available on [`MidiConfig::MidiCCs`] and up.
     MidiChannelPressure {
         timing: u32,
@@ -307,6 +315,7 @@ impl NoteEvent {
             NoteEvent::PolyVibrato { timing, .. } => *timing,
             NoteEvent::PolyExpression { timing, .. } => *timing,
             NoteEvent::PolyBrightness { timing, .. } => *timing,
+            NoteEvent::MidiProgramChange { timing, .. } => *timing,
             NoteEvent::MidiChannelPressure { timing, .. } => *timing,
             NoteEvent::MidiPitchBend { timing, .. } => *timing,
             NoteEvent::MidiCC { timing, .. } => *timing,
@@ -329,6 +338,7 @@ impl NoteEvent {
             NoteEvent::PolyVibrato { voice_id, .. } => *voice_id,
             NoteEvent::PolyExpression { voice_id, .. } => *voice_id,
             NoteEvent::PolyBrightness { voice_id, .. } => *voice_id,
+            NoteEvent::MidiProgramChange { .. } => None,
             NoteEvent::MidiChannelPressure { .. } => None,
             NoteEvent::MidiPitchBend { .. } => None,
             NoteEvent::MidiCC { .. } => None,
@@ -362,6 +372,11 @@ impl NoteEvent {
                 channel,
                 note: midi_data[1],
                 pressure: midi_data[2] as f32 / 127.0,
+            }),
+            midi::PROGRAM_CHANGE => Ok(NoteEvent::MidiProgramChange {
+                timing,
+                channel,
+                program: midi_data[1],
             }),
             midi::CHANNEL_KEY_PRESSURE => Ok(NoteEvent::MidiChannelPressure {
                 timing,
@@ -421,6 +436,15 @@ impl NoteEvent {
                 midi::POLYPHONIC_KEY_PRESSURE | channel,
                 note,
                 (pressure * 127.0).round().clamp(0.0, 127.0) as u8,
+            ]),
+            NoteEvent::MidiProgramChange {
+                timing: _,
+                channel,
+                program,
+            } => Some([
+                midi::PROGRAM_CHANGE | channel,
+                program,
+                0,
             ]),
             NoteEvent::MidiChannelPressure {
                 timing: _,
@@ -487,6 +511,7 @@ impl NoteEvent {
             NoteEvent::PolyVibrato { timing, .. } => *timing -= samples,
             NoteEvent::PolyExpression { timing, .. } => *timing -= samples,
             NoteEvent::PolyBrightness { timing, .. } => *timing -= samples,
+            NoteEvent::MidiProgramChange { timing, .. } => *timing -= samples,
             NoteEvent::MidiChannelPressure { timing, .. } => *timing -= samples,
             NoteEvent::MidiPitchBend { timing, .. } => *timing -= samples,
             NoteEvent::MidiCC { timing, .. } => *timing -= samples,
@@ -541,6 +566,20 @@ mod tests {
             channel: 1,
             note: 2,
             pressure: 0.6929134,
+        };
+
+        assert_eq!(
+            NoteEvent::from_midi(TIMING, event.as_midi().unwrap()).unwrap(),
+            event
+        );
+    }
+
+    #[test]
+    fn test_program_change_midi_conversion() {
+        let event = NoteEvent::MidiProgramChange {
+            timing: TIMING,
+            channel: 1,
+            program: 42,
         };
 
         assert_eq!(
