@@ -288,7 +288,8 @@ pub enum NoteEvent {
         /// The CC's value, normalized to `[0, 1]`. Multiply by 127 to get the original raw value.
         value: f32,
     },
-    /// A MIDI program change event, available on [`MidiConfig::MidiCCs`] and up.
+    /// A MIDI program change event, available on [`MidiConfig::MidiCCs`] and up. VST3 plugins
+    /// cannot receive these events.
     MidiProgramChange {
         timing: u32,
         /// The affected channel, from 0 to 16.
