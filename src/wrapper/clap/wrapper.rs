@@ -1212,35 +1212,17 @@ impl<P: ClapPlugin> Wrapper<P> {
 
                     clap_call! { out=>try_push(out, &event.header) }
                 }
-                NoteEvent::MidiChannelPressure {
-                    timing: _,
-                    channel,
-                    pressure,
-                } if P::MIDI_OUTPUT >= MidiConfig::MidiCCs => {
-                    let event = clap_event_midi {
-                        header: clap_event_header {
-                            size: mem::size_of::<clap_event_midi>() as u32,
-                            time,
-                            space_id: CLAP_CORE_EVENT_SPACE_ID,
-                            type_: CLAP_EVENT_MIDI,
-                            flags: 0,
-                        },
-                        port_index: 0,
-                        data: [
-                            midi::CHANNEL_KEY_PRESSURE | channel as u8,
-                            (pressure * 127.0).round() as u8,
-                            0,
-                        ],
-                    };
-
-                    clap_call! { out=>try_push(out, &event.header) }
-                }
-                NoteEvent::MidiPitchBend {
-                    timing: _,
-                    channel,
-                    value,
-                } if P::MIDI_OUTPUT >= MidiConfig::MidiCCs => {
-                    let scaled = (value * ((1 << 14) - 1) as f32).round() as i32;
+                midi_event @ (NoteEvent::MidiChannelPressure { .. }
+                | NoteEvent::MidiPitchBend { .. }
+                | NoteEvent::MidiCC { .. }
+                | NoteEvent::MidiProgramChange { .. })
+                    if P::MIDI_OUTPUT >= MidiConfig::MidiCCs =>
+                {
+                    // NIH-plug already includes MIDI conversion functions, so we'll reuse those for
+                    // the MIDI events
+                    let midi = midi_event
+                        .as_midi()
+                        .expect("Missing MIDI conversion for MIDI event");
 
                     let event = clap_event_midi {
                         header: clap_event_header {
@@ -1251,54 +1233,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                             flags: 0,
                         },
                         port_index: 0,
-                        data: [
-                            midi::PITCH_BEND_CHANGE | channel as u8,
-                            (scaled & 0b01111111) as u8,
-                            ((scaled >> 7) & 0b01111111) as u8,
-                        ],
-                    };
-
-                    clap_call! { out=>try_push(out, &event.header) }
-                }
-                NoteEvent::MidiCC {
-                    timing: _,
-                    channel,
-                    cc,
-                    value,
-                } if P::MIDI_OUTPUT >= MidiConfig::MidiCCs => {
-                    let event = clap_event_midi {
-                        header: clap_event_header {
-                            size: mem::size_of::<clap_event_midi>() as u32,
-                            time,
-                            space_id: CLAP_CORE_EVENT_SPACE_ID,
-                            type_: CLAP_EVENT_MIDI,
-                            flags: 0,
-                        },
-                        port_index: 0,
-                        data: [
-                            midi::CONTROL_CHANGE | channel as u8,
-                            cc,
-                            (value * 127.0).round() as u8,
-                        ],
-                    };
-
-                    clap_call! { out=>try_push(out, &event.header) }
-                }
-                NoteEvent::MidiProgramChange {
-                    timing: _,
-                    channel,
-                    program,
-                } if P::MIDI_OUTPUT >= MidiConfig::MidiCCs => {
-                    let event = clap_event_midi {
-                        header: clap_event_header {
-                            size: mem::size_of::<clap_event_midi>() as u32,
-                            time,
-                            space_id: CLAP_CORE_EVENT_SPACE_ID,
-                            type_: CLAP_EVENT_MIDI,
-                            flags: 0,
-                        },
-                        port_index: 0,
-                        data: [midi::PROGRAM_CHANGE | channel as u8, program, 0],
+                        data: midi,
                     };
 
                     clap_call! { out=>try_push(out, &event.header) }
