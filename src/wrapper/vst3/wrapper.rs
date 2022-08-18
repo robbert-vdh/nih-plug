@@ -1667,19 +1667,6 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                     }
                                 }
                             }
-                            NoteEvent::MidiProgramChange {
-                                timing: _,
-                                channel,
-                                program,
-                            } if P::MIDI_OUTPUT >= MidiConfig::MidiCCs => {
-                                vst3_event.type_ = EventTypes::kLegacyMIDICCOutEvent as u16;
-                                vst3_event.event.legacy_midi_cc_out = LegacyMidiCCOutEvent {
-                                    control_number: 130, // kCtrlProgramChange
-                                    channel: channel as i8,
-                                    value: program as i8,
-                                    value2: 0,
-                                };
-                            }
                             NoteEvent::MidiChannelPressure {
                                 timing: _,
                                 channel,
@@ -1719,6 +1706,19 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                     control_number: cc,
                                     channel: channel as i8,
                                     value: (value * 127.0).round() as i8,
+                                    value2: 0,
+                                };
+                            }
+                            NoteEvent::MidiProgramChange {
+                                timing: _,
+                                channel,
+                                program,
+                            } if P::MIDI_OUTPUT >= MidiConfig::MidiCCs => {
+                                vst3_event.type_ = EventTypes::kLegacyMIDICCOutEvent as u16;
+                                vst3_event.event.legacy_midi_cc_out = LegacyMidiCCOutEvent {
+                                    control_number: 130, // kCtrlProgramChange
+                                    channel: channel as i8,
+                                    value: program as i8,
                                     value2: 0,
                                 };
                             }
