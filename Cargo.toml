@@ -49,7 +49,7 @@ assert_process_allocs = ["dep:assert_no_alloc"]
 # Enables an export target for standalone binaries through the
 # `nih_export_standalone()` function. Disabled by default as this requires
 # building additional dependencies for audio and MIDI handling.
-standalone = ["dep:anyhow", "dep:baseview", "dep:clap", "dep:jack"]
+standalone = ["dep:baseview", "dep:clap", "dep:jack"]
 # Enables the `nih_export_vst3!()` macro. Enabled by default. This feature
 # exists mostly for GPL-compliance reasons, since even if you don't use the VST3
 # wrapper you might otherwise still include a couple (unused) symbols from the
@@ -58,12 +58,19 @@ vst3 = ["dep:vst3-sys"]
 # Add adapters to the Buffer object for reading the channel data to and from
 # `std::simd` vectors. Requires a nightly compiler.
 simd = []
+# Compress plugin state using the Zstandard algorithm. Loading uncompressed
+# state is still supported so existing state will still load after enabling this
+# feature for a plugin, but it can not be disabled again without losing state
+# compatibility.
+zstd = ["dep:zstd"]
+
 # Only relevant when generating docs, adds the `doc_auto_cfg` nightly feature
 docs = []
 
 [dependencies]
 nih_plug_derive = { path = "nih_plug_derive" }
 
+anyhow = "1.0"
 atomic_float = "0.1"
 atomic_refcell = "0.1"
 backtrace = "0.3.65"
@@ -85,7 +92,6 @@ widestring = "1.0.0-beta.1"
 assert_no_alloc = { version = "1.1", optional = true }
 
 # Used for the `standalone` feature
-anyhow = { version = "1.0", optional = true }
 # NOTE: OpenGL support is not needed here, but rust-analyzer gets confused when
 #       some crates do use it and others don't
 baseview = { git = "https://github.com/robbert-vdh/baseview.git", branch = "feature/resize", features = ["opengl"], optional = true }
@@ -96,6 +102,9 @@ jack = { git = "https://github.com/robbert-vdh/rust-jack.git", branch = "feature
 
 # Used for the `vst3` feature
 vst3-sys = { git = "https://github.com/robbert-vdh/vst3-sys.git", branch = "fix/note-off-event", optional = true }
+
+# Used for the `zstd` feature
+zstd = { version = "0.11.2", optional = true }
 
 [target.'cfg(all(target_family = "unix", not(target_os = "macos")))'.dependencies]
 libc = "0.2.124"

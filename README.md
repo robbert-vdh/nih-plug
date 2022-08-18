@@ -116,6 +116,8 @@ Scroll down for more information on the plugin framework.
   enabled by setting the `Plugin::SAMPLE_ACCURATE_AUTOMATION` constant to
   `true`.
 - Support for CLAP's polyphonic modulation on a per-parameter basis.
+- Optional support for compressing the human readable JSON state files using
+  [Zstandard](https://en.wikipedia.org/wiki/Zstd).
 - Comes with adapters for popular Rust GUI frameworks as well as some basic
   widgets for them that integrate with NIH-plug's parameter system. Currently
   there's support for [egui](nih_plug_egui), [iced](nih_plug_iced) and

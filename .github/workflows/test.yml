@@ -60,7 +60,7 @@ jobs:
           command: build
           # Don't use --all-features as that will enable a whole bunch of
           # conflicting iced features
-          args: --workspace --features "simd,standalone"
+          args: --workspace --features "simd,standalone,zstd"
       - name: Run the tests
         uses: actions-rs/cargo@v1
         with:

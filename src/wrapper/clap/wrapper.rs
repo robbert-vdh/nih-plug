@@ -3139,7 +3139,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 true
             }
             Err(err) => {
-                nih_debug_assert_failure!("Could not save state: {}", err);
+                nih_debug_assert_failure!("Could not save state: {:#}", err);
                 false
             }
         }

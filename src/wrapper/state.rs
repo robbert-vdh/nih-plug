@@ -1,6 +1,7 @@
 //! Utilities for saving a [crate::plugin::Plugin]'s state. The actual state object is also exposed
 //! to plugins through the [`GuiContext`][crate::prelude::GuiContext].
 
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
@@ -115,13 +116,24 @@ pub(crate) unsafe fn serialize_object<'a>(
 }
 
 /// Serialize a plugin's state to a vector containing JSON data. This can (and should) be shared
-/// across plugin formats.
+/// across plugin formats. If the `zstd` feature is enabled, then the state will be compressed using
+/// Zstandard.
 pub(crate) unsafe fn serialize_json<'a>(
     plugin_params: Arc<dyn Params>,
     params_iter: impl IntoIterator<Item = (&'a String, ParamPtr)>,
-) -> serde_json::Result<Vec<u8>> {
+) -> Result<Vec<u8>> {
     let plugin_state = serialize_object(plugin_params, params_iter);
-    serde_json::to_vec(&plugin_state)
+    let json = serde_json::to_vec(&plugin_state).context("Could not format as JSON")?;
+
+    #[cfg(feature = "zstd")]
+    {
+        zstd::encode_all(json.as_slice(), zstd::DEFAULT_COMPRESSION_LEVEL)
+            .context("Could not compress state")
+    }
+    #[cfg(not(feature = "zstd"))]
+    {
+        Ok(json)
+    }
 }
 
 /// Deserialize a plugin's state from a [`PluginState`] object. This is used to allow the plugin to
@@ -191,8 +203,9 @@ pub(crate) unsafe fn deserialize_object(
     true
 }
 
-/// Deserialize a plugin's state from a vector containing JSON data. This can (and should) be shared
-/// across plugin formats. Returns `false` and logs an error if the state could not be deserialized.
+/// Deserialize a plugin's state from a vector containing (compressed) JSON data. This can (and
+/// should) be shared across plugin formats. Returns `false` and logs an error if the state could
+/// not be deserialized. If the `zstd` feature is enabled, then this can
 ///
 /// Make sure to reinitialize plugin after deserializing the state so it can react to the new
 /// parameter values. The smoothers have already been reset by this function.
@@ -202,6 +215,38 @@ pub(crate) unsafe fn deserialize_json(
     params_getter: impl Fn(&str) -> Option<ParamPtr>,
     current_buffer_config: Option<&BufferConfig>,
 ) -> bool {
+    #[cfg(feature = "zstd")]
+    let state: PluginState = match zstd::decode_all(state) {
+        Ok(decompressed) => match serde_json::from_slice(decompressed.as_slice()) {
+            Ok(s) => {
+                nih_log!("Deserialized compressed");
+                s
+            }
+            Err(err) => {
+                nih_debug_assert_failure!("Error while deserializing state: {}", err);
+                return false;
+            }
+        },
+        // Uncompressed state files can still be loaded after enabling this feature to prevent
+        // breaking existing plugin instances
+        Err(zstd_err) => match serde_json::from_slice(state) {
+            Ok(s) => {
+                nih_log!("Deserialized uncompressed");
+                s
+            }
+            Err(json_err) => {
+                nih_debug_assert_failure!(
+                    "Error while deserializing state as either compressed or uncompressed state: \
+                     {}, {}",
+                    zstd_err,
+                    json_err
+                );
+                return false;
+            }
+        },
+    };
+
+    #[cfg(not(feature = "zstd"))]
     let state: PluginState = match serde_json::from_slice(state) {
         Ok(s) => s,
         Err(err) => {

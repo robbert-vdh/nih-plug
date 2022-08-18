@@ -555,7 +555,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                 kResultOk
             }
             Err(err) => {
-                nih_debug_assert_failure!("Could not save state: {}", err);
+                nih_debug_assert_failure!("Could not save state: {:#}", err);
                 kResultFalse
             }
         }
