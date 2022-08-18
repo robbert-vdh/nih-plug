@@ -59,7 +59,6 @@ use clap_sys::stream::{clap_istream, clap_ostream};
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::{self, SendTimeoutError};
 use crossbeam::queue::ArrayQueue;
-use midi_consts::channel_event as midi;
 use parking_lot::RwLock;
 use raw_window_handle::RawWindowHandle;
 use std::any::Any;
