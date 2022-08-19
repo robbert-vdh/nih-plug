@@ -86,9 +86,9 @@ pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = Stri
                     Err(err) => {
                         nih_error!(
                             "Could not initialize either the JACK or the ALSA backends, falling \
-                             back to the dummy audio backend"
+                             back to the dummy audio backend: {err:#}"
                         );
-                        Err(err)
+                        Err(())
                     }
                 }
             });
@@ -102,9 +102,9 @@ pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = Stri
                     Err(err) => {
                         nih_error!(
                             "Could not initialize either the JACK or the CoreAudio backends, \
-                             falling back to the dummy audio backend"
+                             falling back to the dummy audio backend: {err:#}"
                         );
-                        Err(err)
+                        Err(())
                     }
                 }
             });
@@ -118,9 +118,9 @@ pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = Stri
                     Err(err) => {
                         nih_error!(
                             "Could not initialize either the JACK or the WASAPI backends, falling \
-                             back to the dummy audio backend"
+                             back to the dummy audio backend: {err:#}"
                         );
-                        Err(err)
+                        Err(())
                     }
                 }
             });
