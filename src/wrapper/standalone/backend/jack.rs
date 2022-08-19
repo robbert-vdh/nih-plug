@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use crossbeam::channel;
+use crossbeam::sync::Parker;
 use jack::{
     AsyncClient, AudioIn, AudioOut, Client, ClientOptions, ClosureProcessHandler, Control, MidiIn,
     MidiOut, Port,
@@ -28,12 +28,6 @@ pub struct Jack {
     midi_output: Option<Arc<Mutex<Port<MidiOut>>>>,
 }
 
-/// A simple message to tell the audio thread to shut down, since the actual processing happens in
-/// these callbacks.
-enum Task {
-    Shutdown,
-}
-
 impl Backend for Jack {
     fn run(
         &mut self,
@@ -54,7 +48,10 @@ impl Backend for Jack {
         let mut input_events = Vec::with_capacity(2048);
         let mut output_events = Vec::with_capacity(2048);
 
-        let (control_sender, control_receiver) = channel::bounded(32);
+        // This thread needs to be blocked until processing is finished
+        let parker = Parker::new();
+        let unparker = parker.unparker().clone();
+
         let config = self.config.clone();
         let inputs = self.inputs.clone();
         let outputs = self.outputs.clone();
@@ -69,7 +66,7 @@ impl Backend for Jack {
                     "Buffer size changed from {buffer_size} to {num_frames}. Buffer size changes \
                      are currently not supported, aborting..."
                 );
-                control_sender.send(Task::Shutdown).unwrap();
+                unparker.unpark();
                 return Control::Quit;
             }
 
@@ -153,7 +150,7 @@ impl Backend for Jack {
 
                 Control::Continue
             } else {
-                control_sender.send(Task::Shutdown).unwrap();
+                unparker.unpark();
                 Control::Quit
             }
         });
@@ -168,16 +165,7 @@ impl Backend for Jack {
 
         // The process callback happens on another thread, so we need to block this thread until we
         // get the request to shut down or until the process callback runs into an error
-        #[allow(clippy::never_loop)]
-        loop {
-            match control_receiver.recv() {
-                Ok(Task::Shutdown) => break,
-                Err(err) => {
-                    nih_debug_assert_failure!("Error reading from channel: {}", err);
-                    break;
-                }
-            }
-        }
+        parker.park();
 
         // And put the client back where it belongs in case this function is called a second time
         let (client, _, _) = async_client.deactivate().unwrap();
