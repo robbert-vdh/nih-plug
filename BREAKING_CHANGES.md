@@ -6,6 +6,13 @@ new and what's changed, this document lists all breaking changes in reverse
 chronological order. If a new feature did not require any changes to existing
 code then it will not be listed here.
 
+## [2022-08-19]
+
+- `Plugin::DEFAULT_NUM_INPUTS` and `Plugin::DEFAULT_NUM_OUTPUTS` have been
+  renamed to `Plugin::DEFAULT_INPUT_CHANNELS` and
+  `Plugin::DEFAULT_OUTPUT_CHANNELS` respectively to avoid confusion as these
+  constants only affect the main input and output.
+
 ## [2022-07-18]
 
 - `IntRange` and `FloatRange` no longer have min/max methods and instead have

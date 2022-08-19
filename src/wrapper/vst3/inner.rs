@@ -289,8 +289,8 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             // that, we'll always initialize this configuration even before the host requests a
             // channel layout.
             current_bus_config: AtomicCell::new(BusConfig {
-                num_input_channels: P::DEFAULT_NUM_INPUTS,
-                num_output_channels: P::DEFAULT_NUM_OUTPUTS,
+                num_input_channels: P::DEFAULT_INPUT_CHANNELS,
+                num_output_channels: P::DEFAULT_OUTPUT_CHANNELS,
                 aux_input_busses: P::DEFAULT_AUX_INPUTS.unwrap_or_default(),
                 aux_output_busses: P::DEFAULT_AUX_OUTPUTS.unwrap_or_default(),
             }),

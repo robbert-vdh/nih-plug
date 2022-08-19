@@ -40,20 +40,20 @@ pub trait Plugin: Default + Send + Sync + 'static {
     /// the defaults instead of setting up the busses properly.
     ///
     /// Setting this to zero causes the plugin to have no main input bus.
-    const DEFAULT_NUM_INPUTS: u32 = 2;
+    const DEFAULT_INPUT_CHANNELS: u32 = 2;
     /// The default number of output channels. All of the same caveats mentioned for
-    /// `DEFAULT_NUM_INPUTS` apply here.
+    /// `DEFAULT_INPUT_CHANNELS` apply here.
     ///
     /// Setting this to zero causes the plugin to have no main output bus.
-    const DEFAULT_NUM_OUTPUTS: u32 = 2;
+    const DEFAULT_OUTPUT_CHANNELS: u32 = 2;
 
     /// If set, then the plugin will have this many sidechain input busses with a default number of
     /// channels. Not all hosts support more than one sidechain input bus. Negotiating the actual
-    /// configuration wroks the same was as with `DEFAULT_NUM_INPUTS`.
+    /// configuration works the same was as with `DEFAULT_INPUT_CHANNELS`.
     const DEFAULT_AUX_INPUTS: Option<AuxiliaryIOConfig> = None;
     /// If set, then the plugin will have this many auxiliary output busses with a default number of
     /// channels. Negotiating the actual configuration wroks the same was as with
-    /// `DEFAULT_NUM_INPUTS`.
+    /// `DEFAULT_INPUT_CHANNELS`.
     const DEFAULT_AUX_OUTPUTS: Option<AuxiliaryIOConfig> = None;
 
     /// Optional names for the main and auxiliary input and output ports. Will be generated if not
@@ -107,8 +107,8 @@ pub trait Plugin: Default + Send + Sync + 'static {
     /// Whether the plugin supports a bus config. This only acts as a check, and the plugin
     /// shouldn't do anything beyond returning true or false.
     fn accepts_bus_config(&self, config: &BusConfig) -> bool {
-        config.num_input_channels == Self::DEFAULT_NUM_INPUTS
-            && config.num_output_channels == Self::DEFAULT_NUM_OUTPUTS
+        config.num_input_channels == Self::DEFAULT_INPUT_CHANNELS
+            && config.num_output_channels == Self::DEFAULT_OUTPUT_CHANNELS
     }
 
     /// Initialize the plugin for the given bus and buffer configurations. These configurations will

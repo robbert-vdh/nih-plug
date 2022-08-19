@@ -148,8 +148,8 @@ impl Plugin for PolyModSynth {
 
     const VERSION: &'static str = "0.0.1";
 
-    const DEFAULT_NUM_INPUTS: u32 = 2;
-    const DEFAULT_NUM_OUTPUTS: u32 = 2;
+    const DEFAULT_INPUT_CHANNELS: u32 = 2;
+    const DEFAULT_OUTPUT_CHANNELS: u32 = 2;
 
     // We won't need any MIDI CCs here, we just want notes and polyphonic modulation
     const MIDI_INPUT: MidiConfig = MidiConfig::Basic;

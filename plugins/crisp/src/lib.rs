@@ -302,8 +302,8 @@ impl Plugin for Crisp {
 
     const VERSION: &'static str = "0.1.0";
 
-    const DEFAULT_NUM_INPUTS: u32 = NUM_CHANNELS;
-    const DEFAULT_NUM_OUTPUTS: u32 = NUM_CHANNELS;
+    const DEFAULT_INPUT_CHANNELS: u32 = NUM_CHANNELS;
+    const DEFAULT_OUTPUT_CHANNELS: u32 = NUM_CHANNELS;
 
     const SAMPLE_ACCURATE_AUTOMATION: bool = true;
 

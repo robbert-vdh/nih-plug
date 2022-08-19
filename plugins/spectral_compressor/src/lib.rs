@@ -137,7 +137,7 @@ impl Default for SpectralCompressor {
         // Changing any of the compressor threshold or ratio parameters will set an atomic flag in
         // this object that causes the compressor thresholds and ratios to be recalcualted
         let compressor_bank = compressor_bank::CompressorBank::new(
-            Self::DEFAULT_NUM_OUTPUTS as usize,
+            Self::DEFAULT_OUTPUT_CHANNELS as usize,
             MAX_WINDOW_SIZE,
         );
 
@@ -153,7 +153,7 @@ impl Default for SpectralCompressor {
             },
 
             // These three will be set to the correct values in the initialize function
-            stft: util::StftHelper::new(Self::DEFAULT_NUM_OUTPUTS as usize, MAX_WINDOW_SIZE, 0),
+            stft: util::StftHelper::new(Self::DEFAULT_OUTPUT_CHANNELS as usize, MAX_WINDOW_SIZE, 0),
             window_function: Vec::with_capacity(MAX_WINDOW_SIZE),
             dry_wet_mixer: dry_wet_mixer::DryWetMixer::new(0, 0, 0),
             compressor_bank,
@@ -261,8 +261,8 @@ impl Plugin for SpectralCompressor {
 
     const VERSION: &'static str = "0.2.0";
 
-    const DEFAULT_NUM_INPUTS: u32 = 2;
-    const DEFAULT_NUM_OUTPUTS: u32 = 2;
+    const DEFAULT_INPUT_CHANNELS: u32 = 2;
+    const DEFAULT_OUTPUT_CHANNELS: u32 = 2;
     const DEFAULT_AUX_INPUTS: Option<AuxiliaryIOConfig> = Some(AuxiliaryIOConfig {
         num_busses: 1,
         num_channels: 2,

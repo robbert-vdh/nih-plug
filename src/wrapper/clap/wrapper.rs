@@ -506,8 +506,8 @@ impl<P: ClapPlugin> Wrapper<P> {
         // In the off chance that the default config specified by the plugin is not in the above
         // list, we'll try that as well.
         let default_bus_config = BusConfig {
-            num_input_channels: P::DEFAULT_NUM_INPUTS,
-            num_output_channels: P::DEFAULT_NUM_OUTPUTS,
+            num_input_channels: P::DEFAULT_INPUT_CHANNELS,
+            num_output_channels: P::DEFAULT_OUTPUT_CHANNELS,
             aux_input_busses: P::DEFAULT_AUX_INPUTS.unwrap_or_default(),
             aux_output_busses: P::DEFAULT_AUX_OUTPUTS.unwrap_or_default(),
         };
@@ -549,8 +549,8 @@ impl<P: ClapPlugin> Wrapper<P> {
 
             is_processing: AtomicBool::new(false),
             current_bus_config: AtomicCell::new(BusConfig {
-                num_input_channels: P::DEFAULT_NUM_INPUTS,
-                num_output_channels: P::DEFAULT_NUM_OUTPUTS,
+                num_input_channels: P::DEFAULT_INPUT_CHANNELS,
+                num_output_channels: P::DEFAULT_OUTPUT_CHANNELS,
                 aux_input_busses: P::DEFAULT_AUX_INPUTS.unwrap_or_default(),
                 aux_output_busses: P::DEFAULT_AUX_OUTPUTS.unwrap_or_default(),
             }),

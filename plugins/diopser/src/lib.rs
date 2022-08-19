@@ -121,7 +121,7 @@ impl Default for Diopser {
 
         // We only do stereo right now so this is simple
         let (spectrum_input, spectrum_output) =
-            SpectrumInput::new(Self::DEFAULT_NUM_OUTPUTS as usize);
+            SpectrumInput::new(Self::DEFAULT_OUTPUT_CHANNELS as usize);
 
         Self {
             params: Arc::new(DiopserParams::new(should_update_filters.clone())),
@@ -247,8 +247,8 @@ impl Plugin for Diopser {
 
     const VERSION: &'static str = "0.2.0";
 
-    const DEFAULT_NUM_INPUTS: u32 = 2;
-    const DEFAULT_NUM_OUTPUTS: u32 = 2;
+    const DEFAULT_INPUT_CHANNELS: u32 = 2;
+    const DEFAULT_OUTPUT_CHANNELS: u32 = 2;
 
     const SAMPLE_ACCURATE_AUTOMATION: bool = true;
 

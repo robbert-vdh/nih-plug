@@ -91,7 +91,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
         // HACK: Bitwig will not call the process function at all if the plugin does not have any
         //       audio IO, so we'll add a zero channel output to work around this if that is the
         //       case
-        let no_main_audio_io = P::DEFAULT_NUM_INPUTS == 0 && P::DEFAULT_NUM_OUTPUTS == 0;
+        let no_main_audio_io = P::DEFAULT_INPUT_CHANNELS == 0 && P::DEFAULT_OUTPUT_CHANNELS == 0;
 
         // A plugin has a main input and output bus if the default number of channels is non-zero,
         // and a plugin can also have auxiliary input and output busses
@@ -99,7 +99,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
             x if x == vst3_sys::vst::MediaTypes::kAudio as i32
                 && dir == vst3_sys::vst::BusDirections::kInput as i32 =>
             {
-                let main_busses = if P::DEFAULT_NUM_INPUTS > 0 { 1 } else { 0 };
+                let main_busses = if P::DEFAULT_INPUT_CHANNELS > 0 { 1 } else { 0 };
                 let aux_busses = P::DEFAULT_AUX_INPUTS.unwrap_or_default().num_busses as i32;
 
                 main_busses + aux_busses
@@ -107,7 +107,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
             x if x == vst3_sys::vst::MediaTypes::kAudio as i32
                 && dir == vst3_sys::vst::BusDirections::kOutput as i32 =>
             {
-                let main_busses = if P::DEFAULT_NUM_OUTPUTS > 0 { 1 } else { 0 };
+                let main_busses = if P::DEFAULT_OUTPUT_CHANNELS > 0 { 1 } else { 0 };
                 let aux_busses = P::DEFAULT_AUX_OUTPUTS.unwrap_or_default().num_busses as i32;
 
                 if no_main_audio_io {
@@ -144,7 +144,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
         // HACK: Bitwig will not call the process function at all if the plugin does not have any
         //       audio IO, so we'll add a zero channel output to work around this if that is the
         //       case
-        let no_main_audio_io = P::DEFAULT_NUM_INPUTS == 0 && P::DEFAULT_NUM_OUTPUTS == 0;
+        let no_main_audio_io = P::DEFAULT_INPUT_CHANNELS == 0 && P::DEFAULT_OUTPUT_CHANNELS == 0;
 
         match (type_, dir, index) {
             (t, _, _) if t == vst3_sys::vst::MediaTypes::kAudio as i32 => {
@@ -159,7 +159,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                 let bus_config = self.inner.current_bus_config.load();
                 if dir == vst3_sys::vst::BusDirections::kInput as i32 {
                     let aux_inputs_only =
-                        P::DEFAULT_NUM_INPUTS == 0 && P::DEFAULT_AUX_INPUTS.is_some();
+                        P::DEFAULT_INPUT_CHANNELS == 0 && P::DEFAULT_AUX_INPUTS.is_some();
                     let aux_input_start_idx = if aux_inputs_only { 0 } else { 1 };
                     if !aux_inputs_only && index == 0 {
                         info.bus_type = vst3_sys::vst::BusTypes::kMain as i32;
@@ -197,7 +197,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                     }
                 } else if dir == vst3_sys::vst::BusDirections::kOutput as i32 {
                     let aux_outputs_only =
-                        P::DEFAULT_NUM_OUTPUTS == 0 && P::DEFAULT_AUX_OUTPUTS.is_some();
+                        P::DEFAULT_OUTPUT_CHANNELS == 0 && P::DEFAULT_AUX_OUTPUTS.is_some();
                     let aux_output_start_idx = if aux_outputs_only { 0 } else { 1 };
                     if (!aux_outputs_only || no_main_audio_io) && index == 0 {
                         info.bus_type = vst3_sys::vst::BusTypes::kMain as i32;
@@ -291,8 +291,8 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
             (t, 0)
                 if t == vst3_sys::vst::MediaTypes::kAudio as i32
                     // We only have an IO pair when the plugin has both a main input and a main output
-                    && P::DEFAULT_NUM_INPUTS > 0
-                    && P::DEFAULT_NUM_OUTPUTS > 0 =>
+                    && P::DEFAULT_INPUT_CHANNELS > 0
+                    && P::DEFAULT_OUTPUT_CHANNELS > 0 =>
             {
                 out_info.media_type = vst3_sys::vst::MediaTypes::kAudio as i32;
                 out_info.bus_index = in_info.bus_index;
@@ -325,7 +325,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
         // HACK: Bitwig will not call the process function at all if the plugin does not have any
         //       audio IO, so we'll add a zero channel output to work around this if that is the
         //       case
-        let no_main_audio_io = P::DEFAULT_NUM_INPUTS == 0 && P::DEFAULT_NUM_OUTPUTS == 0;
+        let no_main_audio_io = P::DEFAULT_INPUT_CHANNELS == 0 && P::DEFAULT_OUTPUT_CHANNELS == 0;
 
         // We don't need any special handling here
         match (type_, dir, index) {
@@ -333,7 +333,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                 if t == vst3_sys::vst::MediaTypes::kAudio as i32
                     && d == vst3_sys::vst::BusDirections::kInput as i32 =>
             {
-                let main_busses = if P::DEFAULT_NUM_INPUTS > 0 { 1 } else { 0 };
+                let main_busses = if P::DEFAULT_INPUT_CHANNELS > 0 { 1 } else { 0 };
                 let aux_busses = P::DEFAULT_AUX_INPUTS.unwrap_or_default().num_busses as i32;
 
                 if (0..main_busses + aux_busses).contains(&index) {
@@ -346,7 +346,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                 if t == vst3_sys::vst::MediaTypes::kAudio as i32
                     && d == vst3_sys::vst::BusDirections::kOutput as i32 =>
             {
-                let main_busses = if P::DEFAULT_NUM_OUTPUTS > 0 || no_main_audio_io {
+                let main_busses = if P::DEFAULT_OUTPUT_CHANNELS > 0 || no_main_audio_io {
                     1
                 } else {
                     0
@@ -785,7 +785,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
         // HACK: Bitwig will not call the process function at all if the plugin does not have any
         //       audio IO, so we'll add a zero channel output to work around this if that is the
         //       case
-        let no_main_audio_io = P::DEFAULT_NUM_INPUTS == 0 && P::DEFAULT_NUM_OUTPUTS == 0;
+        let no_main_audio_io = P::DEFAULT_INPUT_CHANNELS == 0 && P::DEFAULT_OUTPUT_CHANNELS == 0;
 
         // Why are these signed integers again?
         if num_ins < 0 || num_outs < 0 {
@@ -796,7 +796,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
         // support plugins with no main IO but with auxiliary IO, we'll need to take that into
         // account when asserting this. If that's the case, then the first bus for that direction
         // will have been marked auxiliary.
-        let aux_inputs_only = P::DEFAULT_NUM_INPUTS == 0 && P::DEFAULT_AUX_INPUTS.is_some();
+        let aux_inputs_only = P::DEFAULT_INPUT_CHANNELS == 0 && P::DEFAULT_AUX_INPUTS.is_some();
         let num_input_channels = if aux_inputs_only || num_ins < 1 {
             0
         } else {
@@ -819,7 +819,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
             }
         }
 
-        let aux_outputs_only = P::DEFAULT_NUM_OUTPUTS == 0 && P::DEFAULT_AUX_OUTPUTS.is_some();
+        let aux_outputs_only = P::DEFAULT_OUTPUT_CHANNELS == 0 && P::DEFAULT_AUX_OUTPUTS.is_some();
         let num_output_channels = if (aux_outputs_only && !no_main_audio_io) || num_outs < 1 {
             0
         } else {
@@ -879,7 +879,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
         // HACK: Bitwig will not call the process function at all if the plugin does not have any
         //       audio IO, so we'll add a zero channel output to work around this if that is the
         //       case
-        let no_main_audio_io = P::DEFAULT_NUM_INPUTS == 0 && P::DEFAULT_NUM_OUTPUTS == 0;
+        let no_main_audio_io = P::DEFAULT_INPUT_CHANNELS == 0 && P::DEFAULT_OUTPUT_CHANNELS == 0;
 
         let channel_count_to_map = |count| match count {
             0 => vst3_sys::vst::kEmpty,
@@ -900,7 +900,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
 
         let bus_config = self.inner.current_bus_config.load();
         let num_channels = if dir == vst3_sys::vst::BusDirections::kInput as i32 {
-            let aux_inputs_only = P::DEFAULT_NUM_INPUTS == 0 && P::DEFAULT_AUX_INPUTS.is_some();
+            let aux_inputs_only = P::DEFAULT_INPUT_CHANNELS == 0 && P::DEFAULT_AUX_INPUTS.is_some();
             let aux_input_start_idx = if aux_inputs_only { 0 } else { 1 };
             if !aux_inputs_only && index == 0 {
                 bus_config.num_input_channels
@@ -913,7 +913,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                 return kInvalidArgument;
             }
         } else if dir == vst3_sys::vst::BusDirections::kOutput as i32 {
-            let aux_outputs_only = P::DEFAULT_NUM_OUTPUTS == 0 && P::DEFAULT_AUX_OUTPUTS.is_some();
+            let aux_outputs_only = P::DEFAULT_OUTPUT_CHANNELS == 0 && P::DEFAULT_AUX_OUTPUTS.is_some();
             let aux_output_start_idx = if aux_outputs_only { 0 } else { 1 };
             if (!aux_outputs_only || no_main_audio_io) && index == 0 {
                 bus_config.num_output_channels
