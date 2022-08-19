@@ -94,10 +94,10 @@ pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = Stri
 }
 
 fn run_wrapper<P: Plugin, B: Backend>(backend: B, config: WrapperConfig) -> bool {
-    let wrapper = match Wrapper::<P, _>::new(backend, config.clone()) {
+    let wrapper = match Wrapper::<P, _>::new(backend, config) {
         Ok(wrapper) => wrapper,
         Err(err) => {
-            print_error(err, &config);
+            print_error(err);
             return false;
         }
     };
@@ -106,13 +106,13 @@ fn run_wrapper<P: Plugin, B: Backend>(backend: B, config: WrapperConfig) -> bool
     match wrapper.run() {
         Ok(()) => true,
         Err(err) => {
-            print_error(err, &config);
+            print_error(err);
             false
         }
     }
 }
 
-fn print_error(error: WrapperError, config: &WrapperConfig) {
+fn print_error(error: WrapperError) {
     match error {
         WrapperError::IncompatibleConfig {
             input_channels,
