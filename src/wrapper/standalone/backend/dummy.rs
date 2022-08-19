@@ -5,12 +5,14 @@ use super::Backend;
 use crate::buffer::Buffer;
 use crate::context::Transport;
 use crate::midi::NoteEvent;
+use crate::plugin::{AuxiliaryIOConfig, BusConfig, Plugin};
 
 /// This backend doesn't input or output any audio or MIDI. It only exists so the standalone
 /// application can continue to run even when there is no audio backend available. This can be
 /// useful for testing plugin GUIs.
 pub struct Dummy {
     config: WrapperConfig,
+    bus_config: BusConfig,
 }
 
 impl Backend for Dummy {
@@ -27,7 +29,7 @@ impl Backend for Dummy {
 
         let mut channels = vec![
             vec![0.0f32; self.config.period_size as usize];
-            self.config.output_channels as usize
+            self.bus_config.num_output_channels as usize
         ];
         let mut buffer = Buffer::default();
         unsafe {
@@ -71,7 +73,16 @@ impl Backend for Dummy {
 }
 
 impl Dummy {
-    pub fn new(config: WrapperConfig) -> Self {
-        Self { config }
+    pub fn new<P: Plugin>(config: WrapperConfig) -> Self {
+        Self {
+            bus_config: BusConfig {
+                num_input_channels: config.input_channels.unwrap_or(P::DEFAULT_INPUT_CHANNELS),
+                num_output_channels: config.output_channels.unwrap_or(P::DEFAULT_OUTPUT_CHANNELS),
+                // TODO: Support these in the standalone
+                aux_input_busses: AuxiliaryIOConfig::default(),
+                aux_output_busses: AuxiliaryIOConfig::default(),
+            },
+            config,
+        }
     }
 }

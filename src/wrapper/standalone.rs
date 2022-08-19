@@ -77,7 +77,7 @@ pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = Stri
             }
             Err(_) => {
                 nih_log!("Could not initialize JACK, falling back to the dummy audio backend");
-                run_wrapper::<P, _>(backend::Dummy::new(config.clone()), config)
+                run_wrapper::<P, _>(backend::Dummy::new::<P>(config.clone()), config)
             }
         },
         config::BackendType::Jack => match backend::Jack::new::<P>(config.clone()) {
@@ -88,7 +88,7 @@ pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = Stri
             }
         },
         config::BackendType::Dummy => {
-            run_wrapper::<P, _>(backend::Dummy::new(config.clone()), config)
+            run_wrapper::<P, _>(backend::Dummy::new::<P>(config.clone()), config)
         }
     }
 }
@@ -114,12 +114,13 @@ fn run_wrapper<P: Plugin, B: Backend>(backend: B, config: WrapperConfig) -> bool
 
 fn print_error(error: WrapperError, config: &WrapperConfig) {
     match error {
-        WrapperError::IncompatibleConfig => {
+        WrapperError::IncompatibleConfig {
+            input_channels,
+            output_channels,
+        } => {
             nih_error!(
-                "The plugin does not support the {} channel input and {} channel output \
-                 configuration",
-                config.input_channels,
-                config.output_channels
+                "The plugin does not support the {input_channels} channel input and \
+                 {output_channels} channel output configuration",
             );
         }
         WrapperError::InitializationFailed => {

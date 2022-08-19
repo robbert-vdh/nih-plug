@@ -12,6 +12,8 @@ code then it will not be listed here.
   renamed to `Plugin::DEFAULT_INPUT_CHANNELS` and
   `Plugin::DEFAULT_OUTPUT_CHANNELS` respectively to avoid confusion as these
   constants only affect the main input and output.
+- Standalones now use the plugin's default input and output channel counts
+  instead of always defaulting to two inputs and two outputs.
 
 ## [2022-07-18]
 

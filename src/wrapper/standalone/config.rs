@@ -11,12 +11,15 @@ pub struct WrapperConfig {
     #[clap(value_parser, short = 'b', long, default_value = "auto")]
     pub backend: BackendType,
 
+    // These will default to the plugin's default input and output channel count. We could set the
+    // default value here to match those, but that would require a custom Args+FromArgMatches
+    // implementation and access to the `Plugin` type.
     /// The number of input channels.
-    #[clap(value_parser, short = 'i', long, default_value = "2")]
-    pub input_channels: u32,
+    #[clap(value_parser, short = 'i', long)]
+    pub input_channels: Option<u32>,
     /// The number of output channels.
-    #[clap(value_parser, short = 'o', long, default_value = "2")]
-    pub output_channels: u32,
+    #[clap(value_parser, short = 'o', long)]
+    pub output_channels: Option<u32>,
     /// The audio backend's sample rate.
     ///
     /// This setting is ignored when using the JACK backend.

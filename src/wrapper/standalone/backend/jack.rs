@@ -188,7 +188,8 @@ impl Jack {
         }
 
         let mut inputs = Vec::new();
-        for port_no in 1..config.input_channels + 1 {
+        let num_input_channels = config.input_channels.unwrap_or(P::DEFAULT_INPUT_CHANNELS);
+        for port_no in 1..num_input_channels + 1 {
             inputs.push(client.register_port(&format!("input_{port_no}"), AudioIn)?);
         }
 
@@ -196,7 +197,8 @@ impl Jack {
         // no. So the connections are made just after activating the client in the `run()` function
         // above.
         let mut outputs = Vec::new();
-        for port_no in 1..config.output_channels + 1 {
+        let num_output_channels = config.output_channels.unwrap_or(P::DEFAULT_OUTPUT_CHANNELS);
+        for port_no in 1..num_output_channels + 1 {
             outputs.push(client.register_port(&format!("output_{port_no}"), AudioOut)?);
         }
 

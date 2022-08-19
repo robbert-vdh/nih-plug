@@ -75,7 +75,10 @@ pub struct Wrapper<P: Plugin, B: Backend> {
 #[derive(Debug, Clone, Copy)]
 pub enum WrapperError {
     /// The plugin does not accept the IO configuration from the config.
-    IncompatibleConfig,
+    IncompatibleConfig {
+        input_channels: u32,
+        output_channels: u32,
+    },
     /// The plugin returned `false` during initialization.
     InitializationFailed,
 }
@@ -174,8 +177,8 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
             editor,
 
             bus_config: BusConfig {
-                num_input_channels: config.input_channels,
-                num_output_channels: config.output_channels,
+                num_input_channels: config.input_channels.unwrap_or(P::DEFAULT_INPUT_CHANNELS),
+                num_output_channels: config.output_channels.unwrap_or(P::DEFAULT_OUTPUT_CHANNELS),
                 // TODO: Expose additional sidechain IO in the JACK backend
                 aux_input_busses: AuxiliaryIOConfig::default(),
                 aux_output_busses: AuxiliaryIOConfig::default(),
@@ -199,7 +202,10 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
         {
             let mut plugin = wrapper.plugin.write();
             if !plugin.accepts_bus_config(&wrapper.bus_config) {
-                return Err(WrapperError::IncompatibleConfig);
+                return Err(WrapperError::IncompatibleConfig {
+                    input_channels: wrapper.bus_config.num_input_channels,
+                    output_channels: wrapper.bus_config.num_output_channels,
+                });
             }
 
             // Befure initializing the plugin, make sure all smoothers are set the the default values
