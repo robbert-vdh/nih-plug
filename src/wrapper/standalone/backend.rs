@@ -1,11 +1,14 @@
-pub use self::dummy::Dummy;
-pub use self::jack::Jack;
-pub use crate::buffer::Buffer;
 use crate::context::Transport;
 use crate::midi::NoteEvent;
 
+mod cpal;
 mod dummy;
 mod jack;
+
+pub use self::cpal::Cpal;
+pub use self::dummy::Dummy;
+pub use self::jack::Jack;
+pub use crate::buffer::Buffer;
 
 /// An audio+MIDI backend for the standalone wrapper.
 pub trait Backend: 'static + Send + Sync {

@@ -70,16 +70,66 @@ pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = Stri
     .unwrap_or_else(|err| err.exit());
 
     match config.backend {
-        config::BackendType::Auto => match backend::Jack::new::<P>(config.clone()) {
-            Ok(backend) => {
+        config::BackendType::Auto => {
+            let result = backend::Jack::new::<P>(config.clone()).map(|backend| {
                 nih_log!("Using the JACK backend");
-                run_wrapper::<P, _>(backend, config)
-            }
-            Err(_) => {
-                nih_log!("Could not initialize JACK, falling back to the dummy audio backend");
+                run_wrapper::<P, _>(backend, config.clone())
+            });
+
+            #[cfg(target_os = "linux")]
+            let result = result.or_else(|_| {
+                match backend::Cpal::new::<P>(config.clone(), cpal::HostId::Alsa) {
+                    Ok(backend) => {
+                        nih_log!("Using the ALSA backend");
+                        Ok(run_wrapper::<P, _>(backend, config.clone()))
+                    }
+                    Err(err) => {
+                        nih_error!(
+                            "Could not initialize either the JACK or the ALSA backends, falling \
+                             back to the dummy audio backend"
+                        );
+                        Err(err)
+                    }
+                }
+            });
+            #[cfg(target_os = "macos")]
+            let result = result.or_else(|_| {
+                match backend::Cpal::new::<P>(config.clone(), cpal::HostId::CoreAudio) {
+                    Ok(backend) => {
+                        nih_log!("Using the CoreAudio backend");
+                        Ok(run_wrapper::<P, _>(backend, config.clone()))
+                    }
+                    Err(err) => {
+                        nih_error!(
+                            "Could not initialize either the JACK or the CoreAudio backends, \
+                             falling back to the dummy audio backend"
+                        );
+                        Err(err)
+                    }
+                }
+            });
+            #[cfg(target_os = "windows")]
+            let result = result.or_else(|_| {
+                match backend::Cpal::new::<P>(config.clone(), cpal::HostId::Wasapi) {
+                    Ok(backend) => {
+                        nih_log!("Using the WASAPI backend");
+                        Ok(run_wrapper::<P, _>(backend, config.clone()))
+                    }
+                    Err(err) => {
+                        nih_error!(
+                            "Could not initialize either the JACK or the WASAPI backends, falling \
+                             back to the dummy audio backend"
+                        );
+                        Err(err)
+                    }
+                }
+            });
+
+            result.unwrap_or_else(|_| {
+                nih_error!("Falling back to the dummy audio backend, audio and MIDI will not work");
                 run_wrapper::<P, _>(backend::Dummy::new::<P>(config.clone()), config)
-            }
-        },
+            })
+        }
         config::BackendType::Jack => match backend::Jack::new::<P>(config.clone()) {
             Ok(backend) => run_wrapper::<P, _>(backend, config),
             Err(err) => {
@@ -87,6 +137,36 @@ pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = Stri
                 false
             }
         },
+        #[cfg(target_os = "linux")]
+        config::BackendType::Alsa => {
+            match backend::Cpal::new::<P>(config.clone(), cpal::HostId::Alsa) {
+                Ok(backend) => run_wrapper::<P, _>(backend, config),
+                Err(err) => {
+                    nih_error!("Could not initialize the ALSA backend: {:#}", err);
+                    false
+                }
+            }
+        }
+        #[cfg(target_os = "macos")]
+        config::BackendType::CoreAudio => {
+            match backend::Cpal::new::<P>(config.clone(), cpal::HostId::CoreAudio) {
+                Ok(backend) => run_wrapper::<P, _>(backend, config),
+                Err(err) => {
+                    nih_error!("Could not initialize the CoreAudio backend: {:#}", err);
+                    false
+                }
+            }
+        }
+        #[cfg(target_os = "windows")]
+        config::BackendType::Wasapi => {
+            match backend::Cpal::new::<P>(config.clone(), cpal::HostId::Wasapi) {
+                Ok(backend) => run_wrapper::<P, _>(backend, config),
+                Err(err) => {
+                    nih_error!("Could not initialize the WASAPI backend: {:#}", err);
+                    false
+                }
+            }
+        }
         config::BackendType::Dummy => {
             run_wrapper::<P, _>(backend::Dummy::new::<P>(config.clone()), config)
         }

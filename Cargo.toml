@@ -49,7 +49,7 @@ assert_process_allocs = ["dep:assert_no_alloc"]
 # Enables an export target for standalone binaries through the
 # `nih_export_standalone()` function. Disabled by default as this requires
 # building additional dependencies for audio and MIDI handling.
-standalone = ["dep:baseview", "dep:clap", "dep:jack"]
+standalone = ["dep:baseview", "dep:clap", "dep:cpal", "dep:jack"]
 # Enables the `nih_export_vst3!()` macro. Enabled by default. This feature
 # exists mostly for GPL-compliance reasons, since even if you don't use the VST3
 # wrapper you might otherwise still include a couple (unused) symbols from the
@@ -97,6 +97,7 @@ assert_no_alloc = { version = "1.1", optional = true }
 baseview = { git = "https://github.com/robbert-vdh/baseview.git", branch = "feature/resize", features = ["opengl"], optional = true }
 # All the claps!
 clap = { version = "3.2", features = ["derive"], optional = true }
+cpal = { version = "0.13.5", optional = true }
 # The current upstream jack panics when it can't load the JACK library, which breaks the backend fallback
 jack = { git = "https://github.com/robbert-vdh/rust-jack.git", branch = "feature/handle-library-failure", optional = true }
 

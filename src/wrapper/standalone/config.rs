@@ -10,6 +10,17 @@ pub struct WrapperConfig {
     /// no audio input or output if the other backends are not available.
     #[clap(value_parser, short = 'b', long, default_value = "auto")]
     pub backend: BackendType,
+    /// The input device for the ALSA, CoreAudio, and WASAPI backends. No input will be connected if
+    /// this is not specified.
+    ///
+    /// Specifying an empty string or other invalid value will list all available input devices.
+    #[clap(value_parser, long)]
+    pub input_device: Option<String>,
+    /// The output device for the ALSA, CoreAudio, and WASAPI backends.
+    ///
+    /// Specifying an empty string or other invalid value will list all available output devices.
+    #[clap(value_parser, long)]
+    pub output_device: Option<String>,
 
     // These will default to the plugin's default input and output channel count. We could set the
     // default value here to match those, but that would require a custom Args+FromArgMatches
@@ -81,6 +92,15 @@ pub enum BackendType {
     Auto,
     /// Use JACK for audio and MIDI.
     Jack,
+    /// Use ALSA for audio and MIDI.
+    #[cfg(target_os = "linux")]
+    Alsa,
+    /// Use CoreAudio for audio and MIDI.
+    #[cfg(target_os = "macos")]
+    CoreAudio,
+    /// Use WASAPI for audio and MIDI.
+    #[cfg(target_os = "windows")]
+    Wasapi,
     /// Does not playback or receive any audio or MIDI.
     Dummy,
 }
