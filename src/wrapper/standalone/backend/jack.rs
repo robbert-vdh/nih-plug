@@ -119,9 +119,21 @@ impl Backend for Jack {
             input_events.clear();
             if let Some(midi_input) = &midi_input {
                 input_events.extend(midi_input.iter(ps).filter_map(|midi| {
-                    // This should always be three bytes, but we get an unsized slice
-                    let midi_data: [u8; 3] = midi.bytes.try_into().ok()?;
-                    NoteEvent::from_midi(midi.time, midi_data).ok()
+                    // Unless it is a SysEx message, a JACK MIDI message is always three bytes or
+                    // less and is normalized (starts with a status byte and is self-contained).
+                    // Filter out the SysEx messages.
+                    let len = midi.bytes.len();
+                    if len <= 3 {
+                        let mut midi_data = [0u8; 3];
+                        midi_data[..len].copy_from_slice(midi.bytes);
+                        if midi_data[0] >= 0x80 && midi_data[0] != 0xF0 && midi_data[0] != 0xF7 {
+                            NoteEvent::from_midi(midi.time, midi_data).ok()
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
                 }));
             }
 
