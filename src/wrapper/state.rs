@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use crate::param::internals::{ParamPtr, Params};
 use crate::param::{Param, ParamMut};
-use crate::plugin::BufferConfig;
+use crate::plugin::{BufferConfig, Plugin};
 
 // These state objects are also exposed directly to the plugin so it can do its own internal preset
 // management
@@ -30,6 +30,16 @@ pub enum ParamValue {
 /// The fields are stored as `BTreeMap`s so the order in the serialized file is consistent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginState {
+    /// The plugin version this state was saved with. Right now this is not used, but later versions
+    /// of NIH-plug may allow you to modify the plugin state object directly before it is loaded to
+    /// allow migrating plugin states between breaking parameter changes.
+    ///
+    /// # Notes
+    ///
+    /// If the saved state is very old, then this field may be empty.
+    #[serde(default)]
+    pub version: String,
+
     /// The plugin's parameter values. These are stored unnormalized. This mean sthe old values will
     /// be recalled when when the parameter's range gets increased. Doing so may still mess with
     /// parameter automation though, depending on how the host impelments that.
@@ -73,7 +83,7 @@ pub(crate) fn make_params_getter<'a>(
 /// allow passing the raw object directly to the plugin. The parameters are not pulled directly from
 /// `plugin_params` by default to avoid unnecessary allocations in the `.param_map()` method, as the
 /// plugin wrappers will already have a list of parameters handy. See [`make_params_iter()`].
-pub(crate) unsafe fn serialize_object<'a>(
+pub(crate) unsafe fn serialize_object<'a, P: Plugin>(
     plugin_params: Arc<dyn Params>,
     params_iter: impl IntoIterator<Item = (&'a String, ParamPtr)>,
 ) -> PluginState {
@@ -112,17 +122,21 @@ pub(crate) unsafe fn serialize_object<'a>(
     // storing things like sample data.
     let fields = plugin_params.serialize_fields();
 
-    PluginState { params, fields }
+    PluginState {
+        version: String::from(P::VERSION),
+        params,
+        fields,
+    }
 }
 
 /// Serialize a plugin's state to a vector containing JSON data. This can (and should) be shared
 /// across plugin formats. If the `zstd` feature is enabled, then the state will be compressed using
 /// Zstandard.
-pub(crate) unsafe fn serialize_json<'a>(
+pub(crate) unsafe fn serialize_json<'a, P: Plugin>(
     plugin_params: Arc<dyn Params>,
     params_iter: impl IntoIterator<Item = (&'a String, ParamPtr)>,
 ) -> Result<Vec<u8>> {
-    let plugin_state = serialize_object(plugin_params, params_iter);
+    let plugin_state = serialize_object::<P>(plugin_params, params_iter);
     let json = serde_json::to_vec(&plugin_state).context("Could not format as JSON")?;
 
     #[cfg(feature = "zstd")]

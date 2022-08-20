@@ -537,7 +537,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
 
         let state = state.upgrade().unwrap();
 
-        let serialized = state::serialize_json(
+        let serialized = state::serialize_json::<P>(
             self.inner.params.clone(),
             state::make_params_iter(&self.inner.param_by_hash, &self.inner.param_id_to_hash),
         );
@@ -913,7 +913,8 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                 return kInvalidArgument;
             }
         } else if dir == vst3_sys::vst::BusDirections::kOutput as i32 {
-            let aux_outputs_only = P::DEFAULT_OUTPUT_CHANNELS == 0 && P::DEFAULT_AUX_OUTPUTS.is_some();
+            let aux_outputs_only =
+                P::DEFAULT_OUTPUT_CHANNELS == 0 && P::DEFAULT_AUX_OUTPUTS.is_some();
             let aux_output_start_idx = if aux_outputs_only { 0 } else { 1 };
             if (!aux_outputs_only || no_main_audio_io) && index == 0 {
                 bus_config.num_output_channels

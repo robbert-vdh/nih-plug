@@ -1544,7 +1544,7 @@ impl<P: ClapPlugin> Wrapper<P> {
     /// the JSON in the relevant plugin API methods instead.
     pub fn get_state_object(&self) -> PluginState {
         unsafe {
-            state::serialize_object(
+            state::serialize_object::<P>(
                 self.params.clone(),
                 state::make_params_iter(&self.param_by_hash, &self.param_id_to_hash),
             )
@@ -3067,7 +3067,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         check_null_ptr!(false, plugin, stream);
         let wrapper = &*(plugin as *const Self);
 
-        let serialized = state::serialize_json(
+        let serialized = state::serialize_json::<P>(
             wrapper.params.clone(),
             state::make_params_iter(&wrapper.param_by_hash, &wrapper.param_id_to_hash),
         );

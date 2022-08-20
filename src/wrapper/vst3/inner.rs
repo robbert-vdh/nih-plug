@@ -415,7 +415,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
     /// the JSON in the relevant plugin API methods instead.
     pub fn get_state_object(&self) -> PluginState {
         unsafe {
-            state::serialize_object(
+            state::serialize_object::<P>(
                 self.params.clone(),
                 state::make_params_iter(&self.param_by_hash, &self.param_id_to_hash),
             )

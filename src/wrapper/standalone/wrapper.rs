@@ -338,7 +338,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
     /// the JSON in the relevant plugin API methods instead.
     pub fn get_state_object(&self) -> PluginState {
         unsafe {
-            state::serialize_object(
+            state::serialize_object::<P>(
                 self.params.clone(),
                 self.param_map
                     .iter()
