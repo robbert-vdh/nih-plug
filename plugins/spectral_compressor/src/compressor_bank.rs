@@ -336,7 +336,7 @@ impl CompressorParams {
                 1.0,
                 FloatRange::Skewed {
                     min: 1.0,
-                    max: 300.0,
+                    max: 500.0,
                     factor: FloatRange::skew_factor(-2.0),
                 },
             )
