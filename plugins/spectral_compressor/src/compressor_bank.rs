@@ -136,8 +136,14 @@ pub enum ThresholdMode {
     /// how how much of the other channel values to mix in before multiplying the sidechain gain
     /// values with the thresholds.
     #[id = "sidechain"]
-    #[name = "Sidechain"]
-    Sidechain,
+    #[name = "Sidechain Matching"]
+    SidechainMatch,
+    /// Compress the input signal based on the sidechain signal's activity. Can be used to
+    /// spectrally duck the input, or to amplify parts of the input based on holes in the sidechain
+    /// signal.
+    #[id = "sidechain_compress"]
+    #[name = "Sidechain Compression"]
+    SidechainCompress,
 }
 
 /// Contains the compressor parameters for both the upwards and downwards compressor banks.
@@ -519,11 +525,26 @@ impl CompressorBank {
         nih_debug_assert_eq!(buffer.len(), self.log2_freqs.len());
 
         self.update_if_needed(params);
-        self.update_envelopes(buffer, channel_idx, params, overlap_times, skip_bins_below);
         match params.threshold.mode.value() {
-            ThresholdMode::Internal => self.compress(buffer, channel_idx, params, skip_bins_below),
-            ThresholdMode::Sidechain => {
-                self.compress_sidechain(buffer, channel_idx, params, skip_bins_below)
+            ThresholdMode::Internal => {
+                self.update_envelopes(buffer, channel_idx, params, overlap_times, skip_bins_below);
+                self.compress(buffer, channel_idx, params, skip_bins_below)
+            }
+            ThresholdMode::SidechainMatch => {
+                self.update_envelopes(buffer, channel_idx, params, overlap_times, skip_bins_below);
+                self.compress_sidechain_match(buffer, channel_idx, params, skip_bins_below)
+            }
+            ThresholdMode::SidechainCompress => {
+                // This mode uses regular compression, but the envelopes are computed from the
+                // sidechain input magnitudes. These are already set in `process_sidechain`. This
+                // separate envelope updating function is needed for the channel linking.
+                self.update_envelopes_sidechain(
+                    channel_idx,
+                    params,
+                    overlap_times,
+                    skip_bins_below,
+                );
+                self.compress(buffer, channel_idx, params, skip_bins_below)
             }
         };
     }
@@ -586,6 +607,72 @@ impl CompressorBank {
         }
     }
 
+    /// The same as [`update_envelopes()`][Self::update_envelopes()], but based on the previously
+    /// set sidechain bin magnitudes. This allows for channel linking.
+    /// [`process_sidechain()`][Self::process_sidechain()] needs to be called for all channels
+    /// before this function can be used to set the magnitude spectra.
+    fn update_envelopes_sidechain(
+        &mut self,
+        channel_idx: usize,
+        params: &SpectralCompressorParams,
+        overlap_times: usize,
+        skip_bins_below: usize,
+    ) {
+        // See `update_envelopes()`
+        let effective_sample_rate =
+            self.sample_rate / (self.window_size as f32 / overlap_times as f32);
+        let attack_old_t = if params.global.compressor_attack_ms.value == 0.0 {
+            0.0
+        } else {
+            (-1.0 / (params.global.compressor_attack_ms.value / 1000.0 * effective_sample_rate))
+                .exp()
+        };
+        let attack_new_t = 1.0 - attack_old_t;
+        let release_old_t = if params.global.compressor_release_ms.value == 0.0 {
+            0.0
+        } else {
+            (-1.0 / (params.global.compressor_release_ms.value / 1000.0 * effective_sample_rate))
+                .exp()
+        };
+        let release_new_t = 1.0 - release_old_t;
+
+        // For the channel linking
+        let num_channels = self.sidechain_spectrum_magnitudes.len() as f32;
+        let other_channels_t = params.threshold.sc_channel_link.value / num_channels;
+        let this_channel_t = 1.0 - (other_channels_t * (num_channels - 1.0));
+
+        for (bin_idx, envelope) in self.envelopes[channel_idx]
+            .iter_mut()
+            .enumerate()
+            .skip(skip_bins_below)
+        {
+            // In this mode the envelopes are set based on the sidechain signal, taking channel
+            // linking into account
+            let sidechain_magnitude: f32 = self
+                .sidechain_spectrum_magnitudes
+                .iter()
+                .enumerate()
+                .map(|(sidechain_channel_idx, magnitudes)| {
+                    let t = if sidechain_channel_idx == channel_idx {
+                        this_channel_t
+                    } else {
+                        other_channels_t
+                    };
+
+                    unsafe { magnitudes.get_unchecked(bin_idx) * t }
+                })
+                .sum::<f32>();
+
+            if *envelope > sidechain_magnitude {
+                // Release stage
+                *envelope = (release_old_t * *envelope) + (release_new_t * sidechain_magnitude);
+            } else {
+                // Attack stage
+                *envelope = (attack_old_t * *envelope) + (attack_new_t * sidechain_magnitude);
+            }
+        }
+    }
+
     /// Update the spectral data using the sidechain input
     fn update_sidechain_spectra(&mut self, sc_buffer: &mut [Complex32], channel_idx: usize) {
         nih_debug_assert!(channel_idx < self.sidechain_spectrum_magnitudes.len());
@@ -598,8 +685,8 @@ impl CompressorBank {
         }
     }
 
-    /// Actually do the thing. [`Self::update_envelopes()`] must have been called before calling
-    /// this.
+    /// Actually do the thing. [`Self::update_envelopes()`] or
+    /// [`Self::update_envelopes_sidechain()`] must have been called before calling this.
     ///
     /// # Panics
     ///
@@ -630,6 +717,8 @@ impl CompressorBank {
         assert!(self.upwards_ratio_recips.len() == buffer.len());
         assert!(self.upwards_knee_starts.len() == buffer.len());
         assert!(self.upwards_knee_ends.len() == buffer.len());
+        // NOTE: In the sidechain compression mode these envelopes are computed from the sidechain
+        //       signal instead of the main input
         for (bin_idx, (bin, envelope)) in buffer
             .iter_mut()
             .zip(self.envelopes[channel_idx].iter())
@@ -679,13 +768,13 @@ impl CompressorBank {
     }
 
     /// The same as [`compress()`][Self::compress()], but multiplying the threshold and knee values
-    /// with the sidehcain gains.
+    /// with the sidechain gains.
     ///
     /// # Panics
     ///
     /// Panics if the buffer does not have the same length as the one that was passed to the last
     /// `resize()` call.
-    fn compress_sidechain(
+    fn compress_sidechain_match(
         &self,
         buffer: &mut [Complex32],
         channel_idx: usize,
@@ -792,7 +881,9 @@ impl CompressorBank {
         // be a flat offset to the sidechain input at the default settings.
         let slope = match params.threshold.mode.value() {
             ThresholdMode::Internal => params.threshold.curve_slope.value - 3.0,
-            ThresholdMode::Sidechain => params.threshold.curve_slope.value,
+            ThresholdMode::SidechainMatch | ThresholdMode::SidechainCompress => {
+                params.threshold.curve_slope.value
+            }
         };
         let curve = params.threshold.curve_curve.value;
         let log2_center_freq = params.threshold.center_frequency.value.log2();
