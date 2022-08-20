@@ -49,14 +49,21 @@ pub fn v2s_compression_ratio(digits: usize) -> Arc<dyn Fn(f32) -> String + Send 
 }
 
 /// Parse a `x:y` compression ratio back to a floating point number. Used in conjunction with
-/// [`v2s_compression_ratio()`].
+/// [`v2s_compression_ratio()`]. Plain numbers are parsed directly for UX's sake.
 pub fn s2v_compression_ratio() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> {
     Arc::new(|string| {
-        let (numerator, denominator) = string.trim().split_once(':')?;
-        let numerator: f32 = numerator.trim().parse().ok()?;
-        let denominator: f32 = denominator.trim().parse().ok()?;
+        let string = string.trim();
+        string
+            .trim()
+            .split_once(':')
+            .and_then(|(numerator, denominator)| {
+                let numerator: f32 = numerator.trim().parse().ok()?;
+                let denominator: f32 = denominator.trim().parse().ok()?;
 
-        Some(numerator / denominator)
+                Some(numerator / denominator)
+            })
+            // Just parse the value directly if it doesn't contain a colon
+            .or_else(|| string.parse().ok())
     })
 }
 
