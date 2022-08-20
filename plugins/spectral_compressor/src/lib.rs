@@ -402,38 +402,41 @@ impl Plugin for SpectralCompressor {
                     )
                 },
             ),
-            compressor_bank::ThresholdMode::Sidechain => self.stft.process_overlap_add_sidechain(
-                buffer,
-                [&aux.inputs[0]],
-                overlap_times,
-                |channel_idx, sidechain_buffer_idx, real_fft_buffer| {
-                    if sidechain_buffer_idx.is_some() {
-                        process_stft_sidechain(
-                            channel_idx,
-                            real_fft_buffer,
-                            &mut self.complex_fft_buffer,
-                            fft_plan,
-                            &self.window_function,
-                            &mut self.compressor_bank,
-                            input_gain,
-                        );
-                    } else {
-                        process_stft_main(
-                            channel_idx,
-                            real_fft_buffer,
-                            &mut self.complex_fft_buffer,
-                            fft_plan,
-                            &self.window_function,
-                            &self.params,
-                            &mut self.compressor_bank,
-                            input_gain,
-                            output_gain,
-                            overlap_times,
-                            first_non_dc_bin_idx,
-                        )
-                    }
-                },
-            ),
+            compressor_bank::ThresholdMode::SidechainMatch
+            | compressor_bank::ThresholdMode::SidechainCompress => {
+                self.stft.process_overlap_add_sidechain(
+                    buffer,
+                    [&aux.inputs[0]],
+                    overlap_times,
+                    |channel_idx, sidechain_buffer_idx, real_fft_buffer| {
+                        if sidechain_buffer_idx.is_some() {
+                            process_stft_sidechain(
+                                channel_idx,
+                                real_fft_buffer,
+                                &mut self.complex_fft_buffer,
+                                fft_plan,
+                                &self.window_function,
+                                &mut self.compressor_bank,
+                                input_gain,
+                            );
+                        } else {
+                            process_stft_main(
+                                channel_idx,
+                                real_fft_buffer,
+                                &mut self.complex_fft_buffer,
+                                fft_plan,
+                                &self.window_function,
+                                &self.params,
+                                &mut self.compressor_bank,
+                                input_gain,
+                                output_gain,
+                                overlap_times,
+                                first_non_dc_bin_idx,
+                            )
+                        }
+                    },
+                )
+            }
         }
 
         self.dry_wet_mixer.mix_in_dry(
