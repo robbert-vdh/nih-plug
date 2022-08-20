@@ -25,10 +25,10 @@ use crate::SpectralCompressorParams;
 const DOWNWARDS_NAME_PREFIX: &str = "downwards_";
 const UPWARDS_NAME_PREFIX: &str = "upwards_";
 
-/// The envelopes are initialized to the RMS value of a unity sine wave to make sure extreme upwards
+/// The envelopes are initialized to the RMS value of a -12 dB sine wave to make sure extreme upwards
 /// compression doesn't cause pops when switching between window sizes and when deactivating and
 /// reactivating the plugin.
-const ENVELOPE_INIT_VALUE: f32 = std::f32::consts::FRAC_1_SQRT_2;
+const ENVELOPE_INIT_VALUE: f32 = std::f32::consts::FRAC_1_SQRT_2 / 4.0;
 
 /// A bank of compressors so each FFT bin can be compressed individually. The vectors in this struct
 /// will have a capacity of `MAX_WINDOW_SIZE / 2 + 1` and a size that matches the current complex
