@@ -110,7 +110,9 @@ pub struct GlobalParams {
     #[id = "dry_wet"]
     pub dry_wet_ratio: FloatParam,
     /// Sets the 0-20 Hz bin to 0 since this won't have a lot of semantic meaning anymore after this
-    /// plugin and it will thus just eat up headroom.
+    /// plugin and it will thus just eat up headroom. If this option is disabled then the DC bins
+    /// will be gained by the reverse of the output gain to prevent them from getting louder as you
+    /// crank the output gain as makeup gain.
     #[id = "dc_filter"]
     pub dc_filter: BoolParam,
 
@@ -526,10 +528,15 @@ fn process_stft_main(
         first_non_dc_bin_idx,
     );
 
-    // The DC and other low frequency bins doesn't contain much semantic meaning anymore
-    // after all of this, so it only ends up consuming headroom.
+    // The DC and other low frequency bins doesn't contain much semantic meaning anymore after all
+    // of this, so it only ends up consuming headroom. Otherwise they're gained down by the output
+    // gain to prevent makeup gain from making these bins too loud.
     if params.global.dc_filter.value {
         complex_fft_buffer[..first_non_dc_bin_idx].fill(Complex32::default());
+    } else {
+        for bin in complex_fft_buffer[..first_non_dc_bin_idx].iter_mut() {
+            *bin *= -output_gain;
+        }
     }
 
     // Inverse FFT back into the scratch buffer. This will be added to a ring buffer
