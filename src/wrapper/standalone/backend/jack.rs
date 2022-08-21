@@ -184,6 +184,13 @@ impl Jack {
             anyhow::bail!("The JACK server returned an error: {status:?}");
         }
 
+        if config.connect_jack_inputs.is_none() && P::DEFAULT_INPUT_CHANNELS > 0 {
+            nih_log!(
+                "Audio inputs are not connected automatically to prevent feedback. Use the \
+                 '--connect-jack-inputs' option to connect the input ports."
+            )
+        }
+
         let mut inputs = Vec::new();
         let num_input_channels = config.input_channels.unwrap_or(P::DEFAULT_INPUT_CHANNELS);
         for port_no in 1..num_input_channels + 1 {

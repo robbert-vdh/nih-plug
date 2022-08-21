@@ -132,6 +132,13 @@ impl Cpal {
     pub fn new<P: Plugin>(config: WrapperConfig, cpal_host_id: cpal::HostId) -> Result<Self> {
         let host = cpal::host_from_id(cpal_host_id).context("The Audio API is unavailable")?;
 
+        if config.input_device.is_none() && P::DEFAULT_INPUT_CHANNELS > 0 {
+            nih_log!(
+                "Audio inputs are not connected automatically to prevent feedback. Use the \
+                 '--input-device' option to choose an input device."
+            )
+        }
+
         // No input device is connected unless requested by the user to avoid feedback loops
         let input_device = config
             .input_device
