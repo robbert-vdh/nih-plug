@@ -323,6 +323,7 @@ impl Cpal {
         // TODO: MIDI input and output
         let midi_input_events = Vec::with_capacity(1024);
         let mut midi_output_events = Vec::with_capacity(1024);
+        nih_log!("Audio-only, MIDI input and output has not been implemented yet.");
 
         // Can't borrow from `self` in the callback
         let config = self.config.clone();
