@@ -2602,6 +2602,7 @@ dependencies = [
  "nih_plug_derive",
  "parking_lot 0.12.1",
  "raw-window-handle",
+ "rtrb",
  "serde",
  "serde_json",
  "simplelog",
@@ -3542,6 +3543,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "921904a62e410e37e215c40381b7117f830d9d89ba60ab5236170541dd25646b"
 dependencies = [
  "xmlparser",
+]
+
+[[package]]
+name = "rtrb"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9026ee10cf6d8388598dc10601819be903d14528e05ec3ab97b9ade70e24819c"
+dependencies = [
+ "cache-padded",
 ]
 
 [[package]]

@@ -1,6 +1,10 @@
 use anyhow::{Context, Result};
-use cpal::{traits::*, Device, OutputCallbackInfo, Sample, SampleFormat, StreamConfig};
+use cpal::{
+    traits::*, Device, InputCallbackInfo, OutputCallbackInfo, Sample, SampleFormat, Stream,
+    StreamConfig,
+};
 use crossbeam::sync::{Parker, Unparker};
+use rtrb::RingBuffer;
 
 use super::super::config::WrapperConfig;
 use super::Backend;
@@ -31,16 +35,60 @@ impl Backend for Cpal {
     ) {
         // The CPAL audio devices may not accept floating point samples, so all of the actual audio
         // handling and buffer management handles in the `build_*_data_callback()` functions defined
-        // below
+        // below.
+
+        // CPAL does not support duplex streams, so audio input (when enabled, inputs aren't
+        // connected by default) waits a read a period of data before starting the output stream
+        let mut _input_stream: Option<Stream> = None;
+        let mut input_rb_consumer: Option<rtrb::Consumer<f32>> = None;
+        if let Some((input_device, input_config, input_sample_format)) = &self.input {
+            // Data is sent to the output data callback using a wait-free ring buffer
+            let (rb_producer, rb_consumer) = RingBuffer::new(
+                self.output_config.channels as usize * self.config.period_size as usize,
+            );
+            input_rb_consumer = Some(rb_consumer);
+
+            let input_parker = Parker::new();
+            let input_unparker = input_parker.unparker().clone();
+            let error_cb = {
+                let input_unparker = input_unparker.clone();
+                move |err| {
+                    nih_error!("Error during capture: {err:#}");
+                    input_unparker.clone().unpark();
+                }
+            };
+
+            let stream = match input_sample_format {
+                SampleFormat::I16 => input_device.build_input_stream(
+                    input_config,
+                    self.build_input_data_callback::<i16>(input_unparker, rb_producer),
+                    error_cb,
+                ),
+                SampleFormat::U16 => input_device.build_input_stream(
+                    input_config,
+                    self.build_input_data_callback::<u16>(input_unparker, rb_producer),
+                    error_cb,
+                ),
+                SampleFormat::F32 => input_device.build_input_stream(
+                    input_config,
+                    self.build_input_data_callback::<f32>(input_unparker, rb_producer),
+                    error_cb,
+                ),
+            }
+            .expect("Fatal error creating the capture stream");
+            stream
+                .play()
+                .expect("Fatal error trying to start the capture stream");
+            _input_stream = Some(stream);
+
+            // Playback is delayed one period if we're capturing audio so it has something to process
+            input_parker.park()
+        }
 
         // This thread needs to be blocked until audio processing ends as CPAL processes the streams
         // on another thread instead of blocking
-        // TODO: Move this to the output stream handling
-        // TODO: Input stream
-        // TODO: Block the main thread until this breaky thing
         let parker = Parker::new();
         let unparker = parker.unparker().clone();
-
         let error_cb = {
             let unparker = unparker.clone();
             move |err| {
@@ -52,17 +100,17 @@ impl Backend for Cpal {
         let output_stream = match self.output_sample_format {
             SampleFormat::I16 => self.output_device.build_output_stream(
                 &self.output_config,
-                self.build_output_data_callback::<i16>(unparker, cb),
+                self.build_output_data_callback::<i16>(unparker, input_rb_consumer, cb),
                 error_cb,
             ),
             SampleFormat::U16 => self.output_device.build_output_stream(
                 &self.output_config,
-                self.build_output_data_callback::<u16>(unparker, cb),
+                self.build_output_data_callback::<u16>(unparker, input_rb_consumer, cb),
                 error_cb,
             ),
             SampleFormat::F32 => self.output_device.build_output_stream(
                 &self.output_config,
-                self.build_output_data_callback::<f32>(unparker, cb),
+                self.build_output_data_callback::<f32>(unparker, input_rb_consumer, cb),
                 error_cb,
             ),
         }
@@ -226,9 +274,30 @@ impl Cpal {
         })
     }
 
+    fn build_input_data_callback<T: Sample>(
+        &self,
+        input_unparker: Unparker,
+        mut input_rb_producer: rtrb::Producer<f32>,
+    ) -> impl FnMut(&[T], &InputCallbackInfo) + Send + 'static {
+        // This callback needs to copy input samples to a ring buffer that can be read from in the
+        // output data callback
+        move |data, _info| {
+            for sample in data {
+                // If for whatever reason the input callback is fired twice before an output
+                // callback, then just spin on this until the push succeeds
+                while input_rb_producer.push(sample.to_f32()).is_err() {}
+            }
+
+            // The run function is blocked until a single period has been processed here. After this
+            // point output playback can start.
+            input_unparker.unpark();
+        }
+    }
+
     fn build_output_data_callback<T: Sample>(
         &self,
         unparker: Unparker,
+        mut input_rb_consumer: Option<rtrb::Consumer<f32>>,
         mut cb: impl FnMut(&mut Buffer, Transport, &[NoteEvent], &mut Vec<NoteEvent>) -> bool
             + 'static
             + Send,
@@ -252,7 +321,7 @@ impl Cpal {
         }
 
         // TODO: MIDI input and output
-        let mut midi_input_events = Vec::with_capacity(1024);
+        let midi_input_events = Vec::with_capacity(1024);
         let mut midi_output_events = Vec::with_capacity(1024);
 
         // Can't borrow from `self` in the callback
@@ -280,8 +349,28 @@ impl Cpal {
             transport.time_sig_denominator = Some(config.timesig_denom as i32);
             transport.playing = true;
 
-            for channel in buffer.as_slice() {
-                channel.fill(0.0);
+            // If an input was configured, then the output buffer is filled with (interleaved) input
+            // samples. Otherwise it gets filled with silence.
+            match &mut input_rb_consumer {
+                Some(input_rb_consumer) => {
+                    for channels in buffer.iter_samples() {
+                        for sample in channels {
+                            loop {
+                                // Keep spinning on this if the output callback somehow outpaces the
+                                // input callback
+                                if let Ok(input_sample) = input_rb_consumer.pop() {
+                                    *sample = input_sample;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                None => {
+                    for channel in buffer.as_slice() {
+                        channel.fill(0.0);
+                    }
+                }
             }
 
             midi_output_events.clear();
