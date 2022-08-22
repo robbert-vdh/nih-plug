@@ -2,7 +2,6 @@ use clap_sys::plugin::clap_plugin_descriptor;
 use clap_sys::version::CLAP_VERSION;
 use std::ffi::{CStr, CString};
 use std::marker::PhantomData;
-use std::mem::MaybeUninit;
 use std::os::raw::c_char;
 
 use crate::plugin::ClapPlugin;
@@ -23,12 +22,13 @@ pub struct PluginDescriptor<P: ClapPlugin> {
     clap_support_url: Option<CString>,
     clap_description: Option<CString>,
     clap_features: Vec<CString>,
-    clap_features_ptrs: MaybeUninit<Vec<*const c_char>>,
 
+    /// The contains pointers to the strings in `clap_features`.
+    clap_features_ptrs: Vec<*const c_char>,
     /// We only support a single plugin per descriptor right now, so we'll fill in the plugin
     /// descriptor upfront. We also need to initialize the `CString` fields above first before we
     /// can initialize this plugin descriptor.
-    plugin_descriptor: MaybeUninit<clap_plugin_descriptor>,
+    plugin_descriptor: Option<clap_plugin_descriptor>,
 
     /// The plugin's type.
     _phantom: PhantomData<P>,
@@ -54,24 +54,27 @@ impl<P: ClapPlugin> Default for PluginDescriptor<P> {
                 .map(|feat| feat.as_str())
                 .map(|s| CString::new(s).expect("`CLAP_FEATURES` contained null bytes"))
                 .collect(),
-            clap_features_ptrs: MaybeUninit::uninit(),
 
-            plugin_descriptor: MaybeUninit::uninit(),
+            // These need to be initialized later as they contain pointers to the fields in this
+            // descriptor
+            clap_features_ptrs: Vec::new(),
+            plugin_descriptor: None,
 
             _phantom: PhantomData,
         };
 
         // The keyword list is an environ-like list of char pointers terminated by a null pointer.
-        let mut clap_features_ptrs: Vec<*const c_char> = descriptor
+        descriptor.clap_features_ptrs = descriptor
             .clap_features
             .iter()
             .map(|feature| feature.as_ptr())
             .collect();
-        clap_features_ptrs.push(std::ptr::null());
-        descriptor.clap_features_ptrs.write(clap_features_ptrs);
+        descriptor.clap_features_ptrs.push(std::ptr::null());
 
         // We couldn't initialize this directly because of all the CStrings
-        descriptor.plugin_descriptor.write(clap_plugin_descriptor {
+        // NOTE: This is safe without pinning this struct because all of the data is already stored
+        //       on the heap
+        descriptor.plugin_descriptor = Some(clap_plugin_descriptor {
             clap_version: CLAP_VERSION,
             id: descriptor.clap_id.as_ptr(),
             name: descriptor.name.as_ptr(),
@@ -93,7 +96,7 @@ impl<P: ClapPlugin> Default for PluginDescriptor<P> {
                 .as_ref()
                 .map(|description| description.as_ptr())
                 .unwrap_or(std::ptr::null()),
-            features: unsafe { descriptor.clap_features_ptrs.assume_init_ref() }.as_ptr(),
+            features: descriptor.clap_features_ptrs.as_ptr(),
         });
 
         descriptor
@@ -105,7 +108,7 @@ unsafe impl<P: ClapPlugin> Sync for PluginDescriptor<P> {}
 
 impl<P: ClapPlugin> PluginDescriptor<P> {
     pub fn clap_plugin_descriptor(&self) -> &clap_plugin_descriptor {
-        unsafe { self.plugin_descriptor.assume_init_ref() }
+        self.plugin_descriptor.as_ref().unwrap()
     }
 
     pub fn clap_id(&self) -> &CStr {
