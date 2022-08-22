@@ -3,7 +3,6 @@ use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::{self, SendTimeoutError};
 use parking_lot::RwLock;
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::mem::MaybeUninit;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -53,11 +52,11 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// through [`Self::do_maybe_async()`] instead. That method posts the task to the host's
     /// `IRunLoop` instead of it's available.
     ///
-    /// This RwLock is only needed because it has to be initialized late. There is no reason to
-    /// mutably borrow the event loop, so reads will never be contested.
+    /// This AtomicRefCell+Option is only needed because it has to be initialized late. There is no
+    /// reason to mutably borrow the event loop, so reads will never be contested.
     ///
     /// TODO: Is there a better type for Send+Sync late initializaiton?
-    pub event_loop: AtomicRefCell<MaybeUninit<OsEventLoop<Task, Self>>>,
+    pub event_loop: AtomicRefCell<Option<OsEventLoop<Task, Self>>>,
 
     /// Whether the plugin is currently processing audio. In other words, the last state
     /// `IAudioProcessor::setActive()` has been called with.
@@ -281,7 +280,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
 
             plug_view: RwLock::new(None),
 
-            event_loop: AtomicRefCell::new(MaybeUninit::uninit()),
+            event_loop: AtomicRefCell::new(None),
 
             is_processing: AtomicBool::new(false),
             // Some hosts, like the current version of Bitwig and Ardour at the time of writing,
@@ -321,7 +320,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         //        is separate from the internal COM-style reference count.
         let wrapper: Arc<WrapperInner<P>> = wrapper.into();
         *wrapper.event_loop.borrow_mut() =
-            MaybeUninit::new(OsEventLoop::new_and_spawn(Arc::downgrade(&wrapper)));
+            Some(OsEventLoop::new_and_spawn(Arc::downgrade(&wrapper)));
 
         wrapper
     }
@@ -351,7 +350,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
     #[must_use]
     pub fn do_maybe_async(&self, task: Task) -> bool {
         let event_loop = self.event_loop.borrow();
-        let event_loop = unsafe { event_loop.assume_init_ref() };
+        let event_loop = event_loop.as_ref().unwrap();
         if event_loop.is_main_thread() {
             unsafe { self.execute(task) };
             true
@@ -480,9 +479,14 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         }
 
         // After the state has been updated, notify the host about the new parameter values
-        let task_posted = unsafe { self.event_loop.borrow().assume_init_ref() }.do_maybe_async(
-            Task::TriggerRestart(RestartFlags::kParamValuesChanged as i32),
-        );
+        let task_posted =
+            self.event_loop
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .do_maybe_async(Task::TriggerRestart(
+                    RestartFlags::kParamValuesChanged as i32,
+                ));
         nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
     }
 

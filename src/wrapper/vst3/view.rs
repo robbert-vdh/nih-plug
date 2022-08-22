@@ -508,13 +508,13 @@ impl<P: Vst3Plugin> Drop for RunLoopEventHandler<P> {
         // handle those in the regular event loop so no work gets lost
         let mut posting_failed = false;
         while let Some(task) = self.tasks.pop() {
-            posting_failed |= !unsafe {
-                self.inner
-                    .event_loop
-                    .borrow()
-                    .assume_init_ref()
-                    .do_maybe_async(task)
-            };
+            posting_failed |= !self
+                .inner
+                .event_loop
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .do_maybe_async(task);
         }
 
         if posting_failed {
