@@ -3089,6 +3089,8 @@ impl<P: ClapPlugin> Wrapper<P> {
                     return false;
                 }
 
+                nih_trace!("Saved state ({} bytes)", serialized.len());
+
                 true
             }
             Err(err) => {
@@ -3151,6 +3153,8 @@ impl<P: ClapPlugin> Wrapper<P> {
             //       duplicate reset if it's not needed.
             process_wrapper(|| plugin.reset());
         }
+
+        nih_trace!("Loaded state ({length} bytes)");
 
         true
     }

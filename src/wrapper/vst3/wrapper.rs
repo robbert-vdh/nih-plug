@@ -529,6 +529,8 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
             process_wrapper(|| plugin.reset());
         }
 
+        nih_trace!("Loaded state ({} bytes)", read_buffer.len());
+
         kResultOk
     }
 
@@ -552,6 +554,9 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
 
                 nih_debug_assert_eq!(result, kResultOk);
                 nih_debug_assert_eq!(num_bytes_written as usize, serialized.len());
+
+                nih_trace!("Saved state ({} bytes)", serialized.len());
+
                 kResultOk
             }
             Err(err) => {
