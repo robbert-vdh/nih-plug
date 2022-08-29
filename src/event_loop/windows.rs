@@ -13,7 +13,7 @@ use windows::Win32::System::{
     LibraryLoader::GetModuleHandleA, Performance::QueryPerformanceCounter,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CloseWindow, CreateWindowExA, DefWindowProcA, GetWindowLongPtrA, PostMessageA,
+    CreateWindowExA, DefWindowProcA, DestroyWindow, GetWindowLongPtrA, PostMessageA,
     RegisterClassExA, SetWindowLongPtrA, UnregisterClassA, CREATESTRUCTA, GWLP_USERDATA, HMENU,
     WINDOW_EX_STYLE, WINDOW_STYLE, WM_CREATE, WM_DESTROY, WM_USER, WNDCLASSEXA,
 };
@@ -171,7 +171,7 @@ where
 
 impl<T, E> Drop for WindowsEventLoop<T, E> {
     fn drop(&mut self) {
-        unsafe { CloseWindow(self.message_window) };
+        unsafe { DestroyWindow(self.message_window) };
         unsafe {
             UnregisterClassA(
                 PSTR(self.message_window_class_name.as_bytes_with_nul().as_ptr()),
