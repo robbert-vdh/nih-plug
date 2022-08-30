@@ -13,10 +13,11 @@ limited to the functionality that I either needed myself or that was requested
 by others. See the [current features](#current-features) section for more
 information on the project's current status.
 
-Come join us on the [Rust Audio Discord](https://discord.gg/ykxU3rt4Cb), or
-check out the work in progress
-[documentation](https://nih-plug.robbertvanderhelm.nl/) for some pointers on how
-to get started.
+Come join us on the [Rust Audio Discord](https://discord.gg/ykxU3rt4Cb), check
+out the work-in-progress
+[documentation](https://nih-plug.robbertvanderhelm.nl/), or use the
+[cookiecutter template](https://github.com/robbert-vdh/nih-plug-template) to
+quickly get started with NIH-plug.
 
 ### Table of contents
 
