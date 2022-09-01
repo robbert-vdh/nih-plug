@@ -255,6 +255,9 @@ fn bundle_binary(
 
     fs::create_dir_all(standalone_binary_path.parent().unwrap())
         .context("Could not create standalone bundle directory")?;
+    if standalone_binary_path.exists() {
+        fs::remove_file(&standalone_binary_path)?;
+    }
     reflink::reflink_or_copy(&bin_path, &standalone_binary_path)
         .context("Could not copy binary to standalone bundle")?;
 
