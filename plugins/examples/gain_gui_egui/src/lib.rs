@@ -154,9 +154,14 @@ impl Plugin for Gain {
         buffer_config: &BufferConfig,
         _context: &mut impl InitContext,
     ) -> bool {
-        // TODO: How do you tie this exponential decay to an actual time span?
-        self.peak_meter_decay_weight = 0.9992f32.powf(44_100.0 / buffer_config.sample_rate);
-
+        // Set the volume meter to decay from 10db within 1 second.
+        let decay_secs = 1.0;
+        self.peak_meter_decay_weight = 1.0
+            + util::exponential_decay_rate(
+                secs * buffer_config.sample_rate,
+                util::db_to_gain(10.0),
+                util::MINUS_INFINITY_GAIN,
+            );
         true
     }
 
