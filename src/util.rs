@@ -50,6 +50,16 @@ pub fn midi_note_to_freq(note: u8) -> f32 {
     2.0f32.powf((note as f32 - 69.0) / 12.0) * 440.0
 }
 
+/// Return the rate of exponential decay necessary over `num_ticks` to
+/// decrease from `start` to `target`.
+pub fn exponential_decay_rate(num_ticks: f32, start: f32, target: f32) -> f32 {
+    // Exponential growth function is
+    // y = a(1 + r)^t
+    // Transform this to get t...
+    // r = (y/a)^(1/t) - 1
+    (target / start).powf(1.0 / num_ticks) - 1.0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -87,5 +97,10 @@ mod tests {
     #[test]
     fn test_gain_to_db_minus_infinity_negative() {
         assert_eq!(gain_to_db(-2.0), MINUS_INFINITY_DB);
+    }
+
+    #[test]
+    fn test_exponential_decay_rate_single_step_halflife() {
+        assert_eq!(exponential_decay_rate(1.0, 1.0, 0.5), -0.5);
     }
 }
