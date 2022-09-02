@@ -534,8 +534,11 @@ fn process_stft_main(
     if params.global.dc_filter.value {
         complex_fft_buffer[..first_non_dc_bin_idx].fill(Complex32::default());
     } else {
+        // The `output_gain` parameter also contains gain compensation for the windowingq, we don't
+        // want to compensate for that
+        let output_gain_recip = params.global.output_gain.value.recip();
         for bin in complex_fft_buffer[..first_non_dc_bin_idx].iter_mut() {
-            *bin *= -output_gain;
+            *bin *= output_gain_recip;
         }
     }
 
