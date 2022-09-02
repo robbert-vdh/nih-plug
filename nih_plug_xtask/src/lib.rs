@@ -9,6 +9,7 @@ use std::process::Command;
 use std::os::unix::fs::PermissionsExt;
 
 mod symbols;
+mod util;
 
 /// Re-export for the main function.
 pub use anyhow::Result;
@@ -255,7 +256,7 @@ fn bundle_binary(
 
     fs::create_dir_all(standalone_binary_path.parent().unwrap())
         .context("Could not create standalone bundle directory")?;
-    reflink::reflink_or_copy(&bin_path, &standalone_binary_path)
+    util::reflink(&bin_path, &standalone_binary_path)
         .context("Could not copy binary to standalone bundle")?;
 
     // FIXME: The reflink crate seems to sometime strip away the executable bit, so we need to help
@@ -325,7 +326,7 @@ fn bundle_plugin(
 
         fs::create_dir_all(clap_lib_path.parent().unwrap())
             .context("Could not create CLAP bundle directory")?;
-        reflink::reflink_or_copy(&lib_path, &clap_lib_path)
+        util::reflink(&lib_path, &clap_lib_path)
             .context("Could not copy library to CLAP bundle")?;
 
         // In contrast to VST3, CLAP only uses bundles on macOS, so we'll just take the first
@@ -352,7 +353,7 @@ fn bundle_plugin(
 
         fs::create_dir_all(vst2_lib_path.parent().unwrap())
             .context("Could not create VST2 bundle directory")?;
-        reflink::reflink_or_copy(&lib_path, &vst2_lib_path)
+        util::reflink(&lib_path, &vst2_lib_path)
             .context("Could not copy library to VST2 bundle")?;
 
         // VST2 only uses bundles on macOS, so we'll just take the first component of the library
@@ -379,7 +380,7 @@ fn bundle_plugin(
 
         fs::create_dir_all(vst3_lib_path.parent().unwrap())
             .context("Could not create VST3 bundle directory")?;
-        reflink::reflink_or_copy(&lib_path, &vst3_lib_path)
+        util::reflink(&lib_path, &vst3_lib_path)
             .context("Could not copy library to VST3 bundle")?;
 
         let vst3_bundle_home = vst3_lib_path
