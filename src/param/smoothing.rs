@@ -85,6 +85,29 @@ impl SmoothingStyle {
             SmoothingStyle::Exponential(_) => 0.0001f64.powf(1.0 / steps_left as f64) as f32,
         }
     }
+
+    /// The same as [`next()`][Self::next()], but with the option to take more than one step at a
+    /// time. Calling `next_step()` with step count `n` gives the same result as applying `next()`
+    /// `n` times to a value, but is more efficient to compute. `next_step()` with 1 step is
+    /// equivalent to `step()`.
+    ///
+    /// See the docstring on the [`SmoothingStyle::next_step()`] function for the formulas used.
+    #[inline]
+    pub fn next_step(&self, current: f32, target: f32, step_size: f32, steps: u32) -> f32 {
+        nih_debug_assert!(steps >= 1);
+
+        match self {
+            SmoothingStyle::None => target,
+            SmoothingStyle::Linear(_) => current + (step_size * steps as f32),
+            SmoothingStyle::Logarithmic(_) => current * (step_size.powi(steps as i32)),
+            SmoothingStyle::Exponential(_) => {
+                // This is the same as calculating `current = (current * step_size) +
+                // (target * (1 - step_size))` in a loop since the target value won't change
+                let coefficient = step_size.powi(steps as i32);
+                (current * coefficient) + (target * (1.0 - coefficient))
+            }
+        }
+    }
 }
 
 /// A type that can be smoothed. This exists just to avoid duplicate explicit implementations for
@@ -221,17 +244,7 @@ impl<T: Smoothable> Smoother<T> {
                 self.steps_left.store(0, Ordering::Relaxed);
                 target
             } else {
-                match &self.style {
-                    SmoothingStyle::None => target,
-                    SmoothingStyle::Linear(_) => current + (self.step_size * steps as f32),
-                    SmoothingStyle::Logarithmic(_) => current * (self.step_size.powi(steps as i32)),
-                    SmoothingStyle::Exponential(_) => {
-                        // This is the same as calculating `current = (current * step_size) +
-                        // (target * (1 - step_size))` in a loop since the target value won't change
-                        let coefficient = self.step_size.powi(steps as i32);
-                        (current * coefficient) + (target * (1.0 - coefficient))
-                    }
-                }
+                self.style.next_step(current, target, self.step_size, steps)
             };
             self.current.store(new, Ordering::Relaxed);
 
