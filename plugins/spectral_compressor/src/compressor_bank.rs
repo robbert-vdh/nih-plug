@@ -512,39 +512,35 @@ impl CompressorBank {
 
     /// Apply the magnitude compression to a buffer of FFT bins. The compressors are first updated
     /// if needed. The overlap amount is needed to compute the effective sample rate. The
-    /// `skip_bins_below` argument is used to avoid compressing DC bins, or the neighbouring bins
-    /// the DC signal may have been convolved into because of the Hann window function.
+    /// `first_non_dc_bin` argument is used to avoid upwards compression on the DC bins, or the
+    /// neighbouring bins the DC signal may have been convolved into because of the Hann window
+    /// function.
     pub fn process(
         &mut self,
         buffer: &mut [Complex32],
         channel_idx: usize,
         params: &SpectralCompressorParams,
         overlap_times: usize,
-        skip_bins_below: usize,
+        first_non_dc_bin: usize,
     ) {
         nih_debug_assert_eq!(buffer.len(), self.log2_freqs.len());
 
         self.update_if_needed(params);
         match params.threshold.mode.value() {
             ThresholdMode::Internal => {
-                self.update_envelopes(buffer, channel_idx, params, overlap_times, skip_bins_below);
-                self.compress(buffer, channel_idx, params, skip_bins_below)
+                self.update_envelopes(buffer, channel_idx, params, overlap_times);
+                self.compress(buffer, channel_idx, params, first_non_dc_bin)
             }
             ThresholdMode::SidechainMatch => {
-                self.update_envelopes(buffer, channel_idx, params, overlap_times, skip_bins_below);
-                self.compress_sidechain_match(buffer, channel_idx, params, skip_bins_below)
+                self.update_envelopes(buffer, channel_idx, params, overlap_times);
+                self.compress_sidechain_match(buffer, channel_idx, params, first_non_dc_bin)
             }
             ThresholdMode::SidechainCompress => {
                 // This mode uses regular compression, but the envelopes are computed from the
                 // sidechain input magnitudes. These are already set in `process_sidechain`. This
                 // separate envelope updating function is needed for the channel linking.
-                self.update_envelopes_sidechain(
-                    channel_idx,
-                    params,
-                    overlap_times,
-                    skip_bins_below,
-                );
-                self.compress(buffer, channel_idx, params, skip_bins_below)
+                self.update_envelopes_sidechain(channel_idx, params, overlap_times);
+                self.compress(buffer, channel_idx, params, first_non_dc_bin)
             }
         };
     }
@@ -565,7 +561,6 @@ impl CompressorBank {
         channel_idx: usize,
         params: &SpectralCompressorParams,
         overlap_times: usize,
-        skip_bins_below: usize,
     ) {
         // The coefficient the old envelope value is multiplied by when the current rectified sample
         // value is above the envelope's value. The 0 to 1 step response retains 36.8% of the old
@@ -591,11 +586,7 @@ impl CompressorBank {
         };
         let release_new_t = 1.0 - release_old_t;
 
-        for (bin, envelope) in buffer
-            .iter()
-            .zip(self.envelopes[channel_idx].iter_mut())
-            .skip(skip_bins_below)
-        {
+        for (bin, envelope) in buffer.iter().zip(self.envelopes[channel_idx].iter_mut()) {
             let magnitude = bin.norm();
             if *envelope > magnitude {
                 // Release stage
@@ -616,7 +607,6 @@ impl CompressorBank {
         channel_idx: usize,
         params: &SpectralCompressorParams,
         overlap_times: usize,
-        skip_bins_below: usize,
     ) {
         // See `update_envelopes()`
         let effective_sample_rate =
@@ -641,11 +631,7 @@ impl CompressorBank {
         let other_channels_t = params.threshold.sc_channel_link.value / num_channels;
         let this_channel_t = 1.0 - (other_channels_t * (num_channels - 1.0));
 
-        for (bin_idx, envelope) in self.envelopes[channel_idx]
-            .iter_mut()
-            .enumerate()
-            .skip(skip_bins_below)
-        {
+        for (bin_idx, envelope) in self.envelopes[channel_idx].iter_mut().enumerate() {
             // In this mode the envelopes are set based on the sidechain signal, taking channel
             // linking into account
             let sidechain_magnitude: f32 = self
@@ -697,7 +683,7 @@ impl CompressorBank {
         buffer: &mut [Complex32],
         channel_idx: usize,
         params: &SpectralCompressorParams,
-        skip_bins_below: usize,
+        first_non_dc_bin: usize,
     ) {
         // Well I'm not sure at all why this scaling works, but it does. With higher knee
         // bandwidths, the middle values needs to be pushed more towards the post-knee threshold
@@ -723,7 +709,6 @@ impl CompressorBank {
             .iter_mut()
             .zip(self.envelopes[channel_idx].iter())
             .enumerate()
-            .skip(skip_bins_below)
         {
             // This works by computing a scaling factor, and then scaling the bin magnitudes by that.
             let mut scale = 1.0;
@@ -752,7 +737,7 @@ impl CompressorBank {
             let upwards_ratio_recip = unsafe { self.upwards_ratio_recips.get_unchecked(bin_idx) };
             let upwards_knee_start = unsafe { self.upwards_knee_starts.get_unchecked(bin_idx) };
             let upwards_knee_end = unsafe { self.upwards_knee_ends.get_unchecked(bin_idx) };
-            if *upwards_ratio_recip != 1.0 && *envelope > 1e-6 {
+            if bin_idx >= first_non_dc_bin && *upwards_ratio_recip != 1.0 && *envelope > 1e-6 {
                 scale *= compress_upwards(
                     *envelope,
                     *upwards_threshold,
@@ -779,7 +764,7 @@ impl CompressorBank {
         buffer: &mut [Complex32],
         channel_idx: usize,
         params: &SpectralCompressorParams,
-        skip_bins_below: usize,
+        first_non_dc_bin: usize,
     ) {
         // See `compress` for more details
         let downwards_knee_scaling_factor =
@@ -805,7 +790,6 @@ impl CompressorBank {
             .iter_mut()
             .zip(self.envelopes[channel_idx].iter())
             .enumerate()
-            .skip(skip_bins_below)
         {
             // The idea here is that we scale the compressor thresholds/knee values by the sidechain
             // signal, thus sort of creating a dynamic multiband compressor
@@ -855,7 +839,7 @@ impl CompressorBank {
                 unsafe { self.upwards_knee_starts.get_unchecked(bin_idx) * sidechain_scale };
             let upwards_knee_end =
                 unsafe { self.upwards_knee_ends.get_unchecked(bin_idx) * sidechain_scale };
-            if *upwards_ratio_recip != 1.0 && *envelope > 1e-6 {
+            if bin_idx >= first_non_dc_bin && *upwards_ratio_recip != 1.0 && *envelope > 1e-6 {
                 scale *= compress_upwards(
                     *envelope,
                     upwards_threshold,
