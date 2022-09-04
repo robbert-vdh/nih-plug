@@ -63,6 +63,30 @@ pub struct SmootherIter<'a, T> {
     smoother: &'a Smoother<T>,
 }
 
+impl SmoothingStyle {
+    /// Compute the step size for this smoother.
+    #[inline]
+    pub fn step_size(&self, current: f32, target: f32, steps_left: u32) -> f32 {
+        nih_debug_assert!(steps_left >= 1);
+
+        match self {
+            SmoothingStyle::None => 0.0,
+            SmoothingStyle::Linear(_) => (target - current) / (steps_left as f32),
+            SmoothingStyle::Logarithmic(_) => {
+                // We need to solve `current * (step_size ^ steps_left) = target` for
+                // `step_size`
+                nih_debug_assert_ne!(current, 0.0);
+                ((target / current) as f64).powf((steps_left as f64).recip()) as f32
+            }
+            // In this case the step size value is the coefficient the current value will be
+            // multiplied by, while the target value is multipled by one minus the coefficient. This
+            // reaches 99.99% of the target value after `steps_left`. The smoother will snap to the
+            // target value after that point.
+            SmoothingStyle::Exponential(_) => 0.0001f64.powf(1.0 / steps_left as f64) as f32,
+        }
+    }
+}
+
 /// A type that can be smoothed. This exists just to avoid duplicate explicit implementations for
 /// the smoothers.
 pub trait Smoothable: Default + Copy {
@@ -161,21 +185,9 @@ impl<T: Smoothable> Smoother<T> {
         self.steps_left.store(steps_left, Ordering::Relaxed);
 
         let current = self.current.load(Ordering::Relaxed);
-        self.step_size = match self.style {
-            SmoothingStyle::None => 0.0,
-            SmoothingStyle::Linear(_) => (self.target.to_f32() - current) / steps_left as f32,
-            SmoothingStyle::Logarithmic(_) => {
-                // We need to solve `current * (step_size ^ steps_left) = target` for
-                // `step_size`
-                nih_debug_assert_ne!(current, 0.0);
-                ((self.target.to_f32() / current) as f64).powf((steps_left as f64).recip()) as f32
-            }
-            // In this case the step size value is the coefficient the current value will be
-            // multiplied by, while the target value is multipled by one minus the coefficient. This
-            // reaches 99.99% of the target value after `steps_left`. The smoother will snap to the
-            // target value after that point.
-            SmoothingStyle::Exponential(_) => 0.0001f64.powf(1.0 / steps_left as f64) as f32,
-        };
+        self.step_size = self
+            .style
+            .step_size(current, self.target.to_f32(), steps_left as u32);
     }
 
     /// Get the next value from this smoother. The value will be equal to the previous value once
