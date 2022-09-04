@@ -274,7 +274,7 @@ impl ThresholdParams {
                 .with_callback(Arc::new(move |_| set_update_both_thresholds(0.0))),
             sc_channel_link: FloatParam::new(
                 "SC Channel Link",
-                0.0,
+                0.8,
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             )
             .with_unit("%")
