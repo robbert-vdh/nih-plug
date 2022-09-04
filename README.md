@@ -5,7 +5,7 @@
 [![Docs](https://github.com/robbert-vdh/nih-plug/actions/workflows/docs.yml/badge.svg?branch=master)](https://nih-plug.robbertvanderhelm.nl/)
 
 This is a work in progress API-agnostic audio plugin framework written in Rust
-as well as a small collection of plugins. The idea is to have a statefull but
+as well as a small collection of plugins. The idea is to have a stateful but
 simple plugin API that gets rid of as much unnecessary ceremony wherever
 possible, while also keeping the amount of magic to minimum. Since this is not
 quite meant for general use just yet, the plugin API surface is currently
@@ -143,7 +143,7 @@ Scroll down for more information on the plugin framework.
   has mostly been tested through Wine with
   [yabridge](https://github.com/robbert-vdh/yabridge).
 - See the [`Plugin`](src/plugin.rs) trait's documentation for an incomplete list
-  of the functionlaity that has currently not yet been implemented.
+  of the functionality that has currently not yet been implemented.
 
 ### Building
 
