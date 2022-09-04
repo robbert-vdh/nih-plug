@@ -357,8 +357,8 @@ impl CompressorParams {
                 if param_id_prefix == UPWARDS_NAME_PREFIX {
                     0.75
                 } else {
-                    // These basically work in the opposite way
-                    0.25
+                    // When used subtly, no rolloff is usually better for downwards compression
+                    0.0
                 },
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             )
