@@ -324,24 +324,11 @@ impl<T: Smoothable> Smoother<T> {
     ///
     /// Panics if `block_len > block_values.len()`.
     pub fn next_block(&self, block_values: &mut [T], block_len: usize) {
-        self.next_block_exact_mapped(&mut block_values[..block_len], |x| x)
+        self.next_block_exact(&mut block_values[..block_len])
     }
 
     /// The same as [`next_block()`][Self::next_block()], but filling the entire slice.
     pub fn next_block_exact(&self, block_values: &mut [T]) {
-        self.next_block_exact_mapped(block_values, |x| x)
-    }
-
-    /// The same as [`next_block()`][Self::next_block()], but with a function applied to each
-    /// produced value. Useful when applying modulation to a smoothed parameter. The mapping
-    /// function is only applied once for the final target value.
-    pub fn next_block_mapped(&self, block_values: &mut [T], block_len: usize, f: impl Fn(T) -> T) {
-        self.next_block_exact_mapped(&mut block_values[..block_len], f)
-    }
-
-    /// The same as [`next_block_exact()`][Self::next_block()], but with a function applied to each
-    /// produced value. Useful when applying modulation to a smoothed parameter.
-    pub fn next_block_exact_mapped(&self, block_values: &mut [T], f: impl Fn(T) -> T) {
         // `self.next()` will yield the current value if the parameter is no longer smoothing, but
         // it's a bit of a waste to continuesly call that if only the first couple or none of the
         // values in `block_values` would require smoothing and the rest don't. Instead, we'll just
@@ -354,9 +341,10 @@ impl<T: Smoothable> Smoother<T> {
             // conditionals optimized out
             let mut current = self.current.load(Ordering::Relaxed);
             let target = self.target.to_f32();
+
             block_values[..num_smoothed_values].fill_with(|| {
                 current = self.style.next(current, target, self.step_size);
-                f(T::from_f32(current))
+                T::from_f32(current)
             });
 
             // In `next()` the last step snaps the value to the target value. Since we're computing
@@ -364,16 +352,84 @@ impl<T: Smoothable> Smoother<T> {
             // instead to avoid the conditional.
             if num_smoothed_values == steps_left {
                 current = target.to_f32();
-                block_values[num_smoothed_values - 1..].fill(f(self.target));
+                block_values[num_smoothed_values - 1..].fill(self.target);
             } else {
-                block_values[num_smoothed_values..].fill(f(self.target));
+                block_values[num_smoothed_values..].fill(self.target);
             }
 
             self.current.store(current, Ordering::Relaxed);
             self.steps_left
                 .fetch_sub(num_smoothed_values as i32, Ordering::Relaxed);
         } else {
-            block_values.fill(f(self.target));
+            block_values.fill(self.target);
+        }
+    }
+
+    /// The same as [`next_block()`][Self::next_block()], but with a function applied to each
+    /// produced value. The mapping function takes an index in the block and a floating point
+    /// representation of the smoother's current value. This allows the modulation to be consistent
+    /// during smoothing. Additionally, the mapping function is always called even if the smoothing
+    /// is finished.
+    pub fn next_block_mapped(
+        &self,
+        block_values: &mut [T],
+        block_len: usize,
+        f: impl FnMut(usize, f32) -> T,
+    ) {
+        self.next_block_exact_mapped(&mut block_values[..block_len], f)
+    }
+
+    /// The same as [`next_block_exact()`][Self::next_block()], but with a function applied to each
+    /// produced value. Useful when applying modulation to a smoothed parameter.
+    pub fn next_block_exact_mapped(
+        &self,
+        block_values: &mut [T],
+        mut f: impl FnMut(usize, f32) -> T,
+    ) {
+        // This works exactly the same as `next_block_exact()`, except for the addition of the
+        // mapping function
+        let target = self.target.to_f32();
+
+        let steps_left = self.steps_left.load(Ordering::Relaxed) as usize;
+        let num_smoothed_values = block_values.len().min(steps_left);
+        if num_smoothed_values > 0 {
+            let mut current = self.current.load(Ordering::Relaxed);
+
+            for (idx, value) in block_values
+                .iter_mut()
+                .enumerate()
+                .take(num_smoothed_values)
+            {
+                current = self.style.next(current, target, self.step_size);
+                *value = f(idx, current);
+            }
+
+            if num_smoothed_values == steps_left {
+                current = target.to_f32();
+                for (idx, value) in block_values
+                    .iter_mut()
+                    .enumerate()
+                    .skip(num_smoothed_values - 1)
+                {
+                    *value = f(idx, target);
+                }
+            } else {
+                for (idx, value) in block_values
+                    .iter_mut()
+                    .enumerate()
+                    .skip(num_smoothed_values)
+                {
+                    *value = f(idx, target);
+                }
+            }
+
+            self.current.store(current, Ordering::Relaxed);
+            self.steps_left
+                .fetch_sub(num_smoothed_values as i32, Ordering::Relaxed);
+        } else {
+            for (idx, value) in block_values.iter_mut().enumerate() {
+                *value = f(idx, target);
+            }
         }
     }
 }

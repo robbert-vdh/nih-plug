@@ -6,6 +6,16 @@ new and what's changed, this document lists all breaking changes in reverse
 chronological order. If a new feature did not require any changes to existing
 code then it will not be listed here.
 
+## [2022-09-04]
+
+- `Smoother::next_block_mapped()` and `Smoother::next_block_exact_mapped()` have
+  been redesigned. They now take an index of the element being generated and the
+  float representation of the smoothed value. This makes it easier to use them
+  for modulation, and it makes it possible to smoothly modulate integers and
+  other stepped parameters. Additionally, the mapping functions are now also
+  called for every produced value, even if the smoother has already finished
+  smoothing and is always producing the same value.
+
 ## [2022-08-19]
 
 - `Plugin::DEFAULT_NUM_INPUTS` and `Plugin::DEFAULT_NUM_OUTPUTS` have been
