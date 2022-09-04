@@ -3,6 +3,9 @@ use nih_plug::prelude::*;
 use nih_plug_egui::{create_egui_editor, egui, widgets, EguiState};
 use std::sync::Arc;
 
+/// The time it takes for the peak meter to decay by 12 dB after switching to complete silence.
+const PEAK_METER_DECAY_MS: f64 = 150.0;
+
 /// This is mostly identical to the gain example, minus some fluff, and with a GUI.
 struct Gain {
     params: Arc<GainParams>,
@@ -154,8 +157,11 @@ impl Plugin for Gain {
         buffer_config: &BufferConfig,
         _context: &mut impl InitContext,
     ) -> bool {
-        // TODO: How do you tie this exponential decay to an actual time span?
-        self.peak_meter_decay_weight = 0.9992f32.powf(44_100.0 / buffer_config.sample_rate);
+        // After `PEAK_METER_DECAY_MS` milliseconds of pure silence, the peak meter's value should
+        // have dropped by 12 dB
+        self.peak_meter_decay_weight = 0.25f64
+            .powf((buffer_config.sample_rate as f64 * PEAK_METER_DECAY_MS / 1000.0).recip())
+            as f32;
 
         true
     }
