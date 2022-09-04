@@ -237,7 +237,30 @@ impl<T: Smoothable> Smoother<T> {
     #[allow(clippy::should_implement_trait)]
     #[inline]
     pub fn next(&self) -> T {
-        self.next_step(1)
+        // NOTE: This used to be implemented in terms of `next_step()`, but this is more efficient
+        //       for the common use case of single steps
+        if self.steps_left.load(Ordering::Relaxed) > 0 {
+            let current = self.current.load(Ordering::Relaxed);
+            let target = self.target.to_f32();
+
+            // The number of steps usually won't fit exactly, so make sure we don't end up with
+            // quantization errors on overshoots or undershoots. We also need to account for the
+            // possibility that we only have `n < steps` steps left. This is especially important
+            // for the `Exponential` smoothing style, since that won't reach the target value
+            // exactly.
+            let old_steps_left = self.steps_left.fetch_sub(1, Ordering::Relaxed);
+            let new = if old_steps_left == 1 {
+                self.steps_left.store(0, Ordering::Relaxed);
+                target
+            } else {
+                self.style.next(current, target, self.step_size)
+            };
+            self.current.store(new, Ordering::Relaxed);
+
+            T::from_f32(new)
+        } else {
+            self.target
+        }
     }
 
     /// [`next()`][Self::next()], but with the ability to skip forward in the smoother.
