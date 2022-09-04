@@ -85,22 +85,22 @@ impl SmoothingStyle {
     /// [`SmoothingStyle::num_steps()`]. Check the source code of the [`SmoothingStyle::next()`] and
     /// [`SmoothingStyle::next_step()`] functions for details on how these values should be used.
     #[inline]
-    pub fn step_size(&self, current: f32, target: f32, num_steps: u32) -> f32 {
+    pub fn step_size(&self, start: f32, target: f32, num_steps: u32) -> f32 {
         nih_debug_assert!(num_steps >= 1);
 
         match self {
             SmoothingStyle::None => 0.0,
-            SmoothingStyle::Linear(_) => (target - current) / (num_steps as f32),
+            SmoothingStyle::Linear(_) => (target - start) / (num_steps as f32),
             SmoothingStyle::Logarithmic(_) => {
-                // We need to solve `current * (step_size ^ num_steps) = target` for `step_size`
-                nih_debug_assert_ne!(current, 0.0);
-                ((target / current) as f64).powf((num_steps as f64).recip()) as f32
+                // We need to solve `start * (step_size ^ num_steps) = target` for `step_size`
+                nih_debug_assert_ne!(start, 0.0);
+                ((target / start) as f64).powf((num_steps as f64).recip()) as f32
             }
             // In this case the step size value is the coefficient the current value will be
             // multiplied by, while the target value is multipled by one minus the coefficient. This
             // reaches 99.99% of the target value after `num_steps`. The smoother will snap to the
             // target value after that point.
-            SmoothingStyle::Exponential(_) => 0.0001f64.powf(1.0 / num_steps as f64) as f32,
+            SmoothingStyle::Exponential(_) => 0.0001f64.powf((num_steps as f64).recip()) as f32,
         }
     }
 
