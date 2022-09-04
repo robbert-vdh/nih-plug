@@ -64,7 +64,9 @@ pub struct SmootherIter<'a, T> {
 }
 
 impl SmoothingStyle {
-    /// Compute the step size for this smoother.
+    /// Compute the step size for this smoother. Check the source code of the
+    /// [`SmoothingStyle::next()`] and [`SmoothingStyle::next_step()`] functions for details on how
+    /// these values should be used.
     #[inline]
     pub fn step_size(&self, current: f32, target: f32, steps_left: u32) -> f32 {
         nih_debug_assert!(steps_left >= 1);
@@ -83,6 +85,22 @@ impl SmoothingStyle {
             // reaches 99.99% of the target value after `steps_left`. The smoother will snap to the
             // target value after that point.
             SmoothingStyle::Exponential(_) => 0.0001f64.powf(1.0 / steps_left as f64) as f32,
+        }
+    }
+
+    /// Compute the next value from `current` leading up to `target` using the `step_size` computed
+    /// using [`SmoothingStyle::step_size()`]. Depending on the smoothing style this function may
+    /// never completely reach `target`, so you will need to snap to `target` yourself after
+    /// cmoputing the target number of steps.
+    ///
+    /// See the docstring on the [`SmoothingStyle::next_step()`] function for the formulas used.
+    #[inline]
+    pub fn next(&self, current: f32, target: f32, step_size: f32) -> f32 {
+        match self {
+            SmoothingStyle::None => target,
+            SmoothingStyle::Linear(_) => current + step_size,
+            SmoothingStyle::Logarithmic(_) => current * step_size,
+            SmoothingStyle::Exponential(_) => (current * step_size) + (target * (1.0 - step_size)),
         }
     }
 
