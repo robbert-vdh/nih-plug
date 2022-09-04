@@ -333,7 +333,8 @@ impl<T: Smoothable> Smoother<T> {
     }
 
     /// The same as [`next_block()`][Self::next_block()], but with a function applied to each
-    /// produced value. Useful when applying modulation to a smoothed parameter.
+    /// produced value. Useful when applying modulation to a smoothed parameter. The mapping
+    /// function is only applied once for the final target value.
     pub fn next_block_mapped(&self, block_values: &mut [T], block_len: usize, f: impl Fn(T) -> T) {
         self.next_block_exact_mapped(&mut block_values[..block_len], f)
     }
@@ -346,12 +347,34 @@ impl<T: Smoothable> Smoother<T> {
         // values in `block_values` would require smoothing and the rest don't. Instead, we'll just
         // smooth the values as necessary, and then reuse the target value for the rest of the
         // block.
-        let num_smoothed_values = block_values
-            .len()
-            .min(self.steps_left.load(Ordering::Relaxed) as usize);
+        let steps_left = self.steps_left.load(Ordering::Relaxed) as usize;
+        let num_smoothed_values = block_values.len().min(steps_left);
+        if num_smoothed_values > 0 {
+            // This is the same as calling `next()` `num_smoothed_values` times, but with some
+            // conditionals optimized out
+            let mut current = self.current.load(Ordering::Relaxed);
+            let target = self.target.to_f32();
+            block_values[..num_smoothed_values].fill_with(|| {
+                current = self.style.next(current, target, self.step_size);
+                f(T::from_f32(current))
+            });
 
-        block_values[..num_smoothed_values].fill_with(|| f(self.next()));
-        block_values[num_smoothed_values..].fill(self.target);
+            // In `next()` the last step snaps the value to the target value. Since we're computing
+            // many values in a row, we'll just overwrite the last value with the target value
+            // instead to avoid the conditional.
+            if num_smoothed_values == steps_left {
+                current = target.to_f32();
+                block_values[num_smoothed_values - 1..].fill(f(self.target));
+            } else {
+                block_values[num_smoothed_values..].fill(f(self.target));
+            }
+
+            self.current.store(current, Ordering::Relaxed);
+            self.steps_left
+                .fetch_sub(num_smoothed_values as i32, Ordering::Relaxed);
+        } else {
+            block_values.fill(f(self.target));
+        }
     }
 }
 
