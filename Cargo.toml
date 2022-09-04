@@ -108,6 +108,9 @@ vst3-sys = { git = "https://github.com/robbert-vdh/vst3-sys.git", branch = "fix/
 # Used for the `zstd` feature
 zstd = { version = "0.11.2", optional = true }
 
+[dev-dependencies]
+approx = "0.5.1"
+
 [target.'cfg(all(target_family = "unix", not(target_os = "macos")))'.dependencies]
 libc = "0.2.124"
 

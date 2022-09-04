@@ -2583,6 +2583,7 @@ name = "nih_plug"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "approx 0.5.1",
  "assert_no_alloc",
  "atomic_float",
  "atomic_refcell",

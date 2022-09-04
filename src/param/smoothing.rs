@@ -371,6 +371,58 @@ impl Smoothable for i32 {
 mod tests {
     use super::*;
 
+    /// Applying `next()` `n` times should be the same as `next_step()` for `n` steps.
+    #[test]
+    fn linear_f32_next_equivalance() {
+        let style = SmoothingStyle::Linear(100.0);
+
+        let mut current = 0.4;
+        let target = 0.8;
+        let steps = 15;
+        let step_size = style.step_size(current, target, steps);
+
+        let expected_result = style.next_step(current, target, step_size, steps);
+        for _ in 0..steps {
+            current = style.next(current, target, step_size);
+        }
+
+        approx::assert_relative_eq!(current, expected_result, epsilon = 1e-5);
+    }
+
+    #[test]
+    fn logarithmic_f32_next_equivalance() {
+        let style = SmoothingStyle::Logarithmic(100.0);
+
+        let mut current = 0.4;
+        let target = 0.8;
+        let steps = 15;
+        let step_size = style.step_size(current, target, steps);
+
+        let expected_result = style.next_step(current, target, step_size, steps);
+        for _ in 0..steps {
+            current = style.next(current, target, step_size);
+        }
+
+        approx::assert_relative_eq!(current, expected_result, epsilon = 1e-5);
+    }
+
+    #[test]
+    fn exponential_f32_next_equivalance() {
+        let style = SmoothingStyle::Exponential(100.0);
+
+        let mut current = 0.4;
+        let target = 0.8;
+        let steps = 15;
+        let step_size = style.step_size(current, target, steps);
+
+        let expected_result = style.next_step(current, target, step_size, steps);
+        for _ in 0..steps {
+            current = style.next(current, target, step_size);
+        }
+
+        approx::assert_relative_eq!(current, expected_result, epsilon = 1e-5);
+    }
+
     #[test]
     fn linear_f32_smoothing() {
         let mut smoother: Smoother<f32> = Smoother::new(SmoothingStyle::Linear(100.0));
