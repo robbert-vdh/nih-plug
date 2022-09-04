@@ -64,26 +64,43 @@ pub struct SmootherIter<'a, T> {
 }
 
 impl SmoothingStyle {
-    /// Compute the step size for this smoother. Check the source code of the
-    /// [`SmoothingStyle::next()`] and [`SmoothingStyle::next_step()`] functions for details on how
-    /// these values should be used.
+    /// Compute the number of steps to reach the target value based on the sample rate and this
+    /// smoothing style's duration.
     #[inline]
-    pub fn step_size(&self, current: f32, target: f32, steps: u32) -> f32 {
-        nih_debug_assert!(steps >= 1);
+    pub fn num_steps(&self, sample_rate: f32) -> u32 {
+        nih_debug_assert!(sample_rate > 0.0);
+
+        match self {
+            SmoothingStyle::None => 1,
+            SmoothingStyle::Linear(time)
+            | SmoothingStyle::Logarithmic(time)
+            | SmoothingStyle::Exponential(time) => {
+                nih_debug_assert!(*time >= 0.0);
+                (sample_rate * time / 1000.0).round() as u32
+            }
+        }
+    }
+
+    /// Compute the step size for this smoother. `num_steps` can be obtained using
+    /// [`SmoothingStyle::num_steps()`]. Check the source code of the [`SmoothingStyle::next()`] and
+    /// [`SmoothingStyle::next_step()`] functions for details on how these values should be used.
+    #[inline]
+    pub fn step_size(&self, current: f32, target: f32, num_steps: u32) -> f32 {
+        nih_debug_assert!(num_steps >= 1);
 
         match self {
             SmoothingStyle::None => 0.0,
-            SmoothingStyle::Linear(_) => (target - current) / (steps as f32),
+            SmoothingStyle::Linear(_) => (target - current) / (num_steps as f32),
             SmoothingStyle::Logarithmic(_) => {
-                // We need to solve `current * (step_size ^ steps) = target` for `step_size`
+                // We need to solve `current * (step_size ^ num_steps) = target` for `step_size`
                 nih_debug_assert_ne!(current, 0.0);
-                ((target / current) as f64).powf((steps as f64).recip()) as f32
+                ((target / current) as f64).powf((num_steps as f64).recip()) as f32
             }
             // In this case the step size value is the coefficient the current value will be
             // multiplied by, while the target value is multipled by one minus the coefficient. This
-            // reaches 99.99% of the target value after `steps`. The smoother will snap to the
+            // reaches 99.99% of the target value after `num_steps`. The smoother will snap to the
             // target value after that point.
-            SmoothingStyle::Exponential(_) => 0.0001f64.powf(1.0 / steps as f64) as f32,
+            SmoothingStyle::Exponential(_) => 0.0001f64.powf(1.0 / num_steps as f64) as f32,
         }
     }
 
@@ -216,12 +233,7 @@ impl<T: Smoothable> Smoother<T> {
     pub fn set_target(&mut self, sample_rate: f32, target: T) {
         self.target = target;
 
-        let steps_left = match self.style {
-            SmoothingStyle::None => 1,
-            SmoothingStyle::Linear(time)
-            | SmoothingStyle::Logarithmic(time)
-            | SmoothingStyle::Exponential(time) => (sample_rate * time / 1000.0).round() as i32,
-        };
+        let steps_left = self.style.num_steps(sample_rate) as i32;
         self.steps_left.store(steps_left, Ordering::Relaxed);
 
         let current = self.current.load(Ordering::Relaxed);
