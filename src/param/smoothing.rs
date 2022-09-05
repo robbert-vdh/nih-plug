@@ -337,25 +337,29 @@ impl<T: Smoothable> Smoother<T> {
         let steps_left = self.steps_left.load(Ordering::Relaxed) as usize;
         let num_smoothed_values = block_values.len().min(steps_left);
         if num_smoothed_values > 0 {
-            // This is the same as calling `next()` `num_smoothed_values` times, but with some
-            // conditionals optimized out
             let mut current = self.current.load(Ordering::Relaxed);
             let target = self.target.to_f32();
 
-            block_values[..num_smoothed_values].fill_with(|| {
-                current = self.style.next(current, target, self.step_size);
-                T::from_f32(current)
-            });
-
-            // In `next()` the last step snaps the value to the target value. Since we're computing
-            // many values in a row, we'll just overwrite the last value with the target value
-            // instead to avoid the conditional.
             if num_smoothed_values == steps_left {
+                // This is the same as calling `next()` `num_smoothed_values` times, but with some
+                // conditionals optimized out
+                block_values[..num_smoothed_values - 1].fill_with(|| {
+                    current = self.style.next(current, target, self.step_size);
+                    T::from_f32(current)
+                });
+
+                // In `next()` the last step snaps the value to the target value, so we'll do the
+                // same thing here
                 current = target.to_f32();
-                block_values[num_smoothed_values - 1..].fill(self.target);
+                block_values[num_smoothed_values - 1] = self.target;
             } else {
-                block_values[num_smoothed_values..].fill(self.target);
+                block_values[..num_smoothed_values].fill_with(|| {
+                    current = self.style.next(current, target, self.step_size);
+                    T::from_f32(current)
+                });
             }
+
+            block_values[num_smoothed_values..].fill(self.target);
 
             self.current.store(current, Ordering::Relaxed);
             self.steps_left
@@ -395,32 +399,36 @@ impl<T: Smoothable> Smoother<T> {
         if num_smoothed_values > 0 {
             let mut current = self.current.load(Ordering::Relaxed);
 
-            for (idx, value) in block_values
-                .iter_mut()
-                .enumerate()
-                .take(num_smoothed_values)
-            {
-                current = self.style.next(current, target, self.step_size);
-                *value = f(idx, current);
-            }
-
+            // See `next_block_exact()` for more details
             if num_smoothed_values == steps_left {
-                current = target.to_f32();
                 for (idx, value) in block_values
                     .iter_mut()
                     .enumerate()
-                    .skip(num_smoothed_values - 1)
+                    .take(num_smoothed_values - 1)
                 {
-                    *value = f(idx, target);
+                    current = self.style.next(current, target, self.step_size);
+                    *value = f(idx, current);
                 }
+
+                current = target.to_f32();
+                block_values[num_smoothed_values - 1] = f(num_smoothed_values - 1, target);
             } else {
                 for (idx, value) in block_values
                     .iter_mut()
                     .enumerate()
-                    .skip(num_smoothed_values)
+                    .take(num_smoothed_values)
                 {
-                    *value = f(idx, target);
+                    current = self.style.next(current, target, self.step_size);
+                    *value = f(idx, current);
                 }
+            }
+
+            for (idx, value) in block_values
+                .iter_mut()
+                .enumerate()
+                .skip(num_smoothed_values)
+            {
+                *value = f(idx, target);
             }
 
             self.current.store(current, Ordering::Relaxed);
