@@ -212,8 +212,8 @@ impl Plugin for PolyModSynth {
                             } => {
                                 let initial_phase: f32 = self.prng.gen();
                                 // This starts with the attack portion of the amplitude envelope
-                                let mut amp_envelope = Smoother::new(SmoothingStyle::Exponential(
-                                    self.params.amp_attack_ms.value,
+                                let amp_envelope = Smoother::new(SmoothingStyle::Exponential(
+                                    self.params.amp_attack_ms.value(),
                                 ));
                                 amp_envelope.reset(0.0);
                                 amp_envelope.set_target(sample_rate, 1.0);
@@ -522,7 +522,7 @@ impl PolyModSynth {
                 {
                     *releasing = true;
                     amp_envelope.style =
-                        SmoothingStyle::Exponential(self.params.amp_release_ms.value);
+                        SmoothingStyle::Exponential(self.params.amp_release_ms.value());
                     amp_envelope.set_target(sample_rate, 0.0);
 
                     // If this targetted a single voice ID, we're done here. Otherwise there may be

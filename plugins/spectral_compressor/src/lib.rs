@@ -357,7 +357,7 @@ impl Plugin for SpectralCompressor {
         // These plans have already been made during initialization we can switch between versions
         // without reallocating
         let fft_plan = &mut self.plan_for_order.as_mut().unwrap()
-            [self.params.global.window_size_order.value as usize - MIN_WINDOW_ORDER];
+            [self.params.global.window_size_order.value() as usize - MIN_WINDOW_ORDER];
         let num_bins = self.complex_fft_buffer.len();
         // The Hann window function spreads the DC signal out slightly, so we'll clear all 0-20 Hz
         // bins for this. With small window sizes you probably don't want this as it would result in
@@ -378,7 +378,7 @@ impl Plugin for SpectralCompressor {
         // threshold option. When sidechaining is enabled this is used to gain up the sidechain
         // signal instead.
         let input_gain = gain_compensation.sqrt();
-        let output_gain = self.params.global.output_gain.value * gain_compensation.sqrt();
+        let output_gain = self.params.global.output_gain.value() * gain_compensation.sqrt();
         // TODO: Auto makeup gain
 
         // This is mixed in later with latency compensation applied
@@ -459,11 +459,11 @@ impl Plugin for SpectralCompressor {
 
 impl SpectralCompressor {
     fn window_size(&self) -> usize {
-        1 << self.params.global.window_size_order.value as usize
+        1 << self.params.global.window_size_order.value() as usize
     }
 
     fn overlap_times(&self) -> usize {
-        1 << self.params.global.overlap_times_order.value as usize
+        1 << self.params.global.overlap_times_order.value() as usize
     }
 
     /// `window_size` should not exceed `MAX_WINDOW_SIZE` or this will allocate.
@@ -531,12 +531,12 @@ fn process_stft_main(
     // The DC and other low frequency bins doesn't contain much semantic meaning anymore after all
     // of this, so it only ends up consuming headroom. Otherwise they're gained down by the output
     // gain to prevent makeup gain from making these bins too loud.
-    if params.global.dc_filter.value {
+    if params.global.dc_filter.value() {
         complex_fft_buffer[..first_non_dc_bin_idx].fill(Complex32::default());
     } else {
         // The `output_gain` parameter also contains gain compensation for the windowingq, we don't
         // want to compensate for that
-        let output_gain_recip = params.global.output_gain.value.recip();
+        let output_gain_recip = params.global.output_gain.value().recip();
         for bin in complex_fft_buffer[..first_non_dc_bin_idx].iter_mut() {
             *bin *= output_gain_recip;
         }

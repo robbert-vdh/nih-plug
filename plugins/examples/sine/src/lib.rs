@@ -150,7 +150,7 @@ impl Plugin for Sine {
             let gain = self.params.gain.smoothed.next();
 
             // This plugin can be either triggered by MIDI or controleld by a parameter
-            let sine = if self.params.use_midi.value {
+            let sine = if self.params.use_midi.value() {
                 // Act on the next MIDI event
                 while let Some(event) = next_event {
                     if event.timing() > sample_id as u32 {

@@ -245,7 +245,7 @@ impl Plugin for PubertySimulator {
         // These plans have already been made during initialization we can switch between versions
         // without reallocating
         let fft_plan = &mut self.plan_for_order.as_mut().unwrap()
-            [self.params.window_size_order.value as usize - MIN_WINDOW_ORDER];
+            [self.params.window_size_order.value() as usize - MIN_WINDOW_ORDER];
 
         let mut smoothed_pitch_value = 0.0;
         self.stft
@@ -395,11 +395,11 @@ impl Plugin for PubertySimulator {
 
 impl PubertySimulator {
     fn window_size(&self) -> usize {
-        1 << self.params.window_size_order.value as usize
+        1 << self.params.window_size_order.value() as usize
     }
 
     fn overlap_times(&self) -> usize {
-        1 << self.params.overlap_times_order.value as usize
+        1 << self.params.overlap_times_order.value() as usize
     }
 
     /// `window_size` should not exceed `MAX_WINDOW_SIZE` or this will allocate.

@@ -115,12 +115,12 @@ unsafe impl<P: Params> Params for Arc<P> {
 /// erasure.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub enum ParamPtr {
-    FloatParam(*mut super::FloatParam),
-    IntParam(*mut super::IntParam),
-    BoolParam(*mut super::BoolParam),
+    FloatParam(*const super::FloatParam),
+    IntParam(*const super::IntParam),
+    BoolParam(*const super::BoolParam),
     /// Since we can't encode the actual enum here, this inner parameter struct contains all of the
     /// relevant information from the enum so it can be type erased.
-    EnumParam(*mut super::enums::EnumParamInner),
+    EnumParam(*const super::enums::EnumParamInner),
 }
 
 // These pointers only point to fields on structs kept in an `Arc<dyn Params>`, and the caller

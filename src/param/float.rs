@@ -1,6 +1,8 @@
 //! Continuous (or discrete, with a step size) floating point parameters.
 
+use atomic_float::AtomicF32;
 use std::fmt::Display;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use super::internals::ParamPtr;
@@ -10,31 +12,21 @@ use super::{Param, ParamFlags, ParamMut};
 
 /// A floating point parameter that's stored unnormalized. The range is used for the normalization
 /// process.
-//
-// XXX: To keep the API simple and to allow the optimizer to do its thing, the values are stored as
-//      plain primitive values that are modified through the `*mut` pointers from the plugin's
-//      `Params` object. Technically modifying these while the GUI is open is unsound. We could
-//      remedy this by changing `value` to be an atomic type and adding a function also called
-//      `value()` to load that value, but in practice that should not be necessary if we don't do
-//      anything crazy other than modifying this value. On both AArch64 and x86(_64) reads and
-//      writes to naturally aligned values up to word size are atomic, so there's no risk of reading
-//      a partially written to value here. We should probably reconsider this at some point though.
-#[repr(C, align(4))]
 pub struct FloatParam {
     /// The field's current plain value, after monophonic modulation has been applied.
-    pub value: f32,
+    value: AtomicF32,
     /// The field's current value normalized to the `[0, 1]` range.
-    normalized_value: f32,
+    normalized_value: AtomicF32,
     /// The field's plain, unnormalized value before any monophonic automation coming from the host
     /// has been applied. This will always be the same as `value` for VST3 plugins.
-    unmodulated_value: f32,
+    unmodulated_value: AtomicF32,
     /// The field's value normalized to the `[0, 1]` range before any monophonic automation coming
     /// from the host has been applied. This will always be the same as `value` for VST3 plugins.
-    unmodulated_normalized_value: f32,
+    unmodulated_normalized_value: AtomicF32,
     /// A value in `[-1, 1]` indicating the amount of modulation applied to
     /// `unmodulated_normalized_`. This needs to be stored separately since the normalied values are
     /// clamped, and this value persists after new automation events.
-    modulation_offset: f32,
+    modulation_offset: AtomicF32,
     /// The field's default plain, unnormalized value.
     default: f32,
     /// An optional smoother that will automatically interpolate between the new automation values
@@ -84,12 +76,12 @@ pub struct FloatParam {
 impl Display for FloatParam {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match (&self.value_to_string, &self.step_size) {
-            (Some(func), _) => write!(f, "{}{}", func(self.value), self.unit),
+            (Some(func), _) => write!(f, "{}{}", func(self.value()), self.unit),
             (None, Some(step_size)) => {
                 let num_digits = decimals_from_step_size(*step_size);
-                write!(f, "{:.num_digits$}{}", self.value, self.unit)
+                write!(f, "{:.num_digits$}{}", self.value(), self.unit)
             }
-            _ => write!(f, "{}{}", self.value, self.unit),
+            _ => write!(f, "{}{}", self.value(), self.unit),
         }
     }
 }
@@ -111,22 +103,22 @@ impl Param for FloatParam {
 
     #[inline]
     fn plain_value(&self) -> Self::Plain {
-        self.value
+        self.value.load(Ordering::Relaxed)
     }
 
     #[inline]
-    fn normalized_value(&self) -> Self::Plain {
-        self.normalized_value
+    fn normalized_value(&self) -> f32 {
+        self.normalized_value.load(Ordering::Relaxed)
     }
 
     #[inline]
     fn unmodulated_plain_value(&self) -> Self::Plain {
-        self.unmodulated_value
+        self.unmodulated_value.load(Ordering::Relaxed)
     }
 
     #[inline]
     fn unmodulated_normalized_value(&self) -> f32 {
-        self.unmodulated_normalized_value
+        self.unmodulated_normalized_value.load(Ordering::Relaxed)
     }
 
     #[inline]
@@ -196,52 +188,54 @@ impl Param for FloatParam {
 }
 
 impl ParamMut for FloatParam {
-    fn set_plain_value(&mut self, plain: Self::Plain) {
-        self.unmodulated_value = plain;
-        self.unmodulated_normalized_value = self.preview_normalized(plain);
-        if self.modulation_offset == 0.0 {
-            self.value = self.unmodulated_value;
-            self.normalized_value = self.unmodulated_normalized_value;
+    fn set_plain_value(&self, plain: Self::Plain) {
+        let unmodulated_value = plain;
+        let unmodulated_normalized_value = self.preview_normalized(plain);
+
+        let modulation_offset = self.modulation_offset.load(Ordering::Relaxed);
+        let (value, normalized_value) = if modulation_offset == 0.0 {
+            (unmodulated_value, unmodulated_normalized_value)
         } else {
-            self.normalized_value =
-                (self.unmodulated_normalized_value + self.modulation_offset).clamp(0.0, 1.0);
-            self.value = self.preview_plain(self.normalized_value);
-        }
+            let normalized_value =
+                (unmodulated_normalized_value + modulation_offset).clamp(0.0, 1.0);
+
+            (self.preview_plain(normalized_value), normalized_value)
+        };
+
+        self.value.store(value, Ordering::Relaxed);
+        self.normalized_value
+            .store(normalized_value, Ordering::Relaxed);
+        self.unmodulated_value
+            .store(unmodulated_value, Ordering::Relaxed);
+        self.unmodulated_normalized_value
+            .store(unmodulated_normalized_value, Ordering::Relaxed);
+
         if let Some(f) = &self.value_changed {
-            f(self.value);
+            f(value);
         }
     }
 
-    fn set_normalized_value(&mut self, normalized: f32) {
+    fn set_normalized_value(&self, normalized: f32) {
         // NOTE: The double conversion here is to make sure the state is reproducible. State is
         //       saved and restored using plain values, and the new normalized value will be
         //       different from `normalized`. This is not necesasry for the modulation as these
         //       values are never shown to the host.
-        self.unmodulated_value = self.preview_plain(normalized);
-        self.unmodulated_normalized_value = self.preview_normalized(self.unmodulated_value);
-        if self.modulation_offset == 0.0 {
-            self.value = self.unmodulated_value;
-            self.normalized_value = self.unmodulated_normalized_value;
-        } else {
-            self.normalized_value =
-                (self.unmodulated_normalized_value + self.modulation_offset).clamp(0.0, 1.0);
-            self.value = self.preview_plain(self.normalized_value);
-        }
-        if let Some(f) = &self.value_changed {
-            f(self.value);
-        }
+        self.set_plain_value(self.preview_plain(normalized))
     }
 
-    fn modulate_value(&mut self, modulation_offset: f32) {
-        self.modulation_offset = modulation_offset;
-        self.set_normalized_value(self.unmodulated_normalized_value);
+    fn modulate_value(&self, modulation_offset: f32) {
+        self.modulation_offset
+            .store(modulation_offset, Ordering::Relaxed);
+
+        // TODO: This renormalizes this value, which is not necessary
+        self.set_plain_value(self.plain_value());
     }
 
-    fn update_smoother(&mut self, sample_rate: f32, reset: bool) {
+    fn update_smoother(&self, sample_rate: f32, reset: bool) {
         if reset {
-            self.smoothed.reset(self.value);
+            self.smoothed.reset(self.plain_value());
         } else {
-            self.smoothed.set_target(sample_rate, self.value);
+            self.smoothed.set_target(sample_rate, self.plain_value());
         }
     }
 }
@@ -251,11 +245,11 @@ impl FloatParam {
     /// parameter.
     pub fn new(name: impl Into<String>, default: f32, range: FloatRange) -> Self {
         Self {
-            value: default,
-            normalized_value: range.normalize(default),
-            unmodulated_value: default,
-            unmodulated_normalized_value: range.normalize(default),
-            modulation_offset: 0.0,
+            value: AtomicF32::new(default),
+            normalized_value: AtomicF32::new(range.normalize(default)),
+            unmodulated_value: AtomicF32::new(default),
+            unmodulated_normalized_value: AtomicF32::new(range.normalize(default)),
+            modulation_offset: AtomicF32::new(0.0),
             default,
             smoothed: Smoother::none(),
 
@@ -270,6 +264,13 @@ impl FloatParam {
             value_to_string: None,
             string_to_value: None,
         }
+    }
+
+    /// The field's current plain value, after monophonic modulation has been applied. Equivalent to
+    /// calling `param.plain_value()`.
+    #[inline]
+    pub fn value(&self) -> f32 {
+        self.plain_value()
     }
 
     /// Enable polyphonic modulation for this parameter. The ID is used to uniquely identify this

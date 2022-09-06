@@ -209,7 +209,7 @@ impl Plugin for SafetyLimiter {
             let mut is_peaking = false;
             for sample in channel_samples.iter_mut() {
                 if sample.is_finite() {
-                    is_peaking |= sample.abs() > self.params.threshold_gain.value;
+                    is_peaking |= sample.abs() > self.params.threshold_gain.value();
                 } else {
                     // Infinity or NaN values need to be completely filtered out, because otherwise
                     // we'll try to mix them back into the signal later
@@ -253,7 +253,7 @@ impl Plugin for SafetyLimiter {
                     // This phase runs from 0 to `2 * pi` as an optimization, so we can use it
                     // directly. And the sine wave is scaled down to the threshold minus 24 dB
                     let sine_sample =
-                        self.osc_phase_tau.sin() * (self.params.threshold_gain.value * 0.125);
+                        self.osc_phase_tau.sin() * (self.params.threshold_gain.value() * 0.125);
                     self.osc_phase_tau += self.osc_phase_tau_dt;
                     if self.osc_phase_tau >= std::f32::consts::TAU {
                         self.osc_phase_tau -= std::f32::consts::TAU;

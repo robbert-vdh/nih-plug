@@ -267,37 +267,37 @@ impl Param for EnumParamInner {
 }
 
 impl<T: Enum + PartialEq> ParamMut for EnumParam<T> {
-    fn set_plain_value(&mut self, plain: Self::Plain) {
+    fn set_plain_value(&self, plain: Self::Plain) {
         self.inner.set_plain_value(T::to_index(plain) as i32)
     }
 
-    fn set_normalized_value(&mut self, normalized: f32) {
+    fn set_normalized_value(&self, normalized: f32) {
         self.inner.set_normalized_value(normalized)
     }
 
-    fn modulate_value(&mut self, modulation_offset: f32) {
+    fn modulate_value(&self, modulation_offset: f32) {
         self.inner.modulate_value(modulation_offset)
     }
 
-    fn update_smoother(&mut self, sample_rate: f32, reset: bool) {
+    fn update_smoother(&self, sample_rate: f32, reset: bool) {
         self.inner.update_smoother(sample_rate, reset)
     }
 }
 
 impl ParamMut for EnumParamInner {
-    fn set_plain_value(&mut self, plain: Self::Plain) {
+    fn set_plain_value(&self, plain: Self::Plain) {
         self.inner.set_plain_value(plain)
     }
 
-    fn set_normalized_value(&mut self, normalized: f32) {
+    fn set_normalized_value(&self, normalized: f32) {
         self.inner.set_normalized_value(normalized)
     }
 
-    fn modulate_value(&mut self, modulation_offset: f32) {
+    fn modulate_value(&self, modulation_offset: f32) {
         self.inner.modulate_value(modulation_offset)
     }
 
-    fn update_smoother(&mut self, sample_rate: f32, reset: bool) {
+    fn update_smoother(&self, sample_rate: f32, reset: bool) {
         self.inner.update_smoother(sample_rate, reset)
     }
 }
@@ -324,6 +324,12 @@ impl<T: Enum + PartialEq + 'static> EnumParam<T> {
             },
             _marker: PhantomData,
         }
+    }
+
+    /// Get the active enum variant.
+    #[inline]
+    pub fn value(&self) -> T {
+        self.plain_value()
     }
 
     /// Enable polyphonic modulation for this parameter. The ID is used to uniquely identify this
@@ -376,11 +382,6 @@ impl<T: Enum + PartialEq + 'static> EnumParam<T> {
         self.inner.inner = self.inner.inner.hide_in_generic_ui();
         self
     }
-
-    /// Get the active enum variant.
-    pub fn value(&self) -> T {
-        self.plain_value()
-    }
 }
 
 impl EnumParamInner {
@@ -402,7 +403,7 @@ impl EnumParamInner {
 
     /// Set the parameter based on a serialized stable string identifier. Return whether the ID was
     /// known and the parameter was set.
-    pub fn set_from_id(&mut self, id: &str) -> bool {
+    pub fn set_from_id(&self, id: &str) -> bool {
         match self
             .ids
             .and_then(|ids| ids.iter().position(|candidate| *candidate == id))

@@ -120,7 +120,7 @@ impl Plugin for Gain {
                                     setter.end_set_parameter(&params.gain);
                                     new_value
                                 }
-                                None => params.gain.value as f64,
+                                None => params.gain.value() as f64,
                             }
                         })
                         .suffix(" dB"),

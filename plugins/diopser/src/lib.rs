@@ -61,7 +61,7 @@ struct Diopser {
     should_update_filters: Arc<AtomicBool>,
     /// If this is 1 and any of the filter parameters are still smoothing, thenn the filter
     /// coefficients should be recalculated on the next sample. After that, this gets reset to
-    /// `unnormalize_automation_precision(self.params.automation_precision.value)`. This is to
+    /// `unnormalize_automation_precision(self.params.automation_precision.value())`. This is to
     /// reduce the DSP load of automation parameters. It can also cause some fun sounding glitchy
     /// effects when the precision is low.
     next_filter_smoothing_in: i32,
@@ -291,7 +291,7 @@ impl Plugin for Diopser {
         // necessary, and allow smoothing only every n samples using the automation precision
         // parameter
         let smoothing_interval =
-            unnormalize_automation_precision(self.params.automation_precision.value);
+            unnormalize_automation_precision(self.params.automation_precision.value());
 
         for mut channel_samples in buffer.iter_samples() {
             self.maybe_update_filters(smoothing_interval);
@@ -303,7 +303,7 @@ impl Plugin for Diopser {
             for filter in self
                 .filters
                 .iter_mut()
-                .take(self.params.filter_stages.value as usize)
+                .take(self.params.filter_stages.value() as usize)
             {
                 samples = filter.process(samples);
             }
@@ -379,10 +379,10 @@ impl Diopser {
         // TODO: This wrecks the DSP load at high smoothing accuracy, perhaps also use SIMD here
         const MIN_FREQUENCY: f32 = 5.0;
         let max_frequency = self.sample_rate / 2.05;
-        for filter_idx in 0..self.params.filter_stages.value as usize {
+        for filter_idx in 0..self.params.filter_stages.value() as usize {
             // The index of the filter normalized to range [-1, 1]
             let filter_proportion =
-                (filter_idx as f32 / self.params.filter_stages.value as f32) * 2.0 - 1.0;
+                (filter_idx as f32 / self.params.filter_stages.value() as f32) * 2.0 - 1.0;
 
             // The spread parameter adds an offset to the frequency depending on the number of the
             // filter

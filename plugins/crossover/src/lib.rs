@@ -291,7 +291,7 @@ impl Crossover {
             }
 
             self.iir_crossover.process(
-                self.params.num_bands.value as usize,
+                self.params.num_bands.value() as usize,
                 &main_channel_samples,
                 bands,
             );
@@ -331,7 +331,7 @@ impl Crossover {
             ];
 
             self.fir_crossover.process(
-                self.params.num_bands.value as usize,
+                self.params.num_bands.value() as usize,
                 main_io,
                 band_outputs,
                 channel_idx,
@@ -371,12 +371,12 @@ impl Crossover {
         match self.params.crossover_type.value() {
             CrossoverType::LinkwitzRiley24 => self.iir_crossover.update(
                 self.buffer_config.sample_rate,
-                self.params.num_bands.value as usize,
+                self.params.num_bands.value() as usize,
                 crossover_frequencies,
             ),
             CrossoverType::LinkwitzRiley24LinearPhase => self.fir_crossover.update(
                 self.buffer_config.sample_rate,
-                self.params.num_bands.value as usize,
+                self.params.num_bands.value() as usize,
                 crossover_frequencies,
             ),
         }

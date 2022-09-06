@@ -171,7 +171,7 @@ pub(crate) trait ParamMut: Param {
     /// value then this offset is taken into account to form the effective value.
     ///
     /// This does **not** update the smoother.
-    fn set_plain_value(&mut self, plain: Self::Plain);
+    fn set_plain_value(&self, plain: Self::Plain);
 
     /// Set this parameter based on a normalized value. The normalized value will be snapped to the
     /// step size for continuous parameters (i.e. [`FloatParam`]). If
@@ -179,7 +179,7 @@ pub(crate) trait ParamMut: Param {
     /// value then this offset is taken into account to form the effective value.
     ///
     /// This does **not** update the smoother.
-    fn set_normalized_value(&mut self, normalized: f32);
+    fn set_normalized_value(&self, normalized: f32);
 
     /// Add a modulation offset to the value's unmodulated value. This value sticks until this
     /// function is called again with a 0.0 value. Out of bound values will be clamped to the
@@ -187,10 +187,10 @@ pub(crate) trait ParamMut: Param {
     /// parameters (i.e. [`FloatParam`]).
     ///
     /// This does **not** update the smoother.
-    fn modulate_value(&mut self, modulation_offset: f32);
+    fn modulate_value(&self, modulation_offset: f32);
 
     /// Update the smoother state to point to the current value. Also used when initializing and
     /// restoring a plugin so everything is in sync. In that case the smoother should completely
     /// reset to the current value.
-    fn update_smoother(&mut self, sample_rate: f32, reset: bool);
+    fn update_smoother(&self, sample_rate: f32, reset: bool);
 }

@@ -392,7 +392,7 @@ impl Plugin for Crisp {
                 }
             }
 
-            if self.params.wet_only.value {
+            if self.params.wet_only.value() {
                 for (channel_samples, rm_outputs) in block.iter_samples().zip(&mut rm_outputs) {
                     let output_gain = self.params.output_gain.smoothed.next();
                     for (sample, rm_output) in channel_samples.into_iter().zip(rm_outputs) {

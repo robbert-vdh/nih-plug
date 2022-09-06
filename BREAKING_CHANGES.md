@@ -6,6 +6,17 @@ new and what's changed, this document lists all breaking changes in reverse
 chronological order. If a new feature did not require any changes to existing
 code then it will not be listed here.
 
+## [2022-09-06]
+
+- Parameter values are now accessed using `param.value()` instead of
+  `param.value`, with `param.value()` being an alias for the existing
+  `param.plain_value()` function. The old approach, while perfectly safe in
+  practice, was technically unsound because it used mutable pointers to
+  parameters that may also be simultaneously read from in an editor GUI. With
+  this change the parameters now use actual relaxed atomic stores and loads to
+  avoid mutable aliasing, which means the value fields are now no longer
+  directly accessible.
+
 ## [2022-09-04]
 
 - `Smoother::next_block_mapped()` and `Smoother::next_block_exact_mapped()` have
