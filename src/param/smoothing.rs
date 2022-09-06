@@ -34,7 +34,7 @@ pub enum SmoothingStyle {
 // TODO: We need to use atomics here so we can share the params object with the GUI. Is there a
 //       better alternative to allow the process function to mutate these smoothers?
 #[derive(Debug)]
-pub struct Smoother<T> {
+pub struct Smoother<T: Smoothable> {
     /// The kind of snoothing that needs to be applied, if any.
     pub style: SmoothingStyle,
     /// The number of steps of smoothing left to take.
@@ -48,18 +48,18 @@ pub struct Smoother<T> {
     ///
     /// In the case of the `Exponential` smoothing style this is the coefficient `x` that the
     /// previous sample is multplied by.
-    step_size: f32,
+    step_size: AtomicF32,
     /// The value for the current sample. Always stored as floating point for obvious reasons.
     current: AtomicF32,
     /// The value we're smoothing towards
-    target: T,
+    target: T::Atomic,
 }
 
 /// An iterator that continuously produces smoothed values. Can be used as an alternative to the
 /// block-based smoothing API. Since the iterator itself is infinite, you can use
 /// [`Smoother::is_smoothing()`] and [`Smoother::steps_left()`] to get information on the current
 /// smoothing status.
-pub struct SmootherIter<'a, T> {
+pub struct SmootherIter<'a, T: Smoothable> {
     smoother: &'a Smoother<T>,
 }
 
@@ -146,9 +146,18 @@ impl SmoothingStyle {
 
 /// A type that can be smoothed. This exists just to avoid duplicate explicit implementations for
 /// the smoothers.
-pub trait Smoothable: Default + Copy {
+pub trait Smoothable: Default + Clone + Copy {
+    /// The atomic representation of `Self`.
+    type Atomic: Default;
+
     fn to_f32(self) -> f32;
     fn from_f32(value: f32) -> Self;
+
+    fn atomic_new(value: Self) -> Self::Atomic;
+    /// A relaxed atomic load.
+    fn atomic_load(this: &Self::Atomic) -> Self;
+    /// A relaxed atomic store.
+    fn atomic_store(this: &Self::Atomic, value: Self);
 }
 
 impl<T: Smoothable> Default for Smoother<T> {
@@ -172,16 +181,16 @@ impl<T: Smoothable> Iterator for SmootherIter<'_, T> {
     }
 }
 
-impl<T: Clone> Clone for Smoother<T> {
+impl<T: Smoothable> Clone for Smoother<T> {
     fn clone(&self) -> Self {
         // We can't derive clone because of the atomics, but these atomics are only here to allow
         // Send+Sync interior mutability
         Self {
             style: self.style,
             steps_left: AtomicI32::new(self.steps_left.load(Ordering::Relaxed)),
-            step_size: self.step_size,
+            step_size: AtomicF32::new(self.step_size.load(Ordering::Relaxed)),
             current: AtomicF32::new(self.current.load(Ordering::Relaxed)),
-            target: self.target.clone(),
+            target: T::atomic_new(T::atomic_load(&self.target)),
         }
     }
 }
@@ -223,23 +232,25 @@ impl<T: Smoothable> Smoother<T> {
     }
 
     /// Reset the smoother the specified value.
-    pub fn reset(&mut self, value: T) {
-        self.target = value;
+    pub fn reset(&self, value: T) {
+        T::atomic_store(&self.target, value);
         self.current.store(value.to_f32(), Ordering::Relaxed);
         self.steps_left.store(0, Ordering::Relaxed);
     }
 
     /// Set the target value.
-    pub fn set_target(&mut self, sample_rate: f32, target: T) {
-        self.target = target;
+    pub fn set_target(&self, sample_rate: f32, target: T) {
+        T::atomic_store(&self.target, target);
 
         let steps_left = self.style.num_steps(sample_rate) as i32;
         self.steps_left.store(steps_left, Ordering::Relaxed);
 
         let current = self.current.load(Ordering::Relaxed);
-        self.step_size = self
-            .style
-            .step_size(current, self.target.to_f32(), steps_left as u32);
+        let target_f32 = target.to_f32();
+        self.step_size.store(
+            self.style.step_size(current, target_f32, steps_left as u32),
+            Ordering::Relaxed,
+        );
     }
 
     /// Get the next value from this smoother. The value will be equal to the previous value once
@@ -248,11 +259,14 @@ impl<T: Smoothable> Smoother<T> {
     #[allow(clippy::should_implement_trait)]
     #[inline]
     pub fn next(&self) -> T {
+        let target = T::atomic_load(&self.target);
+
         // NOTE: This used to be implemented in terms of `next_step()`, but this is more efficient
         //       for the common use case of single steps
         if self.steps_left.load(Ordering::Relaxed) > 0 {
             let current = self.current.load(Ordering::Relaxed);
-            let target = self.target.to_f32();
+            let target_f32 = target.to_f32();
+            let step_size = self.step_size.load(Ordering::Relaxed);
 
             // The number of steps usually won't fit exactly, so make sure we don't end up with
             // quantization errors on overshoots or undershoots. We also need to account for the
@@ -262,15 +276,15 @@ impl<T: Smoothable> Smoother<T> {
             let old_steps_left = self.steps_left.fetch_sub(1, Ordering::Relaxed);
             let new = if old_steps_left == 1 {
                 self.steps_left.store(0, Ordering::Relaxed);
-                target
+                target_f32
             } else {
-                self.style.next(current, target, self.step_size)
+                self.style.next(current, target_f32, step_size)
             };
             self.current.store(new, Ordering::Relaxed);
 
             T::from_f32(new)
         } else {
-            self.target
+            target
         }
     }
 
@@ -282,9 +296,12 @@ impl<T: Smoothable> Smoother<T> {
     pub fn next_step(&self, steps: u32) -> T {
         nih_debug_assert_ne!(steps, 0);
 
+        let target = T::atomic_load(&self.target);
+
         if self.steps_left.load(Ordering::Relaxed) > 0 {
             let current = self.current.load(Ordering::Relaxed);
-            let target = self.target.to_f32();
+            let target_f32 = target.to_f32();
+            let step_size = self.step_size.load(Ordering::Relaxed);
 
             // The number of steps usually won't fit exactly, so make sure we don't end up with
             // quantization errors on overshoots or undershoots. We also need to account for the
@@ -294,15 +311,15 @@ impl<T: Smoothable> Smoother<T> {
             let old_steps_left = self.steps_left.fetch_sub(steps as i32, Ordering::Relaxed);
             let new = if old_steps_left <= steps as i32 {
                 self.steps_left.store(0, Ordering::Relaxed);
-                target
+                target_f32
             } else {
-                self.style.next_step(current, target, self.step_size, steps)
+                self.style.next_step(current, target_f32, step_size, steps)
             };
             self.current.store(new, Ordering::Relaxed);
 
             T::from_f32(new)
         } else {
-            self.target
+            target
         }
     }
 
@@ -329,6 +346,8 @@ impl<T: Smoothable> Smoother<T> {
 
     /// The same as [`next_block()`][Self::next_block()], but filling the entire slice.
     pub fn next_block_exact(&self, block_values: &mut [T]) {
+        let target = T::atomic_load(&self.target);
+
         // `self.next()` will yield the current value if the parameter is no longer smoothing, but
         // it's a bit of a waste to continuesly call that if only the first couple or none of the
         // values in `block_values` would require smoothing and the rest don't. Instead, we'll just
@@ -338,34 +357,35 @@ impl<T: Smoothable> Smoother<T> {
         let num_smoothed_values = block_values.len().min(steps_left);
         if num_smoothed_values > 0 {
             let mut current = self.current.load(Ordering::Relaxed);
-            let target = self.target.to_f32();
+            let target_f32 = target.to_f32();
+            let step_size = self.step_size.load(Ordering::Relaxed);
 
             if num_smoothed_values == steps_left {
                 // This is the same as calling `next()` `num_smoothed_values` times, but with some
                 // conditionals optimized out
                 block_values[..num_smoothed_values - 1].fill_with(|| {
-                    current = self.style.next(current, target, self.step_size);
+                    current = self.style.next(current, target_f32, step_size);
                     T::from_f32(current)
                 });
 
                 // In `next()` the last step snaps the value to the target value, so we'll do the
                 // same thing here
-                current = target.to_f32();
-                block_values[num_smoothed_values - 1] = self.target;
+                current = target_f32.to_f32();
+                block_values[num_smoothed_values - 1] = target;
             } else {
                 block_values[..num_smoothed_values].fill_with(|| {
-                    current = self.style.next(current, target, self.step_size);
+                    current = self.style.next(current, target_f32, step_size);
                     T::from_f32(current)
                 });
             }
 
-            block_values[num_smoothed_values..].fill(self.target);
+            block_values[num_smoothed_values..].fill(target);
 
             self.current.store(current, Ordering::Relaxed);
             self.steps_left
                 .fetch_sub(num_smoothed_values as i32, Ordering::Relaxed);
         } else {
-            block_values.fill(self.target);
+            block_values.fill(target);
         }
     }
 
@@ -392,12 +412,13 @@ impl<T: Smoothable> Smoother<T> {
     ) {
         // This works exactly the same as `next_block_exact()`, except for the addition of the
         // mapping function
-        let target = self.target.to_f32();
+        let target_f32 = T::atomic_load(&self.target).to_f32();
 
         let steps_left = self.steps_left.load(Ordering::Relaxed) as usize;
         let num_smoothed_values = block_values.len().min(steps_left);
         if num_smoothed_values > 0 {
             let mut current = self.current.load(Ordering::Relaxed);
+            let step_size = self.step_size.load(Ordering::Relaxed);
 
             // See `next_block_exact()` for more details
             if num_smoothed_values == steps_left {
@@ -406,19 +427,19 @@ impl<T: Smoothable> Smoother<T> {
                     .enumerate()
                     .take(num_smoothed_values - 1)
                 {
-                    current = self.style.next(current, target, self.step_size);
+                    current = self.style.next(current, target_f32, step_size);
                     *value = f(idx, current);
                 }
 
-                current = target.to_f32();
-                block_values[num_smoothed_values - 1] = f(num_smoothed_values - 1, target);
+                current = target_f32.to_f32();
+                block_values[num_smoothed_values - 1] = f(num_smoothed_values - 1, target_f32);
             } else {
                 for (idx, value) in block_values
                     .iter_mut()
                     .enumerate()
                     .take(num_smoothed_values)
                 {
-                    current = self.style.next(current, target, self.step_size);
+                    current = self.style.next(current, target_f32, step_size);
                     *value = f(idx, current);
                 }
             }
@@ -428,7 +449,7 @@ impl<T: Smoothable> Smoother<T> {
                 .enumerate()
                 .skip(num_smoothed_values)
             {
-                *value = f(idx, target);
+                *value = f(idx, target_f32);
             }
 
             self.current.store(current, Ordering::Relaxed);
@@ -436,13 +457,15 @@ impl<T: Smoothable> Smoother<T> {
                 .fetch_sub(num_smoothed_values as i32, Ordering::Relaxed);
         } else {
             for (idx, value) in block_values.iter_mut().enumerate() {
-                *value = f(idx, target);
+                *value = f(idx, target_f32);
             }
         }
     }
 }
 
 impl Smoothable for f32 {
+    type Atomic = AtomicF32;
+
     #[inline]
     fn to_f32(self) -> f32 {
         self
@@ -452,9 +475,26 @@ impl Smoothable for f32 {
     fn from_f32(value: f32) -> Self {
         value
     }
+
+    #[inline]
+    fn atomic_new(value: Self) -> Self::Atomic {
+        AtomicF32::new(value)
+    }
+
+    #[inline]
+    fn atomic_load(this: &Self::Atomic) -> Self {
+        this.load(Ordering::Relaxed)
+    }
+
+    #[inline]
+    fn atomic_store(this: &Self::Atomic, value: Self) {
+        this.store(value, Ordering::Relaxed)
+    }
 }
 
 impl Smoothable for i32 {
+    type Atomic = AtomicI32;
+
     #[inline]
     fn to_f32(self) -> f32 {
         self as f32
@@ -463,6 +503,21 @@ impl Smoothable for i32 {
     #[inline]
     fn from_f32(value: f32) -> Self {
         value.round() as i32
+    }
+
+    #[inline]
+    fn atomic_new(value: Self) -> Self::Atomic {
+        AtomicI32::new(value)
+    }
+
+    #[inline]
+    fn atomic_load(this: &Self::Atomic) -> Self {
+        this.load(Ordering::Relaxed)
+    }
+
+    #[inline]
+    fn atomic_store(this: &Self::Atomic, value: Self) {
+        this.store(value, Ordering::Relaxed)
     }
 }
 
@@ -524,7 +579,7 @@ mod tests {
 
     #[test]
     fn linear_f32_smoothing() {
-        let mut smoother: Smoother<f32> = Smoother::new(SmoothingStyle::Linear(100.0));
+        let smoother: Smoother<f32> = Smoother::new(SmoothingStyle::Linear(100.0));
         smoother.reset(10.0);
         assert_eq!(smoother.next(), 10.0);
 
@@ -540,7 +595,7 @@ mod tests {
 
     #[test]
     fn linear_i32_smoothing() {
-        let mut smoother: Smoother<i32> = Smoother::new(SmoothingStyle::Linear(100.0));
+        let smoother: Smoother<i32> = Smoother::new(SmoothingStyle::Linear(100.0));
         smoother.reset(10);
         assert_eq!(smoother.next(), 10);
 
@@ -555,7 +610,7 @@ mod tests {
 
     #[test]
     fn logarithmic_f32_smoothing() {
-        let mut smoother: Smoother<f32> = Smoother::new(SmoothingStyle::Logarithmic(100.0));
+        let smoother: Smoother<f32> = Smoother::new(SmoothingStyle::Logarithmic(100.0));
         smoother.reset(10.0);
         assert_eq!(smoother.next(), 10.0);
 
@@ -571,7 +626,7 @@ mod tests {
 
     #[test]
     fn logarithmic_i32_smoothing() {
-        let mut smoother: Smoother<i32> = Smoother::new(SmoothingStyle::Logarithmic(100.0));
+        let smoother: Smoother<i32> = Smoother::new(SmoothingStyle::Logarithmic(100.0));
         smoother.reset(10);
         assert_eq!(smoother.next(), 10);
 
@@ -587,7 +642,7 @@ mod tests {
     /// Same as [linear_f32_smoothing], but skipping steps instead.
     #[test]
     fn skipping_linear_f32_smoothing() {
-        let mut smoother: Smoother<f32> = Smoother::new(SmoothingStyle::Linear(100.0));
+        let smoother: Smoother<f32> = Smoother::new(SmoothingStyle::Linear(100.0));
         smoother.reset(10.0);
         assert_eq!(smoother.next(), 10.0);
 
@@ -600,7 +655,7 @@ mod tests {
     /// Same as [linear_i32_smoothing], but skipping steps instead.
     #[test]
     fn skipping_linear_i32_smoothing() {
-        let mut smoother: Smoother<i32> = Smoother::new(SmoothingStyle::Linear(100.0));
+        let smoother: Smoother<i32> = Smoother::new(SmoothingStyle::Linear(100.0));
         smoother.reset(10);
         assert_eq!(smoother.next(), 10);
 
@@ -613,7 +668,7 @@ mod tests {
     /// Same as [logarithmic_f32_smoothing], but skipping steps instead.
     #[test]
     fn skipping_logarithmic_f32_smoothing() {
-        let mut smoother: Smoother<f32> = Smoother::new(SmoothingStyle::Logarithmic(100.0));
+        let smoother: Smoother<f32> = Smoother::new(SmoothingStyle::Logarithmic(100.0));
         smoother.reset(10.0);
         assert_eq!(smoother.next(), 10.0);
 
@@ -626,7 +681,7 @@ mod tests {
     /// Same as [logarithmic_i32_smoothing], but skipping steps instead.
     #[test]
     fn skipping_logarithmic_i32_smoothing() {
-        let mut smoother: Smoother<i32> = Smoother::new(SmoothingStyle::Logarithmic(100.0));
+        let smoother: Smoother<i32> = Smoother::new(SmoothingStyle::Logarithmic(100.0));
         smoother.reset(10);
         assert_eq!(smoother.next(), 10);
 
