@@ -88,8 +88,16 @@ serde_json = "1.0"
 simplelog = "0.12"
 widestring = "1.0.0-beta.1"
 
-# Used for the `assert_process_allocs` feature
-assert_no_alloc = { version = "1.1", optional = true }
+# Used for the `assert_process_allocs` feature. This fork includes support for
+# the log crate and printing backtraces on allocation failure so you can trace
+# the allocation back to a place in the code.
+# TODO: The `log` feature causes would pipe these messages through our logger
+#       which is great in theory, but if the allocation failure happens as part
+#       of the logger then this will cause the program to hang indefinitely
+#       because simplelog gates the log function behind a mutex. At some point
+#       we should implement our own logger and enable this feature. That way we
+#       can also use CLAP's logging extension.
+assert_no_alloc = { git = "https://github.com/robbert-vdh/rust-assert-no-alloc.git", branch = "nih-plug", features = ["backtrace"], optional = true }
 
 # Used for the `standalone` feature
 # NOTE: OpenGL support is not needed here, but rust-analyzer gets confused when

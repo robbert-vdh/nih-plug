@@ -144,8 +144,10 @@ dependencies = [
 [[package]]
 name = "assert_no_alloc"
 version = "1.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55ca83137a482d61d916ceb1eba52a684f98004f18e0cafea230fe5579c178a3"
+source = "git+https://github.com/robbert-vdh/rust-assert-no-alloc.git?branch=nih-plug#95120d996240a2c279a6067502e11b62d30563a6"
+dependencies = [
+ "backtrace",
+]
 
 [[package]]
 name = "async-channel"
@@ -4153,7 +4155,7 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 1.0.0",
+ "cfg-if 0.1.10",
  "rand 0.8.5",
  "static_assertions",
 ]
