@@ -23,6 +23,7 @@ use crate::plugin::{
 };
 use crate::util::permit_alloc;
 use crate::wrapper::state::{self, PluginState};
+use crate::wrapper::util::process_wrapper;
 
 /// How many parameter changes we can store in our unprocessed parameter change queue. Storing more
 /// than this many parameters at a time will cause changes to get lost.
@@ -228,6 +229,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
             ) {
                 return Err(WrapperError::InitializationFailed);
             }
+            process_wrapper(|| plugin.reset());
         }
 
         Ok(wrapper)
