@@ -164,6 +164,14 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
             }
         }
 
+        // TODO: Sidechain inputs and auxiliary outputs
+        if P::DEFAULT_AUX_INPUTS.is_some() {
+            nih_log!("Sidechain inputs are not yet supported in this standalone version");
+        }
+        if P::DEFAULT_AUX_OUTPUTS.is_some() {
+            nih_log!("Auxiliary outputs are not yet supported in this standalone version");
+        }
+
         let wrapper = Arc::new(Wrapper {
             backend: AtomicRefCell::new(backend),
 
