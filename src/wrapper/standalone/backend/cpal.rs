@@ -10,7 +10,7 @@ use super::super::config::WrapperConfig;
 use super::Backend;
 use crate::buffer::Buffer;
 use crate::context::Transport;
-use crate::midi::NoteEvent;
+use crate::midi::{MidiConfig, NoteEvent};
 use crate::plugin::{AuxiliaryIOConfig, BusConfig, Plugin};
 
 /// Uses CPAL for audio and midir for MIDI.
@@ -269,6 +269,11 @@ impl Cpal {
         };
         let output_sample_format = output_config_range.sample_format();
 
+        // TODO: Implement MIDI support
+        if P::MIDI_INPUT >= MidiConfig::Basic || P::MIDI_OUTPUT >= MidiConfig::Basic {
+            nih_log!("Audio-only, MIDI input and output has not been implemented yet.");
+        }
+
         Ok(Cpal {
             config,
             bus_config,
@@ -330,7 +335,6 @@ impl Cpal {
         // TODO: MIDI input and output
         let midi_input_events = Vec::with_capacity(1024);
         let mut midi_output_events = Vec::with_capacity(1024);
-        nih_log!("Audio-only, MIDI input and output has not been implemented yet.");
 
         // Can't borrow from `self` in the callback
         let config = self.config.clone();
