@@ -456,9 +456,19 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
 
                         self.notify_param_values_changed();
 
-                        // TODO: Normally we'd also call initialize after deserializing state, but
-                        //       that's not guaranteed to be realtime safe. Should we do it anyways?
-                        self.plugin.write().reset();
+                        // FIXME: This is obviously not realtime safe, but loading presets without
+                        //         doing this could lead to inconsistencies. It's the plugin's
+                        //         responsibility to not perform any realtime-unsafe work when the
+                        //         initialize function is called a second time if it supports
+                        //         runtime preset loading.
+                        permit_alloc(|| {
+                            plugin.initialize(
+                                &self.bus_config,
+                                &self.buffer_config,
+                                &mut self.make_init_context(),
+                            )
+                        });
+                        plugin.reset();
 
                         // We'll pass the state object back to the GUI thread so deallocation can
                         // happen there without potentially blocking the audio thread
