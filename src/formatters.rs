@@ -218,7 +218,7 @@ pub fn v2s_bool_bypass() -> Arc<dyn Fn(bool) -> String + Send + Sync> {
 pub fn s2v_bool_bypass() -> Arc<dyn Fn(&str) -> Option<bool> + Send + Sync> {
     Arc::new(|string| {
         let string = string.trim();
-        if string.eq_ignore_ascii_case("bypass") {
+        if string.eq_ignore_ascii_case("bypassed") {
             Some(true)
         } else if string.eq_ignore_ascii_case("not bypassed") {
             Some(false)
