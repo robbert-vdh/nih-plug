@@ -1719,12 +1719,15 @@ impl<P: ClapPlugin> Wrapper<P> {
             // inputs. The slices will be assigned in the process function as this object may have
             // been moved before then.
             let mut aux_input_storage = wrapper.aux_input_storage.borrow_mut();
-            aux_input_storage.resize_with(bus_config.aux_input_busses.num_busses as usize, || {
-                vec![
-                    vec![0.0; max_frames_count as usize];
-                    bus_config.aux_input_busses.num_channels as usize
-                ]
-            });
+            aux_input_storage
+                .resize_with(bus_config.aux_input_busses.num_busses as usize, Vec::new);
+            for bus_storage in aux_input_storage.iter_mut() {
+                bus_storage
+                    .resize_with(bus_config.aux_input_busses.num_channels as usize, Vec::new);
+                for channel_storage in bus_storage {
+                    channel_storage.resize(max_frames_count as usize, 0.0);
+                }
+            }
 
             let mut aux_input_buffers = wrapper.aux_input_buffers.borrow_mut();
             aux_input_buffers.resize_with(
