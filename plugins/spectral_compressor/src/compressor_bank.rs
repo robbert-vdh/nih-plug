@@ -876,6 +876,8 @@ impl CompressorBank {
             params.compressors.downwards.high_freq_ratio_rolloff.value();
         let upwards_high_freq_ratio_rolloff =
             params.compressors.upwards.high_freq_ratio_rolloff.value();
+        // TODO: Use 20 kHz instead of nyquist to avoid the plugin becoming brighter at higher
+        //       sample rates
         let log2_nyquist_freq = self
             .log2_freqs
             .last()
