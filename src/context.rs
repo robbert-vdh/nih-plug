@@ -338,7 +338,7 @@ impl Transport {
             (Some(time_sig_numerator), Some(time_sig_denominator), Some(pos_beats)) => {
                 let quarter_note_bar_length =
                     time_sig_numerator as f64 / time_sig_denominator as f64 * 4.0;
-                Some(pos_beats.div_euclid(quarter_note_bar_length))
+                Some((pos_beats / quarter_note_bar_length).floor() * quarter_note_bar_length)
             }
             (_, _, _) => None,
         }
