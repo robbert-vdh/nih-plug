@@ -24,8 +24,7 @@ jobs:
       matrix:
         include:
           - { name: ubuntu-18.04,       os: ubuntu-18.04,   cross-target: '' }
-          - { name: macos-10.15-x86_64, os: macos-10.15,    cross-target: '' }
-          - { name: macos-11-aarch64,   os: macos-11,       cross-target: aarch64-apple-darwin }
+          - { name: macos-universal,    os: macos-11,       cross-target: aarch64-apple-darwin }
           - { name: windows,            os: windows-latest, cross-target: '' }
     name: Package plugin binaries
     runs-on: ${{ matrix.os }}
@@ -61,8 +60,8 @@ jobs:
           toolchain: nightly-2022-07-15
           profile: minimal
           default: true
-          # The macOS AArch64 build is done from an x86_64 macOS CI runner, so
-          # it needs to be cross compiled
+          # The macOS AArch64/universal build is done from an x86_64 macOS CI
+          # runner, so it needs to be cross compiled
           target: ${{ matrix.cross-target }}
       - name: Package all targets from bundler.toml
         # Instead of hardcoding which targets to build and package, we'll
@@ -74,12 +73,17 @@ jobs:
             package_args+=("-p" "$package")
           done
 
-          cross_target=${{ matrix.cross-target }}
-          if [[ -n $cross_target ]]; then
-            package_args+=("--target" "$cross_target")
-          fi
+          runner_name=${{ matrix.name }}
+          if [[ $runner_name = 'macos-universal' ]]; then
+            cargo xtask bundle-universal "${package_args[@]}" --release
+          else
+            cross_target=${{ matrix.cross-target }}
+            if [[ -n $cross_target ]]; then
+              package_args+=("--target" "$cross_target")
+            fi
 
-          cargo xtask bundle "${package_args[@]}" --release
+            cargo xtask bundle "${package_args[@]}" --release
+          fi
 
       - name: Determine build archive name
         run: |

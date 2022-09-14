@@ -1,4 +1,4 @@
-use anyhow::{bail, Context};
+use anyhow::Context;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
@@ -23,7 +23,10 @@ fn build_usage_string(command_name: &str) -> String {
   {command_name} bundle <package> [--release]
   {command_name} bundle -p <package1> -p <package2> ... [--release]
 
-  All other cargo-build options are supported, including --target and --profile."
+  {command_name} bundle-universal <package> [--release]  (macOS only)
+  {command_name} bundle-universal -p <package1> -p <package2> ... [--release]  (macOS only)
+
+  All other 'cargo build' options are supported, including '--target' and '--profile'."
     )
 }
 
@@ -43,6 +46,8 @@ struct PackageConfig {
 pub enum CompilationTarget {
     Linux(Architecture),
     MacOS(Architecture),
+    /// A special case for lipo'd `x86_64-apple-darwin` and `aarch64-apple-darwin` builds.
+    MacOSUniversal,
     Windows(Architecture),
 }
 
@@ -78,36 +83,59 @@ pub fn main_with_args(command_name: &str, args: impl IntoIterator<Item = String>
     let usage_string = build_usage_string(command_name);
     let command = args
         .next()
-        .context(format!("Missing command name\n\n{usage_string}",))?;
+        .with_context(|| format!("Missing command name\n\n{usage_string}",))?;
     match command.as_str() {
         "bundle" => {
             // For convenience's sake we'll allow building multiple packages with `-p` just like
             // carg obuild, but you can also build a single package without specifying `-p`. Since
             // multiple packages can be built in parallel if we pass all of these flags to a single
             // `cargo build` we'll first build all of these packages and only then bundle them.
-            let mut args = args.peekable();
-            let mut packages = Vec::new();
-            if args.peek().map(|s| s.as_str()) == Some("-p") {
-                while args.peek().map(|s| s.as_str()) == Some("-p") {
-                    packages.push(
-                        args.nth(1)
-                            .context(format!("Missing package name after -p\n\n{usage_string}"))?,
-                    );
-                }
-            } else {
-                packages.push(
-                    args.next()
-                        .context(format!("Missing package name\n\n{usage_string}"))?,
-                );
-            };
-            let other_args: Vec<_> = args.collect();
+            let (packages, other_args) = split_bundle_args(args, &usage_string)?;
 
             // As explained above, for efficiency's sake this is a two step process
             build(&packages, &other_args)?;
 
-            bundle(&packages[0], &other_args)?;
+            bundle(&packages[0], &other_args, false)?;
             for package in packages.into_iter().skip(1) {
-                bundle(&package, &other_args)?;
+                bundle(&package, &other_args, false)?;
+            }
+
+            Ok(())
+        }
+        "bundle-universal" => {
+            // The same as `--bundle`, but builds universal binaries for macOS Cargo will also error
+            // out on duplicate `--target` options, but it seems like a good idea to preemptively
+            // abort the bundling process if that happens
+            let (packages, other_args) = split_bundle_args(args, &usage_string)?;
+
+            for arg in &other_args {
+                if arg == "--target" || arg.starts_with("--target=") {
+                    anyhow::bail!(
+                        "'{command_name} xtask bundle-universal' is incompatible with the '{arg}' \
+                         option."
+                    )
+                }
+            }
+
+            // We can just use the regular build function here. There's sadly no way to build both
+            // targets in parallel, so this will likely take twice as logn as a regular build.
+            // TODO: Explicitly specifying the target even on the native target causes a rebuild in
+            //       the target `target/<target_triple>` directory. This makes bundling much simpler
+            //       because there's no conditional logic required based on the current platform,
+            //       but it does waste some resources and requires a rebuild if the native target
+            //       was already built.
+            let mut x86_64_args = other_args.clone();
+            x86_64_args.push(String::from("--target=x86_64-apple-darwin"));
+            build(&packages, &x86_64_args)?;
+            let mut aarch64_args = other_args.clone();
+            aarch64_args.push(String::from("--target=aarch64-apple-darwin"));
+            build(&packages, &aarch64_args)?;
+
+            // This `true` indicates a universal build. This will cause the two sets of built
+            // binaries to beq lipo'd together into universal binaries before bundling
+            bundle(&packages[0], &other_args, true)?;
+            for package in packages.into_iter().skip(1) {
+                bundle(&package, &other_args, true)?;
             }
 
             Ok(())
@@ -115,7 +143,7 @@ pub fn main_with_args(command_name: &str, args: impl IntoIterator<Item = String>
         // This is only meant to be used by the CI, since using awk for this can be a bit spotty on
         // macOS
         "known-packages" => list_known_packages(),
-        _ => bail!("Unknown command '{command}'\n\n{usage_string}"),
+        _ => anyhow::bail!("Unknown command '{command}'\n\n{usage_string}"),
     }
 }
 
@@ -163,12 +191,9 @@ pub fn build(packages: &[String], args: &[String]) -> Result<()> {
         .args(package_args)
         .args(args)
         .status()
-        .context(format!(
-            "Could not call cargo to build {}",
-            packages.join(", ")
-        ))?;
+        .with_context(|| format!("Could not call cargo to build {}", packages.join(", ")))?;
     if !status.success() {
-        bail!("Could not build {}", packages.join(", "));
+        anyhow::bail!("Could not build {}", packages.join(", "));
     } else {
         Ok(())
     }
@@ -184,7 +209,11 @@ pub fn build(packages: &[String], args: &[String]) -> Result<()> {
 /// If the package also exposes a binary target in addition to a library (or just a binary, in case
 /// the binary target has a different name) then this will also be copied into the `bundled`
 /// directory.
-pub fn bundle(package: &str, args: &[String]) -> Result<()> {
+///
+/// Normally this respects the `--target` option for cross compilation. If the `universal` option is
+/// specified instead, then this will assume both `x86_64-apple-darwin` and `aarch64-apple-darwin`
+/// have been built and it will try to lipo those together instead.
+pub fn bundle(package: &str, args: &[String], universal: bool) -> Result<()> {
     let mut build_type_dir = "debug";
     let mut cross_compile_target: Option<String> = None;
     for arg_idx in (0..args.len()).rev() {
@@ -221,29 +250,75 @@ pub fn bundle(package: &str, args: &[String]) -> Result<()> {
 
     // We can bundle both library targets (for plugins) and binary targets (for standalone
     // applications)
-    let compilation_target = compilation_target(cross_compile_target.as_deref())?;
-    let target_base = target_base(cross_compile_target.as_deref())?.join(build_type_dir);
-    let bin_path = target_base.join(binary_basename(package, compilation_target));
-    let lib_path = target_base.join(library_basename(package, compilation_target));
-    if !bin_path.exists() && !lib_path.exists() {
-        bail!("Could not find built library at '{}'", lib_path.display());
-    }
+    if universal {
+        let x86_64_target_base = target_base(Some("x86_64-apple-darwin"))?.join(build_type_dir);
+        let x86_64_bin_path = x86_64_target_base.join(binary_basename(
+            package,
+            CompilationTarget::MacOS(Architecture::X86_64),
+        ));
+        let x86_64_lib_path = x86_64_target_base.join(library_basename(
+            package,
+            CompilationTarget::MacOS(Architecture::X86_64),
+        ));
 
-    eprintln!();
-    if bin_path.exists() {
-        bundle_binary(package, &bin_path, compilation_target)?;
-    }
-    if lib_path.exists() {
-        bundle_plugin(package, &lib_path, compilation_target)?;
+        let aarch64_target_base = target_base(Some("aarch64-apple-darwin"))?.join(build_type_dir);
+        let aarch64_bin_path = aarch64_target_base.join(binary_basename(
+            package,
+            CompilationTarget::MacOS(Architecture::AArch64),
+        ));
+        let aarch64_lib_path = aarch64_target_base.join(library_basename(
+            package,
+            CompilationTarget::MacOS(Architecture::AArch64),
+        ));
+
+        let build_bin = x86_64_bin_path.exists() && aarch64_bin_path.exists();
+        let build_lib = x86_64_lib_path.exists() && aarch64_lib_path.exists();
+        if !build_bin && !build_lib {
+            anyhow::bail!("Could not find built libraries for universal build.");
+        }
+
+        eprintln!();
+        if build_bin {
+            bundle_binary(
+                package,
+                &[&x86_64_bin_path, &aarch64_bin_path],
+                CompilationTarget::MacOSUniversal,
+            )?;
+        }
+        if build_lib {
+            bundle_plugin(
+                package,
+                &[&x86_64_lib_path, &aarch64_lib_path],
+                CompilationTarget::MacOSUniversal,
+            )?;
+        }
+    } else {
+        let compilation_target = compilation_target(cross_compile_target.as_deref())?;
+        let target_base = target_base(cross_compile_target.as_deref())?.join(build_type_dir);
+        let bin_path = target_base.join(binary_basename(package, compilation_target));
+        let lib_path = target_base.join(library_basename(package, compilation_target));
+        if !bin_path.exists() && !lib_path.exists() {
+            anyhow::bail!("Could not find built library at '{}'", lib_path.display());
+        }
+
+        eprintln!();
+        if bin_path.exists() {
+            bundle_binary(package, &[&bin_path], compilation_target)?;
+        }
+        if lib_path.exists() {
+            bundle_plugin(package, &[&lib_path], compilation_target)?;
+        }
     }
 
     Ok(())
 }
 
-/// Bundle a standalone target.
+/// Bundle a standalone target. If `bin_path` contains more than one path, then the binaries will be
+/// combined into a single binary using a method that depends on the compiilation target. For
+/// universal macOS builds this uses lipo.
 fn bundle_binary(
     package: &str,
-    bin_path: &Path,
+    bin_paths: &[&Path],
     compilation_target: CompilationTarget,
 ) -> Result<()> {
     let bundle_name = match load_bundler_config()?.and_then(|c| c.get(package).cloned()) {
@@ -258,8 +333,8 @@ fn bundle_binary(
 
     fs::create_dir_all(standalone_binary_path.parent().unwrap())
         .context("Could not create standalone bundle directory")?;
-    util::reflink(&bin_path, &standalone_binary_path)
-        .context("Could not copy binary to standalone bundle")?;
+    util::reflink_or_combine(bin_paths, &standalone_binary_path, compilation_target)
+        .context("Could not create standaloen bundle")?;
 
     // FIXME: The reflink crate seems to sometime strip away the executable bit, so we need to help
     //        it a little here
@@ -299,10 +374,12 @@ fn bundle_binary(
     Ok(())
 }
 
-/// Bundle all plugin targets for a plugin library.
+/// Bundle all plugin targets for a plugin library. If `lib_path` contains more than one path, then
+/// the libraries will be combined into a single library using a method that depends on the
+/// compiilation target. For universal macOS builds this uses lipo.
 fn bundle_plugin(
     package: &str,
-    lib_path: &Path,
+    lib_paths: &[&Path],
     compilation_target: CompilationTarget,
 ) -> Result<()> {
     let bundle_name = match load_bundler_config()?.and_then(|c| c.get(package).cloned()) {
@@ -310,26 +387,32 @@ fn bundle_plugin(
         _ => package.to_string(),
     };
 
-    // We'll detect the pugin formats supported by the plugin binary and create bundled accordingly
-    // NOTE: NIH-plug does not support VST2, but we'll support bundling VST2 plugins anyways because
-    //       this bundler can also be used standalone.
-    let bundle_clap = symbols::exported(&lib_path, "clap_entry")
-        .with_context(|| format!("Could not parse '{}'", lib_path.display()))?;
+    // We'll detect the pugin formats supported by the plugin binary and create bundled accordingly.
+    // If `lib_path` contains paths to multiple plugins that need to be comined into a macOS
+    // universal binary, then we'll assume all of them export the same symbols and only check the
+    // first one.
+    let first_lib_path = lib_paths.first().context("Empty library paths slice")?;
+
+    let bundle_clap = symbols::exported(&first_lib_path, "clap_entry")
+        .with_context(|| format!("Could not parse '{}'", first_lib_path.display()))?;
     // We'll ignore the platofrm-specific entry points for VST2 plugins since there's no reason to
     // create a new Rust VST2 plugin that doesn't work in modern DAWs
-    let bundle_vst2 = symbols::exported(&lib_path, "VSTPluginMain")
-        .with_context(|| format!("Could not parse '{}'", lib_path.display()))?;
-    let bundle_vst3 = symbols::exported(&lib_path, "GetPluginFactory")
-        .with_context(|| format!("Could not parse '{}'", lib_path.display()))?;
+    // NOTE: NIH-plug does not support VST2, but we'll support bundling VST2 plugins anyways because
+    //       this bundler can also be used standalone.
+    let bundle_vst2 = symbols::exported(&first_lib_path, "VSTPluginMain")
+        .with_context(|| format!("Could not parse '{}'", first_lib_path.display()))?;
+    let bundle_vst3 = symbols::exported(&first_lib_path, "GetPluginFactory")
+        .with_context(|| format!("Could not parse '{}'", first_lib_path.display()))?;
     let bundled_plugin = bundle_clap || bundle_vst2 || bundle_vst3;
+
     if bundle_clap {
         let clap_bundle_library_name = clap_bundle_library_name(&bundle_name, compilation_target);
         let clap_lib_path = Path::new(BUNDLE_HOME).join(&clap_bundle_library_name);
 
         fs::create_dir_all(clap_lib_path.parent().unwrap())
             .context("Could not create CLAP bundle directory")?;
-        util::reflink(&lib_path, &clap_lib_path)
-            .context("Could not copy library to CLAP bundle")?;
+        util::reflink_or_combine(lib_paths, &clap_lib_path, compilation_target)
+            .context("Could not create CLAP bundle")?;
 
         // In contrast to VST3, CLAP only uses bundles on macOS, so we'll just take the first
         // component of the library name instead
@@ -355,8 +438,8 @@ fn bundle_plugin(
 
         fs::create_dir_all(vst2_lib_path.parent().unwrap())
             .context("Could not create VST2 bundle directory")?;
-        util::reflink(&lib_path, &vst2_lib_path)
-            .context("Could not copy library to VST2 bundle")?;
+        util::reflink_or_combine(lib_paths, &vst2_lib_path, compilation_target)
+            .context("Could not create VST2 bundle")?;
 
         // VST2 only uses bundles on macOS, so we'll just take the first component of the library
         // name instead
@@ -382,8 +465,8 @@ fn bundle_plugin(
 
         fs::create_dir_all(vst3_lib_path.parent().unwrap())
             .context("Could not create VST3 bundle directory")?;
-        util::reflink(&lib_path, &vst3_lib_path)
-            .context("Could not copy library to VST3 bundle")?;
+        util::reflink_or_combine(lib_paths, &vst3_lib_path, compilation_target)
+            .context("Could not create VST3 bundle")?;
 
         let vst3_bundle_home = vst3_lib_path
             .parent()
@@ -439,6 +522,33 @@ fn load_bundler_config() -> Result<Option<BundlerConfig>> {
     Ok(Some(result))
 }
 
+/// Split the `xtask bundle` arguments into a list of packages and a list of other arguments. The
+/// package vector either contains just the first argument, or if the arguments iterator starts with
+/// one or more occurences of `-p <package>` then this will contain all those packages.
+fn split_bundle_args(
+    args: impl Iterator<Item = String>,
+    usage_string: &str,
+) -> Result<(Vec<String>, Vec<String>)> {
+    let mut args = args.peekable();
+    let mut packages = Vec::new();
+    if args.peek().map(|s| s.as_str()) == Some("-p") {
+        while args.peek().map(|s| s.as_str()) == Some("-p") {
+            packages.push(
+                args.nth(1)
+                    .with_context(|| format!("Missing package name after -p\n\n{usage_string}"))?,
+            );
+        }
+    } else {
+        packages.push(
+            args.next()
+                .with_context(|| format!("Missing package name\n\n{usage_string}"))?,
+        );
+    };
+    let other_args: Vec<_> = args.collect();
+
+    Ok((packages, other_args))
+}
+
 /// The target we're compiling for. This is used to determine the paths and options for creating
 /// plugin bundles.
 fn compilation_target(cross_compile_target: Option<&str>) -> Result<CompilationTarget> {
@@ -458,7 +568,7 @@ fn compilation_target(cross_compile_target: Option<&str>) -> Result<CompilationT
         Some("aarch64-pc-windows-gnu") | Some("aarch64-pc-windows-msvc") => {
             Ok(CompilationTarget::Windows(Architecture::AArch64))
         }
-        Some(target) => bail!("Unhandled cross-compilation target: {}", target),
+        Some(target) => anyhow::bail!("Unhandled cross-compilation target: {}", target),
         None => {
             #[cfg(target_arch = "x86")]
             let architecture = Architecture::X86;
@@ -493,7 +603,9 @@ fn binary_basename(package: &str, target: CompilationTarget) -> String {
     let bin_name = package.replace('-', "_");
 
     match target {
-        CompilationTarget::Linux(_) | CompilationTarget::MacOS(_) => bin_name,
+        CompilationTarget::Linux(_)
+        | CompilationTarget::MacOS(_)
+        | CompilationTarget::MacOSUniversal => bin_name,
         CompilationTarget::Windows(_) => format!("{bin_name}.exe"),
     }
 }
@@ -505,7 +617,9 @@ fn library_basename(package: &str, target: CompilationTarget) -> String {
 
     match target {
         CompilationTarget::Linux(_) => format!("lib{lib_name}.so"),
-        CompilationTarget::MacOS(_) => format!("lib{lib_name}.dylib"),
+        CompilationTarget::MacOS(_) | CompilationTarget::MacOSUniversal => {
+            format!("lib{lib_name}.dylib")
+        }
         CompilationTarget::Windows(_) => format!("{lib_name}.dll"),
     }
 }
@@ -514,7 +628,9 @@ fn library_basename(package: &str, target: CompilationTarget) -> String {
 fn standalone_bundle_binary_name(package: &str, target: CompilationTarget) -> String {
     match target {
         CompilationTarget::Linux(_) => package.to_owned(),
-        CompilationTarget::MacOS(_) => format!("{package}.app/Contents/MacOS/{package}"),
+        CompilationTarget::MacOS(_) | CompilationTarget::MacOSUniversal => {
+            format!("{package}.app/Contents/MacOS/{package}")
+        }
         CompilationTarget::Windows(_) => format!("{package}.exe"),
     }
 }
@@ -524,7 +640,9 @@ fn standalone_bundle_binary_name(package: &str, target: CompilationTarget) -> St
 fn clap_bundle_library_name(package: &str, target: CompilationTarget) -> String {
     match target {
         CompilationTarget::Linux(_) | CompilationTarget::Windows(_) => format!("{package}.clap"),
-        CompilationTarget::MacOS(_) => format!("{package}.clap/Contents/MacOS/{package}"),
+        CompilationTarget::MacOS(_) | CompilationTarget::MacOSUniversal => {
+            format!("{package}.clap/Contents/MacOS/{package}")
+        }
     }
 }
 
@@ -533,7 +651,9 @@ fn clap_bundle_library_name(package: &str, target: CompilationTarget) -> String 
 fn vst2_bundle_library_name(package: &str, target: CompilationTarget) -> String {
     match target {
         CompilationTarget::Linux(_) => format!("{package}.so"),
-        CompilationTarget::MacOS(_) => format!("{package}.vst/Contents/MacOS/{package}"),
+        CompilationTarget::MacOS(_) | CompilationTarget::MacOSUniversal => {
+            format!("{package}.vst/Contents/MacOS/{package}")
+        }
         CompilationTarget::Windows(_) => format!("{package}.dll"),
     }
 }
@@ -553,7 +673,9 @@ fn vst3_bundle_library_name(package: &str, target: CompilationTarget) -> String 
         CompilationTarget::Linux(Architecture::AArch64) => {
             format!("{package}.vst3/Contents/aarch64-linux/{package}.so")
         }
-        CompilationTarget::MacOS(_) => format!("{package}.vst3/Contents/MacOS/{package}"),
+        CompilationTarget::MacOS(_) | CompilationTarget::MacOSUniversal => {
+            format!("{package}.vst3/Contents/MacOS/{package}")
+        }
         CompilationTarget::Windows(Architecture::X86) => {
             format!("{package}.vst3/Contents/x86-win/{package}.vst3")
         }
