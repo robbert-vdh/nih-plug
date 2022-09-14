@@ -20,8 +20,10 @@ const BUNDLE_HOME: &str = "target/bundled";
 fn build_usage_string(command_name: &str) -> String {
     format!(
         "Usage:
-  {command_name} bundle <package> [--release] [--target <triple>]
-  {command_name} bundle -p <package1> -p <package2> ... [--release] [--target <triple>]"
+  {command_name} bundle <package> [--release]
+  {command_name} bundle -p <package1> -p <package2> ... [--release]
+
+  All other cargo-build options are supported, including --target and --profile."
     )
 }
 
