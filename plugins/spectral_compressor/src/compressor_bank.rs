@@ -30,6 +30,10 @@ const UPWARDS_NAME_PREFIX: &str = "upwards_";
 /// reactivating the plugin.
 const ENVELOPE_INIT_VALUE: f32 = std::f32::consts::FRAC_1_SQRT_2 / 8.0;
 
+/// The target frequency for the high frequency ratio rolloff. This is fixed to prevent Spectral
+/// Compressor from getting brighter as the sample rate increases.
+const HIGH_FREQ_RATIO_ROLLOFF_FREQUENCY: f32 = 22_050.0;
+
 /// A bank of compressors so each FFT bin can be compressed individually. The vectors in this struct
 /// will have a capacity of `MAX_WINDOW_SIZE / 2 + 1` and a size that matches the current complex
 /// FFT buffer size. This is stored as a struct of arrays to make SIMD-ing easier in the future.
@@ -170,7 +174,9 @@ pub struct CompressorParams {
     /// A `[0, 1]` scaling factor that causes the compressors for the higher registers to have lower
     /// ratios than the compressors for the lower registers. The scaling is applied logarithmically
     /// rather than linearly over the compressors. If this is set to 1.0, then the ratios will be
-    /// the same for every compressor.
+    /// the same for every compressor. A value of 0.5 means that at
+    /// `HIGH_FREQ_RATIO_ROLLOFF_FREQUENCY` Hz, the compression ratio will be 0.5 times that as the
+    /// one at 0 Hz.
     pub high_freq_ratio_rolloff: FloatParam,
     /// The compression knee width, in decibels.
     pub knee_width_db: FloatParam,
@@ -876,12 +882,6 @@ impl CompressorBank {
             params.compressors.downwards.high_freq_ratio_rolloff.value();
         let upwards_high_freq_ratio_rolloff =
             params.compressors.upwards.high_freq_ratio_rolloff.value();
-        // TODO: Use 20 kHz instead of nyquist to avoid the plugin becoming brighter at higher
-        //       sample rates
-        let log2_nyquist_freq = self
-            .log2_freqs
-            .last()
-            .expect("The CompressorBank has not yet been resized");
 
         if self
             .should_update_downwards_thresholds
@@ -959,7 +959,7 @@ impl CompressorBank {
                     .iter()
                     .zip(self.downwards_ratio_recips.iter_mut())
                 {
-                    let octave_fraction = log2_freq / log2_nyquist_freq;
+                    let octave_fraction = log2_freq / HIGH_FREQ_RATIO_ROLLOFF_FREQUENCY;
                     let rolloff_t = octave_fraction * downwards_high_freq_ratio_rolloff;
                     // If the octave fraction times the rolloff amount is high, then this should get
                     // closer to `high_freq_ratio_rolloff` (which is in [0, 1]).
@@ -982,7 +982,7 @@ impl CompressorBank {
                     .iter()
                     .zip(self.upwards_ratio_recips.iter_mut())
                 {
-                    let octave_fraction = log2_freq / log2_nyquist_freq;
+                    let octave_fraction = log2_freq / HIGH_FREQ_RATIO_ROLLOFF_FREQUENCY;
                     let rolloff_t = octave_fraction * upwards_high_freq_ratio_rolloff;
                     *ratio = (target_ratio_recip * (1.0 - rolloff_t)) + rolloff_t;
                 }
