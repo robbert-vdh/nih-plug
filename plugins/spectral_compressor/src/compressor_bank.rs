@@ -33,6 +33,7 @@ const ENVELOPE_INIT_VALUE: f32 = std::f32::consts::FRAC_1_SQRT_2 / 8.0;
 /// The target frequency for the high frequency ratio rolloff. This is fixed to prevent Spectral
 /// Compressor from getting brighter as the sample rate increases.
 const HIGH_FREQ_RATIO_ROLLOFF_FREQUENCY: f32 = 22_050.0;
+const HIGH_FREQ_RATIO_ROLLOFF_FREQUENCY_LOG2: f32 = 14.428_491;
 
 /// A bank of compressors so each FFT bin can be compressed individually. The vectors in this struct
 /// will have a capacity of `MAX_WINDOW_SIZE / 2 + 1` and a size that matches the current complex
@@ -982,7 +983,7 @@ impl CompressorBank {
                     .iter()
                     .zip(self.upwards_ratio_recips.iter_mut())
                 {
-                    let octave_fraction = log2_freq / HIGH_FREQ_RATIO_ROLLOFF_FREQUENCY;
+                    let octave_fraction = log2_freq / HIGH_FREQ_RATIO_ROLLOFF_FREQUENCY_LOG2;
                     let rolloff_t = octave_fraction * upwards_high_freq_ratio_rolloff;
                     *ratio = (target_ratio_recip * (1.0 - rolloff_t)) + rolloff_t;
                 }
