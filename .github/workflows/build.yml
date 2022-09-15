@@ -75,6 +75,7 @@ jobs:
 
           runner_name=${{ matrix.name }}
           if [[ $runner_name = 'macos-universal' ]]; then
+            export MACOSX_DEPLOYMENT_TARGET=10.13
             cargo xtask bundle-universal "${package_args[@]}" --release
           else
             cross_target=${{ matrix.cross-target }}
