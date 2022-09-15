@@ -699,7 +699,10 @@ pub fn maybe_create_macos_bundle_metadata(
     target: CompilationTarget,
     bundle_type: BundleType,
 ) -> Result<()> {
-    if !matches!(target, CompilationTarget::MacOS(_)) {
+    if !matches!(
+        target,
+        CompilationTarget::MacOS(_) | CompilationTarget::MacOSUniversal
+    ) {
         return Ok(());
     }
 
