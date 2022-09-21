@@ -7,7 +7,7 @@ use super::util::{self, ModifiersExt};
 use super::RawParamEvent;
 
 /// When shift+dragging a parameter, one pixel dragged corresponds to this much change in the
-/// noramlized parameter.
+/// normalized parameter.
 const GRANULAR_DRAG_MULTIPLIER: f32 = 0.1;
 
 /// A slider that integrates with NIH-plug's [`Param`] types. Use the
@@ -36,7 +36,7 @@ pub struct ParamSlider {
 
     /// What style to use for the slider.
     style: ParamSliderStyle,
-    /// Will be set to `true` when the field gets Alt+Click'ed which will replae the label with a
+    /// Will be set to `true` when the field gets Alt+Click'ed which will replace the label with a
     /// text box.
     text_input_active: bool,
 
@@ -48,7 +48,7 @@ pub struct ParamSlider {
 pub enum ParamSliderStyle {
     /// Visualize the offset from the default value for continuous parameters with a default value
     /// at around half of its range, fill the bar from the left for discrete parameters and
-    /// continous parameters without centered default values.
+    /// continuous parameters without centered default values.
     Centered,
     /// Always fill the bar starting from the left.
     FromLeft,
@@ -78,7 +78,7 @@ impl ParamSlider {
     /// handled by emitting [`ParamEvent`][super::ParamEvent]s which are automatically handled by
     /// the VIZIA wrapper.
     ///
-    /// See [`ParamSliderExt`] for additonal options.
+    /// See [`ParamSliderExt`] for additional options.
     pub fn new<L, Params, P, F>(cx: &mut Context, params: L, params_to_param: F) -> Handle<Self>
     where
         L: Lens<Target = Params> + Clone,
