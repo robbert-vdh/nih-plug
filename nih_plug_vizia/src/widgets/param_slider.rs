@@ -7,7 +7,7 @@ use super::util::{self, ModifiersExt};
 use super::RawParamEvent;
 
 /// When shift+dragging a parameter, one pixel dragged corresponds to this much change in the
-/// noramlized parameter.
+/// normalized parameter.
 const GRANULAR_DRAG_MULTIPLIER: f32 = 0.1;
 
 /// A slider that integrates with NIH-plug's [`Param`] types. Use the
@@ -16,6 +16,7 @@ const GRANULAR_DRAG_MULTIPLIER: f32 = 0.1;
 /// TODO: Handle scrolling for steps (and shift+scroll for smaller steps?)
 /// TODO: We may want to add a couple dedicated event handlers if it seems like those would be
 ///       useful, having a completely self contained widget is perfectly fine for now though
+#[derive(Lens)]
 pub struct ParamSlider {
     // We're not allowed to store a reference to the parameter internally, at least not in the
     // struct that implements [`View`]
@@ -31,6 +32,14 @@ pub struct ParamSlider {
     /// dragging for higher precision dragging. This is a `None` value when granular dragging is not
     /// active.
     granular_drag_start_x_value: Option<(f32, f32)>,
+
+
+    /// What style to use for the slider.
+    style: ParamSliderStyle,
+    /// Will be set to `true` when the field gets Alt+Click'ed which will replace the label with a
+    /// text box.
+    text_input_active: bool,
+
 }
 
 /// How the [`ParamSlider`] should display its values. Set this using
@@ -39,7 +48,7 @@ pub struct ParamSlider {
 pub enum ParamSliderStyle {
     /// Visualize the offset from the default value for continuous parameters with a default value
     /// at around half of its range, fill the bar from the left for discrete parameters and
-    /// continous parameters without centered default values.
+    /// continuous parameters without centered default values.
     Centered,
     /// Always fill the bar starting from the left.
     FromLeft,
@@ -57,49 +66,19 @@ pub enum ParamSliderStyle {
 enum ParamSliderEvent {
     /// Text input has been cancelled without submitting a new value.
     CancelTextInput,
-    /// A new value has been sent by the text input dialog after pressint Enter.
+    /// A new value has been sent by the text input dialog after pressing Enter.
     TextInput(String),
 }
 
-/// Internal param slider state the view needs to react to.
-#[derive(Lens)]
-struct ParamSliderInternal {
-    /// What style to use for the slider.
-    style: ParamSliderStyle,
-    /// Will be set to `true` when the field gets Alt+Click'ed which will replae the label with a
-    /// text box.
-    text_input_active: bool,
-}
-
-enum ParamSliderInternalEvent {
-    SetStyle(ParamSliderStyle),
-    SetTextInputActive(bool),
-}
-
-impl Model for ParamSliderInternal {
-    fn event(&mut self, _cx: &mut Context, event: &mut Event) {
-        event.map(
-            |param_slider_internal_event, _| match param_slider_internal_event {
-                ParamSliderInternalEvent::SetStyle(style) => self.style = *style,
-                ParamSliderInternalEvent::SetTextInputActive(active) => {
-                    // When this gets set to `true` the textbox widget will be created, and when it
-                    // gets created we'll focus it and select all text
-                    self.text_input_active = *active;
-                }
-            },
-        );
-    }
-}
-
 impl ParamSlider {
-    /// Creates a new [`ParamSlider`] for the given parameter. To accomdate VIZIA's mapping system,
+    /// Creates a new [`ParamSlider`] for the given parameter. To accommodate VIZIA's mapping system,
     /// you'll need to provide a lens containing your `Params` implementation object (check out how
     /// the `Data` struct is used in `gain_gui_vizia`) and a projection function that maps the
     /// `Params` object to the parameter you want to display a widget for. Parameter changes are
     /// handled by emitting [`ParamEvent`][super::ParamEvent]s which are automatically handled by
     /// the VIZIA wrapper.
     ///
-    /// See [`ParamSliderExt`] for additonal options.
+    /// See [`ParamSliderExt`] for additional options.
     pub fn new<L, Params, P, F>(cx: &mut Context, params: L, params_to_param: F) -> Handle<Self>
     where
         L: Lens<Target = Params> + Clone,
@@ -109,7 +88,7 @@ impl ParamSlider {
     {
         // We'll visualize the difference between the current value and the default value if the
         // default value lies somewhere in the middle and the parameter is continuous. Otherwise
-        // this appraoch looks a bit jarring.
+        // this approach looks a bit jarring.
         // We need to do a bit of a nasty and erase the lifetime bound by going through the raw
         // GuiContext and a ParamPtr.
         let param_ptr = params
@@ -131,15 +110,13 @@ impl ParamSlider {
             drag_active: false,
             is_double_click: false,
             granular_drag_start_x_value: None,
+
+            style: ParamSliderStyle::Centered,
+            text_input_active: false,
         }
         .build(cx, move |cx| {
-            ParamSliderInternal {
-                style: ParamSliderStyle::Centered,
-                text_input_active: false,
-            }
-            .build(cx);
 
-            Binding::new(cx, ParamSliderInternal::style, move |cx, style| {
+            Binding::new(cx, ParamSlider::style, move |cx, style| {
                 let style = style.get(cx);
                 let draw_fill_from_default = matches!(style, ParamSliderStyle::Centered)
                     && step_count.is_none()
@@ -152,7 +129,7 @@ impl ParamSlider {
                 let params = params.clone();
                 Binding::new(
                     cx,
-                    ParamSliderInternal::text_input_active,
+                    ParamSlider::text_input_active,
                     move |cx, text_input_active| {
                         // Can't use `.to_string()` here as that would include the modulation.
                         let param_display_value_lens = params.clone().map(move |params| {
@@ -287,7 +264,7 @@ impl ParamSlider {
                                     // should not affect that
                                     .hoverable(false);
 
-                                // If the parameter is being modulated, then we'll display anoter
+                                // If the parameter is being modulated, then we'll display another
                                 // filled bar showing the current modulation delta
                                 // VIZIA's bindings make this a bit, uh, difficult to read
                                 Element::new(cx)
@@ -394,14 +371,11 @@ impl ParamSlider {
     /// slider styles from [`ParamSliderStyle`] this will remap the normalized range to match up
     /// with the fill value display.
     fn set_normalized_value_drag(&self, cx: &mut Context, normalized_value: f32) {
-        let normalized_value = match (cx.data(), unsafe { self.param_ptr.step_count() }) {
+        let normalized_value = match (self.style, unsafe { self.param_ptr.step_count() }) {
             (
-                Some(ParamSliderInternal {
-                    style:
-                        ParamSliderStyle::CurrentStep { even: true }
-                        | ParamSliderStyle::CurrentStepLabeled { even: true },
-                    ..
-                }),
+                
+                ParamSliderStyle::CurrentStep { even: true } | ParamSliderStyle::CurrentStepLabeled { even: true },
+                
                 Some(step_count),
             ) => {
                 // We'll remap the value range to be the same as the displayed range, e.g. with each
@@ -426,7 +400,7 @@ impl View for ParamSlider {
     fn event(&mut self, cx: &mut Context, event: &mut Event) {
         event.map(|param_slider_event, _| match param_slider_event {
             ParamSliderEvent::CancelTextInput => {
-                cx.emit(ParamSliderInternalEvent::SetTextInputActive(false));
+                self.text_input_active = false;
                 cx.set_active(false);
             }
             ParamSliderEvent::TextInput(string) => {
@@ -438,7 +412,7 @@ impl View for ParamSlider {
                     cx.emit(RawParamEvent::EndSetParameter(self.param_ptr));
                 }
 
-                cx.emit(ParamSliderInternalEvent::SetTextInputActive(false));
+                self.text_input_active = false;
             }
         });
 
@@ -446,7 +420,7 @@ impl View for ParamSlider {
             WindowEvent::MouseDown(MouseButton::Left) => {
                 if cx.modifiers().alt() {
                     // ALt+Click brings up a text entry dialog
-                    cx.emit(ParamSliderInternalEvent::SetTextInputActive(true));
+                    self.text_input_active = true;
                     cx.set_active(true);
                 } else if cx.modifiers().command() || self.is_double_click {
                     // Ctrl+Click and double click should reset the parameter instead of initiating
@@ -552,13 +526,6 @@ pub trait ParamSliderExt {
 
 impl ParamSliderExt for Handle<'_, ParamSlider> {
     fn set_style(self, style: ParamSliderStyle) -> Self {
-        self.cx.emit_custom(
-            Event::new(ParamSliderInternalEvent::SetStyle(style))
-                .target(self.entity)
-                .origin(self.entity)
-                .propagate(Propagation::Subtree),
-        );
-
-        self
+        self.modify(|param_slider: &mut ParamSlider| param_slider.style = style)
     }
 }
