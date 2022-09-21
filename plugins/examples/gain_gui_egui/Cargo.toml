@@ -12,7 +12,7 @@ description = "A simple gain plugin with an egui GUI"
 crate-type = ["cdylib", "lib"]
 
 [dependencies]
-nih_plug = { path = "../../../", features = ["standalone"] }
+nih_plug = { path = "../../../", features = ["assert_process_allocs", "standalone"] }
 nih_plug_egui = { path = "../../../nih_plug_egui" }
 
 atomic_float = "0.1"
