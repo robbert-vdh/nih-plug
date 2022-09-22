@@ -6,6 +6,10 @@ new and what's changed, this document lists all breaking changes in reverse
 chronological order. If a new feature did not require any changes to existing
 code then it will not be listed here.
 
+## [2022-09-22]
+
+- `nih_plug_egui` has been updated from egui 0.17 to egui 0.19.
+
 ## [2022-09-06]
 
 - Parameter values are now accessed using `param.value()` instead of

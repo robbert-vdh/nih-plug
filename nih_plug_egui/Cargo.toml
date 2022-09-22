@@ -16,7 +16,7 @@ nih_plug = { path = ".." }
 
 baseview = { git = "https://github.com/robbert-vdh/baseview.git", branch = "feature/mouse-event-modifiers" }
 crossbeam = "0.8"
-egui = "0.17"
+egui = "0.19"
 # Upstream doesn't work with the current baseview and egui versions
 egui-baseview = { git = "https://github.com/robbert-vdh/egui-baseview.git", branch = "fix/update-dependencies" }
 lazy_static = "1.4"

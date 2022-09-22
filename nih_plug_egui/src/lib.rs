@@ -173,8 +173,7 @@ where
                 queue.request_repaint();
                 (update)(egui_ctx, &setter, &mut state.write());
             },
-        )
-        .expect("We provided an OpenGL config, did we not?");
+        );
 
         self.egui_state.open.store(true, Ordering::Release);
         Box::new(EguiEditorHandle {
