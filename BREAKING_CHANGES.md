@@ -9,6 +9,8 @@ code then it will not be listed here.
 ## [2022-09-22]
 
 - `nih_plug_egui` has been updated from egui 0.17 to egui 0.19.
+- `nih_plug_vizia` has been updated. Custom widgets will need to be updated
+  because of changes Vizia itself.
 
 ## [2022-09-06]
 

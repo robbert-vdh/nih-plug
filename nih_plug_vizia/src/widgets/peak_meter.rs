@@ -47,11 +47,11 @@ impl PeakMeter {
             // Now for something that may be illegal under some jurisdictions. If a hold time is
             // given, then we'll build a new lens that always gives the held peak level for the
             // current moment in time by mutating some values captured into the mapping closure.
-            let peak_dbfs = match hold_time {
-                Some(hold_time) => {
-                    let held_peak_value_db = Cell::new(f32::MIN);
-                    let last_held_peak_value: Cell<Option<Instant>> = Cell::new(None);
-                    level_dbfs.clone().map(move |level| -> f32 {
+            let held_peak_value_db = Cell::new(f32::MIN);
+            let last_held_peak_value: Cell<Option<Instant>> = Cell::new(None);
+            let peak_dbfs = level_dbfs.clone().map(move |level| -> f32 {
+                match hold_time {
+                    Some(hold_time) => {
                         let mut peak_level = held_peak_value_db.get();
                         let peak_time = last_held_peak_value.get();
 
@@ -66,12 +66,10 @@ impl PeakMeter {
                         }
 
                         peak_level
-                    })
+                    }
+                    None => util::MINUS_INFINITY_DB,
                 }
-                None => level_dbfs
-                    .clone()
-                    .map(|_level| -> f32 { util::MINUS_INFINITY_DB }),
-            };
+            });
 
             PeakMeterBar {
                 level_dbfs,
@@ -98,8 +96,8 @@ impl PeakMeter {
                             Element::new(cx).class("ticks__tick");
                         }
 
-                        let font_size = cx.style_ref().font_size.get(cx.current()).unwrap_or(&15.0)
-                            * cx.style_ref().dpi_factor as f32;
+                        let font_size = cx.style.font_size.get(cx.current()).unwrap_or(&15.0)
+                            * cx.style.dpi_factor as f32;
                         let label = if first_tick {
                             Label::new(cx, "-inf")
                                 .class("ticks__label")
@@ -149,23 +147,22 @@ where
         let peak_dbfs = self.peak_dbfs.get(cx);
 
         // These basics are taken directly from the default implementation of this function
-        let entity = cx.current();
-        let bounds = cx.cache().get_bounds(entity);
+        let bounds = cx.bounds();
         if bounds.w == 0.0 || bounds.h == 0.0 {
             return;
         }
 
         // TODO: It would be cool to allow the text color property to control the gradient here. For
         //       now we'll only support basic background colors and borders.
-        let background_color = cx.background_color(entity).cloned().unwrap_or_default();
-        let border_color = cx.border_color(entity).cloned().unwrap_or_default();
-        let opacity = cx.cache().get_opacity(entity);
+        let background_color = cx.background_color().cloned().unwrap_or_default();
+        let border_color = cx.border_color().cloned().unwrap_or_default();
+        let opacity = cx.opacity();
         let mut background_color: vg::Color = background_color.into();
         background_color.set_alphaf(background_color.a * opacity);
         let mut border_color: vg::Color = border_color.into();
         border_color.set_alphaf(border_color.a * opacity);
 
-        let border_width = match cx.border_width(entity).unwrap_or_default() {
+        let border_width = match cx.border_width().unwrap_or_default() {
             Units::Pixels(val) => val,
             Units::Percentage(val) => bounds.w.min(bounds.h) * (val / 100.0),
             _ => 0.0,

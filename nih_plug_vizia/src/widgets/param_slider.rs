@@ -33,13 +33,11 @@ pub struct ParamSlider {
     /// active.
     granular_drag_start_x_value: Option<(f32, f32)>,
 
-
     /// What style to use for the slider.
     style: ParamSliderStyle,
     /// Will be set to `true` when the field gets Alt+Click'ed which will replace the label with a
     /// text box.
     text_input_active: bool,
-
 }
 
 /// How the [`ParamSlider`] should display its values. Set this using
@@ -115,7 +113,6 @@ impl ParamSlider {
             text_input_active: false,
         }
         .build(cx, move |cx| {
-
             Binding::new(cx, ParamSlider::style, move |cx, style| {
                 let style = style.get(cx);
                 let draw_fill_from_default = matches!(style, ParamSliderStyle::Centered)
@@ -350,7 +347,7 @@ impl ParamSlider {
     /// Set the normalized value for a parameter if that would change the parameter's plain value
     /// (to avoid unnecessary duplicate parameter changes). The begin- and end set parameter
     /// messages need to be sent before calling this function.
-    fn set_normalized_value(&self, cx: &mut Context, normalized_value: f32) {
+    fn set_normalized_value(&self, cx: &mut EventContext, normalized_value: f32) {
         // This snaps to the nearest plain value if the parameter is stepped in some way.
         // TODO: As an optimization, we could add a `const CONTINUOUS: bool` to the parameter to
         //       avoid this normalized->plain->normalized conversion for parameters that don't need
@@ -370,12 +367,11 @@ impl ParamSlider {
     /// `set_normalized_value()`, but resulting from a mouse drag. When using the 'even' stepped
     /// slider styles from [`ParamSliderStyle`] this will remap the normalized range to match up
     /// with the fill value display.
-    fn set_normalized_value_drag(&self, cx: &mut Context, normalized_value: f32) {
+    fn set_normalized_value_drag(&self, cx: &mut EventContext, normalized_value: f32) {
         let normalized_value = match (self.style, unsafe { self.param_ptr.step_count() }) {
             (
-                
-                ParamSliderStyle::CurrentStep { even: true } | ParamSliderStyle::CurrentStepLabeled { even: true },
-                
+                ParamSliderStyle::CurrentStep { even: true }
+                | ParamSliderStyle::CurrentStepLabeled { even: true },
                 Some(step_count),
             ) => {
                 // We'll remap the value range to be the same as the displayed range, e.g. with each
@@ -397,7 +393,7 @@ impl View for ParamSlider {
         Some("param-slider")
     }
 
-    fn event(&mut self, cx: &mut Context, event: &mut Event) {
+    fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
         event.map(|param_slider_event, _| match param_slider_event {
             ParamSliderEvent::CancelTextInput => {
                 self.text_input_active = false;
@@ -418,11 +414,11 @@ impl View for ParamSlider {
 
         event.map(|window_event, _| match window_event {
             WindowEvent::MouseDown(MouseButton::Left) => {
-                if cx.modifiers().alt() {
+                if cx.modifiers.alt() {
                     // ALt+Click brings up a text entry dialog
                     self.text_input_active = true;
                     cx.set_active(true);
-                } else if cx.modifiers().command() || self.is_double_click {
+                } else if cx.modifiers.command() || self.is_double_click {
                     // Ctrl+Click and double click should reset the parameter instead of initiating
                     // a drag operation
                     cx.emit(RawParamEvent::BeginSetParameter(self.param_ptr));
@@ -441,15 +437,15 @@ impl View for ParamSlider {
                     // When holding down shift while clicking on a parameter we want to granuarly
                     // edit the parameter without jumping to a new value
                     cx.emit(RawParamEvent::BeginSetParameter(self.param_ptr));
-                    if cx.modifiers().shift() {
-                        self.granular_drag_start_x_value = Some((cx.mouse().cursorx, unsafe {
+                    if cx.modifiers.shift() {
+                        self.granular_drag_start_x_value = Some((cx.mouse.cursorx, unsafe {
                             self.param_ptr.unmodulated_normalized_value()
                         }));
                     } else {
                         self.granular_drag_start_x_value = None;
                         self.set_normalized_value_drag(
                             cx,
-                            util::remap_current_entity_x_coordinate(cx, cx.mouse().cursorx),
+                            util::remap_current_entity_x_coordinate(cx, cx.mouse.cursorx),
                         );
                     }
                 }
@@ -475,10 +471,10 @@ impl View for ParamSlider {
                 if self.drag_active {
                     // If shift is being held then the drag should be more granular instead of
                     // absolute
-                    if cx.modifiers().shift() {
+                    if cx.modifiers.shift() {
                         let (drag_start_x, drag_start_value) =
                             *self.granular_drag_start_x_value.get_or_insert_with(|| {
-                                (cx.mouse().cursorx, unsafe {
+                                (cx.mouse.cursorx, unsafe {
                                     self.param_ptr.unmodulated_normalized_value()
                                 })
                             });
@@ -509,7 +505,7 @@ impl View for ParamSlider {
                     self.granular_drag_start_x_value = None;
                     self.set_normalized_value(
                         cx,
-                        util::remap_current_entity_x_coordinate(cx, cx.mouse().cursorx),
+                        util::remap_current_entity_x_coordinate(cx, cx.mouse.cursorx),
                     );
                 }
             }

@@ -75,7 +75,7 @@ pub(crate) struct WindowModel {
 }
 
 impl Model for ParamModel {
-    fn event(&mut self, _cx: &mut Context, event: &mut Event) {
+    fn event(&mut self, _cx: &mut EventContext, event: &mut Event) {
         // `ParamEvent` gets downcast into `NormalizedParamEvent` by the `Message`
         // implementation below
         event.map(|param_event, _| match *param_event {
@@ -91,7 +91,7 @@ impl Model for ParamModel {
 }
 
 impl Model for WindowModel {
-    fn event(&mut self, cx: &mut Context, event: &mut Event) {
+    fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
         // This gets fired whenever the inner window gets resized
         event.map(|window_event, _| {
             if let WindowEvent::WindowResize = window_event {

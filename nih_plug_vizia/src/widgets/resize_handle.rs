@@ -40,24 +40,24 @@ impl View for ResizeHandle {
         Some("resize-handle")
     }
 
-    fn event(&mut self, cx: &mut Context, event: &mut Event) {
+    fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
         event.map(|window_event, meta| match *window_event {
             WindowEvent::MouseDown(MouseButton::Left) => {
                 // The handle is a triangle, so we should also interac twith it as if it was a
                 // triangle
                 if intersects_triangle(
-                    cx.cache_ref().get_bounds(cx.current()),
-                    (cx.mouse().cursorx, cx.mouse().cursory),
+                    cx.cache.get_bounds(cx.current()),
+                    (cx.mouse.cursorx, cx.mouse.cursory),
                 ) {
                     cx.capture();
                     cx.set_active(true);
 
                     self.drag_active = true;
                     self.start_scale_factor = cx.user_scale_factor();
-                    self.start_dpi_factor = cx.style().dpi_factor;
+                    self.start_dpi_factor = cx.style.dpi_factor;
                     self.start_physical_coordinates = (
-                        cx.mouse().cursorx * cx.style().dpi_factor as f32,
-                        cx.mouse().cursory * cx.style().dpi_factor as f32,
+                        cx.mouse.cursorx * cx.style.dpi_factor as f32,
+                        cx.mouse.cursory * cx.style.dpi_factor as f32,
                     );
 
                     meta.consume();
@@ -75,7 +75,7 @@ impl View for ResizeHandle {
             }
             WindowEvent::MouseMove(x, y) => {
                 cx.set_hover(intersects_triangle(
-                    cx.cache_ref().get_bounds(cx.current()),
+                    cx.cache.get_bounds(cx.current()),
                     (x, y),
                 ));
 
@@ -111,21 +111,20 @@ impl View for ResizeHandle {
         // We'll draw the handle directly as styling elements for this is going to be a bit tricky
 
         // These basics are taken directly from the default implementation of this function
-        let entity = cx.current();
-        let bounds = cx.cache().get_bounds(entity);
+        let bounds = cx.bounds();
         if bounds.w == 0.0 || bounds.h == 0.0 {
             return;
         }
 
-        let background_color = cx.background_color(entity).copied().unwrap_or_default();
-        let border_color = cx.border_color(entity).copied().unwrap_or_default();
-        let opacity = cx.cache().get_opacity(entity);
+        let background_color = cx.background_color().copied().unwrap_or_default();
+        let border_color = cx.border_color().copied().unwrap_or_default();
+        let opacity = cx.opacity();
         let mut background_color: vg::Color = background_color.into();
         background_color.set_alphaf(background_color.a * opacity);
         let mut border_color: vg::Color = border_color.into();
         border_color.set_alphaf(border_color.a * opacity);
 
-        let border_width = match cx.border_width(entity).unwrap_or_default() {
+        let border_width = match cx.border_width().unwrap_or_default() {
             Units::Pixels(val) => val,
             Units::Percentage(val) => bounds.w.min(bounds.h) * (val / 100.0),
             _ => 0.0,
@@ -180,11 +179,7 @@ impl View for ResizeHandle {
         // path.move_to(x + (w / 3.0 * 1.5), y + h);
         // path.close();
 
-        let mut color: vg::Color = cx
-            .font_color(entity)
-            .copied()
-            .unwrap_or(Color::white())
-            .into();
+        let mut color: vg::Color = cx.font_color().copied().unwrap_or(Color::white()).into();
         color.set_alphaf(color.a * opacity);
         let paint = vg::Paint::color(color);
         canvas.fill_path(&mut path, paint);

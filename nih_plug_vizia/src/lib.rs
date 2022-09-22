@@ -192,14 +192,14 @@ impl Editor for ViziaEditor {
                 cx.set_default_font(assets::NOTO_SANS_LIGHT);
 
                 // TOOD: `:root { background-color: #fafafa; }` in a stylesheet doesn't work
-                cx.style()
+                cx.style
                     .background_color
                     .insert(Entity::root(), Color::rgb(250, 250, 250));
-                cx.style()
+                cx.style
                     .font_color
                     .insert(Entity::root(), Color::rgb(10, 10, 10));
                 // VIZIA uses points instead of pixels, this is 20px
-                cx.style().font_size.insert(Entity::root(), 15.0);
+                cx.style.font_size.insert(Entity::root(), 15.0);
                 cx.add_theme(include_str!("../assets/theme.css"));
 
                 // There doesn't seem to be any way to bundle styles with a widget, so we'll always
