@@ -13,6 +13,9 @@ pub struct ResizeHandle {
     /// The scale factor when we started dragging. This is kept track of separately to avoid
     /// accumulating rounding errors.
     start_scale_factor: f64,
+    /// The DPI factor when we started dragging, includes both the HiDPI scaling and the user
+    /// scaling factor. This is kept track of separately to avoid accumulating rounding errors.
+    start_dpi_factor: f64,
     /// The cursor position in physical screen pixels when the drag started.
     start_physical_coordinates: (f32, f32),
 }
@@ -25,6 +28,7 @@ impl ResizeHandle {
         ResizeHandle {
             drag_active: false,
             start_scale_factor: 1.0,
+            start_dpi_factor: 1.0,
             start_physical_coordinates: (0.0, 0.0),
         }
         .build(cx, |_| {})
@@ -50,6 +54,7 @@ impl View for ResizeHandle {
 
                     self.drag_active = true;
                     self.start_scale_factor = cx.user_scale_factor();
+                    self.start_dpi_factor = cx.style().dpi_factor;
                     self.start_physical_coordinates = (
                         cx.mouse().cursorx * cx.style().dpi_factor as f32,
                         cx.mouse().cursory * cx.style().dpi_factor as f32,
@@ -82,8 +87,8 @@ impl View for ResizeHandle {
                     // TODO: This may start doing fun things when the window grows so large that it
                     //       gets pushed upwards or leftwards
                     let (compensated_physical_x, compensated_physical_y) = (
-                        x * self.start_scale_factor as f32,
-                        y * self.start_scale_factor as f32,
+                        x * self.start_dpi_factor as f32,
+                        y * self.start_dpi_factor as f32,
                     );
                     let (start_physical_x, start_physical_y) = self.start_physical_coordinates;
                     let new_scale_factor = (self.start_scale_factor
