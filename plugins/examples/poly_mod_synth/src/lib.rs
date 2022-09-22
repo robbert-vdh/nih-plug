@@ -364,7 +364,6 @@ impl Plugin for PolyModSynth {
             let mut voice_amp_envelope = [0.0; MAX_BLOCK_SIZE];
             self.params.gain.smoothed.next_block(&mut gain, block_len);
 
-            // TODO: Amp envelope
             // TODO: Some form of band limiting
             // TODO: Filter
             for voice in self.voices.iter_mut().filter_map(|v| v.as_mut()) {
