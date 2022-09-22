@@ -395,6 +395,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "baseview"
+version = "0.1.0"
+source = "git+https://github.com/RustAudio/baseview.git?rev=eae4033e7d2cc9c31ccaa2794d5d08eedf2f510c#eae4033e7d2cc9c31ccaa2794d5d08eedf2f510c"
+dependencies = [
+ "cocoa",
+ "core-foundation 0.9.3",
+ "keyboard-types",
+ "nix 0.22.3",
+ "objc",
+ "raw-window-handle",
+ "uuid",
+ "winapi",
+ "x11",
+ "xcb 0.9.0",
+ "xcb-util",
+]
+
+[[package]]
 name = "bindgen"
 version = "0.59.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1199,9 +1217,9 @@ dependencies = [
 [[package]]
 name = "egui-baseview"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/egui-baseview.git?branch=fix/update-dependencies#c2e7281f1129482f0aef564cae42b3e7a26a6373"
+source = "git+https://github.com/BillyDM/egui-baseview.git?rev=46e21cc11c57c705fb83611389399ec3d2670a44#46e21cc11c57c705fb83611389399ec3d2670a44"
 dependencies = [
- "baseview 0.1.0 (git+https://github.com/robbert-vdh/baseview.git?branch=feature/mouse-event-modifiers)",
+ "baseview 0.1.0 (git+https://github.com/RustAudio/baseview.git?rev=eae4033e7d2cc9c31ccaa2794d5d08eedf2f510c)",
  "copypasta 0.8.1",
  "egui",
  "egui_glow",
@@ -2670,7 +2688,7 @@ dependencies = [
 name = "nih_plug_egui"
 version = "0.0.0"
 dependencies = [
- "baseview 0.1.0 (git+https://github.com/robbert-vdh/baseview.git?branch=feature/mouse-event-modifiers)",
+ "baseview 0.1.0 (git+https://github.com/RustAudio/baseview.git?rev=eae4033e7d2cc9c31ccaa2794d5d08eedf2f510c)",
  "crossbeam",
  "egui",
  "egui-baseview",
