@@ -50,13 +50,9 @@ impl<P: Plugin, B: Backend> GuiContext for WrapperGuiContext<P, B> {
         let (unscaled_width, unscaled_height) = self.wrapper.editor.as_ref().unwrap().size();
 
         // This will cause the editor to be resized at the start of the next frame
-        let dpi_scale = self.wrapper.dpi_scale();
         let push_successful = self
             .gui_task_sender
-            .send(GuiTask::Resize(
-                (unscaled_width as f32 * dpi_scale).round() as u32,
-                (unscaled_height as f32 * dpi_scale).round() as u32,
-            ))
+            .send(GuiTask::Resize(unscaled_width, unscaled_height))
             .is_ok();
         nih_debug_assert!(push_successful, "Could not queue window resize");
 
