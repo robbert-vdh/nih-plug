@@ -25,9 +25,6 @@ pub struct ParamSlider {
     /// Will be set to `true` if we're dragging the parameter. Resetting the parameter or entering a
     /// text value should not initiate a drag.
     drag_active: bool,
-    /// Whether the next click is a double click. Vizia will send a double click event followed by a
-    /// regular mouse down event when double clicking.
-    is_double_click: bool,
     /// We keep track of the start coordinate and normalized value when holding down Shift while
     /// dragging for higher precision dragging. This is a `None` value when granular dragging is not
     /// active.
@@ -106,7 +103,6 @@ impl ParamSlider {
             param_ptr,
 
             drag_active: false,
-            is_double_click: false,
             granular_drag_start_x_value: None,
 
             style: ParamSliderStyle::Centered,
@@ -418,7 +414,7 @@ impl View for ParamSlider {
                     // ALt+Click brings up a text entry dialog
                     self.text_input_active = true;
                     cx.set_active(true);
-                } else if cx.modifiers.command() || self.is_double_click {
+                } else if cx.modifiers.command() {
                     // Ctrl+Click and double click should reset the parameter instead of initiating
                     // a drag operation
                     cx.emit(RawParamEvent::BeginSetParameter(self.param_ptr));
@@ -449,14 +445,16 @@ impl View for ParamSlider {
                         );
                     }
                 }
-
-                // We'll set this here because weird things like Alt+double click should not cause
-                // the next click to become a reset
-                self.is_double_click = false;
             }
             WindowEvent::MouseDoubleClick(MouseButton::Left) => {
-                // Vizia will send a regular mouse down after this, so we'll handle the reset there
-                self.is_double_click = true;
+                // Ctrl+Click and double click should reset the parameter instead of initiating
+                // a drag operation
+                cx.emit(RawParamEvent::BeginSetParameter(self.param_ptr));
+                cx.emit(RawParamEvent::SetParameterNormalized(
+                    self.param_ptr,
+                    unsafe { self.param_ptr.default_normalized_value() },
+                ));
+                cx.emit(RawParamEvent::EndSetParameter(self.param_ptr));
             }
             WindowEvent::MouseUp(MouseButton::Left) => {
                 if self.drag_active {
