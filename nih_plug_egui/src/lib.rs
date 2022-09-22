@@ -162,15 +162,14 @@ where
             },
             state,
             |_, _, _| {},
-            move |egui_ctx, queue, state| {
+            move |egui_ctx, _queue, state| {
                 let setter = ParamSetter::new(context.as_ref());
 
                 // For now, just always redraw. Most plugin GUIs have meters, and those almost always
                 // need a redraw. Later we can try to be a bit more sophisticated about this. Without
                 // this we would also have a blank GUI when it gets first opened because most DAWs open
                 // their GUI while the window is still unmapped.
-                // TODO: Are there other useful parts of this queue we could pass to thep lugin?
-                queue.request_repaint();
+                egui_ctx.request_repaint();
                 (update)(egui_ctx, &setter, &mut state.write());
             },
         );
