@@ -4,18 +4,15 @@
 [![Tests](https://github.com/robbert-vdh/nih-plug/actions/workflows/test.yml/badge.svg?branch=master)](https://github.com/robbert-vdh/nih-plug/actions/workflows/test.yml?query=branch%3Amaster)
 [![Docs](https://github.com/robbert-vdh/nih-plug/actions/workflows/docs.yml/badge.svg?branch=master)](https://nih-plug.robbertvanderhelm.nl/)
 
-This is a work in progress API-agnostic audio plugin framework written in Rust
-as well as a small collection of plugins. The idea is to have a stateful but
-simple plugin API that gets rid of as much unnecessary ceremony wherever
-possible, while also keeping the amount of magic to minimum. Since this is not
-quite meant for general use just yet, the plugin API surface is currently
-limited to the functionality that I either needed myself or that was requested
-by others. See the [current features](#current-features) section for more
-information on the project's current status.
+NIH-plug is an API-agnostic audio plugin framework written in Rust, as well as a
+small collection of plugins. The idea is to have a stateful yet simple plugin
+API that gets rid of as much unnecessary ceremony wherever possible, while also
+keeping the amount of magic to minimum and making it easy to experiment with
+different approaches to things. See the [current features](#current-features)
+section for more information on the project's current status.
 
 Come join us on the [Rust Audio Discord](https://discord.gg/ykxU3rt4Cb), check
-out the work-in-progress
-[documentation](https://nih-plug.robbertvanderhelm.nl/), or use the
+out the [documentation](https://nih-plug.robbertvanderhelm.nl/), or use the
 [cookiecutter template](https://github.com/robbert-vdh/nih-plug-template) to
 quickly get started with NIH-plug.
 
@@ -31,14 +28,18 @@ quickly get started with NIH-plug.
 
 ## Plugins
 
-Check each plugin's readme for more details on what the plugin actually does.
-You can download the development binaries for Linux, Windows and macOS from the
-[automated
+Check each plugin's readme file for more details on what the plugin actually
+does. You can download the development binaries for Linux, Windows and macOS
+from the [automated
 builds](https://github.com/robbert-vdh/nih-plug/actions/workflows/build.yml?query=branch%3Amaster)
 page. Or if you're not signed in on GitHub, then you can also find the latest
-nightly build [here](https://nightly.link/robbert-vdh/nih-plug/workflows/build/master).
+nightly build
+[here](https://nightly.link/robbert-vdh/nih-plug/workflows/build/master). You
+may need to [disable gatekeeper]([disable
+Gatekeeper](https://disable-gatekeeper.github.io/)) on macOS to be able to use
+the plugins.
 
-Scroll down for more information on the plugin framework.
+Scroll down for more information on the underlying plugin framework.
 
 - [**Crisp**](plugins/crisp) adds a bright crispy top end to any low bass sound.
   Inspired by Polarity's [Fake Distortion](https://youtu.be/MKfFn4L1zeg) video.
