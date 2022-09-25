@@ -64,6 +64,18 @@ pub struct SmootherIter<'a, T: Smoothable> {
 }
 
 impl SmoothingStyle {
+    /// Utility function to modify the duration to compensate for an oversampling factor. When using
+    /// 4x oversampling, the duration needs to be four times as long to compensate for the four
+    /// times higher effective sample rate.
+    pub fn for_oversampling_factor(self, factor: f32) -> Self {
+        match self {
+            SmoothingStyle::None => SmoothingStyle::None,
+            SmoothingStyle::Linear(time) => SmoothingStyle::Linear(time * factor),
+            SmoothingStyle::Logarithmic(time) => SmoothingStyle::Logarithmic(time * factor),
+            SmoothingStyle::Exponential(time) => SmoothingStyle::Exponential(time * factor),
+        }
+    }
+
     /// Compute the number of steps to reach the target value based on the sample rate and this
     /// smoothing style's duration.
     #[inline]
