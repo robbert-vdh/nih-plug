@@ -86,7 +86,7 @@ impl FloatRange {
                     (scaled_proportion.powf(*factor) * 0.5) + 0.5
                 } else {
                     // The part below the center gets scaled, inverted (so the range is [0, 1] where
-                    // 0 corresponds to the center proportion and 1 corresponds to the orignal
+                    // 0 corresponds to the center proportion and 1 corresponds to the original
                     // normalized 0 value), skewed, inverted back again, and then scaled back to the
                     // original range
                     let inverted_scaled_proportion =
@@ -137,7 +137,7 @@ impl FloatRange {
         // range up into 100 segments, but if `self.step_size` is set then we'll use that. Ideally
         // we might want to split the range up into at most 100 segments, falling back to the step
         // size if the total number of steps would be smaller than that, but since ranges can be
-        // nonlienar that's a bit difficult to pull off.
+        // nonlinear that's a bit difficult to pull off.
         // TODO: At some point, implement the above mentioned step size quantization
         match self {
             FloatRange::Linear { min, max }

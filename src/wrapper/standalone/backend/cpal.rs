@@ -342,7 +342,7 @@ impl Cpal {
 
         move |data, _info| {
             // Things may have been moved in between callbacks, so these pointers need to be set up
-            // agian on each invocation
+            // again on each invocation
             unsafe {
                 buffer.with_raw_vec(|output_slices| {
                     for (output_slice, channel) in output_slices.iter_mut().zip(channels.iter_mut())

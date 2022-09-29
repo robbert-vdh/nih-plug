@@ -53,7 +53,7 @@ where
         Self {
             executor: executor.clone(),
             main_thread_id: thread::current().id(),
-            // With our drop implementation we guarentee that this thread never outlives this struct
+            // With our drop implementation we guarantee that this thread never outlives this struct
             worker_thread: Some(
                 thread::Builder::new()
                     .name(String::from("worker"))
@@ -88,7 +88,7 @@ where
 
     fn is_main_thread(&self) -> bool {
         // FIXME: `thread::current()` may allocate the first time it's called, is there a safe
-        //        nonallocating version of this without using huge OS-specific libraries?
+        //        non-allocating version of this without using huge OS-specific libraries?
         permit_alloc(|| thread::current().id() == self.main_thread_id)
     }
 }

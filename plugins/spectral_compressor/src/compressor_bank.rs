@@ -21,7 +21,7 @@ use std::sync::Arc;
 
 use crate::SpectralCompressorParams;
 
-// These are the parameter ID prefixes used for the downwards and upwards cmpression parameters.
+// These are the parameter ID prefixes used for the downwards and upwards compression parameters.
 const DOWNWARDS_NAME_PREFIX: &str = "downwards_";
 const UPWARDS_NAME_PREFIX: &str = "upwards_";
 

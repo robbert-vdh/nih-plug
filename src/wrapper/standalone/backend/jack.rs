@@ -119,7 +119,7 @@ impl Backend for Jack {
                     // Unless it is a SysEx message, a JACK MIDI message is always three bytes or
                     // less and is normalized (starts with a status byte and is self-contained).
                     if midi.bytes.len() <= 3 {
-                        // JACK may not pad messages with zeroes, so mesages for things like channel
+                        // JACK may not pad messages with zeroes, so messages for things like channel
                         // pressure may be less than three bytes in length.
                         let mut midi_data = [0u8; 3];
                         midi_data[..midi.bytes.len()].copy_from_slice(midi.bytes);

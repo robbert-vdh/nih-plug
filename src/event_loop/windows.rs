@@ -116,8 +116,8 @@ where
                 HWND(0),
                 HMENU(0),
                 HINSTANCE(0),
-                // NOTE: We're boxing a box here. As mentioend in [PollCallback], we c an't directly
-                //       pass around fat poitners, so we need a normal pointer to a fat pointer to
+                // NOTE: We're boxing a box here. As mentioned in [PollCallback], we can't directly
+                //       pass around fat pointers, so we need a normal pointer to a fat pointer to
                 //       be able to call this and deallocate it later
                 Box::into_raw(Box::new(callback)) as *const c_void,
             )
@@ -164,7 +164,7 @@ where
 
     fn is_main_thread(&self) -> bool {
         // FIXME: `thread::current()` may allocate the first time it's called, is there a safe
-        //        nonallocating version of this without using huge OS-specific libraries?
+        //        non-allocating version of this without using huge OS-specific libraries?
         permit_alloc(|| thread::current().id() == self.main_thread_id)
     }
 }

@@ -14,7 +14,7 @@ macro_rules! check_null_ptr {
 /// The same as [`check_null_ptr!`], but with a custom message.
 macro_rules! check_null_ptr_msg {
     ($msg:expr, $ret:expr, $ptr:expr $(, $ptrs:expr)* $(, )?) => {
-        // Clippy doesn't understand it when we use a unit in our `check_null_ptr!()` maccro, even
+        // Clippy doesn't understand it when we use a unit in our `check_null_ptr!()` macro, even
         // if we explicitly pattern match on that unit
         #[allow(clippy::unused_unit)]
         if $ptr.is_null() $(|| $ptrs.is_null())* {
