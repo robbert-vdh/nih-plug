@@ -143,10 +143,10 @@ pub struct Wrapper<P: ClapPlugin> {
     /// The last process status returned by the plugin. This is used for tail handling.
     last_process_status: AtomicCell<ProcessStatus>,
     /// The current latency in samples, as set by the plugin through the [`ProcessContext`]. uses
-    /// the latency extnesion
+    /// the latency extension
     pub current_latency: AtomicU32,
-    /// Contains slices for the plugin's outputs. You can't directly create a nested slice form
-    /// apointer to pointers, so this needs to be preallocated in the setup call and kept around
+    /// Contains slices for the plugin's outputs. You can't directly create a nested slice from
+    /// a pointer to pointers, so this needs to be preallocated in the setup call and kept around
     /// between process calls. This buffer owns the vector, because otherwise it would need to store
     /// a mutable reference to the data contained in this mutex.
     output_buffer: AtomicRefCell<Buffer<'static>>,
@@ -215,7 +215,7 @@ pub struct Wrapper<P: ClapPlugin> {
     /// by slashes, and they're only used to allow the DAW to display parameters in a tree
     /// structure.
     param_group_by_hash: HashMap<u32, String>,
-    /// Mappings from string parameter indentifiers to parameter hashes. Useful for debug logging
+    /// Mappings from string parameter identifiers to parameter hashes. Useful for debug logging
     /// and when storing and restoring plugin state.
     param_id_to_hash: HashMap<String, u32>,
     /// The inverse mapping from [`param_by_hash`][Self::param_by_hash]. This is needed to be able
@@ -230,7 +230,7 @@ pub struct Wrapper<P: ClapPlugin> {
     /// A queue of parameter changes and gestures that should be output in either the next process
     /// call or in the next parameter flush.
     ///
-    /// XXX: There's no guarentee that a single parameter doesn't occur twice in this queue, but
+    /// XXX: There's no guarantee that a single parameter doesn't occur twice in this queue, but
     ///      even if it does then that should still not be a problem because the host also reads it
     ///      in the same order, right?
     output_parameter_events: ArrayQueue<OutputParamEvent>,
@@ -690,7 +690,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         }
     }
 
-    /// Queue a parmeter output event to be sent to the host at the end of the audio processing
+    /// Queue a parameter output event to be sent to the host at the end of the audio processing
     /// cycle, and request a parameter flush from the host if the plugin is not currently processing
     /// audio. The parameter's actual value will only be updated at that point so the value won't
     /// change in the middle of a processing call.
@@ -746,7 +746,7 @@ impl<P: ClapPlugin> Wrapper<P> {
     ///
     /// After calling this function, you should call
     /// [`notify_param_values_changed()`][Self::notify_param_values_changed()] to allow the editor
-    /// to update itself. This needs to be done seperately so you can process parameter changes in
+    /// to update itself. This needs to be done separately so you can process parameter changes in
     /// batches.
     ///
     /// # Note
@@ -812,13 +812,13 @@ impl<P: ClapPlugin> Wrapper<P> {
     }
 
     /// Similar to [`handle_in_events()`][Self::handle_in_events()], but will stop just before an
-    /// event if the preducate returns true for that events. This predicate is only called for
+    /// event if the predicate returns true for that events. This predicate is only called for
     /// events that occur after `current_sample_idx`. This is used to stop before a tempo or time
     /// signature change, or before next parameter change event with `raw_event.time >
     /// current_sample_idx` and return the **absolute** (relative to the entire buffer that's being
     /// split) sample index of that event along with the its index in the event queue as a
     /// `(sample_idx, event_idx)` tuple. This allows for splitting the audio buffer into segments
-    /// with distinct sample values to enable sample accurate automation without modifcations to the
+    /// with distinct sample values to enable sample accurate automation without modifications to the
     /// wrapped plugin.
     pub unsafe fn handle_in_events_until(
         &self,
@@ -3199,7 +3199,7 @@ impl<P: ClapPlugin> Wrapper<P> {
     }
 }
 
-/// Convenience function to query an extennsion from the host.
+/// Convenience function to query an extension from the host.
 ///
 /// # Safety
 ///

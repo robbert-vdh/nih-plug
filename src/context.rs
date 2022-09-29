@@ -179,7 +179,7 @@ pub struct Transport {
     /// [`Plugin::initialize()`][crate::prelude::Plugin::initialize()], so if you need this then you
     /// can also store that value.
     pub sample_rate: f32,
-    /// The proejct's tempo in beats per minute.
+    /// The project's tempo in beats per minute.
     pub tempo: Option<f64>,
     /// The time signature's numerator.
     pub time_sig_numerator: Option<i32>,
@@ -206,15 +206,15 @@ pub struct Transport {
 
     /// The loop range in samples, if the loop is active and this information is available. None of
     /// the plugin API docs mention whether this is exclusive or inclusive, but just assume that the
-    /// end is exclusive. Can be calulcated from the other loop range information if needed.
+    /// end is exclusive. Can be calculated from the other loop range information if needed.
     pub(crate) loop_range_samples: Option<(i64, i64)>,
     /// The loop range in seconds, if the loop is active and this information is available. None of
     /// the plugin API docs mention whether this is exclusive or inclusive, but just assume that the
-    /// end is exclusive. Can be calulcated from the other loop range information if needed.
+    /// end is exclusive. Can be calculated from the other loop range information if needed.
     pub(crate) loop_range_seconds: Option<(f64, f64)>,
     /// The loop range in quarter notes, if the loop is active and this information is available.
     /// None of the plugin API docs mention whether this is exclusive or inclusive, but just assume
-    /// that the end is exclusive. Can be calulcated from the other loop range information if
+    /// that the end is exclusive. Can be calculated from the other loop range information if
     /// needed.
     pub(crate) loop_range_beats: Option<(f64, f64)>,
 }
@@ -440,7 +440,7 @@ impl<'a> ParamSetter<'a> {
         }
     }
 
-    /// Inform the host that you will start automating a parmater. This needs to be called before
+    /// Inform the host that you will start automating a parameter. This needs to be called before
     /// calling [`set_parameter()`][Self::set_parameter()] for the specified parameter.
     pub fn begin_set_parameter<P: Param>(&self, param: &P) {
         unsafe { self.raw_context.raw_begin_set_parameter(param.as_ptr()) };

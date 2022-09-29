@@ -57,7 +57,7 @@ pub struct StftHelper<const NUM_SIDECHAIN_INPUTS: usize = 0> {
     padding: usize,
 }
 
-/// Marker struct for the version wtihout sidechaining.
+/// Marker struct for the version without sidechaining.
 struct NoSidechain;
 
 impl StftInput for Buffer<'_> {
@@ -255,7 +255,7 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
         self.main_input_ring_buffers.capacity()
     }
 
-    /// The amount of latency introduced when processing audio throug hthis [`StftHelper`].
+    /// The amount of latency introduced when processing audio through this [`StftHelper`].
     pub fn latency_samples(&self) -> u32 {
         self.main_input_ring_buffers[0].len() as u32
     }
@@ -496,7 +496,7 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
     /// Similar to [`process_overlap_add()`][Self::process_overlap_add()], but without the inverse
     /// STFT part. `buffer` will only ever be read from. This can be useful for providing FFT data
     /// for a spectrum analyzer in a plugin GUI. These is still a delay to the analysis equal to the
-    /// blcok size.
+    /// block size.
     pub fn process_analyze_only<B, F>(
         &mut self,
         buffer: &B,

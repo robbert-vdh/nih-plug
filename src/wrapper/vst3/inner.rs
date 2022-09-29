@@ -55,7 +55,7 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// This AtomicRefCell+Option is only needed because it has to be initialized late. There is no
     /// reason to mutably borrow the event loop, so reads will never be contested.
     ///
-    /// TODO: Is there a better type for Send+Sync late initializaiton?
+    /// TODO: Is there a better type for Send+Sync late initialization?
     pub event_loop: AtomicRefCell<Option<OsEventLoop<Task, Self>>>,
 
     /// Whether the plugin is currently processing audio. In other words, the last state
@@ -72,8 +72,8 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     pub last_process_status: AtomicCell<ProcessStatus>,
     /// The current latency in samples, as set by the plugin through the [`ProcessContext`].
     pub current_latency: AtomicU32,
-    /// Contains slices for the plugin's outputs. You can't directly create a nested slice form
-    /// apointer to pointers, so this needs to be preallocated in the setup call and kept around
+    /// Contains slices for the plugin's outputs. You can't directly create a nested slice from
+    /// a pointer to pointers, so this needs to be preallocated in the setup call and kept around
     /// between process calls. This buffer owns the vector, because otherwise it would need to store
     /// a mutable reference to the data contained in this mutex.
     pub output_buffer: AtomicRefCell<Buffer<'static>>,
@@ -102,7 +102,7 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     pub output_events: AtomicRefCell<VecDeque<NoteEvent>>,
     /// VST3 has several useful predefined note expressions, but for some reason they are the only
     /// note event type that don't have MIDI note ID and channel fields. So we need to keep track of
-    /// the msot recent VST3 note IDs we've seen, and then map those back to MIDI note IDs and
+    /// the most recent VST3 note IDs we've seen, and then map those back to MIDI note IDs and
     /// channels as needed.
     pub note_expression_controller: AtomicRefCell<NoteExpressionController>,
     /// Unprocessed parameter changes and note events sent by the host during a process call.
@@ -134,8 +134,8 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// `params` object does not get deallocated.
     pub param_by_hash: HashMap<u32, ParamPtr>,
     pub param_units: ParamUnits,
-    /// Mappings from string parameter indentifiers to parameter hashes. Useful for debug logging
-    /// and when storing and restorign plugin state.
+    /// Mappings from string parameter identifiers to parameter hashes. Useful for debug logging
+    /// and when storing and restoring plugin state.
     pub param_id_to_hash: HashMap<String, u32>,
     /// The inverse mapping from [`param_by_hash`][Self::param_by_hash]. This is needed to be able
     /// to have an ergonomic parameter setting API that uses references to the parameters instead of
@@ -153,7 +153,7 @@ pub enum Task {
     /// [`vst3_sys::vst::RestartFlags`].
     TriggerRestart(i32),
     /// Request the editor to be resized according to its current size. Right now there is no way to
-    /// handle denied resize requestsyet.
+    /// handle "denied resize" requests yet.
     RequestResize,
 }
 
@@ -384,7 +384,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
     ///
     /// After calling this function, you should call
     /// [`notify_param_values_changed()`][Self::notify_param_values_changed()] to allow the editor
-    /// to update itself. This needs to be done seperately so you can process parameter changes in
+    /// to update itself. This needs to be done separately so you can process parameter changes in
     /// batches.
     pub fn set_normalized_value_by_hash(
         &self,

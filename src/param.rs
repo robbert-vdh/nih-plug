@@ -103,7 +103,7 @@ pub trait Param: Display {
         self.preview_normalized(self.default_plain_value())
     }
 
-    /// Get the number of steps for this paramter, if it is discrete. Used for the host's generic
+    /// Get the number of steps for this parameter, if it is discrete. Used for the host's generic
     /// UI.
     fn step_count(&self) -> Option<usize>;
 

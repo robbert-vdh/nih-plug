@@ -17,8 +17,8 @@ pub use samples::{ChannelSamples, ChannelSamplesIter, SamplesIter};
 ///       this either way. Maybe just get rid of it in favor for raw pointers.
 #[derive(Default)]
 pub struct Buffer<'a> {
-    /// Contains slices for the plugin's outputs. You can't directly create a nested slice form
-    /// apointer to pointers, so this needs to be preallocated in the setup call and kept around
+    /// Contains slices for the plugin's outputs. You can't directly create a nested slice from a
+    /// pointer to pointers, so this needs to be preallocated in the setup call and kept around
     /// between process calls. And because storing a reference to this means a) that you need a lot
     /// of lifetime annotations everywhere and b) that at some point you need unsound lifetime casts
     /// because this `Buffers` either cannot have the same lifetime as the separately stored output
@@ -28,7 +28,7 @@ pub struct Buffer<'a> {
 }
 
 impl<'a> Buffer<'a> {
-    /// Returns the numer of samples in this buffer.
+    /// Returns the number of samples in this buffer.
     #[inline]
     pub fn len(&self) -> usize {
         if self.output_slices.is_empty() {
@@ -38,7 +38,7 @@ impl<'a> Buffer<'a> {
         }
     }
 
-    /// Returns the numer of channels in this buffer.
+    /// Returns the number of channels in this buffer.
     #[inline]
     pub fn channels(&self) -> usize {
         self.output_slices.len()
@@ -76,7 +76,7 @@ impl<'a> Buffer<'a> {
 
     /// Iterate over the buffer in blocks with the specified maximum size. The ideal maximum block
     /// size depends on the plugin in question, but 64 or 128 samples works for most plugins. Since
-    /// the buffer's total size may not be cleanly divisble by the maximum size, the returned
+    /// the buffer's total size may not be cleanly divisible by the maximum size, the returned
     /// buffers may have any size in `[1, max_block_size]`. This is useful when using algorithms
     /// that work on entire blocks of audio, like those that would otherwise need to perform
     /// expensive per-sample branching or that can use per-sample SIMD as opposed to per-channel

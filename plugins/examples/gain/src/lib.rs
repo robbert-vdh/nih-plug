@@ -12,7 +12,7 @@ struct Gain {
 /// of a parameters struct for multiple identical oscillators/filters/envelopes.
 #[derive(Params)]
 struct GainParams {
-    /// The parameter's ID is used to identify the parameter in the wrappred plugin API. As long as
+    /// The parameter's ID is used to identify the parameter in the wrapped plugin API. As long as
     /// these IDs remain constant, you can rename and reorder these fields as you wish. The
     /// parameters are exposed to the host in the same order they were defined. In this case, this
     /// gain parameter is stored as linear gain while the values are displayed in decibels.

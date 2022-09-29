@@ -26,10 +26,10 @@ use crate::util::permit_alloc;
 const NOTIFY_MESSAGE_ID: u32 = WM_USER;
 
 /// A type erased function passed to the window so it can poll for events. We can't pass the tasks
-/// queue and executor to the window callback sicne the callback wouldn't know what types they are,
+/// queue and executor to the window callback since the callback wouldn't know what types they are,
 /// but we can wrap the polling loop in a closure and pass that instead.
 ///
-/// This needs to be double boxed when passed to the function since fat pointers canont be directly
+/// This needs to be double boxed when passed to the function since fat pointers cannot be directly
 /// casted from a regular pointer.
 type PollCallback = Box<dyn Fn()>;
 
@@ -45,7 +45,7 @@ pub(crate) struct WindowsEventLoop<T, E> {
     main_thread_id: ThreadId,
 
     /// An invisible window that we can post a message to when we need to do something on the main
-    /// thread. The host's message loop will then cause our message to be proceded.
+    /// thread. The host's message loop will then cause our message to be proceeded.
     message_window: HWND,
     /// The unique class for the message window, we'll clean this up together with the window.
     message_window_class_name: CString,

@@ -1,4 +1,4 @@
-//! Windowing functions, useful in conjuction with [`StftHelper`][super::StftHelper].
+//! Windowing functions, useful in conjunction with [`StftHelper`][super::StftHelper].
 
 use std::f32;
 

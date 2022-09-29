@@ -24,7 +24,7 @@ pub struct IntParam {
     /// from the host has been applied. This will always be the same as `value` for VST3 plugins.
     unmodulated_normalized_value: AtomicF32,
     /// A value in `[-1, 1]` indicating the amount of modulation applied to
-    /// `unmodulated_normalized_`. This needs to be stored separately since the normalied values are
+    /// `unmodulated_normalized_`. This needs to be stored separately since the normalized values are
     /// clamped, and this value persists after new automation events.
     modulation_offset: AtomicF32,
     /// The field's default plain, unnormalized value.
@@ -39,7 +39,7 @@ pub struct IntParam {
     /// the parameter's new **plain** value. This should not do anything expensive as it may be
     /// called multiple times in rapid succession.
     ///
-    /// To use this, you'll probably want to store an `Arc<Atomic*>` alongside the parmater in the
+    /// To use this, you'll probably want to store an `Arc<Atomic*>` alongside the parameter in the
     /// parameters struct, move a clone of that `Arc` into this closure, and then modify that.
     ///
     /// TODO: We probably also want to pass the old value to this function.
@@ -332,7 +332,7 @@ impl IntParam {
         self
     }
 
-    /// Mark the paramter as non-automatable. This means that the parameter cannot be changed from
+    /// Mark the parameter as non-automatable. This means that the parameter cannot be changed from
     /// an automation lane. The parameter can however still be manually changed by the user from
     /// either the plugin's own GUI or from the host's generic UI.
     pub fn non_automatable(mut self) -> Self {

@@ -80,7 +80,7 @@ struct RunLoopEventHandler<P: Vst3Plugin> {
     /// this object gets dropped so no work is lost.
     inner: Arc<WrapperInner<P>>,
 
-    /// The host's run lopp interface. This lets us run tasks on the same thread as the host's UI.
+    /// The host's run loop interface. This lets us run tasks on the same thread as the host's UI.
     run_loop: VstPtr<dyn IRunLoop>,
 
     /// We need a Unix domain socket the host can poll to know that we have an event to handle. In

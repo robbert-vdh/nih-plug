@@ -1,6 +1,6 @@
 //! Parameter hierarchies in VST3 requires you to define units, which are linearly indexed logical
 //! units that have a name, a parent, and then a whole bunch of other data like note numbers and
-//! MIDI program state. We'll need to implement some of that to conver our list of slash-separated
+//! MIDI program state. We'll need to implement some of that to convert our list of slash-separated
 //! parameter group paths to units.
 //!
 //! <https://steinbergmedia.github.io/vst3_doc/vstinterfaces/classSteinberg_1_1Vst_1_1IUnitInfo.html>
@@ -152,7 +152,7 @@ impl ParamUnits {
         Some((index as i32 + 1, info))
     }
 
-    /// Get the ID of the unit the paramter belongs to or. `kRootUnitId`/0 indicates the root unit.
+    /// Get the ID of the unit the parameter belongs to. `kRootUnitId`/0 indicates the root unit.
     pub fn get_vst3_unit_id(&self, param_hash: u32) -> Option<i32> {
         self.unit_id_by_hash.get(&param_hash).copied()
     }

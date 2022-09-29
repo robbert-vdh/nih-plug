@@ -11,7 +11,7 @@
 //!   debugger is attached, in which case the output is logged to the debug console instead. The
 //!   `NIH_LOG` environment variable controls whether output is logged to STDERR, the Windows debug
 //!   console, or to a file. Check the [`nih_log!()`] macro for more information.
-//! - The abovementioned debug module also contains non-fatal debug-assertions macros that are only
+//! - The aforementioned debug module also contains non-fatal debug-assertions macros that are only
 //!   evaluated during debug builds. The framework uses these all over the place to check for
 //!   invariants, so it's important to test your plugins using debug builds while developing.
 //! - Check out the features list in NIH-plug's `Cargo.toml` file for optional features you can
@@ -38,7 +38,7 @@
 //!      calculations or IO at this point.
 //!   2. The host or the plugin wrapper will call
 //!      [`Plugin::accepts_bus_config()`][prelude::Plugin::accepts_bus_config()] several times with
-//!      different IO configuratinos to poll whether your plugin supports certain IO configurations.
+//!      different IO configurations to poll whether your plugin supports certain IO configurations.
 //!      The plugin should not do any work at this point and just reply with boolean whether it
 //!      supports the configuration or not.
 //!   3. After that, [`Plugin::initialize()`][prelude::Plugin::initialize()] will be called with the
@@ -78,7 +78,7 @@
 //!    out the [`Smoother`][prelude::Smoother] API for more details.
 //!
 //! There's a whole lot more to discuss, but once you understand the above you should be able to
-//! figure out the rest by reading through the examples and the API documetnation. Good luck!
+//! figure out the rest by reading through the examples and the API documentation. Good luck!
 
 #![cfg_attr(feature = "docs", feature(doc_auto_cfg))]
 #![cfg_attr(feature = "simd", feature(portable_simd))]

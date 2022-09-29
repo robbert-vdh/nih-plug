@@ -40,9 +40,9 @@ pub struct PluginState {
     #[serde(default)]
     pub version: String,
 
-    /// The plugin's parameter values. These are stored unnormalized. This mean sthe old values will
+    /// The plugin's parameter values. These are stored unnormalized. This means the old values will
     /// be recalled when when the parameter's range gets increased. Doing so may still mess with
-    /// parameter automation though, depending on how the host impelments that.
+    /// parameter automation though, depending on how the host implements that.
     pub params: BTreeMap<String, ParamValue>,
     /// Arbitrary fields that should be persisted together with the plugin's parameters. Any field
     /// on the [`Params`][crate::param::internals::Params] struct that's annotated with `#[persist =

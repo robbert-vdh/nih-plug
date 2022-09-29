@@ -39,7 +39,7 @@ pub mod serialize_atomic_cell {
 /// This trait can be derived on a struct containing [`FloatParam`][super::FloatParam] and other
 /// parameter fields. When deriving this trait, any of those parameter fields should have the `#[id
 /// = "stable"]` attribute, where `stable` is an up to 6 character long string (to avoid collisions)
-/// that will be used to identify the parameter internall so you can safely move it around and
+/// that will be used to identify the parameter internally so you can safely move it around and
 /// rename the field without breaking compatibility with old presets.
 ///
 /// The struct can also contain other fields that should be persisted along with the rest of the
@@ -50,7 +50,7 @@ pub mod serialize_atomic_cell {
 /// And finally when deriving this trait, it is also possible to inherit the parameters from other
 /// `Params` objects by adding the `#[nested = "Group Name"]` attribute to those fields. These
 /// groups will be displayed as a tree-like structure if your DAW supports it. Parameter IDs and
-/// persisting keys still need to be **unique** when usting nested parameter structs. This currently
+/// persisting keys still need to be **unique** when using nested parameter structs. This currently
 /// has the following caveats:
 ///
 /// - Enforcing that parameter IDs and persist keys are unique does not work across nested structs.
@@ -71,13 +71,13 @@ pub unsafe trait Params: 'static + Send + Sync {
     /// exist or you may encounter panics. The derive macro does this for every parameter field
     /// marked with `#[id = "stable"]`, and it also inlines all fields from nested child `Params`
     /// structs marked with `#[nested = "Group Name"]` while prefixing that group name before the
-    /// parameter's originanl group name. Dereferencing the pointers stored in the values is only
+    /// parameter's original group name. Dereferencing the pointers stored in the values is only
     /// valid as long as this object is valid.
     ///
     /// # Note
     ///
     /// This uses `String` even though for the `Params` derive macro `&'static str` would have been
-    /// fine to be able to support custom reusable Params implemnetations.
+    /// fine to be able to support custom reusable Params implementations.
     fn param_map(&self) -> Vec<(String, ParamPtr, String)>;
 
     /// Serialize all fields marked with `#[persist = "stable_name"]` into a hash map containing
@@ -88,7 +88,7 @@ pub unsafe trait Params: 'static + Send + Sync {
     }
 
     /// Restore all fields marked with `#[persist = "stable_name"]` from a hashmap created by
-    /// [`serialize_fields()`][Self::serialize_fields()]. All of thse fields should be wrapped in a
+    /// [`serialize_fields()`][Self::serialize_fields()]. All of these fields should be wrapped in a
     /// [`PersistentField`] with thread safe interior mutability, like an `RwLock` or a `Mutex`.
     /// This gets called when the plugin's state is being restored. This uses [deserialize_field()]
     /// under the hood.
