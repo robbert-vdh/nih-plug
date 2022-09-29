@@ -35,8 +35,7 @@ builds](https://github.com/robbert-vdh/nih-plug/actions/workflows/build.yml?quer
 page. Or if you're not signed in on GitHub, then you can also find the latest
 nightly build
 [here](https://nightly.link/robbert-vdh/nih-plug/workflows/build/master). You
-may need to [disable gatekeeper]([disable
-Gatekeeper](https://disable-gatekeeper.github.io/)) on macOS to be able to use
+may need to [disable Gatekeeper](https://disable-gatekeeper.github.io/) on macOS to be able to use
 the plugins.
 
 Scroll down for more information on the underlying plugin framework.
