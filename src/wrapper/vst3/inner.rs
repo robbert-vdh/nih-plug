@@ -145,7 +145,7 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
 }
 
 /// Tasks that can be sent from the plugin to be executed on the main thread in a non-blocking
-/// realtime safe way (either a random thread or `IRunLoop` on Linux, the OS' message loop on
+/// realtime-safe way (either a random thread or `IRunLoop` on Linux, the OS' message loop on
 /// Windows and macOS).
 #[derive(Debug, Clone)]
 pub enum Task {

@@ -1785,7 +1785,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                 let bus_config = self.inner.current_bus_config.load();
                 let buffer_config = self.inner.current_buffer_config.load().unwrap();
                 let mut plugin = self.inner.plugin.write();
-                // FIXME: This is obviously not realtime safe, but loading presets without doing
+                // FIXME: This is obviously not realtime-safe, but loading presets without doing
                 //         this could lead to inconsistencies. It's the plugin's responsibility to
                 //         not perform any realtime-unsafe work when the initialize function is
                 //         called a second time if it supports runtime preset loading.

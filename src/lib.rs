@@ -48,7 +48,7 @@
 //!   4. The [`Plugin::reset()`][prelude::Plugin::reset()] function is always called immediately
 //!      after `initialize()`. This is where you should clear out coefficients, envelopes, phases,
 //!      and other runtime data. The reason for this split is that this function may be called at
-//!      any time by the host from the audio thread, and it thus needs to be realtime safe.
+//!      any time by the host from the audio thread, and it thus needs to be realtime-safe.
 //!
 //!      Whenever a preset is loaded, both of these functions will be called again.
 //!   5. After that the [`Plugin::process()`][prelude::Plugin::process()] function will be called

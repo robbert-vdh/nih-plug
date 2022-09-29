@@ -264,7 +264,7 @@ pub struct Wrapper<P: ClapPlugin> {
 }
 
 /// Tasks that can be sent from the plugin to be executed on the main thread in a non-blocking
-/// realtime safe way. Instead of using a random thread or the OS' event loop like in the Linux
+/// realtime-safe way. Instead of using a random thread or the OS' event loop like in the Linux
 /// implementation, this uses [`clap_host::request_callback()`] instead.
 #[derive(Debug)]
 pub enum Task {
@@ -2244,7 +2244,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 let bus_config = wrapper.current_bus_config.load();
                 let buffer_config = wrapper.current_buffer_config.load().unwrap();
                 let mut plugin = wrapper.plugin.write();
-                // FIXME: This is obviously not realtime safe, but loading presets without doing
+                // FIXME: This is obviously not realtime-safe, but loading presets without doing
                 //         this could lead to inconsistencies. It's the plugin's responsibility to
                 //         not perform any realtime-unsafe work when the initialize function is
                 //         called a second time if it supports runtime preset loading.

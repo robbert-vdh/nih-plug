@@ -21,7 +21,7 @@ pub(crate) use self::windows::WindowsEventLoop as OsEventLoop;
 pub(crate) const TASK_QUEUE_CAPACITY: usize = 512;
 
 /// A trait describing the functionality of the platform-specific event loop that can execute tasks
-/// of type `T` in executor `E`. Posting a task to the internal task queue should be realtime safe.
+/// of type `T` in executor `E`. Posting a task to the internal task queue should be realtime-safe.
 /// This event loop should be created during the wrapper's initial initialization on the main
 /// thread.
 ///
