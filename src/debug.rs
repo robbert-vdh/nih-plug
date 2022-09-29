@@ -1,3 +1,10 @@
+//! Macros for logging and debug assertions. [`nih_dbg!()`], [`nih_trace!()`], and the
+//! `nih_debug_assert_*!()` macros are compiled out during release builds, so they can be used for
+//! asserting adiditonal invariants in debug builds. Check the [`nih_log!()`] macro for more
+//! information on NIH-plug's logger. None of the logging functions are realtime safe, and you
+//! should avoid using them during release builds in any of the functions that may be called from an
+//! audio thread.
+
 // NOTE: Exporting macros in Rust is a bit weird. `#[macro_export]` causes them to be exported to
 //       the crate root, but that makes it difficult to include just the macros without using
 //       `#[macro_use] extern crate nih_plug;`. That's why the macros are also re-exported from this
