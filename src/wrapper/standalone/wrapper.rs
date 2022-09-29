@@ -147,7 +147,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
                 param_map.len(),
                 param_ids.len(),
                 "The plugin has duplicate parameter IDs, weird things may happen. Consider using \
-                 6 character parameter IDs to avoid collissions.."
+                 6 character parameter IDs to avoid collisions."
             );
 
             let mut bypass_param_exists = false;
@@ -325,13 +325,13 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
             return false;
         }
 
-        let push_succesful = self
+        let push_successful = self
             .unprocessed_param_changes
             .push((param, normalized))
             .is_ok();
-        nih_debug_assert!(push_succesful, "The parameter change queue was full");
+        nih_debug_assert!(push_successful, "The parameter change queue was full");
 
-        push_succesful
+        push_successful
     }
 
     /// The DPI scale factor for this standalone application
