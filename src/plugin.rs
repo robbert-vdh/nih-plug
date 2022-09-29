@@ -52,7 +52,7 @@ pub trait Plugin: Default + Send + Sync + 'static {
     /// configuration works the same was as with `DEFAULT_INPUT_CHANNELS`.
     const DEFAULT_AUX_INPUTS: Option<AuxiliaryIOConfig> = None;
     /// If set, then the plugin will have this many auxiliary output busses with a default number of
-    /// channels. Negotiating the actual configuration wroks the same was as with
+    /// channels. Negotiating the actual configuration works the same was as with
     /// `DEFAULT_INPUT_CHANNELS`.
     const DEFAULT_AUX_OUTPUTS: Option<AuxiliaryIOConfig> = None;
 
@@ -70,7 +70,7 @@ pub trait Plugin: Default + Send + Sync + 'static {
     /// is set to [`MidiConfig::None`], then the plugin won't receive any note events.
     const MIDI_INPUT: MidiConfig = MidiConfig::None;
     /// Whether the plugin can output note events. If this is set to [`MidiConfig::None`], then the
-    /// plugin won't have a note output port. When this is set to another value, then in most hsots
+    /// plugin won't have a note output port. When this is set to another value, then in most hosts
     /// the plugin will consume all note and MIDI CC input. If you don't want that, then you will
     /// need to forward those events yourself.
     const MIDI_OUTPUT: MidiConfig = MidiConfig::None;
@@ -117,14 +117,14 @@ pub trait Plugin: Default + Send + Sync + 'static {
     /// have already been restored at this point. If based on those parameters (or for any reason
     /// whatsoever) the plugin needs to introduce latency, then you can do so here using the process
     /// context. Depending on how the host restores plugin state, this function may also be called
-    /// twice in rapid succession. If the plugin fails to inialize for whatever reason, then this
+    /// twice in rapid succession. If the plugin fails to initialize for whatever reason, then this
     /// should return `false`.
     ///
     /// Before this point, the plugin should not have done any expensive initialization. Please
     /// don't be that plugin that takes twenty seconds to scan.
     ///
     /// After this function [`reset()`][Self::reset()] will always be called. If you need to clear
-    /// state, such as filters or envelopes, then you should do so in that function inistead.
+    /// state, such as filters or envelopes, then you should do so in that function instead.
     fn initialize(
         &mut self,
         bus_config: &BusConfig,
@@ -141,9 +141,9 @@ pub trait Plugin: Default + Send + Sync + 'static {
 
     /// Process audio. The host's input buffers have already been copied to the output buffers if
     /// they are not processing audio in place (most hosts do however). All channels are also
-    /// guarenteed to contain the same number of samples. Lastly, denormals have already been taken
+    /// guaranteed to contain the same number of samples. Lastly, denormals have already been taken
     /// case of by NIH-plug, and you can optionally enable the `assert_process_allocs` feature to
-    /// abort the program when any allocation accurs in the process function while running in debug
+    /// abort the program when any allocation occurs in the process function while running in debug
     /// mode.
     ///
     /// The framework provides convenient iterators on the [`Buffer`] object to process audio either
@@ -159,7 +159,7 @@ pub trait Plugin: Default + Send + Sync + 'static {
     /// auxiliary output buffers if it has any.
     ///
     /// TODO: Provide a way to access auxiliary input channels if the IO configuration is
-    ///       assymetric
+    ///       asymmetric
     fn process(
         &mut self,
         buffer: &mut Buffer,
@@ -205,7 +205,7 @@ pub trait Vst3Plugin: Plugin {
     /// This will be shuffled into a different byte order on Windows for project-compatibility.
     const VST3_CLASS_ID: [u8; 16];
     /// One or more categories, separated by pipe characters (`|`), up to 127 characters. Anything
-    /// logner than that will be truncated. See the VST3 SDK for examples of common categories:
+    /// longer than that will be truncated. See the VST3 SDK for examples of common categories:
     /// <https://github.com/steinbergmedia/vst3_pluginterfaces/blob/2ad397ade5b51007860bedb3b01b8afd2c5f6fba/vst/ivstaudioprocessor.h#L49-L90>
     //
     // TODO: Create a category enum similar to ClapFeature
@@ -271,7 +271,7 @@ pub trait Editor: Send + Sync {
         context: Arc<dyn GuiContext>,
     ) -> Box<dyn Any + Send + Sync>;
 
-    /// Returns the (currnent) size of the editor in pixels as a `(width, height)` pair. This size
+    /// Returns the (current) size of the editor in pixels as a `(width, height)` pair. This size
     /// must be reported in _logical pixels_, i.e. the size before being multiplied by the DPI
     /// scaling factor to get the actual physical screen pixels.
     fn size(&self) -> (u32, u32);
@@ -285,7 +285,7 @@ pub trait Editor: Send + Sync {
     /// there.
     fn set_scale_factor(&self, factor: f32) -> bool;
 
-    /// A callback that will be called wheneer the parameter values changed while the editor is
+    /// A callback that will be called whenever the parameter values changed while the editor is
     /// open. You don't need to do anything with this, but this can be used to force a redraw when
     /// the host sends a new value for a parameter or when a parameter change sent to the host gets
     /// processed.
@@ -325,7 +325,7 @@ pub struct BusConfig {
     pub aux_output_busses: AuxiliaryIOConfig,
 }
 
-/// Configuration for auxiliary inputs or outputs on [`BusCofnig`].
+/// Configuration for auxiliary inputs or outputs on [`BusConfig`].
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct AuxiliaryIOConfig {
     /// The number of auxiliary input or output busses.
@@ -389,7 +389,7 @@ pub enum ProcessStatus {
     Tail(u32),
     /// This plugin will continue to produce sound regardless of whether or not the input is silent,
     /// and should thus not be deactivated by the host. This is essentially the same as having an
-    /// infite tail.
+    /// infinite tail.
     KeepAlive,
 }
 

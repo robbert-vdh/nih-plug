@@ -47,7 +47,7 @@ pub struct Smoother<T: Smoothable> {
     /// uniform.
     ///
     /// In the case of the `Exponential` smoothing style this is the coefficient `x` that the
-    /// previous sample is multplied by.
+    /// previous sample is multiplied by.
     step_size: AtomicF32,
     /// The value for the current sample. Always stored as floating point for obvious reasons.
     current: AtomicF32,
@@ -119,7 +119,7 @@ impl SmoothingStyle {
     /// Compute the next value from `current` leading up to `target` using the `step_size` computed
     /// using [`SmoothingStyle::step_size()`]. Depending on the smoothing style this function may
     /// never completely reach `target`, so you will need to snap to `target` yourself after
-    /// cmoputing the target number of steps.
+    /// computing the target number of steps.
     ///
     /// See the docstring on the [`SmoothingStyle::next_step()`] function for the formulas used.
     #[inline]
@@ -229,7 +229,7 @@ impl<T: Smoothable> Smoother<T> {
     }
 
     /// Whether calling [`next()`][Self::next()] will yield a new value or an old value. Useful if
-    /// you need to recompute something wheenver this parameter changes.
+    /// you need to recompute something whenever this parameter changes.
     #[inline]
     pub fn is_smoothing(&self) -> bool {
         self.steps_left() > 0

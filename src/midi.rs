@@ -98,7 +98,7 @@ pub enum NoteEvent {
     ///   monophonic modulation. This is `parameter.value` for unsmoothed parameters, and smoothed
     ///   parameters should use block smoothing so the smoothed values can be reused by multiple
     ///   voices.
-    /// - If a `PolyModulation` event is emited for the voice, that voice should use the the
+    /// - If a `PolyModulation` event is emitted for the voice, that voice should use the the
     ///   _normalized offset_ contained within the event to compute the voice's modulated value and
     ///   use that in place of the global value.
     ///   - This value can be obtained by calling `param.preview_plain(param.normalized_value() +
@@ -137,9 +137,9 @@ pub enum NoteEvent {
         normalized_offset: f32,
     },
     /// A notification to inform the plugin that a polyphonically modulated parameter has received a
-    /// new automation value. This is used in conjuction with the `PolyModulation` event. See that
+    /// new automation value. This is used in conjunction with the `PolyModulation` event. See that
     /// event's documentation for more details. The parameter's global value has already been
-    /// updated when this event is emited.
+    /// updated when this event is emitted.
     MonoAutomation {
         timing: u32,
         /// The ID that was set for the modulated parameter using the `.with_poly_modulation_id()`

@@ -167,7 +167,7 @@ impl FloatRange {
         }
     }
 
-    /// Snap a vlue to a step size, clamping to the minimum and maximum value of the range.
+    /// Snap a value to a step size, clamping to the minimum and maximum value of the range.
     pub fn snap_to_step(&self, value: f32, step_size: f32) -> f32 {
         match self {
             FloatRange::Linear { min, max }

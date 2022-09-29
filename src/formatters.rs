@@ -1,7 +1,7 @@
 //! Convenience functions for formatting and parsing parameter values in various common formats.
 //!
 //! Functions prefixed with `v2s_` are meant to be used with the `.value_to_string()` parameter
-//! fucntions, while the `s2v_` functions are meant to be used wit the `.string_to_value()`.
+//! functions, while the `s2v_` functions are meant to be used wit the `.string_to_value()`.
 //! functions. Most of these formatters come as a pair. Check each formatter's documentation for any
 //! additional usage information.
 
@@ -203,7 +203,7 @@ pub fn s2v_i32_note_formatter() -> Arc<dyn Fn(&str) -> Option<i32> + Send + Sync
 }
 
 /// Display 'Bypassed' or 'Not Bypassed' depending on whether the parameter is true or false.
-/// 'Enabled' would have also been a possibilty here, but that could be a bit confusing.
+/// 'Enabled' would have also been a possibility here, but that could be a bit confusing.
 pub fn v2s_bool_bypass() -> Arc<dyn Fn(bool) -> String + Send + Sync> {
     Arc::new(move |value| {
         if value {

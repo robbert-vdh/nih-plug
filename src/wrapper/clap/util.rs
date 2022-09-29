@@ -28,7 +28,7 @@ macro_rules! check_null_ptr_msg {
 /// be null pointers, people will still use null pointers for some of the function arguments. This
 /// also happens in the official `clap-helpers`. As such, these functions are now `Option<fn(...)>`
 /// optional function pointers in `clap-sys`. This macro asserts that the pointer is not null, and
-/// prints a nicely formatted error message containing the struct and funciton name if it is. It
+/// prints a nicely formatted error message containing the struct and function name if it is. It
 /// also emulates C's syntax for accessing fields struct through a pointer. Except that it uses `=>`
 /// instead of `->`. Because that sounds like it would be hilarious.
 macro_rules! clap_call {

@@ -21,7 +21,7 @@ pub struct BoolParam {
     /// from the host has been applied. This will always be the same as `value` for VST3 plugins.
     unmodulated_normalized_value: AtomicF32,
     /// A value in `[-1, 1]` indicating the amount of modulation applied to
-    /// `unmodulated_normalized_`. This needs to be stored separately since the normalied values are
+    /// `unmodulated_normalized_`. This needs to be stored separately since the normalized values are
     /// clamped, and this value persists after new automation events.
     modulation_offset: AtomicF32,
     /// The field's default value.
@@ -286,7 +286,7 @@ impl BoolParam {
         self
     }
 
-    /// Mark the paramter as non-automatable. This means that the parameter cannot be changed from
+    /// Mark the parameter as non-automatable. This means that the parameter cannot be changed from
     /// an automation lane. The parameter can however still be manually changed by the user from
     /// either the plugin's own GUI or from the host's generic UI.
     pub fn non_automatable(mut self) -> Self {

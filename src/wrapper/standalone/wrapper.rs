@@ -318,7 +318,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
     /// processing cycle, and this won't do anything if the parameter has not been registered by the
     /// plugin.
     ///
-    /// This returns false if the parmeter was not set because the `Paramptr` was either unknown or
+    /// This returns false if the parameter was not set because the `ParamPtr` was either unknown or
     /// the queue is full.
     pub fn set_parameter(&self, param: ParamPtr, normalized: f32) -> bool {
         if !self.known_parameters.contains(&param) {

@@ -10,7 +10,7 @@ use super::descriptor::PluginDescriptor;
 use super::wrapper::Wrapper;
 use crate::plugin::ClapPlugin;
 
-/// The plugin's factory. Initialized using a lazy_static from the entry poiunt's `get_factory()`
+/// The plugin's factory. Initialized using a lazy_static from the entry point's `get_factory()`
 /// function. From this point onwards we don't need to generate code with macros anymore.
 #[doc(hidden)]
 #[repr(C)]

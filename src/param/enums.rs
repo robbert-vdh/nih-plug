@@ -63,7 +63,7 @@ pub trait Enum {
 
     /// Get the variant corresponding to the variant with the same index in
     /// [`variants()`][Self::variants()]. This must always return a value. If the index is out of
-    /// range, return the first variatn.
+    /// range, return the first variant.
     fn from_index(index: usize) -> Self;
 }
 
@@ -360,7 +360,7 @@ impl<T: Enum + PartialEq + 'static> EnumParam<T> {
         self
     }
 
-    /// Mark the paramter as non-automatable. This means that the parameter cannot be changed from
+    /// Mark the parameter as non-automatable. This means that the parameter cannot be changed from
     /// an automation lane. The parameter can however still be manually changed by the user from
     /// either the plugin's own GUI or from the host's generic UI.
     pub fn non_automatable(mut self) -> Self {

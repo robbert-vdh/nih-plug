@@ -104,7 +104,7 @@ impl<T, E> Drop for LinuxEventLoop<T, E> {
     }
 }
 
-/// The worker thread used in [`EventLoop`] that executes incmoing tasks on the event loop's
+/// The worker thread used in [`EventLoop`] that executes incoming tasks on the event loop's
 /// executor.
 fn worker_thread<T, E>(receiver: channel::Receiver<Message<T>>, executor: Weak<E>)
 where

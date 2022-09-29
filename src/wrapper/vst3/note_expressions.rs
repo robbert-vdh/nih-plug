@@ -26,7 +26,7 @@ pub const EXPRESSION_EXPRESSION_ID: u32 = 4;
 pub const BRIGHTNESS_EXPRESSION_ID: u32 = 5;
 
 /// The note expressions we support. It's completely undocumented, but apparently VST3 plugins need
-/// to specifically define a custom note expression for the predefined note expressiosn for them to
+/// to specifically define a custom note expression for the predefined note expressions for them to
 /// work.
 pub const KNOWN_NOTE_EXPRESSIONS: [NoteExpressionInfo; 6] = [
     NoteExpressionInfo {

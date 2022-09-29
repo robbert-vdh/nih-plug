@@ -13,7 +13,7 @@ use super::wrapper::Wrapper;
 use crate::plugin::Vst3Plugin;
 use crate::wrapper::util::strlcpy;
 
-/// The VST3 SDK version this is roughtly based on. The bindings include some VST 3.7 things but not
+/// The VST3 SDK version this is roughly based on. The bindings include some VST 3.7 things but not
 /// everything, so we'll play it safe.
 const VST3_SDK_VERSION: &str = "VST 3.6.14";
 
