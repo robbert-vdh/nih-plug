@@ -1,7 +1,7 @@
 //! Macros for logging and debug assertions. [`nih_dbg!()`], [`nih_trace!()`], and the
 //! `nih_debug_assert_*!()` macros are compiled out during release builds, so they can be used for
 //! asserting adiditonal invariants in debug builds. Check the [`nih_log!()`] macro for more
-//! information on NIH-plug's logger. None of the logging functions are realtime safe, and you
+//! information on NIH-plug's logger. None of the logging functions are realtime-safe, and you
 //! should avoid using them during release builds in any of the functions that may be called from an
 //! audio thread.
 
@@ -26,6 +26,7 @@ macro_rules! nih_log {
         $crate::log::info!($($args)*)
     );
 }
+#[doc(inline)]
 pub use nih_log;
 
 /// Similar to `nih_log!()`, more scream-y. Used for printing fatal errors.
@@ -35,6 +36,7 @@ macro_rules! nih_error {
         $crate::log::error!($($args)*)
     );
 }
+#[doc(inline)]
 pub use nih_error;
 
 /// The same as `nih_log!()`, but with source and thread information. Like the
@@ -45,6 +47,7 @@ macro_rules! nih_trace {
         $crate::util::permit_alloc(|| $crate::log::trace!($($args)*))
     );
 }
+#[doc(inline)]
 pub use nih_trace;
 
 /// Analogues to the `dbg!()` macro, but respecting the `NIH_LOG` environment variable and with all
@@ -67,6 +70,7 @@ macro_rules! nih_dbg {
     };
     ($($val:expr),+ $(,)?) => { ($($crate::nih_dbg!($val)),+,) };
 }
+#[doc(inline)]
 pub use nih_dbg;
 
 /// A `debug_assert!()` analogue that prints the error with line number information instead of
@@ -88,6 +92,7 @@ macro_rules! nih_debug_assert {
         }
     );
 }
+#[doc(inline)]
 pub use nih_debug_assert;
 
 /// An unconditional debug assertion failure, for if the condition has already been checked
@@ -105,6 +110,7 @@ macro_rules! nih_debug_assert_failure {
         }
     );
 }
+#[doc(inline)]
 pub use nih_debug_assert_failure;
 
 /// A `debug_assert_eq!()` analogue that prints the error with line number information instead of
@@ -122,6 +128,7 @@ macro_rules! nih_debug_assert_eq {
         }
     );
 }
+#[doc(inline)]
 pub use nih_debug_assert_eq;
 
 /// A `debug_assert_ne!()` analogue that prints the error with line number information instead of
@@ -139,4 +146,5 @@ macro_rules! nih_debug_assert_ne {
         }
     );
 }
+#[doc(inline)]
 pub use nih_debug_assert_ne;
