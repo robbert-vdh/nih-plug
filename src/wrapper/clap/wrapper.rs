@@ -445,7 +445,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 param_map.len(),
                 param_ids.len(),
                 "The plugin has duplicate parameter IDs, weird things may happen. Consider using \
-                 6 character parameter IDs to avoid collissions."
+                 6 character parameter IDs to avoid collisions."
             );
 
             let poly_mod_ids: HashSet<u32> = poly_mod_ids_by_hash.values().copied().collect();
@@ -886,7 +886,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         let sample_rate = self.current_buffer_config.load().map(|c| c.sample_rate);
         let mut parameter_values_changed = false;
         while let Some(change) = self.output_parameter_events.pop() {
-            let push_succesful = match change {
+            let push_successful = match change {
                 OutputParamEvent::BeginGesture { param_hash } => {
                     let event = clap_event_param_gesture {
                         header: clap_event_header {
@@ -947,7 +947,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 }
             };
 
-            nih_debug_assert!(push_succesful);
+            nih_debug_assert!(push_successful);
         }
 
         // Allow the editor to react to the new parameter values if the editor uses a reactive data

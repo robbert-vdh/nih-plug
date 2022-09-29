@@ -220,7 +220,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
                 param_map.len(),
                 param_ids.len(),
                 "The plugin has duplicate parameter IDs, weird things may happen. Consider using \
-                 6 character parameter IDs to avoid collissions.."
+                 6 character parameter IDs to avoid collisions."
             );
 
             let mut bypass_param_exists = false;
