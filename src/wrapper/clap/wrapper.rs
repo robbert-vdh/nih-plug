@@ -203,7 +203,7 @@ pub struct Wrapper<P: ClapPlugin> {
 
     clap_plugin_params: clap_plugin_params,
     host_params: AtomicRefCell<Option<ClapPtr<clap_host_params>>>,
-    // These fiels are exactly the same as their VST3 wrapper counterparts.
+    // These fields are exactly the same as their VST3 wrapper counterparts.
     //
     /// The keys from `param_map` in a stable order.
     param_hashes: Vec<u32>,
@@ -338,7 +338,7 @@ impl<P: ClapPlugin> EventLoop<Task, Wrapper<P>> for Wrapper<P> {
                 unsafe_clap_call! { thread_check=>is_main_thread(&*self.host_callback) }
             }
             // FIXME: `thread::current()` may allocate the first time it's called, is there a safe
-            //        nonallocating version of this without using huge OS-specific libraries?
+            //        non-allocating version of this without using huge OS-specific libraries?
             None => permit_alloc(|| thread::current().id() == self.main_thread_id),
         }
     }
@@ -394,7 +394,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         assert!(!host_callback.is_null());
         let host_callback = unsafe { ClapPtr::new(host_callback) };
 
-        // This is a mapping from the parameter IDs specified by the plugin to pointers to thsoe
+        // This is a mapping from the parameter IDs specified by the plugin to pointers to those
         // parameters. These pointers are assumed to be safe to dereference as long as
         // `wrapper.plugin` is alive. The plugin API identifiers these parameters by hashes, which
         // we'll calculate from the string ID specified by the plugin. These parameters should also
@@ -831,7 +831,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         let mut input_events = self.input_events.borrow_mut();
         input_events.clear();
 
-        // To achive this, we'll always read one event ahead
+        // To achieve this, we'll always read one event ahead
         let num_events = clap_call! { in_=>size(in_) };
         if num_events == 0 {
             return None;
@@ -867,7 +867,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         );
 
         // NOTE: We explicitly did not do this on a block split because that seems a bit excessive.
-        //       When we're performing a block split we're guarenteed that there's still at least one more
+        //       When we're performing a block split we're guaranteed that there's still at least one more
         //       parameter event after the split so this function will still be called.
         if parameter_values_changed {
             self.notify_param_values_changed();
@@ -1283,12 +1283,12 @@ impl<P: ClapPlugin> Wrapper<P> {
                 );
 
                 // If the parameter supports polyphonic modulation, then the plugin needs to be
-                // informed that the parmaeter has been monophonicall automated. This allows the
+                // informed that the parameter has been monophonically automated. This allows the
                 // plugin to update all of its polyphonic modulation values, since polyphonic
                 // modulation acts as an offset to the monophonic value.
                 if let Some(poly_modulation_id) = self.poly_mod_ids_by_hash.get(&event.param_id) {
                     // The modulation offset needs to be normalized to account for modulated
-                    // integer or enum parmaeters
+                    // integer or enum parameters
                     let param_ptr = self.param_by_hash[&event.param_id];
                     let normalized_value =
                         event.value as f32 / param_ptr.step_count().unwrap_or(1) as f32;
@@ -1309,7 +1309,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                     match self.poly_mod_ids_by_hash.get(&event.param_id) {
                         Some(poly_modulation_id) => {
                             // The modulation offset needs to be normalized to account for modulated
-                            // integer or enum parmaeters
+                            // integer or enum parameters
                             let param_ptr = self.param_by_hash[&event.param_id];
                             let normalized_offset =
                                 event.amount as f32 / param_ptr.step_count().unwrap_or(1) as f32;
@@ -1652,7 +1652,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         check_null_ptr!(false, plugin);
         let wrapper = &*(plugin as *const Self);
 
-        // We weren't allowed to query these in the constructor, so we need to do it now intead.
+        // We weren't allowed to query these in the constructor, so we need to do it now instead.
         *wrapper.host_gui.borrow_mut() =
             query_host_extension::<clap_host_gui>(&wrapper.host_callback, CLAP_EXT_GUI);
         *wrapper.host_latency.borrow_mut() =
@@ -1692,7 +1692,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             process_mode: wrapper.current_process_mode.load(),
         };
 
-        // Befure initializing the plugin, make sure all smoothers are set the the default values
+        // Before initializing the plugin, make sure all smoothers are set the the default values
         for param in wrapper.param_by_hash.values() {
             param.update_smoother(buffer_config.sample_rate, true);
         }
@@ -1821,7 +1821,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             let process = &*process;
 
             // Before doing anything, clear out any auxiliary outputs since they may contain
-            // uninitialized data when the host assumes that we'll always write soemthing there
+            // uninitialized data when the host assumes that we'll always write something there
             let current_bus_config = wrapper.current_bus_config.load();
             let has_main_input = current_bus_config.num_input_channels > 0;
             let has_main_output = current_bus_config.num_output_channels > 0;
@@ -1891,8 +1891,8 @@ impl<P: ClapPlugin> Wrapper<P> {
                     );
 
                     // If there are any parameter changes after `block_start` and sample
-                    // accurate automatoin is enabled or the host sends new transport
-                    // inforamtion, then we'll process a new block just after that. Otherwise we can
+                    // accurate automation is enabled or the host sends new transport
+                    // information, then we'll process a new block just after that. Otherwise we can
                     // process all audio until the end of the buffer.
                     match split_result {
                         Some((next_param_change_sample_idx, next_param_change_event_idx)) => {
@@ -2932,7 +2932,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         strlcpy(&mut param_info.module, param_group);
         // We don't use the actual minimum and maximum values here because that would not scale
         // with skewed integer ranges. Instead, just treat all parameters as `[0, 1]` normalized
-        // paramters multiplied by the step size.
+        // parameters multiplied by the step size.
         param_info.min_value = 0.0;
         // Stepped parameters are unnormalized float parameters since there's no separate step
         // range option

@@ -217,7 +217,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
                 });
             }
 
-            // Befure initializing the plugin, make sure all smoothers are set the the default values
+            // Before initializing the plugin, make sure all smoothers are set the the default values
             for param in wrapper.known_parameters.iter() {
                 unsafe { param.update_smoother(wrapper.buffer_config.sample_rate, true) };
             }
@@ -388,7 +388,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
             move |buffer, transport, input_events, output_events| {
                 // TODO: This process wrapper should actually be in the backends (since the backends
                 //       should also not allocate in their audio callbacks), but that's a bit more
-                //       erorr prone
+                //       error prone
                 process_wrapper(|| {
                     if should_terminate.load(Ordering::SeqCst) {
                         return false;

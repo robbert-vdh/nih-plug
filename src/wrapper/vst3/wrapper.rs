@@ -73,7 +73,7 @@ impl<P: Vst3Plugin> IPluginBase for Wrapper<P> {
 
 impl<P: Vst3Plugin> IComponent for Wrapper<P> {
     unsafe fn get_controller_class_id(&self, _tuid: *mut vst3_sys::IID) -> tresult {
-        // We won't separate the edit controller to keep the implemetnation a bit smaller
+        // We won't separate the edit controller to keep the implementation a bit smaller
         kNoInterface
     }
 
@@ -383,7 +383,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
         // custom channel layout overrides we need to initialize here.
         match (state != 0, self.inner.current_buffer_config.load()) {
             (true, Some(buffer_config)) => {
-                // Befure initializing the plugin, make sure all smoothers are set the the default values
+                // Before initializing the plugin, make sure all smoothers are set the the default values
                 for param in self.inner.param_by_hash.values() {
                     param.update_smoother(buffer_config.sample_rate, true);
                 }
@@ -1033,7 +1033,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
             nih_debug_assert!(data.num_samples >= 0);
 
             // Before doing anything, clear out any auxiliary outputs since they may contain
-            // uninitialized data when the host assumes that we'll always write soemthing there
+            // uninitialized data when the host assumes that we'll always write something there
             let current_bus_config = self.inner.current_bus_config.load();
             let has_main_input = current_bus_config.num_input_channels > 0;
             // HACK: Bitwig requires VST3 plugins to always have a main output. We'll however still
@@ -1238,7 +1238,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
             // NOTE: It's important that this sort is stable, because parameter changes need to be
             //       processed before note events. Otherwise you'll get out of bounds note events
             //       with block splitting when the note event occurs at one index after the end (or
-            //       on the exlusive end index) of the block.
+            //       on the exclusive end index) of the block.
             process_events.sort_by_key(|event| match event {
                 ProcessEvent::ParameterChange { timing, .. } => *timing,
                 ProcessEvent::NoteEvent { timing, .. } => *timing,
@@ -1252,7 +1252,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                 // sorted process event array until we run into for the current sample, and then
                 // process the block between the current sample and the sample containing the next
                 // parameter change, if any. All timings also need to be compensated for this. As
-                // mentioend above, for this to work correctly parameter changes need to be ordered
+                // mentioned above, for this to work correctly parameter changes need to be ordered
                 // before note events at the same index.
                 // The extra scope is here to make sure we release the borrow on input_events
                 {
@@ -1557,7 +1557,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                         // There's also a ppqPos field, but uh how about no
                         vst3_event.sample_offset = event.timing() as i32 + block_start as i32;
 
-                        // `voice_id.onwrap_or(|| ...)` triggers
+                        // `voice_id.unwrap_or(|| ...)` triggers
                         // https://github.com/rust-lang/rust-clippy/issues/8522
                         #[allow(clippy::unnecessary_lazy_evaluations)]
                         match event {

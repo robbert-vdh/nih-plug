@@ -345,7 +345,7 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
     }
 
     unsafe fn on_wheel(&self, _distance: f32) -> tresult {
-        // We'll let the plugin use the OS' input mechamisms because not all DAWs (or very few
+        // We'll let the plugin use the OS' input mechanisms because not all DAWs (or very few
         // actually) implement these functions
         kResultOk
     }
@@ -504,7 +504,7 @@ impl<P: Vst3Plugin> IEventHandler for RunLoopEventHandler<P> {
 #[cfg(target_os = "linux")]
 impl<P: Vst3Plugin> Drop for RunLoopEventHandler<P> {
     fn drop(&mut self) {
-        // When this object gets dropped and there are still unprocssed tasks left, then we'll
+        // When this object gets dropped and there are still unprocessed tasks left, then we'll
         // handle those in the regular event loop so no work gets lost
         let mut posting_failed = false;
         while let Some(task) = self.tasks.pop() {
@@ -519,7 +519,7 @@ impl<P: Vst3Plugin> Drop for RunLoopEventHandler<P> {
 
         if posting_failed {
             nih_debug_assert_failure!(
-                "Outstanding tasks have been dropped when clsoing the editor as the task queue \
+                "Outstanding tasks have been dropped when closing the editor as the task queue \
                  was full"
             );
         }

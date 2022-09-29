@@ -196,7 +196,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         // on `Self::updated_state_sender`
         let (updated_state_sender, updated_state_receiver) = channel::bounded(0);
 
-        // This is a mapping from the parameter IDs specified by the plugin to pointers to thsoe
+        // This is a mapping from the parameter IDs specified by the plugin to pointers to those
         // parameters. These pointers are assumed to be safe to dereference as long as
         // `wrapper.plugin` is alive. The plugin API identifiers these parameters by hashes, which
         // we'll calculate from the string ID specified by the plugin. These parameters should also
@@ -357,7 +357,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         } else {
             // If the editor is open, and the host exposes the `IRunLoop` interface, then we'll run
             // the task on the host's GUI thread using that interface. Otherwise we'll use the
-            // regular eent loop. If the editor gets dropped while there's still outstanding work
+            // regular event loop. If the editor gets dropped while there's still outstanding work
             // left in the run loop task queue, then those tasks will be posted to the regular event
             // loop so no work is lost.
             match &*self.plug_view.read() {
@@ -507,7 +507,7 @@ impl<P: Vst3Plugin> MainThreadExecutor<Task> for WrapperInner<P> {
         // TODO: When we add GUI resizing and context menus, this should propagate those events to
         //       `IRunLoop` on Linux to keep REAPER happy. That does mean a double spool, but we can
         //       come up with a nicer solution to handle that later (can always add a separate
-        //       function for checking if a to be scheduled task can be handled right ther and
+        //       function for checking if a to be scheduled task can be handled right there and
         //       then).
         match task {
             Task::TriggerRestart(flags) => match &*self.component_handler.borrow() {

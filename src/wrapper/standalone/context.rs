@@ -60,7 +60,7 @@ impl<P: Plugin, B: Backend> GuiContext for WrapperGuiContext<P, B> {
     }
 
     unsafe fn raw_begin_set_parameter(&self, _param: ParamPtr) {
-        // Since there's no autmoation being recorded here, gestures don't mean anything
+        // Since there's no automation being recorded here, gestures don't mean anything
     }
 
     unsafe fn raw_set_parameter_normalized(&self, param: ParamPtr, normalized: f32) {

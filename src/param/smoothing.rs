@@ -109,7 +109,7 @@ impl SmoothingStyle {
                 ((target / start) as f64).powf((num_steps as f64).recip()) as f32
             }
             // In this case the step size value is the coefficient the current value will be
-            // multiplied by, while the target value is multipled by one minus the coefficient. This
+            // multiplied by, while the target value is multiplied by one minus the coefficient. This
             // reaches 99.99% of the target value after `num_steps`. The smoother will snap to the
             // target value after that point.
             SmoothingStyle::Exponential(_) => 0.0001f64.powf((num_steps as f64).recip()) as f32,
@@ -361,7 +361,7 @@ impl<T: Smoothable> Smoother<T> {
         let target = T::atomic_load(&self.target);
 
         // `self.next()` will yield the current value if the parameter is no longer smoothing, but
-        // it's a bit of a waste to continuesly call that if only the first couple or none of the
+        // it's a bit of a waste to continuously call that if only the first couple or none of the
         // values in `block_values` would require smoothing and the rest don't. Instead, we'll just
         // smooth the values as necessary, and then reuse the target value for the rest of the
         // block.

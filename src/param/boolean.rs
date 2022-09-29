@@ -184,7 +184,7 @@ impl ParamMut for BoolParam {
     fn set_normalized_value(&self, normalized: f32) {
         // NOTE: The double conversion here is to make sure the state is reproducible. State is
         //       saved and restored using plain values, and the new normalized value will be
-        //       different from `normalized`. This is not necesasry for the modulation as these
+        //       different from `normalized`. This is not necessary for the modulation as these
         //       values are never shown to the host.
         self.set_plain_value(self.preview_plain(normalized))
     }

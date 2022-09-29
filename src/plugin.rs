@@ -264,7 +264,7 @@ pub trait Editor: Send + Sync {
     //       callback that deos involve actual GUI operations will still be spooled to the IRunLoop
     //       instance.
     // TODO: This function should return an `Option` instead. Right now window opening failures are
-    //       always fatal. This would need to be fixed in basevie first.
+    //       always fatal. This would need to be fixed in baseview first.
     fn spawn(
         &self,
         parent: ParentWindowHandle,

@@ -80,7 +80,7 @@ impl Default for GainParams {
             // `.with_step_size(0.1)` function to get internal rounding.
             .with_value_to_string(formatters::v2s_f32_gain_to_db(2))
             .with_string_to_value(formatters::s2v_f32_gain_to_db()),
-            // Persisted fields can be intialized like any other fields, and they'll keep their
+            // Persisted fields can be initialized like any other fields, and they'll keep their
             // values when restoring the plugin's state.
             random_data: RwLock::new(Vec::new()),
             sub_params: SubParams {

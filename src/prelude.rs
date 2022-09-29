@@ -1,4 +1,4 @@
-// Re-export the macros, derive macros are already re-exported ferom their respectivem odules
+// Re-export the macros, derive macros are already re-exported from their respective modules
 pub use crate::debug::*;
 
 pub use crate::nih_export_clap;
