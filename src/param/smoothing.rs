@@ -539,7 +539,7 @@ mod tests {
 
     /// Applying `next()` `n` times should be the same as `next_step()` for `n` steps.
     #[test]
-    fn linear_f32_next_equivalance() {
+    fn linear_f32_next_equivalence() {
         let style = SmoothingStyle::Linear(100.0);
 
         let mut current = 0.4;
@@ -556,7 +556,7 @@ mod tests {
     }
 
     #[test]
-    fn logarithmic_f32_next_equivalance() {
+    fn logarithmic_f32_next_equivalence() {
         let style = SmoothingStyle::Logarithmic(100.0);
 
         let mut current = 0.4;
@@ -573,7 +573,7 @@ mod tests {
     }
 
     #[test]
-    fn exponential_f32_next_equivalance() {
+    fn exponential_f32_next_equivalence() {
         let style = SmoothingStyle::Exponential(100.0);
 
         let mut current = 0.4;
