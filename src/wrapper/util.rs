@@ -17,6 +17,9 @@ const NIH_LOG_ENV: &str = "NIH_LOG";
 #[cfg(target_arch = "aarch64")]
 const AARCH64_FTZ_BIT: u64 = 1 << 24;
 
+#[cfg(all(feature = "assert_process_allocs", all(windows, target_env = "gnu")))]
+compile_error!("The 'assert_process_allocs' feature does not work correctly in combination with the 'x86_64-pc-windows-gnu' target, see https://github.com/Windfisch/rust-assert-no-alloc/issues/7");
+
 #[cfg(all(debug_assertions, feature = "assert_process_allocs"))]
 #[global_allocator]
 static A: assert_no_alloc::AllocDisabler = assert_no_alloc::AllocDisabler;
