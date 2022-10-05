@@ -68,22 +68,19 @@ jobs:
         # package everything that's got en entry in the `bundler.toml` file
         run: |
           # Building can be sped up by specifying all packages in one go
-          package_args=()
-          for package in $(cargo xtask known-packages); do
-            package_args+=("-p" "$package")
-          done
 
           runner_name=${{ matrix.name }}
           if [[ $runner_name = 'macos-universal' ]]; then
             export MACOSX_DEPLOYMENT_TARGET=10.13
-            cargo xtask bundle-universal "${package_args[@]}" --release
+            cargo xtask bundle-universal --all --release
           else
             cross_target=${{ matrix.cross-target }}
+            additional_args=()
             if [[ -n $cross_target ]]; then
-              package_args+=("--target" "$cross_target")
+              additional_args+=("--target" "$cross_target")
             fi
 
-            cargo xtask bundle "${package_args[@]}" --release
+            cargo xtask bundle --all "${additional_args[@]}" --release
           fi
 
       - name: Determine build archive name
