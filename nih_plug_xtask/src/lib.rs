@@ -22,9 +22,11 @@ fn build_usage_string(command_name: &str) -> String {
         "Usage:
   {command_name} bundle <package> [--release]
   {command_name} bundle -p <package1> -p <package2> ... [--release]
+  {command_name} bundle --all [--release]
 
   {command_name} bundle-universal <package> [--release]  (macOS only)
   {command_name} bundle-universal -p <package1> -p <package2> ... [--release]  (macOS only)
+  {command_name} bundle-universal --all [--release]  (macOS only)
 
   All other 'cargo build' options are supported, including '--target' and '--profile'."
     )
@@ -495,13 +497,20 @@ fn bundle_plugin(
 /// This lists the packages configured in `bundler.toml`. This is only used as part of the CI when
 /// bundling plugins.
 pub fn list_known_packages() -> Result<()> {
-    if let Some(config) = load_bundler_config()? {
-        for package in config.keys() {
-            println!("{package}");
-        }
+    for package in get_known_packages()? {
+        println!("{package}");
     }
 
     Ok(())
+}
+
+/// Returns the list of packages configured in `bundler.toml`.
+pub fn get_known_packages() -> Result<Vec<String>> {
+    if let Some(config) = load_bundler_config()? {
+        Ok(config.keys().cloned().collect())
+    } else {
+        Ok(Vec::<String>::new())
+    }
 }
 
 /// Load the `bundler.toml` file, if it exists. If it does exist but it cannot be parsed, then this
@@ -545,6 +554,10 @@ fn split_bundle_args(
         );
     };
     let other_args: Vec<_> = args.collect();
+
+    if packages == ["--all"] {
+        packages = get_known_packages()?;
+    }
 
     Ok((packages, other_args))
 }
