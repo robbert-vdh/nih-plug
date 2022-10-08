@@ -96,8 +96,11 @@ impl PeakMeter {
                             Element::new(cx).class("ticks__tick");
                         }
 
-                        let font_size = cx.style.font_size.get(cx.current()).unwrap_or(&15.0)
-                            * cx.style.dpi_factor as f32;
+                        let font_size = {
+                            let current = cx.current();
+                            let draw_cx = DrawContext::new(cx);
+                            draw_cx.font_size(current) * draw_cx.style.dpi_factor as f32
+                        };
                         let label = if first_tick {
                             Label::new(cx, "-inf")
                                 .class("ticks__label")
