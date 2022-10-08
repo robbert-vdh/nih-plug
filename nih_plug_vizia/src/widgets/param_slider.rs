@@ -413,7 +413,12 @@ impl View for ParamSlider {
         });
 
         event.map(|window_event, meta| match window_event {
-            WindowEvent::MouseDown(MouseButton::Left) => {
+            WindowEvent::MouseDown(MouseButton::Left)
+            // Vizia always captures the third mouse click as a triple click. Treating that triple
+            // click as a regular mouse button makes double click followed by another drag work as
+            // expected, instead of requiring a delay or an additional click. Double double click
+            // still won't work.
+            | WindowEvent::MouseTripleClick(MouseButton::Left) => {
                 if cx.modifiers.alt() {
                     // ALt+Click brings up a text entry dialog
                     self.text_input_active = true;
