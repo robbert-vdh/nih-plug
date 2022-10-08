@@ -390,10 +390,12 @@ impl View for ParamSlider {
     }
 
     fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
-        event.map(|param_slider_event, _| match param_slider_event {
+        event.map(|param_slider_event, meta| match param_slider_event {
             ParamSliderEvent::CancelTextInput => {
                 self.text_input_active = false;
                 cx.set_active(false);
+
+                meta.consume();
             }
             ParamSliderEvent::TextInput(string) => {
                 if let Some(normalized_value) =
@@ -405,10 +407,12 @@ impl View for ParamSlider {
                 }
 
                 self.text_input_active = false;
+
+                meta.consume();
             }
         });
 
-        event.map(|window_event, _| match window_event {
+        event.map(|window_event, meta| match window_event {
             WindowEvent::MouseDown(MouseButton::Left) => {
                 if cx.modifiers.alt() {
                     // ALt+Click brings up a text entry dialog
@@ -445,6 +449,8 @@ impl View for ParamSlider {
                         );
                     }
                 }
+
+                meta.consume();
             }
             WindowEvent::MouseDoubleClick(MouseButton::Left) => {
                 // Ctrl+Click and double click should reset the parameter instead of initiating
@@ -455,6 +461,8 @@ impl View for ParamSlider {
                     unsafe { self.param_ptr.default_normalized_value() },
                 ));
                 cx.emit(RawParamEvent::EndSetParameter(self.param_ptr));
+
+                meta.consume();
             }
             WindowEvent::MouseUp(MouseButton::Left) => {
                 if self.drag_active {
@@ -463,6 +471,8 @@ impl View for ParamSlider {
                     cx.set_active(false);
 
                     cx.emit(RawParamEvent::EndSetParameter(self.param_ptr));
+
+                    meta.consume();
                 }
             }
             WindowEvent::MouseMove(x, _y) => {
