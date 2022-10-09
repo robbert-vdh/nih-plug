@@ -16,10 +16,9 @@ builds](https://github.com/robbert-vdh/nih-plug/actions/workflows/build.yml?quer
 page. Or if you're not signed in on GitHub, then you can also find the latest nightly
 build [here](https://nightly.link/robbert-vdh/nih-plug/workflows/build/master).
 
-The macOS version has not been tested and may not work correctly. You may also
-have to [disable Gatekeeper](https://disable-gatekeeper.github.io/) to use the
-VST3 version as Apple has recently made it more difficult to run unsigned code
-on macOS.
+On macOS you may need to [disable
+Gatekeeper](https://disable-gatekeeper.github.io/) as Apple has recently made it
+more difficult to run unsigned code on macOS.
 
 ### Building
 
