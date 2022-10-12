@@ -21,9 +21,10 @@ use std::sync::Arc;
 
 use crate::SpectralCompressorParams;
 
-// These are the parameter ID prefixes used for the downwards and upwards compression parameters.
-const DOWNWARDS_NAME_PREFIX: &str = "downwards_";
-const UPWARDS_NAME_PREFIX: &str = "upwards_";
+// These are the parameter name prefixes used for the downwards and upwards compression parameters.
+// The ID prefixes a re set in the `CompressorBankParams` struct.
+const DOWNWARDS_NAME_PREFIX: &str = "Downwards";
+const UPWARDS_NAME_PREFIX: &str = "Upwards";
 
 /// The envelopes are initialized to the RMS value of a -24 dB sine wave to make sure extreme upwards
 /// compression doesn't cause pops when switching between window sizes and when deactivating and
@@ -154,23 +155,22 @@ pub enum ThresholdMode {
 /// Contains the compressor parameters for both the upwards and downwards compressor banks.
 #[derive(Params)]
 pub struct CompressorBankParams {
-    #[nested(group = "upwards")]
+    #[nested(id_prefix = "upwards", group = "upwards")]
     pub upwards: Arc<CompressorParams>,
-    #[nested(group = "downwards")]
+    #[nested(id_prefix = "downwards", group = "downwards")]
     pub downwards: Arc<CompressorParams>,
 }
 
 /// This struct contains the parameters for either the upward or downward compressors. The `Params`
 /// trait is implemented manually to avoid copy-pasting parameters for both types of compressor.
 /// Both versions will have a parameter ID and a parameter name prefix to distinguish them.
+#[derive(Params)]
 pub struct CompressorParams {
-    /// The prefix to use in the `.param_map()` function so the upwards and downwards compressors
-    /// get unique parameter IDs.
-    param_id_prefix: &'static str,
-
     /// The compression threshold relative to the target curve.
+    #[id = "threshold_offset"]
     pub threshold_offset_db: FloatParam,
     /// The compression ratio. At 1.0 the compressor is disengaged.
+    #[id = "ratio"]
     pub ratio: FloatParam,
     /// A `[0, 1]` scaling factor that causes the compressors for the higher registers to have lower
     /// ratios than the compressors for the lower registers. The scaling is applied logarithmically
@@ -178,34 +178,11 @@ pub struct CompressorParams {
     /// the same for every compressor. A value of 0.5 means that at
     /// `HIGH_FREQ_RATIO_ROLLOFF_FREQUENCY` Hz, the compression ratio will be 0.5 times that as the
     /// one at 0 Hz.
+    #[id = "high_freq_rolloff"]
     pub high_freq_ratio_rolloff: FloatParam,
     /// The compression knee width, in decibels.
+    #[id = "knee"]
     pub knee_width_db: FloatParam,
-}
-
-unsafe impl Params for CompressorParams {
-    fn param_map(&self) -> Vec<(String, ParamPtr, String)> {
-        let prefix = self.param_id_prefix;
-        vec![
-            (
-                format!("{prefix}threshold_offset"),
-                self.threshold_offset_db.as_ptr(),
-                // The parent `CompressorBankParams` struct will add the group here
-                String::new(),
-            ),
-            (format!("{prefix}ratio"), self.ratio.as_ptr(), String::new()),
-            (
-                format!("{prefix}high_freq_rolloff"),
-                self.high_freq_ratio_rolloff.as_ptr(),
-                String::new(),
-            ),
-            (
-                format!("{prefix}knee"),
-                self.knee_width_db.as_ptr(),
-                String::new(),
-            ),
-        ]
-    }
 }
 
 impl ThresholdParams {
@@ -299,13 +276,11 @@ impl CompressorBankParams {
         CompressorBankParams {
             downwards: Arc::new(CompressorParams::new(
                 DOWNWARDS_NAME_PREFIX,
-                "Downwards",
                 compressor.should_update_downwards_thresholds.clone(),
                 compressor.should_update_downwards_ratios.clone(),
             )),
             upwards: Arc::new(CompressorParams::new(
                 UPWARDS_NAME_PREFIX,
-                "Upwards",
                 compressor.should_update_upwards_thresholds.clone(),
                 compressor.should_update_upwards_ratios.clone(),
             )),
@@ -318,7 +293,6 @@ impl CompressorParams {
     /// any of the threshold or ratio parameters causes the passed atomics to be updated. These
     /// should be taken from a [`CompressorBank`] so the parameters are linked to it.
     pub fn new(
-        param_id_prefix: &'static str,
         name_prefix: &str,
         should_update_thresholds: Arc<AtomicBool>,
         should_update_ratios: Arc<AtomicBool>,
@@ -329,8 +303,6 @@ impl CompressorParams {
             Arc::new(move |_| should_update_ratios.store(true, Ordering::SeqCst));
 
         CompressorParams {
-            param_id_prefix,
-
             // TODO: Set nicer default values for these things
             // As explained above, these offsets are relative to the target curve
             threshold_offset_db: FloatParam::new(
@@ -361,7 +333,7 @@ impl CompressorParams {
                 format!("{name_prefix} Hi-Freq Rolloff"),
                 // TODO: Bit of a hacky way to set the default values differently for upwards and
                 //       downwards compressors
-                if param_id_prefix == UPWARDS_NAME_PREFIX {
+                if name_prefix == UPWARDS_NAME_PREFIX {
                     0.75
                 } else {
                     // When used subtly, no rolloff is usually better for downwards compression
