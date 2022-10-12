@@ -83,14 +83,14 @@ pub struct SpectralCompressorParams {
     // can use the generic UIs
     /// Global parameters. These could just live in this struct but I wanted a separate generic UI
     /// just for these.
-    #[nested = "global"]
+    #[nested(group = "global")]
     pub global: Arc<GlobalParams>,
 
     /// Parameters controlling the compressor thresholds and curves.
-    #[nested = "threshold"]
+    #[nested(group = "threshold")]
     pub threshold: Arc<compressor_bank::ThresholdParams>,
     /// Parameters for the upwards and downwards compressors.
-    #[nested = "compressors"]
+    #[nested(group = "compressors")]
     pub compressors: compressor_bank::CompressorBankParams,
 }
 

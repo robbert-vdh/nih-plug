@@ -154,9 +154,9 @@ pub enum ThresholdMode {
 /// Contains the compressor parameters for both the upwards and downwards compressor banks.
 #[derive(Params)]
 pub struct CompressorBankParams {
-    #[nested = "upwards"]
+    #[nested(group = "upwards")]
     pub upwards: Arc<CompressorParams>,
-    #[nested = "downwards"]
+    #[nested(group = "downwards")]
     pub downwards: Arc<CompressorParams>,
 }
 

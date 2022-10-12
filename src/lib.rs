@@ -71,8 +71,8 @@
 //!    The string `"foobar"` here uniquely identifies the parameter, making it possible to reorder
 //!    and rename parameters as long as this string stays constant. You can also store persistent
 //!    non-parameter data and other parameter objects in a `Params` struct. Check out the trait's
-//!    documentation for more details, and also be sure to take a look at the [example
-//!    plugins](https://github.com/robbert-vdh/nih-plug/tree/master/plugins).
+//!    documentation for details on all supported features, and also be sure to take a look at the
+//!    [example plugins](https://github.com/robbert-vdh/nih-plug/tree/master/plugins).
 //!  - After calling `.with_smoother()` during an integer or floating point parameter's creation,
 //!    you can use `param.smoothed` to access smoothed values for that parameter. Be sure to check
 //!    out the [`Smoother`][prelude::Smoother] API for more details.

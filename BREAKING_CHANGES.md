@@ -6,6 +6,16 @@ new and what's changed, this document lists all breaking changes in reverse
 chronological order. If a new feature did not require any changes to existing
 code then it will not be listed here.
 
+## [2022-10-13]
+
+- The `#[nested]` parameter attribute has gained super powers and has its syntax
+  changed. It can now automatically handle many situations that previously
+  required custom `Params` implementations to have multiple almost identical
+  copies of a parameter struct. The current version supports both fields with
+  unique parameter ID prefixes, and arrays of parameter objects. See the
+  [`Params`](https://nih-plug.robbertvanderhelm.nl/nih_plug/param/internals/trait.Params.html)
+  trait for more information on the new syntax.
+
 ## [2022-09-22]
 
 - `nih_plug_egui` has been updated from egui 0.17 to egui 0.19.

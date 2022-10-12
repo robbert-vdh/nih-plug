@@ -27,21 +27,25 @@ struct GainParams {
 
     /// You can also nest parameter structs. These will appear as a separate nested group if your
     /// DAW displays parameters in a tree structure.
-    #[nested = "Subparameters"]
+    #[nested(group = "Subparameters")]
     pub sub_params: SubParams,
+
+    /// Nested parameters also support some advanced functionality for reusing the same parameter
+    /// struct multiple times.
+    #[nested(array, group = "Array Parameters")]
+    pub array_params: [ArrayParams; 3],
 }
 
 #[derive(Params)]
 struct SubParams {
     #[id = "thing"]
     pub nested_parameter: FloatParam,
-
-    #[nested = "Sub-Subparameters"]
-    pub sub_sub_params: SubSubParams,
 }
 
 #[derive(Params)]
-struct SubSubParams {
+struct ArrayParams {
+    /// This parameter's ID will get a `_1`, `_2`, and a `_3` suffix because of how it's used in
+    /// `array_params` above.
     #[id = "noope"]
     pub nope: FloatParam,
 }
@@ -94,10 +98,14 @@ impl Default for GainParams {
                     },
                 )
                 .with_value_to_string(formatters::v2s_f32_rounded(2)),
-                sub_sub_params: SubSubParams {
-                    nope: FloatParam::new("Nope", 0.5, FloatRange::Linear { min: 1.0, max: 2.0 }),
-                },
             },
+            array_params: [1, 2, 3].map(|index| ArrayParams {
+                nope: FloatParam::new(
+                    format!("Nope {index}"),
+                    0.5,
+                    FloatRange::Linear { min: 1.0, max: 2.0 },
+                ),
+            }),
         }
     }
 }

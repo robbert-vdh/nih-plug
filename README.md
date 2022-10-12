@@ -98,10 +98,12 @@ Scroll down for more information on the underlying plugin framework.
     that can be serialized with [Serde](https://serde.rs/) to your plugin's
     `Params` object and annotating them with `#[persist = "key"]`.
   - Group your parameters into logical groups by nesting `Params` objects using
-    the `#[nested = "Group Name"]`attribute.
+    the `#[nested(group = "...")]`attribute.
+  - The `#[nested]` attribute also enables you to use multiple copies of the
+    same parameter, either as regular object fields or through arrays.
   - When needed, you can also provide your own implementation for the `Params`
-    trait to enable dynamically generated parameters and arrays of if mostly
-    identical parameter objects.
+    trait to enable compile time generated parameters and other bespoke
+    functionality.
 - Stateful. Behaves mostly like JUCE, just without all of the boilerplate.
 - Does not make any assumptions on how you want to process audio, but does come
   with utilities and adapters to help with common access patterns.
