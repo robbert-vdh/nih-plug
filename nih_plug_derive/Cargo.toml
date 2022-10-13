@@ -9,5 +9,5 @@ license = "ISC"
 proc-macro = true
 
 [dependencies]
-syn = "1.0"
+syn = { version = "1.0", features = ["extra-traits"] }
 quote = "1.0"
