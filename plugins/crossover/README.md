@@ -8,7 +8,9 @@ linear-phase option.
 
 In Bitwig Studio you'll want to click on the 'Show plug-in multi-out chain
 selector' button and then on 'Add missing chains' to access the chains. The main
-output will not output any audio.
+output will not output any audio. To save time, you can save this setup as the
+default preset by right clicking on the device. Any new Crossover instances will
+then already have the additional output chains set up.
 
 <!-- Screenshots and other binary assets aren't in this repo as that would add bloat to NIH-plug checkouts -->
 
