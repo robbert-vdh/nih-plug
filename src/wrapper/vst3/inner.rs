@@ -1,7 +1,7 @@
 use atomic_refcell::AtomicRefCell;
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::{self, SendTimeoutError};
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
@@ -37,7 +37,7 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// The plugin's editor, if it has one. This object does not do anything on its own, but we need
     /// to instantiate this in advance so we don't need to lock the entire [`Plugin`] object when
     /// creating an editor.
-    pub editor: Option<Arc<dyn Editor>>,
+    pub editor: Option<Arc<Mutex<Box<dyn Editor>>>>,
 
     /// The host's [`IComponentHandler`] instance, if passed through
     /// [`IEditController::set_component_handler`].
@@ -190,7 +190,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
     #[allow(unused_unsafe)]
     pub fn new() -> Arc<Self> {
         let plugin = P::default();
-        let editor = plugin.editor().map(Arc::from);
+        let editor = plugin.editor().map(|editor| Arc::new(Mutex::new(editor)));
 
         // This is used to allow the plugin to restore preset data from its editor, see the comment
         // on `Self::updated_state_sender`
@@ -372,10 +372,18 @@ impl<P: Vst3Plugin> WrapperInner<P> {
 
     /// If there's an editor open, let it know that parameter values have changed. This should be
     /// called whenever there's been a call or multiple calls to
-    /// [`set_normalized_value_by_hash()[Self::set_normalized_value_by_hash()`].
+    /// [`set_normalized_value_by_hash()[Self::set_normalized_value_by_hash()`]. In the off-chance
+    /// that the editor instance is currently locked then nothing will happen, and the request can
+    /// safely be ignored.
     pub fn notify_param_values_changed(&self) {
         if let Some(editor) = &self.editor {
-            editor.param_values_changed();
+            match editor.try_lock() {
+                Some(editor) => editor.param_values_changed(),
+                None => nih_debug_assert_failure!(
+                    "The editor was locked when sending a parameter value change notification, \
+                     ignoring"
+                ),
+            }
         }
     }
 

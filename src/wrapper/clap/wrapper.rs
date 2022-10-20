@@ -59,7 +59,7 @@ use clap_sys::stream::{clap_istream, clap_ostream};
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::{self, SendTimeoutError};
 use crossbeam::queue::ArrayQueue;
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use raw_window_handle::RawWindowHandle;
 use std::any::Any;
 use std::cmp;
@@ -112,7 +112,7 @@ pub struct Wrapper<P: ClapPlugin> {
     /// The plugin's editor, if it has one. This object does not do anything on its own, but we need
     /// to instantiate this in advance so we don't need to lock the entire [`Plugin`] object when
     /// creating an editor.
-    editor: Option<Box<dyn Editor>>,
+    editor: Option<Mutex<Box<dyn Editor>>>,
     /// A handle for the currently active editor instance. The plugin should implement `Drop` on
     /// this handle for its closing behavior.
     editor_handle: RwLock<Option<Box<dyn Any + Send + Sync>>>,
@@ -381,7 +381,7 @@ impl<P: ClapPlugin> MainThreadExecutor<Task> for Wrapper<P> {
 impl<P: ClapPlugin> Wrapper<P> {
     pub fn new(host_callback: *const clap_host) -> Arc<Self> {
         let plugin = P::default();
-        let editor = plugin.editor();
+        let editor = plugin.editor().map(Mutex::new);
 
         // This is used to allow the plugin to restore preset data from its editor, see the comment
         // on `Self::updated_state_sender`
@@ -713,10 +713,18 @@ impl<P: ClapPlugin> Wrapper<P> {
 
     /// If there's an editor open, let it know that parameter values have changed. This should be
     /// called whenever there's been a call or multiple calls to
-    /// [`update_plain_value_by_hash()[Self::update_plain_value_by_hash()`].
+    /// [`update_plain_value_by_hash()[Self::update_plain_value_by_hash()`]. In the off-chance that
+    /// the editor instance is currently locked then nothing will happen, and the request can safely
+    /// be ignored.
     pub fn notify_param_values_changed(&self) {
         if let Some(editor) = &self.editor {
-            editor.param_values_changed();
+            match editor.try_lock() {
+                Some(editor) => editor.param_values_changed(),
+                None => nih_debug_assert_failure!(
+                    "The editor was locked when sending a parameter value change notification, \
+                     ignoring"
+                ),
+            }
         }
     }
 
@@ -726,7 +734,7 @@ impl<P: ClapPlugin> Wrapper<P> {
     pub fn request_resize(&self) -> bool {
         match (&*self.host_gui.borrow(), &self.editor) {
             (Some(host_gui), Some(editor)) => {
-                let (unscaled_width, unscaled_height) = editor.size();
+                let (unscaled_width, unscaled_height) = editor.lock().size();
                 let scaling_factor = self.editor_scaling_factor.load(Ordering::Relaxed);
 
                 unsafe_clap_call! {
@@ -2672,6 +2680,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             .editor
             .as_ref()
             .unwrap()
+            .lock()
             .set_scale_factor(scale as f32)
         {
             wrapper
@@ -2692,7 +2701,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         let wrapper = &*(plugin as *const Self);
 
         // For macOS the scaling factor is always 1
-        let (unscaled_width, unscaled_height) = wrapper.editor.as_ref().unwrap().size();
+        let (unscaled_width, unscaled_height) = wrapper.editor.as_ref().unwrap().lock().size();
         let scaling_factor = wrapper.editor_scaling_factor.load(Ordering::Relaxed);
         (*width, *height) = (
             (unscaled_width as f32 * scaling_factor).round() as u32,
@@ -2734,7 +2743,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         check_null_ptr!(false, plugin);
         let wrapper = &*(plugin as *const Self);
 
-        let (unscaled_width, unscaled_height) = wrapper.editor.as_ref().unwrap().size();
+        let (unscaled_width, unscaled_height) = wrapper.editor.as_ref().unwrap().lock().size();
         let scaling_factor = wrapper.editor_scaling_factor.load(Ordering::Relaxed);
         let (editor_width, editor_height) = (
             (unscaled_width as f32 * scaling_factor).round() as u32,
@@ -2776,7 +2785,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 };
 
                 // This extension is only exposed when we have an editor
-                *editor_handle = Some(wrapper.editor.as_ref().unwrap().spawn(
+                *editor_handle = Some(wrapper.editor.as_ref().unwrap().lock().spawn(
                     ParentWindowHandle { handle },
                     wrapper.clone().make_gui_context(),
                 ));

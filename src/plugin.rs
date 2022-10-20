@@ -253,7 +253,7 @@ const fn swap_vst3_uid_byte_order(mut uid: [u8; 16]) -> [u8; 16] {
 }
 
 /// An editor for a [`Plugin`].
-pub trait Editor: Send + Sync {
+pub trait Editor: Send {
     /// Create an instance of the plugin's editor and embed it in the parent window. As explained in
     /// [`Plugin::editor()`], you can then read the parameter values directly from your [`Params`]
     /// object, and modifying the values can be done using the functions on the

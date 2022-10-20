@@ -2,7 +2,7 @@ use atomic_refcell::AtomicRefCell;
 use baseview::{EventStatus, Window, WindowHandler, WindowOpenOptions};
 use crossbeam::channel;
 use crossbeam::queue::ArrayQueue;
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use raw_window_handle::HasRawWindowHandle;
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
@@ -47,7 +47,7 @@ pub struct Wrapper<P: Plugin, B: Backend> {
     /// The plugin's editor, if it has one. This object does not do anything on its own, but we need
     /// to instantiate this in advance so we don't need to lock the entire [`Plugin`] object when
     /// creating an editor.
-    pub editor: Option<Arc<dyn Editor>>,
+    pub editor: Option<Arc<Mutex<Box<dyn Editor>>>>,
 
     config: WrapperConfig,
 
@@ -132,7 +132,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
     pub fn new(backend: B, config: WrapperConfig) -> Result<Arc<Self>, WrapperError> {
         let plugin = P::default();
         let params = plugin.params();
-        let editor = plugin.editor().map(Arc::from);
+        let editor = plugin.editor().map(|editor| Arc::new(Mutex::new(editor)));
 
         // This is used to allow the plugin to restore preset data from its editor, see the comment
         // on `Self::updated_state_sender`
@@ -262,11 +262,11 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
                 let scaling_policy = baseview::WindowScalePolicy::SystemScaleFactor;
                 #[cfg(not(target_os = "macos"))]
                 let scaling_policy = {
-                    editor.set_scale_factor(self.config.dpi_scale);
+                    editor.lock().set_scale_factor(self.config.dpi_scale);
                     baseview::WindowScalePolicy::ScaleFactor(self.config.dpi_scale as f64)
                 };
 
-                let (width, height) = editor.size();
+                let (width, height) = editor.lock().size();
                 Window::open_blocking(
                     WindowOpenOptions {
                         title: String::from(P::NAME),
@@ -282,7 +282,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
                         //       baseview does not support this yet. Once this is added, we should
                         //       immediately close the parent window when this happens so the loop
                         //       can exit.
-                        let editor_handle = editor.spawn(
+                        let editor_handle = editor.lock().spawn(
                             ParentWindowHandle {
                                 handle: window.raw_window_handle(),
                             },
@@ -477,10 +477,18 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
         );
     }
 
-    /// Tell the editor that the parameter values have changed, if the plugin has an editor.
+    /// Tell the editor that the parameter values have changed, if the plugin has an editor. In the
+    /// off-chance that the editor instance is currently locked then nothing will happen, and the
+    /// request can safely be ignored.
     fn notify_param_values_changed(&self) {
         if let Some(editor) = &self.editor {
-            editor.param_values_changed();
+            match editor.try_lock() {
+                Some(editor) => editor.param_values_changed(),
+                None => nih_debug_assert_failure!(
+                    "The editor was locked when sending a parameter value change notification, \
+                     ignoring"
+                ),
+            }
         }
     }
 

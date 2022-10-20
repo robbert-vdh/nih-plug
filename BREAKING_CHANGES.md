@@ -8,6 +8,8 @@ code then it will not be listed here.
 
 ## [2022-10-20]
 
+- `Editor` now only requires `Send` and no longer needs `Sync`. This is not a
+  breaking change, but it might be worth being aware of.
 - The `create_egui_editor()` function from `nih_plug_egui` now also takes a
   build closure to apply initialization logic to the egui context.
 - The `nih_plug::param` module has been renamed to `nih_plug::params`. Code that

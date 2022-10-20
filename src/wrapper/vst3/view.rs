@@ -1,5 +1,5 @@
 use atomic_float::AtomicF32;
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use raw_window_handle::RawWindowHandle;
 use std::any::Any;
 use std::ffi::{c_void, CStr};
@@ -52,7 +52,7 @@ struct RunLoopEventHandlerWrapper<P: Vst3Plugin>(std::marker::PhantomData<P>);
 #[VST3(implements(IPlugView, IPlugViewContentScaleSupport))]
 pub(crate) struct WrapperView<P: Vst3Plugin> {
     inner: Arc<WrapperInner<P>>,
-    editor: Arc<dyn Editor>,
+    editor: Arc<Mutex<Box<dyn Editor>>>,
     editor_handle: RwLock<Option<Box<dyn Any>>>,
 
     /// The `IPlugFrame` instance passed by the host during [IPlugView::set_frame()].
@@ -99,7 +99,7 @@ struct RunLoopEventHandler<P: Vst3Plugin> {
 }
 
 impl<P: Vst3Plugin> WrapperView<P> {
-    pub fn new(inner: Arc<WrapperInner<P>>, editor: Arc<dyn Editor>) -> Box<Self> {
+    pub fn new(inner: Arc<WrapperInner<P>>, editor: Arc<Mutex<Box<dyn Editor>>>) -> Box<Self> {
         Self::allocate(
             inner,
             editor,
@@ -132,7 +132,7 @@ impl<P: Vst3Plugin> WrapperView<P> {
 
         match &*self.plug_frame.read() {
             Some(plug_frame) => {
-                let (unscaled_width, unscaled_height) = self.editor.size();
+                let (unscaled_width, unscaled_height) = self.editor.lock().size();
                 let scaling_factor = self.scaling_factor.load(Ordering::Relaxed);
                 let mut size = ViewRect {
                     right: (unscaled_width as f32 * scaling_factor).round() as i32,
@@ -314,7 +314,7 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
                 }
             };
 
-            *editor_handle = Some(self.editor.spawn(
+            *editor_handle = Some(self.editor.lock().spawn(
                 ParentWindowHandle { handle },
                 self.inner.clone().make_gui_context(),
             ));
@@ -376,7 +376,7 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
         // TODO: This is technically incorrect during resizing, this should still report the old
         //       size until `.on_size()` has been called. We should probably only bother fixing this
         //       if it turns out to be an issue.
-        let (unscaled_width, unscaled_height) = self.editor.size();
+        let (unscaled_width, unscaled_height) = self.editor.lock().size();
         let scaling_factor = self.scaling_factor.load(Ordering::Relaxed);
         let size = &mut *size;
         size.left = 0;
@@ -391,7 +391,7 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
         check_null_ptr!(new_size);
 
         // TODO: Implement Host->Plugin resizing
-        let (unscaled_width, unscaled_height) = self.editor.size();
+        let (unscaled_width, unscaled_height) = self.editor.lock().size();
         let scaling_factor = self.scaling_factor.load(Ordering::Relaxed);
         let (editor_width, editor_height) = (
             (unscaled_width as f32 * scaling_factor).round() as i32,
@@ -470,7 +470,7 @@ impl<P: Vst3Plugin> IPlugViewContentScaleSupport for WrapperView<P> {
             return kResultFalse;
         }
 
-        if self.editor.set_scale_factor(factor) {
+        if self.editor.lock().set_scale_factor(factor) {
             self.scaling_factor.store(factor, Ordering::Relaxed);
             kResultOk
         } else {
