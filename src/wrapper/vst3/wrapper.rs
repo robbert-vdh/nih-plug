@@ -26,7 +26,7 @@ use super::view::WrapperView;
 use crate::buffer::Buffer;
 use crate::context::Transport;
 use crate::midi::{MidiConfig, NoteEvent};
-use crate::param::ParamFlags;
+use crate::params::ParamFlags;
 use crate::plugin::{
     AuxiliaryBuffers, AuxiliaryIOConfig, BufferConfig, BusConfig, ProcessMode, ProcessStatus,
     Vst3Plugin,

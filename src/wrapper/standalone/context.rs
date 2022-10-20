@@ -5,7 +5,7 @@ use super::backend::Backend;
 use super::wrapper::{GuiTask, Wrapper};
 use crate::context::{GuiContext, InitContext, PluginApi, ProcessContext, Transport};
 use crate::midi::NoteEvent;
-use crate::param::internals::ParamPtr;
+use crate::params::internals::ParamPtr;
 use crate::plugin::Plugin;
 
 /// A [`GuiContext`] implementation for the wrapper. This is passed to the plugin in

@@ -92,7 +92,7 @@
 use baseview::{WindowOpenOptions, WindowScalePolicy};
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel;
-use nih_plug::param::persist::PersistentField;
+use nih_plug::params::persist::PersistentField;
 use nih_plug::prelude::{Editor, GuiContext, ParentWindowHandle};
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
@@ -235,7 +235,7 @@ pub trait IcedEditor: 'static + Send + Sync + Sized {
 #[derive(Serialize, Deserialize)]
 pub struct IcedState {
     /// The window's size in logical pixels before applying `scale_factor`.
-    #[serde(with = "nih_plug::param::persist::serialize_atomic_cell")]
+    #[serde(with = "nih_plug::params::persist::serialize_atomic_cell")]
     size: AtomicCell<(u32, u32)>,
     /// Whether the editor's window is currently open.
     #[serde(skip)]

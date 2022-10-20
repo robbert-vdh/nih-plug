@@ -7,7 +7,7 @@ use vst3_sys::vst::IComponentHandler;
 use super::inner::{Task, WrapperInner};
 use crate::context::{GuiContext, InitContext, PluginApi, ProcessContext, Transport};
 use crate::midi::NoteEvent;
-use crate::param::internals::ParamPtr;
+use crate::params::internals::ParamPtr;
 use crate::plugin::Vst3Plugin;
 use crate::wrapper::state::PluginState;
 

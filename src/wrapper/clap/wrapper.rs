@@ -80,8 +80,8 @@ use crate::buffer::Buffer;
 use crate::context::Transport;
 use crate::event_loop::{EventLoop, MainThreadExecutor, TASK_QUEUE_CAPACITY};
 use crate::midi::{MidiConfig, NoteEvent};
-use crate::param::internals::ParamPtr;
-use crate::param::{ParamFlags, Params};
+use crate::params::internals::ParamPtr;
+use crate::params::{ParamFlags, Params};
 use crate::plugin::{
     AuxiliaryBuffers, BufferConfig, BusConfig, ClapPlugin, Editor, ParentWindowHandle, ProcessMode,
     ProcessStatus,
@@ -299,7 +299,7 @@ pub enum OutputParamEvent {
         /// The internal hash for the parameter.
         param_hash: u32,
         /// The 'plain' value as reported to CLAP. This is the normalized value multiplied by
-        /// [`Param::step_size()`][crate::Param::step_size()].
+        /// [`params::step_size()`][crate::params::step_size()].
         clap_plain_value: f64,
     },
     /// Begin an automation gesture. This must always be sent after sending one or more [`SetValue`]

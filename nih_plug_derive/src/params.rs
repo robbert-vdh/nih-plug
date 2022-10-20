@@ -332,7 +332,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
 
         quote! {
             // This may not be in scope otherwise, used to call .as_ptr()
-            use ::nih_plug::param::Param;
+            use ::nih_plug::params::Param;
 
             #[allow(unused_mut)]
             let mut param_map = vec![#(#param_mapping_self_tokens),*];
@@ -354,9 +354,9 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                 .map(|PersistentField { field, key }| {
                     (
                         quote! {
-                            match ::nih_plug::param::persist::PersistentField::map(
+                            match ::nih_plug::params::persist::PersistentField::map(
                                 &self.#field,
-                                ::nih_plug::param::persist::serialize_field,
+                                ::nih_plug::params::persist::serialize_field,
                             ) {
                                 Ok(data) => {
                                     serialized.insert(String::from(#key), data);
@@ -372,9 +372,9 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                         },
                         quote! {
                             #key => {
-                                match ::nih_plug::param::persist::deserialize_field(&data) {
+                                match ::nih_plug::params::persist::deserialize_field(&data) {
                                     Ok(deserialized) => {
-                                        ::nih_plug::param::persist::PersistentField::set(
+                                        ::nih_plug::params::persist::PersistentField::set(
                                             &self.#field,
                                             deserialized,
                                         );

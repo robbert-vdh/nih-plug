@@ -15,8 +15,8 @@ use super::config::WrapperConfig;
 use super::context::{WrapperGuiContext, WrapperInitContext, WrapperProcessContext};
 use crate::context::Transport;
 use crate::midi::NoteEvent;
-use crate::param::internals::ParamPtr;
-use crate::param::{ParamFlags, Params};
+use crate::params::internals::ParamPtr;
+use crate::params::{ParamFlags, Params};
 use crate::plugin::{
     AuxiliaryBuffers, AuxiliaryIOConfig, BufferConfig, BusConfig, Editor, ParentWindowHandle,
     Plugin, ProcessMode, ProcessStatus,

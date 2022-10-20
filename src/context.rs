@@ -3,8 +3,8 @@
 use std::fmt::Display;
 
 use crate::midi::NoteEvent;
-use crate::param::internals::ParamPtr;
-use crate::param::Param;
+use crate::params::internals::ParamPtr;
+use crate::params::Param;
 use crate::wrapper::state::PluginState;
 
 /// Callbacks the plugin can make while it is being initialized. This is passed to the plugin during
@@ -220,7 +220,7 @@ pub struct Transport {
 }
 
 /// A convenience helper for setting parameter values. Any changes made here will be broadcasted to
-/// the host and reflected in the plugin's [`Params`][crate::param::Params] object. These
+/// the host and reflected in the plugin's [`Params`][crate::params::Params] object. These
 /// functions should only be called from the main thread.
 pub struct ParamSetter<'a> {
     pub raw_context: &'a dyn GuiContext,

@@ -8,10 +8,13 @@ code then it will not be listed here.
 
 ## [2022-10-20]
 
+- The `nih_plug::param` module has been renamed to `nih_plug::params`. Code that
+  only uses the prelude module doesn't need to be changed.
 - Some items have been moved out of `nih_plug::param::internals`. The main
   `Params` trait is now located under `nih_plug::param`, and the
   `PersistentTrait` trait, implementations, and helper functions are now part of
-  a new `nih_plug::param::persist` module.
+  a new `nih_plug::param::persist` module. Code importing the `Params` trait
+  through the prelude module doesn't need to be changed.
 
 ## [2022-10-13]
 

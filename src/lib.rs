@@ -105,6 +105,6 @@ pub mod buffer;
 pub mod context;
 mod event_loop;
 pub mod midi;
-pub mod param;
+pub mod params;
 pub mod plugin;
 pub mod wrapper;

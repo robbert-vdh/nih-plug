@@ -109,7 +109,7 @@ where
 impl_persistent_field_parking_lot_mutex!(parking_lot::Mutex<T>);
 impl_persistent_field_parking_lot_mutex!(parking_lot::FairMutex<T>);
 
-/// Can be used with the `#[serde(with = "nih_plug::param::internals::serialize_atomic_cell")]`
+/// Can be used with the `#[serde(with = "nih_plug::params::internals::serialize_atomic_cell")]`
 /// attribute to serialize `AtomicCell<T>`s.
 pub mod serialize_atomic_cell {
     use crossbeam::atomic::AtomicCell;

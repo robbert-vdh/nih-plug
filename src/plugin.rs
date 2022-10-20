@@ -7,7 +7,7 @@ use std::sync::Arc;
 use crate::buffer::Buffer;
 use crate::context::{GuiContext, InitContext, ProcessContext};
 use crate::midi::MidiConfig;
-use crate::param::Params;
+use crate::params::Params;
 use crate::wrapper::clap::features::ClapFeature;
 
 /// Basic functionality that needs to be implemented by a plugin. The wrappers will use this to

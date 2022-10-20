@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
-use crate::param::internals::ParamPtr;
-use crate::param::{Param, ParamMut, Params};
+use crate::params::internals::ParamPtr;
+use crate::params::{Param, ParamMut, Params};
 use crate::plugin::{BufferConfig, Plugin};
 
 // These state objects are also exposed directly to the plugin so it can do its own internal preset
@@ -45,7 +45,7 @@ pub struct PluginState {
     /// parameter automation though, depending on how the host implements that.
     pub params: BTreeMap<String, ParamValue>,
     /// Arbitrary fields that should be persisted together with the plugin's parameters. Any field
-    /// on the [`Params`][crate::param::Params] struct that's annotated with `#[persist =
+    /// on the [`Params`][crate::params::Params] struct that's annotated with `#[persist =
     /// "stable_name"]` will be persisted this way.
     ///
     /// The individual fields are also serialized as JSON so they can safely be restored

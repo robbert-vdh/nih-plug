@@ -5,7 +5,7 @@
 
 use baseview::{WindowHandle, WindowScalePolicy};
 use crossbeam::atomic::AtomicCell;
-use nih_plug::param::persist::PersistentField;
+use nih_plug::params::persist::PersistentField;
 use nih_plug::prelude::{Editor, GuiContext, ParentWindowHandle};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -77,11 +77,11 @@ where
 #[derive(Serialize, Deserialize)]
 pub struct ViziaState {
     /// The window's size in logical pixels before applying `scale_factor`.
-    #[serde(with = "nih_plug::param::persist::serialize_atomic_cell")]
+    #[serde(with = "nih_plug::params::persist::serialize_atomic_cell")]
     size: AtomicCell<(u32, u32)>,
     /// A scale factor that should be applied to `size` separate from from any system HiDPI scaling.
     /// This can be used to allow GUIs to be scaled uniformly.
-    #[serde(with = "nih_plug::param::persist::serialize_atomic_cell")]
+    #[serde(with = "nih_plug::params::persist::serialize_atomic_cell")]
     scale_factor: AtomicCell<f64>,
     /// Whether the editor's window is currently open.
     #[serde(skip)]
