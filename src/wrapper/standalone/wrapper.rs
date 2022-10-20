@@ -334,15 +334,6 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
         push_successful
     }
 
-    /// The DPI scale factor for this standalone application
-    pub fn dpi_scale(&self) -> f32 {
-        // DPI scaling should be ignored on macOS since the OS already handles this
-        #[cfg(target_os = "macos")]
-        return 1.0;
-        #[cfg(not(target_os = "macos"))]
-        return self.config.dpi_scale;
-    }
-
     /// Get the plugin's state object, may be called by the plugin's GUI as part of its own preset
     /// management. The wrapper doesn't use these functions and serializes and deserializes directly
     /// the JSON in the relevant plugin API methods instead.
