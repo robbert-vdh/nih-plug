@@ -458,8 +458,8 @@ impl<P: Vst3Plugin> WrapperInner<P> {
                 // Otherwise we'll set the state right here and now, since this function should be
                 // called from a GUI thread
                 unsafe {
-                    state::deserialize_object(
-                        &state,
+                    state::deserialize_object::<P>(
+                        &mut state,
                         self.params.clone(),
                         state::make_params_getter(&self.param_by_hash, &self.param_id_to_hash),
                         self.current_buffer_config.load().as_ref(),

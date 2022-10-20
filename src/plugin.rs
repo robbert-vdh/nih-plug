@@ -9,6 +9,7 @@ use crate::context::{GuiContext, InitContext, ProcessContext};
 use crate::midi::MidiConfig;
 use crate::params::Params;
 use crate::wrapper::clap::features::ClapFeature;
+use crate::wrapper::state::PluginState;
 
 /// Basic functionality that needs to be implemented by a plugin. The wrappers will use this to
 /// expose the plugin in a particular plugin format.
@@ -99,6 +100,18 @@ pub trait Plugin: Default + Send + Sync + 'static {
     fn editor(&self) -> Option<Box<dyn Editor>> {
         None
     }
+
+    /// This function is always called just before a [`PluginState`] is loaded. This lets you
+    /// directly modify old plugin state to perform migrations based on the [`PluginState::version`]
+    /// field. Some examples of use cases for this are renaming parameter indices, remapping
+    /// parameter values, and preserving old preset compatibility when introducing new parameters
+    /// with default values that would otherwise change the sound of a preset. Keep in mind that
+    /// automation may still be broken in the first two use cases.
+    ///
+    /// # Note
+    ///
+    /// This is an advanced feature that the vast majority of plugins won't need to implement.
+    fn filter_state(state: &mut PluginState) {}
 
     //
     // The following functions follow the lifetime of the plugin.

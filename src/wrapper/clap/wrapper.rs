@@ -1588,8 +1588,8 @@ impl<P: ClapPlugin> Wrapper<P> {
                 // Otherwise we'll set the state right here and now, since this function should be
                 // called from a GUI thread
                 unsafe {
-                    state::deserialize_object(
-                        &state,
+                    state::deserialize_object::<P>(
+                        &mut state,
                         self.params.clone(),
                         state::make_params_getter(&self.param_by_hash, &self.param_id_to_hash),
                         self.current_buffer_config.load().as_ref(),
@@ -2231,9 +2231,9 @@ impl<P: ClapPlugin> Wrapper<P> {
             // FIXME: Zero capacity channels allocate on receiving, find a better alternative that
             //        doesn't do that
             let updated_state = permit_alloc(|| wrapper.updated_state_receiver.try_recv());
-            if let Ok(state) = updated_state {
-                state::deserialize_object(
-                    &state,
+            if let Ok(mut state) = updated_state {
+                state::deserialize_object::<P>(
+                    &mut state,
                     wrapper.params.clone(),
                     state::make_params_getter(&wrapper.param_by_hash, &wrapper.param_id_to_hash),
                     wrapper.current_buffer_config.load().as_ref(),
@@ -3130,7 +3130,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         }
         read_buffer.set_len(length as usize);
 
-        let success = state::deserialize_json(
+        let success = state::deserialize_json::<P>(
             &read_buffer,
             wrapper.params.clone(),
             state::make_params_getter(&wrapper.param_by_hash, &wrapper.param_id_to_hash),

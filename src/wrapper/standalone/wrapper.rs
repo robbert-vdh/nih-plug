@@ -435,10 +435,10 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
                     // FIXME: Zero capacity channels allocate on receiving, find a better
                     //        alternative that doesn't do that
                     let updated_state = permit_alloc(|| self.updated_state_receiver.try_recv());
-                    if let Ok(state) = updated_state {
+                    if let Ok(mut state) = updated_state {
                         unsafe {
-                            state::deserialize_object(
-                                &state,
+                            state::deserialize_object::<P>(
+                                &mut state,
                                 self.params.clone(),
                                 |param_id| self.param_map.get(param_id).copied(),
                                 Some(&self.buffer_config),

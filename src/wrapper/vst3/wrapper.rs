@@ -504,7 +504,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
             return kResultFalse;
         }
 
-        let success = state::deserialize_json(
+        let success = state::deserialize_json::<P>(
             &read_buffer,
             self.inner.params.clone(),
             state::make_params_getter(&self.inner.param_by_hash, &self.inner.param_id_to_hash),
@@ -1769,9 +1769,9 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
             // FIXME: Zero capacity channels allocate on receiving, find a better alternative that
             //        doesn't do that
             let updated_state = permit_alloc(|| self.inner.updated_state_receiver.try_recv());
-            if let Ok(state) = updated_state {
-                state::deserialize_object(
-                    &state,
+            if let Ok(mut state) = updated_state {
+                state::deserialize_object::<P>(
+                    &mut state,
                     self.inner.params.clone(),
                     state::make_params_getter(
                         &self.inner.param_by_hash,
