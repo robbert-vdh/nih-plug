@@ -32,8 +32,8 @@ pub fn register_theme(cx: &mut Context) {
 /// with parameter values with VIZIA works a little different from updating any other state. These
 /// events are automatically handled by `nih_plug_vizia`.
 ///
-/// Call the [`upcast()`][Self::upcast()] method to be able to emit this event through a
-/// [`Context`][vizia::Context].
+/// Call the [`upcast()`][Self::upcast()] method to be able to emit this event through an
+/// [`EventContext`][EventContext].
 #[derive(Debug, Clone, Copy)]
 pub enum ParamEvent<'a, P: Param> {
     /// Begin an automation gesture for a parameter.
@@ -144,7 +144,7 @@ impl<P: Param> From<ParamEvent<'_, P>> for RawParamEvent {
 
 impl<P: Param> ParamEvent<'_, P> {
     /// Convert this event into a type erased version of itself that can be emitted through
-    /// [`Context::emit()`][vizia::Context::emit()].
+    /// [`EventContext::emit()`][EventContext::emit()].
     ///
     /// TODO: Think of a better, clearer term for this
     pub fn upcast(self) -> RawParamEvent {

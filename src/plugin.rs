@@ -393,8 +393,8 @@ pub enum ProcessStatus {
     KeepAlive,
 }
 
-/// The plugin's current processing mode. Can be queried through [`ProcessContext::process_mode()`].
-/// The host will reinitialize the plugin whenever this changes.
+/// The plugin's current processing mode. Exposed through [`BufferConfig::process_mode`]. The host
+/// will reinitialize the plugin whenever this changes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProcessMode {
     /// The plugin is processing audio in real time at a fixed rate.

@@ -71,15 +71,15 @@ pub trait Param: Display {
     /// Get this parameter's polyphonic modulation ID. If this is set for a parameter in a CLAP
     /// plugin, then polyphonic modulation will be enabled for that parameter. Polyphonic modulation
     /// is communicated to the plugin through
-    /// [`NoteEvent::PolyModulation][crate::prelude::NoteEvent::PolyModulation`] and
-    /// [`NoteEvent::MonoAutomation][crate::prelude::NoteEvent::MonoAutomation`] events. See the
+    /// [`NoteEvent::PolyModulation`][crate::prelude::NoteEvent::PolyModulation] and
+    /// [`NoteEvent::MonoAutomation`][crate::prelude::NoteEvent::MonoAutomation] events. See the
     /// documentation on those events for more information.
     ///
     /// # Important
     ///
     /// After enabling polyphonic modulation, the plugin **must** start sending
-    /// [`NoteEvent::VoiceTerminated`][crate::prelude::NoteEvent::VoiceEnd] events to the host when a voice
-    /// has fully ended. This allows the host to reuse its modulation resources.
+    /// [`NoteEvent::VoiceTerminated`][crate::prelude::NoteEvent::VoiceTerminated] events to the
+    /// host when a voice has fully ended. This allows the host to reuse its modulation resources.
     fn poly_modulation_id(&self) -> Option<u32>;
 
     /// Get the unnormalized value for this parameter.
@@ -207,18 +207,18 @@ pub(crate) trait ParamMut: Param {
 ///
 /// # Deriving `Params` and `#[id = "stable"]`
 ///
-/// This trait can be derived on a struct containing [`FloatParam`][super::FloatParam] and other
-/// parameter fields by adding `#[derive(Params)]`. When deriving this trait, any of those parameter
-/// fields should have the `#[id = "stable"]` attribute, where `stable` is an up to 6 character long
-/// string (to avoid collisions) that will be used to identify the parameter internally so you can
-/// safely move it around and rename the field without breaking compatibility with old presets.
+/// This trait can be derived on a struct containing [`FloatParam`] and other parameter fields by
+/// adding `#[derive(Params)]`. When deriving this trait, any of those parameter fields should have
+/// the `#[id = "stable"]` attribute, where `stable` is an up to 6 character long string (to avoid
+/// collisions) that will be used to identify the parameter internally so you can safely move it
+/// around and rename the field without breaking compatibility with old presets.
 ///
 /// ## `#[persist = "key"]`
 ///
 /// The struct can also contain other fields that should be persisted along with the rest of the
-/// preset data. These fields should be [`PersistentField`]s annotated with the `#[persist = "key"]`
-/// attribute containing types that can be serialized and deserialized with
-/// [Serde](https://serde.rs/).
+/// preset data. These fields should be [`PersistentField`][persist::PersistentField]s annotated
+/// with the `#[persist = "key"]` attribute containing types that can be serialized and deserialized
+/// with [Serde](https://serde.rs/).
 ///
 /// ## `#[nested]`, `#[nested(group_name = "group name")]`
 ///
@@ -276,16 +276,16 @@ pub unsafe trait Params: 'static + Send + Sync {
 
     /// Serialize all fields marked with `#[persist = "stable_name"]` into a hash map containing
     /// JSON-representations of those fields so they can be written to the plugin's state and
-    /// recalled later. This uses [`serialize_field()`] under the hood.
+    /// recalled later. This uses [`persist::serialize_field()`] under the hood.
     fn serialize_fields(&self) -> BTreeMap<String, String> {
         BTreeMap::new()
     }
 
     /// Restore all fields marked with `#[persist = "stable_name"]` from a hashmap created by
     /// [`serialize_fields()`][Self::serialize_fields()]. All of these fields should be wrapped in a
-    /// [`PersistentField`] with thread safe interior mutability, like an `RwLock` or a `Mutex`.
-    /// This gets called when the plugin's state is being restored. This uses [deserialize_field()]
-    /// under the hood.
+    /// [`persist::PersistentField`] with thread safe interior mutability, like an `RwLock` or a
+    /// `Mutex`. This gets called when the plugin's state is being restored. This uses
+    /// [`persist::deserialize_field()`] under the hood.
     #[allow(unused_variables)]
     fn deserialize_fields(&self, serialized: &BTreeMap<String, String>) {}
 }

@@ -1,13 +1,13 @@
 //! Traits and helpers for persistent fields. See the [`Params`][super::Params] trait for more
 //! information.
 
-/// Re-export for use in the [`Params`] proc-macro.
+/// Re-export for use in the [`Params`][super::Params] proc-macro.
 pub use serde_json::from_str as deserialize_field;
-/// Re-export for use in the [`Params`] proc-macro.
+/// Re-export for use in the [`Params`][super::Params] proc-macro.
 pub use serde_json::to_string as serialize_field;
 
 /// Handles the functionality needed for persisting a non-parameter fields in a plugin's state.
-/// These types can be used with [`Params`]' `#[persist = "..."]` attributes.
+/// These types can be used with [`Params`][super::Params]' `#[persist = "..."]` attributes.
 ///
 /// This should be implemented for some type with interior mutability containing a `T`.
 //

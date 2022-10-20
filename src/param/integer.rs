@@ -55,7 +55,7 @@ pub struct IntParam {
     /// If this parameter has been marked as polyphonically modulatable, then this will be a unique
     /// integer identifying the parameter. Because this value is determined by the plugin itself,
     /// the plugin can easily map
-    /// [`NoteEvent::PolyModulation][crate::prelude::NoteEvent::PolyModulation`] events to the
+    /// [`NoteEvent::PolyModulation`][crate::prelude::NoteEvent::PolyModulation] events to the
     /// correct parameter by pattern matching on a constant.
     poly_modulation_id: Option<u32>,
     /// Optional custom conversion function from a plain **unnormalized** value to a string.
@@ -253,7 +253,7 @@ impl IntParam {
     }
 
     /// Enable polyphonic modulation for this parameter. The ID is used to uniquely identify this
-    /// parameter in [`NoteEvent::PolyModulation][crate::prelude::NoteEvent::PolyModulation`]
+    /// parameter in [`NoteEvent::PolyModulation`][crate::prelude::NoteEvent::PolyModulation]
     /// events, and must thus be unique between _all_ polyphonically modulatable parameters. See the
     /// event's documentation on how to use polyphonic modulation. Also consider configuring the
     /// [`ClapPlugin::CLAP_POLY_MODULATION_CONFIG`][crate::prelude::ClapPlugin::CLAP_POLY_MODULATION_CONFIG]
@@ -262,8 +262,8 @@ impl IntParam {
     /// # Important
     ///
     /// After enabling polyphonic modulation, the plugin **must** start sending
-    /// [`NoteEvent::VoiceTerminated`][crate::prelude::NoteEvent::VoiceEnd] events to the host when
-    /// a voice has fully ended. This allows the host to reuse its modulation resources.
+    /// [`NoteEvent::VoiceTerminated`][crate::prelude::NoteEvent::VoiceTerminated] events to the
+    /// host when a voice has fully ended. This allows the host to reuse its modulation resources.
     pub fn with_poly_modulation_id(mut self, id: u32) -> Self {
         self.poly_modulation_id = Some(id);
         self
