@@ -93,6 +93,7 @@ impl Plugin for Gain {
         create_egui_editor(
             self.params.editor_state.clone(),
             (),
+            |_, _| {},
             move |egui_ctx, setter, _state| {
                 egui::CentralPanel::default().show(egui_ctx, |ui| {
                     // NOTE: See `plugins/diopser/src/editor.rs` for an example using the generic UI widget

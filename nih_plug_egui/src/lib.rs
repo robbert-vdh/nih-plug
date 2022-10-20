@@ -35,18 +35,21 @@ pub mod widgets;
 /// field on your parameters struct.
 ///
 /// See [`EguiState::from_size()`].
-pub fn create_egui_editor<T, U>(
+pub fn create_egui_editor<T, B, U>(
     egui_state: Arc<EguiState>,
     user_state: T,
+    build: B,
     update: U,
 ) -> Option<Box<dyn Editor>>
 where
     T: 'static + Send + Sync,
+    B: Fn(&Context, &mut T) + 'static + Send + Sync,
     U: Fn(&Context, &ParamSetter, &mut T) + 'static + Send + Sync,
 {
     Some(Box::new(EguiEditor {
         egui_state,
         user_state: Arc::new(RwLock::new(user_state)),
+        build: Arc::new(build),
         update: Arc::new(update),
 
         // TODO: We can't get the size of the window when baseview does its own scaling, so if the
@@ -110,6 +113,9 @@ struct EguiEditor<T> {
     egui_state: Arc<EguiState>,
     /// The plugin's state. This is kept in between editor openenings.
     user_state: Arc<RwLock<T>>,
+
+    /// The user's build function. Applied once at the start of the application.
+    build: Arc<dyn Fn(&Context, &mut T) + 'static + Send + Sync>,
     /// The user's update function.
     update: Arc<dyn Fn(&Context, &ParamSetter, &mut T) + 'static + Send + Sync>,
 
@@ -127,6 +133,7 @@ where
         parent: ParentWindowHandle,
         context: Arc<dyn GuiContext>,
     ) -> Box<dyn std::any::Any + Send + Sync> {
+        let build = self.build.clone();
         let update = self.update.clone();
         let state = self.user_state.clone();
 
@@ -161,7 +168,7 @@ where
                 }),
             },
             state,
-            |_, _, _| {},
+            move |egui_ctx, _queue, state| build(egui_ctx, &mut state.write()),
             move |egui_ctx, _queue, state| {
                 let setter = ParamSetter::new(context.as_ref());
 
