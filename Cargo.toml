@@ -112,7 +112,7 @@ jack = { git = "https://github.com/robbert-vdh/rust-jack.git", branch = "feature
 rtrb = { version = "0.2.2", optional = true }
 
 # Used for the `vst3` feature
-vst3-sys = { git = "https://github.com/robbert-vdh/vst3-sys.git", branch = "fix/note-off-event", optional = true }
+vst3-sys = { git = "https://github.com/robbert-vdh/vst3-sys.git", branch = "fix/drop-box-from-raw", optional = true }
 
 # Used for the `zstd` feature
 zstd = { version = "0.11.2", optional = true }
