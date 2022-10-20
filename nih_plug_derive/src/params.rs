@@ -354,9 +354,9 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                 .map(|PersistentField { field, key }| {
                     (
                         quote! {
-                            match ::nih_plug::param::internals::PersistentField::map(
+                            match ::nih_plug::param::persist::PersistentField::map(
                                 &self.#field,
-                                ::nih_plug::param::internals::serialize_field,
+                                ::nih_plug::param::persist::serialize_field,
                             ) {
                                 Ok(data) => {
                                     serialized.insert(String::from(#key), data);
@@ -372,9 +372,9 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                         },
                         quote! {
                             #key => {
-                                match ::nih_plug::param::internals::deserialize_field(&data) {
+                                match ::nih_plug::param::persist::deserialize_field(&data) {
                                     Ok(deserialized) => {
-                                        ::nih_plug::param::internals::PersistentField::set(
+                                        ::nih_plug::param::persist::PersistentField::set(
                                             &self.#field,
                                             deserialized,
                                         );

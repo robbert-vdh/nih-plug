@@ -10,7 +10,7 @@ use baseview::{Size, WindowHandle, WindowOpenOptions, WindowScalePolicy};
 use crossbeam::atomic::AtomicCell;
 use egui::Context;
 use egui_baseview::EguiWindow;
-use nih_plug::param::internals::PersistentField;
+use nih_plug::param::persist::PersistentField;
 use nih_plug::prelude::{Editor, GuiContext, ParamSetter, ParentWindowHandle};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -63,7 +63,7 @@ where
 #[derive(Serialize, Deserialize)]
 pub struct EguiState {
     /// The window's size in logical pixels before applying `scale_factor`.
-    #[serde(with = "nih_plug::param::internals::serialize_atomic_cell")]
+    #[serde(with = "nih_plug::param::persist::serialize_atomic_cell")]
     size: AtomicCell<(u32, u32)>,
     /// Whether the editor's window is currently open.
     #[serde(skip)]

@@ -20,6 +20,7 @@ mod float;
 mod integer;
 
 pub mod internals;
+pub mod persist;
 pub mod range;
 pub mod smoothing;
 
