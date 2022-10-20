@@ -174,7 +174,7 @@ impl Editor for ViziaEditor {
         &self,
         parent: ParentWindowHandle,
         context: Arc<dyn GuiContext>,
-    ) -> Box<dyn std::any::Any + Send + Sync> {
+    ) -> Box<dyn std::any::Any + Send> {
         let app = self.app.clone();
         let vizia_state = self.vizia_state.clone();
         let apply_theming = self.apply_theming;
@@ -258,7 +258,6 @@ struct ViziaEditorHandle {
 /// The window handle enum stored within 'WindowHandle' contains raw pointers. Is there a way around
 /// having this requirement?
 unsafe impl Send for ViziaEditorHandle {}
-unsafe impl Sync for ViziaEditorHandle {}
 
 impl Drop for ViziaEditorHandle {
     fn drop(&mut self) {

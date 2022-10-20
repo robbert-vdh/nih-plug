@@ -282,7 +282,7 @@ pub trait Editor: Send {
         &self,
         parent: ParentWindowHandle,
         context: Arc<dyn GuiContext>,
-    ) -> Box<dyn Any + Send + Sync>;
+    ) -> Box<dyn Any + Send>;
 
     /// Returns the (current) size of the editor in pixels as a `(width, height)` pair. This size
     /// must be reported in _logical pixels_, i.e. the size before being multiplied by the DPI

@@ -132,7 +132,7 @@ where
         &self,
         parent: ParentWindowHandle,
         context: Arc<dyn GuiContext>,
-    ) -> Box<dyn std::any::Any + Send + Sync> {
+    ) -> Box<dyn std::any::Any + Send> {
         let build = self.build.clone();
         let update = self.update.clone();
         let state = self.user_state.clone();
@@ -213,7 +213,6 @@ struct EguiEditorHandle {
 /// The window handle enum stored within 'WindowHandle' contains raw pointers. Is there a way around
 /// having this requirement?
 unsafe impl Send for EguiEditorHandle {}
-unsafe impl Sync for EguiEditorHandle {}
 
 impl Drop for EguiEditorHandle {
     fn drop(&mut self) {

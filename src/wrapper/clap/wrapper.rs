@@ -115,7 +115,7 @@ pub struct Wrapper<P: ClapPlugin> {
     editor: Option<Mutex<Box<dyn Editor>>>,
     /// A handle for the currently active editor instance. The plugin should implement `Drop` on
     /// this handle for its closing behavior.
-    editor_handle: RwLock<Option<Box<dyn Any + Send + Sync>>>,
+    editor_handle: Mutex<Option<Box<dyn Any + Send>>>,
     /// The DPI scaling factor as passed to the [IPlugViewContentScaleSupport::set_scale_factor()]
     /// function. Defaults to 1.0, and will be kept there on macOS. When reporting and handling size
     /// the sizes communicated to and from the DAW should be scaled by this factor since NIH-plug's
@@ -544,7 +544,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             plugin: RwLock::new(plugin),
             params,
             editor,
-            editor_handle: RwLock::new(None),
+            editor_handle: Mutex::new(None),
             editor_scaling_factor: AtomicF32::new(1.0),
 
             is_processing: AtomicBool::new(false),
@@ -2645,7 +2645,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         check_null_ptr!(false, plugin);
         let wrapper = &*(plugin as *const Self);
 
-        let editor_handle = wrapper.editor_handle.read();
+        let editor_handle = wrapper.editor_handle.lock();
         if editor_handle.is_none() {
             true
         } else {
@@ -2658,7 +2658,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         check_null_ptr!((), plugin);
         let wrapper = &*(plugin as *const Self);
 
-        let mut editor_handle = wrapper.editor_handle.write();
+        let mut editor_handle = wrapper.editor_handle.lock();
         if editor_handle.is_some() {
             *editor_handle = None;
         } else {
@@ -2764,7 +2764,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         let window = &*window;
 
         let result = {
-            let mut editor_handle = wrapper.editor_handle.write();
+            let mut editor_handle = wrapper.editor_handle.lock();
             if editor_handle.is_none() {
                 let api = CStr::from_ptr(window.api);
                 let handle = if api == CLAP_WINDOW_API_X11 {
