@@ -1680,7 +1680,7 @@ impl<P: ClapPlugin> Wrapper<P> {
     }
 
     unsafe extern "C" fn destroy(plugin: *const clap_plugin) {
-        Arc::from_raw(plugin as *mut Self);
+        drop(Arc::from_raw(plugin as *mut Self));
     }
 
     unsafe extern "C" fn activate(
