@@ -389,7 +389,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                 }
 
                 let bus_config = self.inner.current_bus_config.load();
-                let mut plugin = self.inner.plugin.write();
+                let mut plugin = self.inner.plugin.lock();
                 if plugin.initialize(
                     &bus_config,
                     &buffer_config,
@@ -461,7 +461,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
             }
             (true, None) => kResultFalse,
             (false, _) => {
-                self.inner.plugin.write().deactivate();
+                self.inner.plugin.lock().deactivate();
 
                 kResultOk
             }
@@ -519,7 +519,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
 
         let bus_config = self.inner.current_bus_config.load();
         if let Some(buffer_config) = self.inner.current_buffer_config.load() {
-            let mut plugin = self.inner.plugin.write();
+            let mut plugin = self.inner.plugin.lock();
             plugin.initialize(
                 &bus_config,
                 &buffer_config,
@@ -864,7 +864,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
         if self
             .inner
             .plugin
-            .read()
+            .lock()
             .accepts_bus_config(&proposed_config)
         {
             self.inner.current_bus_config.store(proposed_config);
@@ -1001,7 +1001,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
         // This function is also used to reset buffers on the plugin, so we should do the same
         // thing. We don't call `reset()` in `setup_processing()` for that same reason.
         if state {
-            process_wrapper(|| self.inner.plugin.write().reset());
+            process_wrapper(|| self.inner.plugin.lock().reset());
         }
 
         // We don't have any special handling for suspending and resuming plugins, yet
@@ -1530,7 +1530,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                 }
 
                 let result = if buffer_is_valid {
-                    let mut plugin = self.inner.plugin.write();
+                    let mut plugin = self.inner.plugin.lock();
                     // SAFETY: Shortening these borrows is safe as even if the plugin overwrites the
                     //         slices (which it cannot do without using unsafe code), then they
                     //         would still be reset on the next iteration
@@ -1784,7 +1784,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
 
                 let bus_config = self.inner.current_bus_config.load();
                 let buffer_config = self.inner.current_buffer_config.load().unwrap();
-                let mut plugin = self.inner.plugin.write();
+                let mut plugin = self.inner.plugin.lock();
                 // FIXME: This is obviously not realtime-safe, but loading presets without doing
                 //         this could lead to inconsistencies. It's the plugin's responsibility to
                 //         not perform any realtime-unsafe work when the initialize function is

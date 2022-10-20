@@ -2,7 +2,7 @@ use atomic_refcell::AtomicRefCell;
 use baseview::{EventStatus, Window, WindowHandler, WindowOpenOptions};
 use crossbeam::channel;
 use crossbeam::queue::ArrayQueue;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::Mutex;
 use raw_window_handle::HasRawWindowHandle;
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
@@ -33,7 +33,7 @@ pub struct Wrapper<P: Plugin, B: Backend> {
     backend: AtomicRefCell<B>,
 
     /// The wrapped plugin instance.
-    plugin: RwLock<P>,
+    plugin: Mutex<P>,
     /// The plugin's parameters. These are fetched once during initialization. That way the
     /// `ParamPtr`s are guaranteed to live at least as long as this object and we can interact with
     /// the `Params` object without having to acquire a lock on `plugin`.
@@ -176,7 +176,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
         let wrapper = Arc::new(Wrapper {
             backend: AtomicRefCell::new(backend),
 
-            plugin: RwLock::new(plugin),
+            plugin: Mutex::new(plugin),
             params,
             known_parameters: param_map.iter().map(|(_, ptr, _)| *ptr).collect(),
             param_map: param_map
@@ -209,7 +209,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
         // Right now the IO configuration is fixed in the standalone target, so if the plugin cannot
         // work with this then we cannot initialize the plugin at all.
         {
-            let mut plugin = wrapper.plugin.write();
+            let mut plugin = wrapper.plugin.lock();
             if !plugin.accepts_bus_config(&wrapper.bus_config) {
                 return Err(WrapperError::IncompatibleConfig {
                     input_channels: wrapper.bus_config.num_input_channels,
@@ -309,7 +309,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
 
         // Some plugins may use this to clean up resources. Should not be needed for the standalone
         // application, but it seems like a good idea to stay consistent.
-        self.plugin.write().deactivate();
+        self.plugin.lock().deactivate();
 
         Ok(())
     }
@@ -386,7 +386,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
                     }
 
                     let sample_rate = self.buffer_config.sample_rate;
-                    let mut plugin = self.plugin.write();
+                    let mut plugin = self.plugin.lock();
                     if let ProcessStatus::Error(err) = plugin.process(
                         buffer,
                         // TODO: Provide extra inputs and outputs in the JACk backend

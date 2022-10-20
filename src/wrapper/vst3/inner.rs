@@ -29,7 +29,7 @@ use crate::wrapper::util::{hash_param_id, process_wrapper};
 /// its own struct.
 pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// The wrapped plugin instance.
-    pub plugin: RwLock<P>,
+    pub plugin: Mutex<P>,
     /// The plugin's parameters. These are fetched once during initialization. That way the
     /// `ParamPtr`s are guaranteed to live at least as long as this object and we can interact with
     /// the `Params` object without having to acquire a lock on `plugin`.
@@ -272,7 +272,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             .collect();
 
         let wrapper = Self {
-            plugin: RwLock::new(plugin),
+            plugin: Mutex::new(plugin),
             params,
             editor,
 
@@ -477,7 +477,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
                 self.notify_param_values_changed();
                 let bus_config = self.current_bus_config.load();
                 if let Some(buffer_config) = self.current_buffer_config.load() {
-                    let mut plugin = self.plugin.write();
+                    let mut plugin = self.plugin.lock();
                     plugin.initialize(&bus_config, &buffer_config, &mut self.make_init_context());
                     process_wrapper(|| plugin.reset());
                 }

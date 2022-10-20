@@ -8,6 +8,7 @@ code then it will not be listed here.
 
 ## [2022-10-20]
 
+- Similar to the below change, `Plugin` also no longer requires `Sync`.
 - `Editor` and the editor handle returned by `Editor::spawn` now only require
   `Send` and no longer need `Sync`. This is not a breaking change, but it might
   be worth being aware of.

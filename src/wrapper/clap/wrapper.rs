@@ -59,7 +59,7 @@ use clap_sys::stream::{clap_istream, clap_ostream};
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::{self, SendTimeoutError};
 use crossbeam::queue::ArrayQueue;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::Mutex;
 use raw_window_handle::RawWindowHandle;
 use std::any::Any;
 use std::cmp;
@@ -104,7 +104,7 @@ pub struct Wrapper<P: ClapPlugin> {
     this: AtomicRefCell<Weak<Self>>,
 
     /// The wrapped plugin instance.
-    plugin: RwLock<P>,
+    plugin: Mutex<P>,
     /// The plugin's parameters. These are fetched once during initialization. That way the
     /// `ParamPtr`s are guaranteed to live at least as long as this object and we can interact with
     /// the `Params` object without having to acquire a lock on `plugin`.
@@ -541,7 +541,7 @@ impl<P: ClapPlugin> Wrapper<P> {
 
             this: AtomicRefCell::new(Weak::new()),
 
-            plugin: RwLock::new(plugin),
+            plugin: Mutex::new(plugin),
             params,
             editor,
             editor_handle: Mutex::new(None),
@@ -1607,7 +1607,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 self.notify_param_values_changed();
                 let bus_config = self.current_bus_config.load();
                 if let Some(buffer_config) = self.current_buffer_config.load() {
-                    let mut plugin = self.plugin.write();
+                    let mut plugin = self.plugin.lock();
                     plugin.initialize(&bus_config, &buffer_config, &mut self.make_init_context());
                     process_wrapper(|| plugin.reset());
                 }
@@ -1705,7 +1705,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             param.update_smoother(buffer_config.sample_rate, true);
         }
 
-        let mut plugin = wrapper.plugin.write();
+        let mut plugin = wrapper.plugin.lock();
         if plugin.initialize(
             &bus_config,
             &buffer_config,
@@ -1779,7 +1779,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         check_null_ptr!((), plugin);
         let wrapper = &*(plugin as *const Self);
 
-        wrapper.plugin.write().deactivate();
+        wrapper.plugin.lock().deactivate();
     }
 
     unsafe extern "C" fn start_processing(plugin: *const clap_plugin) -> bool {
@@ -1794,7 +1794,7 @@ impl<P: ClapPlugin> Wrapper<P> {
 
         // To be consistent with the VST3 wrapper, we'll also reset the buffers here in addition to
         // the dedicated `reset()` function.
-        process_wrapper(|| wrapper.plugin.write().reset());
+        process_wrapper(|| wrapper.plugin.lock().reset());
 
         true
     }
@@ -1810,7 +1810,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         check_null_ptr!((), plugin);
         let wrapper = &*(plugin as *const Self);
 
-        process_wrapper(|| wrapper.plugin.write().reset());
+        process_wrapper(|| wrapper.plugin.lock().reset());
     }
 
     unsafe extern "C" fn process(
@@ -2189,7 +2189,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 }
 
                 let result = if buffer_is_valid {
-                    let mut plugin = wrapper.plugin.write();
+                    let mut plugin = wrapper.plugin.lock();
                     // SAFETY: Shortening these borrows is safe as even if the plugin overwrites the
                     //         slices (which it cannot do without using unsafe code), then they
                     //         would still be reset on the next iteration
@@ -2251,7 +2251,7 @@ impl<P: ClapPlugin> Wrapper<P> {
 
                 let bus_config = wrapper.current_bus_config.load();
                 let buffer_config = wrapper.current_buffer_config.load().unwrap();
-                let mut plugin = wrapper.plugin.write();
+                let mut plugin = wrapper.plugin.lock();
                 // FIXME: This is obviously not realtime-safe, but loading presets without doing
                 //         this could lead to inconsistencies. It's the plugin's responsibility to
                 //         not perform any realtime-unsafe work when the initialize function is
@@ -3154,7 +3154,7 @@ impl<P: ClapPlugin> Wrapper<P> {
 
         let bus_config = wrapper.current_bus_config.load();
         if let Some(buffer_config) = wrapper.current_buffer_config.load() {
-            let mut plugin = wrapper.plugin.write();
+            let mut plugin = wrapper.plugin.lock();
             plugin.initialize(
                 &bus_config,
                 &buffer_config,

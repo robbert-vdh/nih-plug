@@ -24,7 +24,7 @@ use crate::wrapper::state::PluginState;
 ///   supported
 /// - Audio thread thread pools (with host integration in CLAP)
 #[allow(unused_variables)]
-pub trait Plugin: Default + Send + Sync + 'static {
+pub trait Plugin: Default + Send + 'static {
     const NAME: &'static str;
     const VENDOR: &'static str;
     const URL: &'static str;
