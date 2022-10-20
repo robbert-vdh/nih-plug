@@ -5,7 +5,7 @@
 
 use baseview::{WindowHandle, WindowScalePolicy};
 use crossbeam::atomic::AtomicCell;
-use nih_plug::param::internals::PersistentField;
+use nih_plug::param::persist::PersistentField;
 use nih_plug::prelude::{Editor, GuiContext, ParentWindowHandle};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};

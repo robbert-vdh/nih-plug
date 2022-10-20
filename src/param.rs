@@ -1,10 +1,17 @@
 //! NIH-plug can handle floating point, integer, boolean, and enum parameters. Parameters are
-//! managed by creating a struct deriving the [`Params`][internals::Params] trait containing fields
+//! managed by creating a struct deriving the [`Params`][Params] trait containing fields
 //! for those parameter types, and then returning a reference to that object from your
 //! [`Plugin::params()`][crate::prelude::Plugin::params()] method. See the `Params` trait for more
 //! information.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
+use std::sync::Arc;
+
+use self::internals::ParamPtr;
+
+// The proc-macro for deriving `Params`
+pub use nih_plug_derive::Params;
 
 // Parameter types
 mod boolean;
@@ -158,7 +165,7 @@ pub trait Param: Display {
     /// Flags to control the parameter's behavior. See [`ParamFlags`].
     fn flags(&self) -> ParamFlags;
 
-    /// Internal implementation detail for implementing [`Params`][internals::Params]. This should
+    /// Internal implementation detail for implementing [`Params`][Params]. This should
     /// not be used directly.
     fn as_ptr(&self) -> internals::ParamPtr;
 }
@@ -193,4 +200,106 @@ pub(crate) trait ParamMut: Param {
     /// restoring a plugin so everything is in sync. In that case the smoother should completely
     /// reset to the current value.
     fn update_smoother(&self, sample_rate: f32, reset: bool);
+}
+
+/// Describes a struct containing parameters and other persistent fields.
+///
+/// # Deriving `Params` and `#[id = "stable"]`
+///
+/// This trait can be derived on a struct containing [`FloatParam`][super::FloatParam] and other
+/// parameter fields by adding `#[derive(Params)]`. When deriving this trait, any of those parameter
+/// fields should have the `#[id = "stable"]` attribute, where `stable` is an up to 6 character long
+/// string (to avoid collisions) that will be used to identify the parameter internally so you can
+/// safely move it around and rename the field without breaking compatibility with old presets.
+///
+/// ## `#[persist = "key"]`
+///
+/// The struct can also contain other fields that should be persisted along with the rest of the
+/// preset data. These fields should be [`PersistentField`]s annotated with the `#[persist = "key"]`
+/// attribute containing types that can be serialized and deserialized with
+/// [Serde](https://serde.rs/).
+///
+/// ## `#[nested]`, `#[nested(group_name = "group name")]`
+///
+/// Finally, the `Params` object may include parameters from other objects. Setting a group name is
+/// optional, but some hosts can use this information to display the parameters in a tree structure.
+/// Parameter IDs and persisting keys still need to be **unique** when using nested parameter
+/// structs. This currently has the following caveats:
+///
+/// - Enforcing that parameter IDs and persist keys are unique does not work across nested structs.
+/// - Deserializing persisted fields will give false positives about fields not existing.
+///
+/// Take a look at the example gain example plugin to see how this is used.
+///
+/// ## `#[nested(id_prefix = "foo", group_name = "Foo")]`
+///
+/// Adding this attribute to a `Params` sub-object works similarly to the regular `#[nested]`
+/// attribute, but it also adds an ID to all parameters from the nested object. If a parameter in
+/// the nested nested object normally has parameter ID `bar`, the parameter's ID will now be renamed
+/// to `foo_bar`. _This makes it possible to reuse same parameter struct with different names and
+/// parameter indices._
+///
+/// This does **not** support persistent fields.
+///
+/// ## `#[nested(array, group_name = "Foo")]`
+///
+/// This can be applied to an array-like data structure and it works similar to a `nested` attribute
+/// with an `id_name`, except that it will iterate over the array and create unique indices for all
+/// nested parameters. If the nested parameters object has a parameter called `bar`, then that
+/// parameter will belong to the group `Foo {array_index + 1}`, and it will have the renamed
+/// parameter ID `bar_{array_index + 1}`.
+///
+/// This does **not** support persistent fields.
+///
+/// # Safety
+///
+/// This implementation is safe when using from the wrapper because the plugin's returned `Params`
+/// object lives in an `Arc`, and the wrapper also holds a reference to this `Arc`.
+pub unsafe trait Params: 'static + Send + Sync {
+    /// Create a mapping from unique parameter IDs to parameter pointers along with the name of the
+    /// group/unit/module they are in, as a `(param_id, param_ptr, group)` triple. The order of the
+    /// `Vec` determines the display order in the (host's) generic UI. The group name is either an
+    /// empty string for top level parameters, or a slash/delimited `"group name 1/Group Name 2"` if
+    /// this `Params` object contains nested child objects. All components of a group path must
+    /// exist or you may encounter panics. The derive macro does this for every parameter field
+    /// marked with `#[id = "stable"]`, and it also inlines all fields from nested child `Params`
+    /// structs marked with `#[nested(...)]` while prefixing that group name before the parameter's
+    /// original group name. Dereferencing the pointers stored in the values is only valid as long
+    /// as this object is valid.
+    ///
+    /// # Note
+    ///
+    /// This uses `String` even though for the `Params` derive macro `&'static str` would have been
+    /// fine to be able to support custom reusable Params implementations.
+    fn param_map(&self) -> Vec<(String, ParamPtr, String)>;
+
+    /// Serialize all fields marked with `#[persist = "stable_name"]` into a hash map containing
+    /// JSON-representations of those fields so they can be written to the plugin's state and
+    /// recalled later. This uses [`serialize_field()`] under the hood.
+    fn serialize_fields(&self) -> BTreeMap<String, String> {
+        BTreeMap::new()
+    }
+
+    /// Restore all fields marked with `#[persist = "stable_name"]` from a hashmap created by
+    /// [`serialize_fields()`][Self::serialize_fields()]. All of these fields should be wrapped in a
+    /// [`PersistentField`] with thread safe interior mutability, like an `RwLock` or a `Mutex`.
+    /// This gets called when the plugin's state is being restored. This uses [deserialize_field()]
+    /// under the hood.
+    #[allow(unused_variables)]
+    fn deserialize_fields(&self, serialized: &BTreeMap<String, String>) {}
+}
+
+/// This may be useful when building generic UIs using nested `Params` objects.
+unsafe impl<P: Params> Params for Arc<P> {
+    fn param_map(&self) -> Vec<(String, ParamPtr, String)> {
+        self.as_ref().param_map()
+    }
+
+    fn serialize_fields(&self) -> BTreeMap<String, String> {
+        self.as_ref().serialize_fields()
+    }
+
+    fn deserialize_fields(&self, serialized: &BTreeMap<String, String>) {
+        self.as_ref().deserialize_fields(serialized)
+    }
 }

@@ -80,8 +80,8 @@ use crate::buffer::Buffer;
 use crate::context::Transport;
 use crate::event_loop::{EventLoop, MainThreadExecutor, TASK_QUEUE_CAPACITY};
 use crate::midi::{MidiConfig, NoteEvent};
-use crate::param::internals::{ParamPtr, Params};
-use crate::param::ParamFlags;
+use crate::param::internals::ParamPtr;
+use crate::param::{ParamFlags, Params};
 use crate::plugin::{
     AuxiliaryBuffers, BufferConfig, BusConfig, ClapPlugin, Editor, ParentWindowHandle, ProcessMode,
     ProcessStatus,

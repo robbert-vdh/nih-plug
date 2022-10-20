@@ -220,7 +220,7 @@ pub struct Transport {
 }
 
 /// A convenience helper for setting parameter values. Any changes made here will be broadcasted to
-/// the host and reflected in the plugin's [`Params`][crate::param::internals::Params] object. These
+/// the host and reflected in the plugin's [`Params`][crate::param::Params] object. These
 /// functions should only be called from the main thread.
 pub struct ParamSetter<'a> {
     pub raw_context: &'a dyn GuiContext,

@@ -15,9 +15,10 @@ pub use crate::context::{GuiContext, InitContext, ParamSetter, PluginApi, Proces
 // This also includes the derive macro
 pub use crate::midi::{control_change, MidiConfig, NoteEvent};
 pub use crate::param::enums::{Enum, EnumParam};
-pub use crate::param::internals::{ParamPtr, Params};
+pub use crate::param::internals::ParamPtr;
 pub use crate::param::range::{FloatRange, IntRange};
 pub use crate::param::smoothing::{Smoothable, Smoother, SmoothingStyle};
+pub use crate::param::Params;
 pub use crate::param::{BoolParam, FloatParam, IntParam, Param, ParamFlags};
 pub use crate::plugin::{
     AuxiliaryBuffers, AuxiliaryIOConfig, BufferConfig, BusConfig, ClapPlugin, Editor,

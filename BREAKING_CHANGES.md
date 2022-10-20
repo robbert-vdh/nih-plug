@@ -6,6 +6,13 @@ new and what's changed, this document lists all breaking changes in reverse
 chronological order. If a new feature did not require any changes to existing
 code then it will not be listed here.
 
+## [2022-10-20]
+
+- Some items have been moved out of `nih_plug::param::internals`. The main
+  `Params` trait is now located under `nih_plug::param`, and the
+  `PersistentTrait` trait, implementations, and helper functions are now part of
+  a new `nih_plug::param::persist` module.
+
 ## [2022-10-13]
 
 - The `#[nested]` parameter attribute has gained super powers and has its syntax
