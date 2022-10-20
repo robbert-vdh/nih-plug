@@ -8,7 +8,12 @@ license = "ISC"
 description = "An adapter to use egui GUIs with NIH-plug"
 
 [features]
-default = ["opengl"]
+default = ["egui-default-features", "opengl"]
+
+# Use egui's default features
+egui-default-features = ["egui/default"]
+# `nih_plug_egui` always uses OpenGL since egui's wgpu backend is still unstable
+# depending on the platform
 opengl = []
 
 [dependencies]
@@ -16,7 +21,9 @@ nih_plug = { path = ".." }
 
 baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "eae4033e7d2cc9c31ccaa2794d5d08eedf2f510c" }
 crossbeam = "0.8"
-egui = "0.19"
+# The `egui-default-features` feature enables the default features. This makes
+# it possible to opt out of this if needed.
+egui = { version = "0.19", default-features = false }
 egui-baseview = { git = "https://github.com/BillyDM/egui-baseview.git", rev = "46e21cc11c57c705fb83611389399ec3d2670a44" }
 lazy_static = "1.4"
 parking_lot = "0.12"
