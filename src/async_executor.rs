@@ -8,7 +8,7 @@
 pub trait AsyncExecutor: Send + Sync {
     /// The type of task this executor can execute. This is usually an enum type. The task type
     /// should not contain any heap allocated data like [`Vec`]s and [`Box`]es.
-    type Task;
+    type Task: Send;
 
     /// Run `task` on the current thread. This is usually called from the operating system's main
     /// thread or a similar thread.
