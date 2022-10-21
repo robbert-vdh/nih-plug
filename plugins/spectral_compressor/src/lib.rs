@@ -295,7 +295,7 @@ impl Plugin for SpectralCompressor {
         &mut self,
         bus_config: &BusConfig,
         buffer_config: &BufferConfig,
-        context: &mut impl InitContext,
+        context: &mut impl InitContext<Self>,
     ) -> bool {
         // Needed to update the compressors later
         self.buffer_config = *buffer_config;

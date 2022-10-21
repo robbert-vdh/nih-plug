@@ -6,8 +6,10 @@ new and what's changed, this document lists all breaking changes in reverse
 chronological order. If a new feature did not require any changes to existing
 code then it will not be listed here.
 
-## [2022-10-21]
+## [2022-10-22]
 
+- The `&mut impl InitContext` argument to `Plugin::initialize()` needs to be
+  changed to `&mut impl InitContext<Self>`.
 - NIH-plug has gained support for asynchronously running background tasks in a
   simple, type-safe, and realtime-safe way. This sadly does mean that every
   `Plugin` instance now needs to define an `AsyncExecutor` type definition and

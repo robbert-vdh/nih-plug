@@ -5,6 +5,7 @@ use std::sync::Arc;
 use vst3_sys::vst::IComponentHandler;
 
 use super::inner::{Task, WrapperInner};
+use crate::async_executor::AsyncExecutor;
 use crate::context::{GuiContext, InitContext, PluginApi, ProcessContext, Transport};
 use crate::midi::NoteEvent;
 use crate::params::internals::ParamPtr;
@@ -115,7 +116,11 @@ impl<P: Vst3Plugin> GuiContext for WrapperGuiContext<P> {
     }
 }
 
-impl<P: Vst3Plugin> InitContext for WrapperInitContext<'_, P> {
+impl<P: Vst3Plugin> InitContext<P> for WrapperInitContext<'_, P> {
+    fn execute(&self, task: <P::AsyncExecutor as crate::prelude::AsyncExecutor>::Task) {
+        self.inner.async_executor.execute(task);
+    }
+
     fn plugin_api(&self) -> PluginApi {
         PluginApi::Vst3
     }

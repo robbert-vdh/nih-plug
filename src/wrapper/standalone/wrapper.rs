@@ -35,6 +35,8 @@ pub struct Wrapper<P: Plugin, B: Backend> {
 
     /// The wrapped plugin instance.
     plugin: Mutex<P>,
+    /// The plugin's background task executor.
+    pub async_executor: P::AsyncExecutor,
     /// The plugin's parameters. These are fetched once during initialization. That way the
     /// `ParamPtr`s are guaranteed to live at least as long as this object and we can interact with
     /// the `Params` object without having to acquire a lock on `plugin`.
@@ -132,6 +134,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
     /// not accept the IO configuration from the wrapper config.
     pub fn new(backend: B, config: WrapperConfig) -> Result<Arc<Self>, WrapperError> {
         let plugin = P::default();
+        let async_executor = plugin.async_executor();
         let params = plugin.params();
         let editor = plugin.editor().map(|editor| Arc::new(Mutex::new(editor)));
 
@@ -178,6 +181,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
             backend: AtomicRefCell::new(backend),
 
             plugin: Mutex::new(plugin),
+            async_executor,
             params,
             known_parameters: param_map.iter().map(|(_, ptr, _)| *ptr).collect(),
             param_map: param_map

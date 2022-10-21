@@ -184,7 +184,7 @@ impl Plugin for PubertySimulator {
         &mut self,
         _bus_config: &BusConfig,
         _buffer_config: &BufferConfig,
-        context: &mut impl InitContext,
+        context: &mut impl InitContext<Self>,
     ) -> bool {
         // Planning with RustFFT is very fast, but it will still allocate we we'll plan all of the
         // FFTs we might need in advance

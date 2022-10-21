@@ -3,6 +3,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use super::wrapper::{OutputParamEvent, Wrapper};
+use crate::async_executor::AsyncExecutor;
 use crate::context::{GuiContext, InitContext, PluginApi, ProcessContext, Transport};
 use crate::midi::NoteEvent;
 use crate::params::internals::ParamPtr;
@@ -112,7 +113,11 @@ impl<P: ClapPlugin> GuiContext for WrapperGuiContext<P> {
     }
 }
 
-impl<P: ClapPlugin> InitContext for WrapperInitContext<'_, P> {
+impl<P: ClapPlugin> InitContext<P> for WrapperInitContext<'_, P> {
+    fn execute(&self, task: <P::AsyncExecutor as crate::prelude::AsyncExecutor>::Task) {
+        self.wrapper.async_executor.execute(task);
+    }
+
     fn plugin_api(&self) -> PluginApi {
         PluginApi::Clap
     }

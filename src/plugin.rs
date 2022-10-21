@@ -160,7 +160,7 @@ pub trait Plugin: Default + Send + 'static {
         &mut self,
         bus_config: &BusConfig,
         buffer_config: &BufferConfig,
-        context: &mut impl InitContext,
+        context: &mut impl InitContext<Self>,
     ) -> bool {
         true
     }

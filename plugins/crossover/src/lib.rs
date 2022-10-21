@@ -201,7 +201,7 @@ impl Plugin for Crossover {
         &mut self,
         _bus_config: &BusConfig,
         buffer_config: &BufferConfig,
-        context: &mut impl InitContext,
+        context: &mut impl InitContext<Self>,
     ) -> bool {
         self.buffer_config = *buffer_config;
 

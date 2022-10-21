@@ -105,6 +105,8 @@ pub struct Wrapper<P: ClapPlugin> {
 
     /// The wrapped plugin instance.
     plugin: Mutex<P>,
+    /// The plugin's background task executor.
+    pub async_executor: P::AsyncExecutor,
     /// The plugin's parameters. These are fetched once during initialization. That way the
     /// `ParamPtr`s are guaranteed to live at least as long as this object and we can interact with
     /// the `Params` object without having to acquire a lock on `plugin`.
@@ -381,6 +383,7 @@ impl<P: ClapPlugin> MainThreadExecutor<Task> for Wrapper<P> {
 impl<P: ClapPlugin> Wrapper<P> {
     pub fn new(host_callback: *const clap_host) -> Arc<Self> {
         let plugin = P::default();
+        let async_executor = plugin.async_executor();
         let editor = plugin.editor().map(Mutex::new);
 
         // This is used to allow the plugin to restore preset data from its editor, see the comment
@@ -542,6 +545,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             this: AtomicRefCell::new(Weak::new()),
 
             plugin: Mutex::new(plugin),
+            async_executor,
             params,
             editor,
             editor_handle: Mutex::new(None),

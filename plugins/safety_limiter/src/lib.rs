@@ -172,7 +172,7 @@ impl Plugin for SafetyLimiter {
         &mut self,
         _bus_config: &BusConfig,
         buffer_config: &BufferConfig,
-        _context: &mut impl InitContext,
+        _context: &mut impl InitContext<Self>,
     ) -> bool {
         self.buffer_config = *buffer_config;
         self.morse_fadeout_samples_start =

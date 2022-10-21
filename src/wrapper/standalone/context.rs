@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use super::backend::Backend;
 use super::wrapper::{GuiTask, Wrapper};
+use crate::async_executor::AsyncExecutor;
 use crate::context::{GuiContext, InitContext, PluginApi, ProcessContext, Transport};
 use crate::midi::NoteEvent;
 use crate::params::internals::ParamPtr;
@@ -23,7 +24,6 @@ pub(crate) struct WrapperGuiContext<P: Plugin, B: Backend> {
 /// can hold on to lock guards for event queues. Otherwise reading these events would require
 /// constant unnecessary atomic operations to lock the uncontested RwLocks.
 pub(crate) struct WrapperInitContext<'a, P: Plugin, B: Backend> {
-    #[allow(dead_code)]
     pub(super) wrapper: &'a Wrapper<P, B>,
 }
 
@@ -78,7 +78,11 @@ impl<P: Plugin, B: Backend> GuiContext for WrapperGuiContext<P, B> {
     }
 }
 
-impl<P: Plugin, B: Backend> InitContext for WrapperInitContext<'_, P, B> {
+impl<P: Plugin, B: Backend> InitContext<P> for WrapperInitContext<'_, P, B> {
+    fn execute(&self, task: <<P as Plugin>::AsyncExecutor as crate::prelude::AsyncExecutor>::Task) {
+        self.wrapper.async_executor.execute(task);
+    }
+
     fn plugin_api(&self) -> PluginApi {
         PluginApi::Standalone
     }
