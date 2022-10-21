@@ -101,6 +101,7 @@ pub mod prelude;
 pub mod formatters;
 pub mod util;
 
+pub mod async_executor;
 pub mod buffer;
 pub mod context;
 pub mod editor;

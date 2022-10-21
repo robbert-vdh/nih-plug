@@ -10,6 +10,7 @@ pub use crate::wrapper::standalone::{nih_export_standalone, nih_export_standalon
 pub use crate::formatters;
 pub use crate::util;
 
+pub use crate::async_executor::AsyncExecutor;
 pub use crate::buffer::Buffer;
 pub use crate::context::{GuiContext, InitContext, ParamSetter, PluginApi, ProcessContext};
 // This also includes the derive macro
