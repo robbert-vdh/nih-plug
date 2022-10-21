@@ -24,9 +24,13 @@ use crate::wrapper::state::PluginState;
 /// - Audio thread thread pools (with host integration in CLAP)
 #[allow(unused_variables)]
 pub trait Plugin: Default + Send + 'static {
+    /// The plugin's name.
     const NAME: &'static str;
+    /// The name of the plugin's vendor.
     const VENDOR: &'static str;
+    /// A URL pointing to the plugin's web page.
     const URL: &'static str;
+    /// The vendor's email address.
     const EMAIL: &'static str;
 
     /// Semver compatible version string (e.g. `0.0.1`). Hosts likely won't do anything with this,
