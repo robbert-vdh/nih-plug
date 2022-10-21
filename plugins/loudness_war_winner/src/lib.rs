@@ -123,6 +123,9 @@ impl Plugin for LoudnessWarWinner {
     const DEFAULT_INPUT_CHANNELS: u32 = 2;
     const DEFAULT_OUTPUT_CHANNELS: u32 = 2;
 
+    type AsyncExecutor = ();
+    fn async_executor(&self) -> Self::AsyncExecutor {}
+
     fn params(&self) -> Arc<dyn Params> {
         self.params.clone()
     }

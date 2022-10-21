@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use crate::async_executor::AsyncExecutor;
 use crate::buffer::Buffer;
 use crate::context::{InitContext, ProcessContext};
 use crate::editor::Editor;
@@ -88,6 +89,20 @@ pub trait Plugin: Default + Send + 'static {
     /// processing requirement when the host asks for it. Supported hosts will never ask the plugin
     /// to do offline processing.
     const HARD_REALTIME_ONLY: bool = false;
+
+    /// The plugin's [`AsyncExecutor`] type. Use `()` if the plugin does not need to perform
+    /// expensive background tasks.
+    //
+    // This needs to be an associated type so we can have a nice type safe interface in the
+    // `*Context` traits.
+    //
+    // NOTE: Sadly it's not yet possible to default this and the `async_executor()` function to
+    //       `()`: https://github.com/rust-lang/rust/issues/29661
+    type AsyncExecutor: AsyncExecutor;
+
+    /// The plugin's background task executor. Use `()` if the plugin does not need this
+    /// functinlality.
+    fn async_executor(&self) -> Self::AsyncExecutor;
 
     /// The plugin's parameters. The host will update the parameter values before calling
     /// `process()`. These parameters are identified by strings that should never change when the

@@ -95,6 +95,9 @@ impl Plugin for Stft {
 
     const SAMPLE_ACCURATE_AUTOMATION: bool = true;
 
+    type AsyncExecutor = ();
+    fn async_executor(&self) -> Self::AsyncExecutor {}
+
     fn params(&self) -> Arc<dyn Params> {
         self.params.clone()
     }
