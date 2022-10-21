@@ -97,6 +97,8 @@ Scroll down for more information on the underlying plugin framework.
   - Store additional non-parameter state for your plugin by adding any field
     that can be serialized with [Serde](https://serde.rs/) to your plugin's
     `Params` object and annotating them with `#[persist = "key"]`.
+  - Optional support for state migrations, for handling breaking changes in
+    plugin parameters.
   - Group your parameters into logical groups by nesting `Params` objects using
     the `#[nested(group = "...")]`attribute.
   - The `#[nested]` attribute also enables you to use multiple copies of the
