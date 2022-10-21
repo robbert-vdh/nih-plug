@@ -78,13 +78,13 @@ use super::descriptor::PluginDescriptor;
 use super::util::ClapPtr;
 use crate::buffer::Buffer;
 use crate::context::Transport;
+use crate::editor::{Editor, ParentWindowHandle};
 use crate::event_loop::{EventLoop, MainThreadExecutor, TASK_QUEUE_CAPACITY};
 use crate::midi::{MidiConfig, NoteEvent};
 use crate::params::internals::ParamPtr;
 use crate::params::{ParamFlags, Params};
 use crate::plugin::{
-    AuxiliaryBuffers, BufferConfig, BusConfig, ClapPlugin, Editor, ParentWindowHandle, ProcessMode,
-    ProcessStatus,
+    AuxiliaryBuffers, BufferConfig, BusConfig, ClapPlugin, ProcessMode, ProcessStatus,
 };
 use crate::util::permit_alloc;
 use crate::wrapper::clap::util::{read_stream, write_stream};

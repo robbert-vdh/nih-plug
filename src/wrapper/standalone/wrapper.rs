@@ -14,12 +14,13 @@ use super::backend::Backend;
 use super::config::WrapperConfig;
 use super::context::{WrapperGuiContext, WrapperInitContext, WrapperProcessContext};
 use crate::context::Transport;
+use crate::editor::{Editor, ParentWindowHandle};
 use crate::midi::NoteEvent;
 use crate::params::internals::ParamPtr;
 use crate::params::{ParamFlags, Params};
 use crate::plugin::{
-    AuxiliaryBuffers, AuxiliaryIOConfig, BufferConfig, BusConfig, Editor, ParentWindowHandle,
-    Plugin, ProcessMode, ProcessStatus,
+    AuxiliaryBuffers, AuxiliaryIOConfig, BufferConfig, BusConfig, Plugin, ProcessMode,
+    ProcessStatus,
 };
 use crate::util::permit_alloc;
 use crate::wrapper::state::{self, PluginState};

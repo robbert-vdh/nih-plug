@@ -103,6 +103,7 @@ pub mod util;
 
 pub mod buffer;
 pub mod context;
+pub mod editor;
 mod event_loop;
 pub mod midi;
 pub mod params;

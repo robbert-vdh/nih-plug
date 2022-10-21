@@ -16,11 +16,12 @@ use super::util::{ObjectPtr, VstPtr, VST3_MIDI_PARAMS_END, VST3_MIDI_PARAMS_STAR
 use super::view::WrapperView;
 use crate::buffer::Buffer;
 use crate::context::Transport;
+use crate::editor::Editor;
 use crate::event_loop::{EventLoop, MainThreadExecutor, OsEventLoop};
 use crate::midi::{MidiConfig, NoteEvent};
 use crate::params::internals::ParamPtr;
 use crate::params::{ParamFlags, Params};
-use crate::plugin::{BufferConfig, BusConfig, Editor, ProcessMode, ProcessStatus, Vst3Plugin};
+use crate::plugin::{BufferConfig, BusConfig, ProcessMode, ProcessStatus, Vst3Plugin};
 use crate::wrapper::state::{self, PluginState};
 use crate::wrapper::util::{hash_param_id, process_wrapper};
 
