@@ -14,13 +14,12 @@ code then it will not be listed here.
   changed to `&mut impl InitContext<Self>`.
 - NIH-plug has gained support for asynchronously running background tasks in a
   simple, type-safe, and realtime-safe way. This sadly does mean that every
-  `Plugin` instance now needs to define an `AsyncExecutor` type definition and
+  `Plugin` instance now needs to define a `BackgroundTask` type definition and
   constructor function as Rust does not yet support defaults for associated
   types (Rust issue [#29661](https://github.com/rust-lang/rust/issues/29661)):
 
   ```rust
-  type AsyncExecutor = ();
-  fn async_executor(&self) -> Self::AsyncExecutor {}
+  type BackgroundTask = ();
   ```
 
 - The `Editor` trait and the `ParentWindowHandle` struct have been moved from

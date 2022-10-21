@@ -5,7 +5,6 @@ use std::sync::Arc;
 use vst3_sys::vst::IComponentHandler;
 
 use super::inner::{Task, WrapperInner};
-use crate::async_executor::AsyncExecutor;
 use crate::context::{GuiContext, InitContext, PluginApi, ProcessContext, Transport};
 use crate::midi::NoteEvent;
 use crate::params::internals::ParamPtr;
@@ -117,8 +116,8 @@ impl<P: Vst3Plugin> GuiContext for WrapperGuiContext<P> {
 }
 
 impl<P: Vst3Plugin> InitContext<P> for WrapperInitContext<'_, P> {
-    fn execute(&self, task: <P::AsyncExecutor as crate::prelude::AsyncExecutor>::Task) {
-        self.inner.async_executor.execute(task);
+    fn execute(&self, task: P::BackgroundTask) {
+        (self.inner.task_executor)(task);
     }
 
     fn plugin_api(&self) -> PluginApi {
@@ -135,7 +134,7 @@ impl<P: Vst3Plugin> InitContext<P> for WrapperInitContext<'_, P> {
 }
 
 impl<P: Vst3Plugin> ProcessContext<P> for WrapperProcessContext<'_, P> {
-    fn execute_async(&self, task: <P::AsyncExecutor as AsyncExecutor>::Task) {
+    fn execute_async(&self, task: P::BackgroundTask) {
         let task_posted = self.inner.do_maybe_async(Task::PluginTask(task));
         nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
     }

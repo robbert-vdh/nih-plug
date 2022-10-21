@@ -10,8 +10,6 @@ mod linux;
 #[cfg(target_os = "windows")]
 mod windows;
 
-use crate::prelude::AsyncExecutor;
-
 #[cfg(all(target_family = "unix", not(target_os = "macos")))]
 pub(crate) use self::linux::LinuxEventLoop as OsEventLoop;
 // For now, also use the Linux event loop on macOS so it at least compiles
@@ -67,12 +65,4 @@ pub(crate) trait MainThreadExecutor<T>: Send + Sync {
     /// This is not actually unsafe in the typical Rust sense. But the implemnting function will
     /// assume (and can only assume) that this is called from the main thread.
     unsafe fn execute(&self, task: T);
-}
-
-/// An adapter implementation to allow any [`AsyncExecutor`] to function as a
-/// [`MainThreadExecutor`]. Used only in the standalone wrapper.
-impl<T: Send, E: AsyncExecutor<Task = T>> MainThreadExecutor<T> for E {
-    unsafe fn execute(&self, task: T) {
-        AsyncExecutor::execute(self, task);
-    }
 }

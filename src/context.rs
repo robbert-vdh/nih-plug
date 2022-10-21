@@ -5,7 +5,7 @@ use std::fmt::Display;
 use crate::midi::NoteEvent;
 use crate::params::internals::ParamPtr;
 use crate::params::Param;
-use crate::prelude::{AsyncExecutor, Plugin};
+use crate::plugin::Plugin;
 use crate::wrapper::state::PluginState;
 
 /// Callbacks the plugin can make while it is being initialized. This is passed to the plugin during
@@ -23,7 +23,7 @@ pub trait InitContext<P: Plugin> {
     ///
     /// There is no asynchronous alternative for this function as that may result in incorrect
     /// behavior when doing offline rendering.
-    fn execute(&self, task: <P::AsyncExecutor as AsyncExecutor>::Task);
+    fn execute(&self, task: P::BackgroundTask);
 
     /// Get the current plugin API.
     fn plugin_api(&self) -> PluginApi;
@@ -53,7 +53,7 @@ pub trait InitContext<P: Plugin> {
 pub trait ProcessContext<P: Plugin> {
     /// Run a task on a background thread. This allows defering expensive background tasks for
     /// alter. As long as creating the `task` is realtime-safe, this operation is too.
-    fn execute_async(&self, task: <P::AsyncExecutor as AsyncExecutor>::Task);
+    fn execute_async(&self, task: P::BackgroundTask);
 
     /// Get the current plugin API.
     fn plugin_api(&self) -> PluginApi;

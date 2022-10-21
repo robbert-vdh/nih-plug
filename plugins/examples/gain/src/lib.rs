@@ -132,11 +132,10 @@ impl Plugin for Gain {
     // splits.
     const SAMPLE_ACCURATE_AUTOMATION: bool = true;
 
-    // More advanced plugins can use this to run expensive background tasks. See the `AsyncExecutor`
-    // trait's documentation for more information. `()` means that the plugin does not have any
-    // background tasks.
-    type AsyncExecutor = ();
-    fn async_executor(&self) -> Self::AsyncExecutor {}
+    // More advanced plugins can use this to run expensive background tasks. See the field's
+    // documentation for more information. `()` means that the plugin does not have any background
+    // tasks.
+    type BackgroundTask = ();
 
     fn params(&self) -> Arc<dyn Params> {
         self.params.clone()

@@ -272,8 +272,7 @@ impl Plugin for SpectralCompressor {
 
     const SAMPLE_ACCURATE_AUTOMATION: bool = true;
 
-    type AsyncExecutor = ();
-    fn async_executor(&self) -> Self::AsyncExecutor {}
+    type BackgroundTask = ();
 
     fn params(&self) -> Arc<dyn Params> {
         self.params.clone()

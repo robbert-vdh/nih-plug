@@ -13,16 +13,15 @@ use std::thread;
 use super::backend::Backend;
 use super::config::WrapperConfig;
 use super::context::{WrapperGuiContext, WrapperInitContext, WrapperProcessContext};
-use crate::async_executor::AsyncExecutor;
 use crate::context::Transport;
 use crate::editor::{Editor, ParentWindowHandle};
-use crate::event_loop::{EventLoop, OsEventLoop};
+use crate::event_loop::{EventLoop, MainThreadExecutor, OsEventLoop};
 use crate::midi::NoteEvent;
 use crate::params::internals::ParamPtr;
 use crate::params::{ParamFlags, Params};
 use crate::plugin::{
     AuxiliaryBuffers, AuxiliaryIOConfig, BufferConfig, BusConfig, Plugin, ProcessMode,
-    ProcessStatus,
+    ProcessStatus, TaskExecutor,
 };
 use crate::util::permit_alloc;
 use crate::wrapper::state::{self, PluginState};
@@ -37,8 +36,9 @@ pub struct Wrapper<P: Plugin, B: Backend> {
 
     /// The wrapped plugin instance.
     plugin: Mutex<P>,
-    /// The plugin's background task executor.
-    pub async_executor: Arc<P::AsyncExecutor>,
+    /// The plugin's background task executor closure. Wrapped in another struct so it can be used
+    /// as a [`MainContext`] with [`EventLoop`].
+    pub task_executor_wrapper: Arc<TaskExecutorWrapper<P>>,
     /// The plugin's parameters. These are fetched once during initialization. That way the
     /// `ParamPtr`s are guaranteed to live at least as long as this object and we can interact with
     /// the `Params` object without having to acquire a lock on `plugin`.
@@ -60,7 +60,7 @@ pub struct Wrapper<P: Plugin, B: Backend> {
     ///
     /// This is only used for executing [`AsyncExecutor`] tasks, so it's parameterized directly over
     /// that using a special `MainThreadExecutor` wrapper around `AsyncExecutor`.
-    pub(crate) event_loop: OsEventLoop<<P::AsyncExecutor as AsyncExecutor>::Task, P::AsyncExecutor>,
+    pub(crate) event_loop: OsEventLoop<P::BackgroundTask, TaskExecutorWrapper<P>>,
 
     config: WrapperConfig,
 
@@ -139,12 +139,25 @@ impl WindowHandler for WrapperWindowHandler {
     }
 }
 
+/// Adapter to make `TaskExecutor<P>` work as a `MainThreadExecutor`.
+pub struct TaskExecutorWrapper<P: Plugin> {
+    pub task_executor: TaskExecutor<P>,
+}
+
+impl<P: Plugin> MainThreadExecutor<P::BackgroundTask> for TaskExecutorWrapper<P> {
+    unsafe fn execute(&self, task: P::BackgroundTask) {
+        (self.task_executor)(task)
+    }
+}
+
 impl<P: Plugin, B: Backend> Wrapper<P, B> {
     /// Instantiate a new instance of the standalone wrapper. Returns an error if the plugin does
     /// not accept the IO configuration from the wrapper config.
     pub fn new(backend: B, config: WrapperConfig) -> Result<Arc<Self>, WrapperError> {
         let plugin = P::default();
-        let async_executor = Arc::new(plugin.async_executor());
+        let task_executor_wrapper = Arc::new(TaskExecutorWrapper {
+            task_executor: plugin.task_executor(),
+        });
         let params = plugin.params();
         let editor = plugin.editor().map(|editor| Arc::new(Mutex::new(editor)));
 
@@ -191,7 +204,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
             backend: AtomicRefCell::new(backend),
 
             plugin: Mutex::new(plugin),
-            async_executor: async_executor.clone(),
+            task_executor_wrapper: task_executor_wrapper.clone(),
             params,
             known_parameters: param_map.iter().map(|(_, ptr, _)| *ptr).collect(),
             param_map: param_map
@@ -200,7 +213,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
                 .collect(),
             editor,
 
-            event_loop: OsEventLoop::new_and_spawn(Arc::downgrade(&async_executor)),
+            event_loop: OsEventLoop::new_and_spawn(Arc::downgrade(&task_executor_wrapper)),
 
             bus_config: BusConfig {
                 num_input_channels: config.input_channels.unwrap_or(P::DEFAULT_INPUT_CHANNELS),

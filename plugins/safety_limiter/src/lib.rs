@@ -157,8 +157,7 @@ impl Plugin for SafetyLimiter {
     const DEFAULT_INPUT_CHANNELS: u32 = 2;
     const DEFAULT_OUTPUT_CHANNELS: u32 = 2;
 
-    type AsyncExecutor = ();
-    fn async_executor(&self) -> Self::AsyncExecutor {}
+    type BackgroundTask = ();
 
     fn params(&self) -> Arc<dyn Params> {
         self.params.clone()

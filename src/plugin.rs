@@ -2,7 +2,6 @@
 
 use std::sync::Arc;
 
-use crate::async_executor::AsyncExecutor;
 use crate::buffer::Buffer;
 use crate::context::{InitContext, ProcessContext};
 use crate::editor::Editor;
@@ -10,6 +9,8 @@ use crate::midi::MidiConfig;
 use crate::params::Params;
 use crate::wrapper::clap::features::ClapFeature;
 use crate::wrapper::state::PluginState;
+
+pub type TaskExecutor<P> = Box<dyn Fn(<P as Plugin>::BackgroundTask) + Send + Sync>;
 
 /// Basic functionality that needs to be implemented by a plugin. The wrappers will use this to
 /// expose the plugin in a particular plugin format.
@@ -90,19 +91,21 @@ pub trait Plugin: Default + Send + 'static {
     /// to do offline processing.
     const HARD_REALTIME_ONLY: bool = false;
 
-    /// The plugin's [`AsyncExecutor`] type. Use `()` if the plugin does not need to perform
-    /// expensive background tasks.
-    //
-    // This needs to be an associated type so we can have a nice type safe interface in the
-    // `*Context` traits.
+    /// A type encoding this plugin's different background tasks, if it needs those. This is usually
+    /// an enum type. The task type should not contain any heap allocated data like [`Vec`]s and
+    /// [`Box`]es. Tasks can be send using the methods on the various [`*Context`][crate::context]
+    /// objects.
+    ///
+    /// Use `()` if the plugin does not need any background tasks.
     //
     // NOTE: Sadly it's not yet possible to default this and the `async_executor()` function to
     //       `()`: https://github.com/rust-lang/rust/issues/29661
-    type AsyncExecutor: AsyncExecutor;
-
-    /// The plugin's background task executor. Use `()` if the plugin does not need this
-    /// functinlality.
-    fn async_executor(&self) -> Self::AsyncExecutor;
+    type BackgroundTask: Send;
+    /// The plugin's background task executor. See [`BackgroundTask`][Self::BackgroundTask].
+    fn task_executor(&self) -> TaskExecutor<Self> {
+        // In the default implementation we can simply ignore the value
+        Box::new(|_| ())
+    }
 
     /// The plugin's parameters. The host will update the parameter values before calling
     /// `process()`. These parameters are identified by strings that should never change when the

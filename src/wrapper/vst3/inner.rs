@@ -14,7 +14,6 @@ use super::note_expressions::NoteExpressionController;
 use super::param_units::ParamUnits;
 use super::util::{ObjectPtr, VstPtr, VST3_MIDI_PARAMS_END, VST3_MIDI_PARAMS_START};
 use super::view::WrapperView;
-use crate::async_executor::AsyncExecutor;
 use crate::buffer::Buffer;
 use crate::context::Transport;
 use crate::editor::Editor;
@@ -22,7 +21,9 @@ use crate::event_loop::{EventLoop, MainThreadExecutor, OsEventLoop};
 use crate::midi::{MidiConfig, NoteEvent};
 use crate::params::internals::ParamPtr;
 use crate::params::{ParamFlags, Params};
-use crate::plugin::{BufferConfig, BusConfig, Plugin, ProcessMode, ProcessStatus, Vst3Plugin};
+use crate::plugin::{
+    BufferConfig, BusConfig, Plugin, ProcessMode, ProcessStatus, TaskExecutor, Vst3Plugin,
+};
 use crate::wrapper::state::{self, PluginState};
 use crate::wrapper::util::{hash_param_id, process_wrapper};
 
@@ -32,8 +33,8 @@ use crate::wrapper::util::{hash_param_id, process_wrapper};
 pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// The wrapped plugin instance.
     pub plugin: Mutex<P>,
-    /// The plugin's background task executor.
-    pub async_executor: P::AsyncExecutor,
+    /// The plugin's background task executor closure.
+    pub task_executor: TaskExecutor<P>,
     /// The plugin's parameters. These are fetched once during initialization. That way the
     /// `ParamPtr`s are guaranteed to live at least as long as this object and we can interact with
     /// the `Params` object without having to acquire a lock on `plugin`.
@@ -154,7 +155,7 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
 #[allow(clippy::enum_variant_names)]
 pub enum Task<P: Plugin> {
     /// Execute one of the plugin's background tasks.
-    PluginTask(<P::AsyncExecutor as AsyncExecutor>::Task),
+    PluginTask(P::BackgroundTask),
     /// Trigger a restart with the given restart flags. This is a bit set of the flags from
     /// [`vst3_sys::vst::RestartFlags`].
     TriggerRestart(i32),
@@ -196,7 +197,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
     #[allow(unused_unsafe)]
     pub fn new() -> Arc<Self> {
         let plugin = P::default();
-        let async_executor = plugin.async_executor();
+        let task_executor = plugin.task_executor();
         let editor = plugin.editor().map(|editor| Arc::new(Mutex::new(editor)));
 
         // This is used to allow the plugin to restore preset data from its editor, see the comment
@@ -280,7 +281,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
 
         let wrapper = Self {
             plugin: Mutex::new(plugin),
-            async_executor,
+            task_executor,
             params,
             editor,
 
@@ -526,7 +527,7 @@ impl<P: Vst3Plugin> MainThreadExecutor<Task<P>> for WrapperInner<P> {
         //       function for checking if a to be scheduled task can be handled right there and
         //       then).
         match task {
-            Task::PluginTask(task) => AsyncExecutor::execute(&self.async_executor, task),
+            Task::PluginTask(task) => (self.task_executor)(task),
             Task::TriggerRestart(flags) => match &*self.component_handler.borrow() {
                 Some(handler) => {
                     handler.restart_component(flags);

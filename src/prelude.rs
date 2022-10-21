@@ -10,7 +10,6 @@ pub use crate::wrapper::standalone::{nih_export_standalone, nih_export_standalon
 pub use crate::formatters;
 pub use crate::util;
 
-pub use crate::async_executor::AsyncExecutor;
 pub use crate::buffer::Buffer;
 pub use crate::context::{GuiContext, InitContext, ParamSetter, PluginApi, ProcessContext};
 // This also includes the derive macro
@@ -24,7 +23,7 @@ pub use crate::params::Params;
 pub use crate::params::{BoolParam, FloatParam, IntParam, Param, ParamFlags};
 pub use crate::plugin::{
     AuxiliaryBuffers, AuxiliaryIOConfig, BufferConfig, BusConfig, ClapPlugin, Plugin,
-    PolyModulationConfig, PortNames, ProcessMode, ProcessStatus, Vst3Plugin,
+    PolyModulationConfig, PortNames, ProcessMode, ProcessStatus, TaskExecutor, Vst3Plugin,
 };
 pub use crate::wrapper::clap::features::ClapFeature;
 pub use crate::wrapper::state::PluginState;
