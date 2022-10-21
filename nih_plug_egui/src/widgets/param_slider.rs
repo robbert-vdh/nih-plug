@@ -268,7 +268,7 @@ impl<'a, P: Param> ParamSlider<'a, P> {
             } else if ui.input().key_pressed(Key::Enter) {
                 // And try to set the value by string when pressing enter
                 self.begin_drag();
-                self.set_from_string(&*value_entry);
+                self.set_from_string(&value_entry);
                 self.end_drag();
 
                 ui.memory().surrender_focus(keyboard_focus_id);
