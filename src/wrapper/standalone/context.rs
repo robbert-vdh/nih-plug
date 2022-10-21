@@ -5,6 +5,7 @@ use super::backend::Backend;
 use super::wrapper::{GuiTask, Wrapper};
 use crate::async_executor::AsyncExecutor;
 use crate::context::{GuiContext, InitContext, PluginApi, ProcessContext, Transport};
+use crate::event_loop::EventLoop;
 use crate::midi::NoteEvent;
 use crate::params::internals::ParamPtr;
 use crate::plugin::Plugin;
@@ -96,7 +97,12 @@ impl<P: Plugin, B: Backend> InitContext<P> for WrapperInitContext<'_, P, B> {
     }
 }
 
-impl<P: Plugin, B: Backend> ProcessContext for WrapperProcessContext<'_, P, B> {
+impl<P: Plugin, B: Backend> ProcessContext<P> for WrapperProcessContext<'_, P, B> {
+    fn execute_async(&self, task: <P::AsyncExecutor as AsyncExecutor>::Task) {
+        let task_posted = self.wrapper.event_loop.do_maybe_async(task);
+        nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+    }
+
     fn plugin_api(&self) -> PluginApi {
         PluginApi::Standalone
     }

@@ -288,7 +288,7 @@ impl Plugin for Diopser {
         &mut self,
         buffer: &mut Buffer,
         _aux: &mut AuxiliaryBuffers,
-        _context: &mut impl ProcessContext,
+        _context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
         // Since this is an expensive operation, only update the filters when it's actually
         // necessary, and allow smoothing only every n samples using the automation precision

@@ -174,7 +174,7 @@ impl Plugin for LoudnessWarWinner {
         &mut self,
         buffer: &mut Buffer,
         _aux: &mut AuxiliaryBuffers,
-        _context: &mut impl ProcessContext,
+        _context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
         for mut channel_samples in buffer.iter_samples() {
             let output_gain = self.params.output_gain.smoothed.next();

@@ -8,6 +8,8 @@ code then it will not be listed here.
 
 ## [2022-10-22]
 
+- The `&mut impl ProcessContext` argument to `Plugin::process()` needs to be
+  changed to `&mut impl ProcessContext<Self>`.
 - The `&mut impl InitContext` argument to `Plugin::initialize()` needs to be
   changed to `&mut impl InitContext<Self>`.
 - NIH-plug has gained support for asynchronously running background tasks in a

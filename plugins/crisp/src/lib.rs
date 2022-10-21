@@ -356,7 +356,7 @@ impl Plugin for Crisp {
         &mut self,
         buffer: &mut Buffer,
         _aux: &mut AuxiliaryBuffers,
-        _context: &mut impl ProcessContext,
+        _context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
         for (_, mut block) in buffer.iter_blocks(BLOCK_SIZE) {
             let mut rm_outputs = [[0.0; NUM_CHANNELS as usize]; BLOCK_SIZE];

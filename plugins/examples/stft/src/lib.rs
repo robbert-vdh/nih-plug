@@ -132,7 +132,7 @@ impl Plugin for Stft {
         &mut self,
         buffer: &mut Buffer,
         _aux: &mut AuxiliaryBuffers,
-        _context: &mut impl ProcessContext,
+        _context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
         self.stft
             .process_overlap_add(buffer, 1, |_channel_idx, real_fft_buffer| {

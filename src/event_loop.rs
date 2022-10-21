@@ -10,6 +10,8 @@ mod linux;
 #[cfg(target_os = "windows")]
 mod windows;
 
+use crate::prelude::AsyncExecutor;
+
 #[cfg(all(target_family = "unix", not(target_os = "macos")))]
 pub(crate) use self::linux::LinuxEventLoop as OsEventLoop;
 // For now, also use the Linux event loop on macOS so it at least compiles
@@ -38,6 +40,9 @@ where
 {
     /// Create and start a new event loop. The thread this is called on will be designated as the
     /// main thread, so this should be called when constructing the wrapper.
+    //
+    // TODO: This use of `Weak` is a bit weird outside the context of the VST3 wrapper, but the
+    //       alternatives didn't feel right either.
     fn new_and_spawn(executor: Weak<E>) -> Self;
 
     /// Either post the function to the task queue so it can be delegated to the main thread, or
@@ -62,4 +67,12 @@ pub(crate) trait MainThreadExecutor<T>: Send + Sync {
     /// This is not actually unsafe in the typical Rust sense. But the implemnting function will
     /// assume (and can only assume) that this is called from the main thread.
     unsafe fn execute(&self, task: T);
+}
+
+/// An adapter implementation to allow any [`AsyncExecutor`] to function as a
+/// [`MainThreadExecutor`]. Used only in the standalone wrapper.
+impl<T: Send, E: AsyncExecutor<Task = T>> MainThreadExecutor<T> for E {
+    unsafe fn execute(&self, task: T) {
+        AsyncExecutor::execute(self, task);
+    }
 }

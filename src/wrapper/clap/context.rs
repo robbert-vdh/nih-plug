@@ -2,9 +2,10 @@ use atomic_refcell::AtomicRefMut;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use super::wrapper::{OutputParamEvent, Wrapper};
+use super::wrapper::{OutputParamEvent, Task, Wrapper};
 use crate::async_executor::AsyncExecutor;
 use crate::context::{GuiContext, InitContext, PluginApi, ProcessContext, Transport};
+use crate::event_loop::EventLoop;
 use crate::midi::NoteEvent;
 use crate::params::internals::ParamPtr;
 use crate::plugin::ClapPlugin;
@@ -131,7 +132,15 @@ impl<P: ClapPlugin> InitContext<P> for WrapperInitContext<'_, P> {
     }
 }
 
-impl<P: ClapPlugin> ProcessContext for WrapperProcessContext<'_, P> {
+impl<P: ClapPlugin> ProcessContext<P> for WrapperProcessContext<'_, P> {
+    fn execute_async(
+        &self,
+        task: <<P as crate::prelude::Plugin>::AsyncExecutor as AsyncExecutor>::Task,
+    ) {
+        let task_posted = self.wrapper.do_maybe_async(Task::PluginTask(task));
+        nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+    }
+
     fn plugin_api(&self) -> PluginApi {
         PluginApi::Clap
     }

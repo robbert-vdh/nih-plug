@@ -228,7 +228,7 @@ impl Plugin for Crossover {
         &mut self,
         buffer: &mut Buffer,
         aux: &mut AuxiliaryBuffers,
-        context: &mut impl ProcessContext,
+        context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
         // Right now both crossover types only do 24 dB/octave Linkwitz-Riley style crossovers
         match self.params.crossover_type.value() {

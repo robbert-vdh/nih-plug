@@ -96,7 +96,7 @@ struct RunLoopEventHandler<P: Vst3Plugin> {
     /// implementations. Instead, we'll post tasks to this queue, ask the host to call
     /// [`on_main_thread()`][Self::on_main_thread()] on the main thread, and then continue to pop
     /// tasks off this queue there until it is empty.
-    tasks: ArrayQueue<Task>,
+    tasks: ArrayQueue<Task<P>>,
 }
 
 impl<P: Vst3Plugin> WrapperView<P> {
@@ -162,7 +162,7 @@ impl<P: Vst3Plugin> WrapperView<P> {
     /// run on the host's UI thread. If not, then this will return an `Err` value containing the
     /// task so it can be run elsewhere.
     #[cfg(target_os = "linux")]
-    pub fn do_maybe_in_run_loop(&self, task: Task) -> Result<(), Task> {
+    pub fn do_maybe_in_run_loop(&self, task: Task<P>) -> Result<(), Task<P>> {
         match &*self.run_loop_event_handler.0.read() {
             Some(run_loop) => run_loop.post_task(task),
             None => Err(task),
@@ -174,7 +174,7 @@ impl<P: Vst3Plugin> WrapperView<P> {
     /// task so it can be run elsewhere.
     #[cfg(not(target_os = "linux"))]
     #[must_use]
-    pub fn do_maybe_in_run_loop(&self, task: Task) -> Result<(), Task> {
+    pub fn do_maybe_in_run_loop(&self, task: Task<P>) -> Result<(), Task<P>> {
         Err(task)
     }
 }
@@ -222,7 +222,7 @@ impl<P: Vst3Plugin> RunLoopEventHandler<P> {
 
     /// Post a task to the tasks queue so it will be run on the host's GUI thread later. Returns the
     /// task if the queue is full and the task could not be posted.
-    pub fn post_task(&self, task: Task) -> Result<(), Task> {
+    pub fn post_task(&self, task: Task<P>) -> Result<(), Task<P>> {
         self.tasks.push(task)?;
 
         // We need to use a Unix domain socket to let the host know to call our event handler. In

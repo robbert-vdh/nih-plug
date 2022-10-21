@@ -134,7 +134,12 @@ impl<P: Vst3Plugin> InitContext<P> for WrapperInitContext<'_, P> {
     }
 }
 
-impl<P: Vst3Plugin> ProcessContext for WrapperProcessContext<'_, P> {
+impl<P: Vst3Plugin> ProcessContext<P> for WrapperProcessContext<'_, P> {
+    fn execute_async(&self, task: <P::AsyncExecutor as AsyncExecutor>::Task) {
+        let task_posted = self.inner.do_maybe_async(Task::PluginTask(task));
+        nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+    }
+
     fn plugin_api(&self) -> PluginApi {
         PluginApi::Vst3
     }

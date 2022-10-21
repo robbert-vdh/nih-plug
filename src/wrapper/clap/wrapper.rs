@@ -76,6 +76,7 @@ use std::time::Duration;
 use super::context::{WrapperGuiContext, WrapperInitContext, WrapperProcessContext};
 use super::descriptor::PluginDescriptor;
 use super::util::ClapPtr;
+use crate::async_executor::AsyncExecutor;
 use crate::buffer::Buffer;
 use crate::context::Transport;
 use crate::editor::{Editor, ParentWindowHandle};
@@ -84,7 +85,7 @@ use crate::midi::{MidiConfig, NoteEvent};
 use crate::params::internals::ParamPtr;
 use crate::params::{ParamFlags, Params};
 use crate::plugin::{
-    AuxiliaryBuffers, BufferConfig, BusConfig, ClapPlugin, ProcessMode, ProcessStatus,
+    AuxiliaryBuffers, BufferConfig, BusConfig, ClapPlugin, Plugin, ProcessMode, ProcessStatus,
 };
 use crate::util::permit_alloc;
 use crate::wrapper::clap::util::{read_stream, write_stream};
@@ -257,7 +258,7 @@ pub struct Wrapper<P: ClapPlugin> {
     /// implementations. Instead, we'll post tasks to this queue, ask the host to call
     /// [`on_main_thread()`][Self::on_main_thread()] on the main thread, and then continue to pop
     /// tasks off this queue there until it is empty.
-    tasks: ArrayQueue<Task>,
+    tasks: ArrayQueue<Task<P>>,
     /// The ID of the main thread. In practice this is the ID of the thread that created this
     /// object. If the host supports the thread check extension (and
     /// [`host_thread_check`][Self::host_thread_check] thus contains a value), then that extension
@@ -268,8 +269,10 @@ pub struct Wrapper<P: ClapPlugin> {
 /// Tasks that can be sent from the plugin to be executed on the main thread in a non-blocking
 /// realtime-safe way. Instead of using a random thread or the OS' event loop like in the Linux
 /// implementation, this uses [`clap_host::request_callback()`] instead.
-#[derive(Debug)]
-pub enum Task {
+#[allow(clippy::enum_variant_names)]
+pub enum Task<P: Plugin> {
+    /// Execute one of the plugin's background tasks.
+    PluginTask(<P::AsyncExecutor as AsyncExecutor>::Task),
     /// Inform the host that the latency has changed.
     LatencyChanged,
     /// Inform the host that the voice info has changed.
@@ -311,12 +314,12 @@ pub enum OutputParamEvent {
 
 /// Because CLAP has this [`clap_host::request_host_callback()`] function, we don't need to use
 /// `OsEventLoop` and can instead just request a main thread callback directly.
-impl<P: ClapPlugin> EventLoop<Task, Wrapper<P>> for Wrapper<P> {
+impl<P: ClapPlugin> EventLoop<Task<P>, Wrapper<P>> for Wrapper<P> {
     fn new_and_spawn(_executor: std::sync::Weak<Self>) -> Self {
         panic!("What are you doing");
     }
 
-    fn do_maybe_async(&self, task: Task) -> bool {
+    fn do_maybe_async(&self, task: Task<P>) -> bool {
         if self.is_main_thread() {
             unsafe { self.execute(task) };
             true
@@ -346,10 +349,11 @@ impl<P: ClapPlugin> EventLoop<Task, Wrapper<P>> for Wrapper<P> {
     }
 }
 
-impl<P: ClapPlugin> MainThreadExecutor<Task> for Wrapper<P> {
-    unsafe fn execute(&self, task: Task) {
+impl<P: ClapPlugin> MainThreadExecutor<Task<P>> for Wrapper<P> {
+    unsafe fn execute(&self, task: Task<P>) {
         // This function is always called from the main thread, from [Self::on_main_thread].
         match task {
+            Task::PluginTask(task) => AsyncExecutor::execute(&self.async_executor, task),
             Task::LatencyChanged => match &*self.host_latency.borrow() {
                 Some(host_latency) => {
                     // XXX: The CLAP docs mention that you should request a restart if this happens

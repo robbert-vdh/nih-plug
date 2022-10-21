@@ -200,7 +200,7 @@ impl Plugin for SafetyLimiter {
         &mut self,
         buffer: &mut Buffer,
         _aux: &mut AuxiliaryBuffers,
-        _context: &mut impl ProcessContext,
+        _context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
         // Don't do anything when bouncing
         if self.buffer_config.process_mode == ProcessMode::Offline {

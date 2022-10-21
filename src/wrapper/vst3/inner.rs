@@ -14,6 +14,7 @@ use super::note_expressions::NoteExpressionController;
 use super::param_units::ParamUnits;
 use super::util::{ObjectPtr, VstPtr, VST3_MIDI_PARAMS_END, VST3_MIDI_PARAMS_START};
 use super::view::WrapperView;
+use crate::async_executor::AsyncExecutor;
 use crate::buffer::Buffer;
 use crate::context::Transport;
 use crate::editor::Editor;
@@ -21,7 +22,7 @@ use crate::event_loop::{EventLoop, MainThreadExecutor, OsEventLoop};
 use crate::midi::{MidiConfig, NoteEvent};
 use crate::params::internals::ParamPtr;
 use crate::params::{ParamFlags, Params};
-use crate::plugin::{BufferConfig, BusConfig, ProcessMode, ProcessStatus, Vst3Plugin};
+use crate::plugin::{BufferConfig, BusConfig, Plugin, ProcessMode, ProcessStatus, Vst3Plugin};
 use crate::wrapper::state::{self, PluginState};
 use crate::wrapper::util::{hash_param_id, process_wrapper};
 
@@ -59,7 +60,7 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// reason to mutably borrow the event loop, so reads will never be contested.
     ///
     /// TODO: Is there a better type for Send+Sync late initialization?
-    pub event_loop: AtomicRefCell<Option<OsEventLoop<Task, Self>>>,
+    pub event_loop: AtomicRefCell<Option<OsEventLoop<Task<P>, Self>>>,
 
     /// Whether the plugin is currently processing audio. In other words, the last state
     /// `IAudioProcessor::setActive()` has been called with.
@@ -150,8 +151,10 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
 /// Tasks that can be sent from the plugin to be executed on the main thread in a non-blocking
 /// realtime-safe way (either a random thread or `IRunLoop` on Linux, the OS' message loop on
 /// Windows and macOS).
-#[derive(Debug, Clone)]
-pub enum Task {
+#[allow(clippy::enum_variant_names)]
+pub enum Task<P: Plugin> {
+    /// Execute one of the plugin's background tasks.
+    PluginTask(<P::AsyncExecutor as AsyncExecutor>::Task),
     /// Trigger a restart with the given restart flags. This is a bit set of the flags from
     /// [`vst3_sys::vst::RestartFlags`].
     TriggerRestart(i32),
@@ -353,7 +356,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
     ///
     /// If the task queue is full, then this will return false.
     #[must_use]
-    pub fn do_maybe_async(&self, task: Task) -> bool {
+    pub fn do_maybe_async(&self, task: Task<P>) -> bool {
         let event_loop = self.event_loop.borrow();
         let event_loop = event_loop.as_ref().unwrap();
         if event_loop.is_main_thread() {
@@ -514,8 +517,8 @@ impl<P: Vst3Plugin> WrapperInner<P> {
     }
 }
 
-impl<P: Vst3Plugin> MainThreadExecutor<Task> for WrapperInner<P> {
-    unsafe fn execute(&self, task: Task) {
+impl<P: Vst3Plugin> MainThreadExecutor<Task<P>> for WrapperInner<P> {
+    unsafe fn execute(&self, task: Task<P>) {
         // This function is always called from the main thread
         // TODO: When we add GUI resizing and context menus, this should propagate those events to
         //       `IRunLoop` on Linux to keep REAPER happy. That does mean a double spool, but we can
@@ -523,6 +526,7 @@ impl<P: Vst3Plugin> MainThreadExecutor<Task> for WrapperInner<P> {
         //       function for checking if a to be scheduled task can be handled right there and
         //       then).
         match task {
+            Task::PluginTask(task) => AsyncExecutor::execute(&self.async_executor, task),
             Task::TriggerRestart(flags) => match &*self.component_handler.borrow() {
                 Some(handler) => {
                     handler.restart_component(flags);

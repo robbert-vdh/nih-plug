@@ -50,7 +50,11 @@ pub trait InitContext<P: Plugin> {
 //
 // The implementing wrapper needs to be able to handle concurrent requests, and it should perform
 // the actual callback within [MainThreadQueue::do_maybe_async].
-pub trait ProcessContext {
+pub trait ProcessContext<P: Plugin> {
+    /// Run a task on a background thread. This allows defering expensive background tasks for
+    /// alter. As long as creating the `task` is realtime-safe, this operation is too.
+    fn execute_async(&self, task: <P::AsyncExecutor as AsyncExecutor>::Task);
+
     /// Get the current plugin API.
     fn plugin_api(&self) -> PluginApi;
 

@@ -195,7 +195,7 @@ pub trait Plugin: Default + Send + 'static {
         &mut self,
         buffer: &mut Buffer,
         aux: &mut AuxiliaryBuffers,
-        context: &mut impl ProcessContext,
+        context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus;
 
     /// Called when the plugin is deactivated. The host will call
