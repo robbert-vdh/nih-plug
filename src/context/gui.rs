@@ -82,9 +82,17 @@ pub trait GuiContext: Send + Sync + 'static {
 //
 // NOTE: This is separate from `GuiContext` because adding a type parameter there would clutter up a
 //       lot of structs, and may even be incompatible with the way certain GUI libraries work.
-#[derive(Clone)]
 pub struct AsyncExecutor<P: Plugin> {
     pub(crate) inner: Arc<dyn Fn(P::BackgroundTask) + Send + Sync>,
+}
+
+// Can't derive this since Rust then requires `P` to also be `Clone`able
+impl<P: Plugin> Clone for AsyncExecutor<P> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+        }
+    }
 }
 
 /// A convenience helper for setting parameter values. Any changes made here will be broadcasted to
