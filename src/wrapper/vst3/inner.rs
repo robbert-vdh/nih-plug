@@ -15,6 +15,7 @@ use super::param_units::ParamUnits;
 use super::util::{ObjectPtr, VstPtr, VST3_MIDI_PARAMS_END, VST3_MIDI_PARAMS_START};
 use super::view::WrapperView;
 use crate::buffer::Buffer;
+use crate::context::gui::AsyncExecutor;
 use crate::context::process::Transport;
 use crate::editor::Editor;
 use crate::event_loop::{EventLoop, MainThreadExecutor, OsEventLoop};
@@ -41,8 +42,8 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     pub params: Arc<dyn Params>,
     /// The plugin's editor, if it has one. This object does not do anything on its own, but we need
     /// to instantiate this in advance so we don't need to lock the entire [`Plugin`] object when
-    /// creating an editor.
-    pub editor: Option<Arc<Mutex<Box<dyn Editor>>>>,
+    /// creating an editor. Wrapped in an `AtomicRefCell` because it needs to be initialized late.
+    pub editor: AtomicRefCell<Option<Arc<Mutex<Box<dyn Editor>>>>>,
 
     /// The host's [`IComponentHandler`] instance, if passed through
     /// [`IEditController::set_component_handler`].
@@ -198,7 +199,6 @@ impl<P: Vst3Plugin> WrapperInner<P> {
     pub fn new() -> Arc<Self> {
         let plugin = P::default();
         let task_executor = Mutex::new(plugin.task_executor());
-        let editor = plugin.editor().map(|editor| Arc::new(Mutex::new(editor)));
 
         // This is used to allow the plugin to restore preset data from its editor, see the comment
         // on `Self::updated_state_sender`
@@ -283,7 +283,8 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             plugin: Mutex::new(plugin),
             task_executor,
             params,
-            editor,
+            // Initialized later as it needs a reference to the wrapper for the async executor
+            editor: AtomicRefCell::new(None),
 
             component_handler: AtomicRefCell::new(None),
 
@@ -330,6 +331,22 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         let wrapper: Arc<WrapperInner<P>> = wrapper.into();
         *wrapper.event_loop.borrow_mut() =
             Some(OsEventLoop::new_and_spawn(Arc::downgrade(&wrapper)));
+
+        // The editor also needs to be initialized later so the Async executor can work.
+        *wrapper.editor.borrow_mut() = wrapper
+            .plugin
+            .lock()
+            .editor(AsyncExecutor {
+                inner: Arc::new({
+                    let wrapper = wrapper.clone();
+
+                    move |task| {
+                        let task_posted = wrapper.do_maybe_async(Task::PluginTask(task));
+                        nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+                    }
+                }),
+            })
+            .map(|editor| Arc::new(Mutex::new(editor)));
 
         wrapper
     }
@@ -385,7 +402,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
     /// that the editor instance is currently locked then nothing will happen, and the request can
     /// safely be ignored.
     pub fn notify_param_values_changed(&self) {
-        if let Some(editor) = &self.editor {
+        if let Some(editor) = self.editor.borrow().as_ref() {
             match editor.try_lock() {
                 Some(editor) => editor.param_values_changed(),
                 None => nih_debug_assert_failure!(

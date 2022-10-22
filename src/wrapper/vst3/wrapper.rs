@@ -771,7 +771,7 @@ impl<P: Vst3Plugin> IEditController for Wrapper<P> {
     unsafe fn create_view(&self, _name: vst3_sys::base::FIDString) -> *mut c_void {
         // Without specialization this is the least redundant way to check if the plugin has an
         // editor. The default implementation returns a None here.
-        match &self.inner.editor {
+        match self.inner.editor.borrow().as_ref() {
             Some(editor) => Box::into_raw(WrapperView::new(self.inner.clone(), editor.clone()))
                 as *mut vst3_sys::c_void,
             None => ptr::null_mut(),

@@ -13,6 +13,7 @@ use std::thread;
 use super::backend::Backend;
 use super::config::WrapperConfig;
 use super::context::{WrapperGuiContext, WrapperInitContext, WrapperProcessContext};
+use crate::context::gui::AsyncExecutor;
 use crate::context::process::Transport;
 use crate::editor::{Editor, ParentWindowHandle};
 use crate::event_loop::{EventLoop, MainThreadExecutor, OsEventLoop};
@@ -51,8 +52,8 @@ pub struct Wrapper<P: Plugin, B: Backend> {
     param_map: HashMap<String, ParamPtr>,
     /// The plugin's editor, if it has one. This object does not do anything on its own, but we need
     /// to instantiate this in advance so we don't need to lock the entire [`Plugin`] object when
-    /// creating an editor.
-    pub editor: Option<Arc<Mutex<Box<dyn Editor>>>>,
+    /// creating an editor. Wrapped in an `AtomicRefCell` because it needs to be initialized late.
+    pub editor: AtomicRefCell<Option<Arc<Mutex<Box<dyn Editor>>>>>,
 
     /// A realtime-safe task queue so the plugin can schedule tasks that need to be run later on the
     /// GUI thread. See the same field in the VST3 wrapper for more information on why this looks
@@ -159,7 +160,6 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
             task_executor: Mutex::new(plugin.task_executor()),
         });
         let params = plugin.params();
-        let editor = plugin.editor().map(|editor| Arc::new(Mutex::new(editor)));
 
         // This is used to allow the plugin to restore preset data from its editor, see the comment
         // on `Self::updated_state_sender`
@@ -211,7 +211,8 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
                 .into_iter()
                 .map(|(param_id, param_ptr, _)| (param_id, param_ptr))
                 .collect(),
-            editor,
+            // Initialized later as it needs a reference to the wrapper for the async executor
+            editor: AtomicRefCell::new(None),
 
             event_loop: OsEventLoop::new_and_spawn(Arc::downgrade(&task_executor_wrapper)),
 
@@ -235,6 +236,22 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
             updated_state_sender,
             updated_state_receiver,
         });
+
+        // The editor needs to be initialized later so the Async executor can work.
+        *wrapper.editor.borrow_mut() = wrapper
+            .plugin
+            .lock()
+            .editor(AsyncExecutor {
+                inner: Arc::new({
+                    let wrapper = wrapper.clone();
+
+                    move |task| {
+                        let task_posted = wrapper.event_loop.do_maybe_async(task);
+                        nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+                    }
+                }),
+            })
+            .map(|editor| Arc::new(Mutex::new(editor)));
 
         // Right now the IO configuration is fixed in the standalone target, so if the plugin cannot
         // work with this then we cannot initialize the plugin at all.
@@ -283,7 +300,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
             thread::spawn(move || this.run_audio_thread(terminate_audio_thread, gui_task_sender))
         };
 
-        match self.editor.clone() {
+        match self.editor.borrow().clone() {
             Some(editor) => {
                 let context = self.clone().make_gui_context(gui_task_sender);
 
@@ -511,7 +528,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
     /// off-chance that the editor instance is currently locked then nothing will happen, and the
     /// request can safely be ignored.
     fn notify_param_values_changed(&self) {
-        if let Some(editor) = &self.editor {
+        if let Some(editor) = self.editor.borrow().as_ref() {
             match editor.try_lock() {
                 Some(editor) => editor.param_values_changed(),
                 None => nih_debug_assert_failure!(

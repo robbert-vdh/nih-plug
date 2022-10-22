@@ -108,7 +108,8 @@ impl<P: Plugin, B: Backend> GuiContext for WrapperGuiContext<P, B> {
     }
 
     fn request_resize(&self) -> bool {
-        let (unscaled_width, unscaled_height) = self.wrapper.editor.as_ref().unwrap().lock().size();
+        let (unscaled_width, unscaled_height) =
+            self.wrapper.editor.borrow().as_ref().unwrap().lock().size();
 
         // This will cause the editor to be resized at the start of the next frame
         let push_successful = self

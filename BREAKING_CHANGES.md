@@ -29,6 +29,8 @@ code then it will not be listed here.
   changed to `&mut impl InitContext<Self>`.
 - The `&mut impl ProcessContext` argument to `Plugin::process()` needs to be
   changed to `&mut impl ProcessContext<Self>`.
+- The `Plugin::editor()` method now also takes a
+  `_async_executor: AsyncExecutor<Self>` parameter.
 
 ## [2022-10-20]
 

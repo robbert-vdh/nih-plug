@@ -77,6 +77,7 @@ use super::context::{WrapperGuiContext, WrapperInitContext, WrapperProcessContex
 use super::descriptor::PluginDescriptor;
 use super::util::ClapPtr;
 use crate::buffer::Buffer;
+use crate::context::gui::AsyncExecutor;
 use crate::context::process::Transport;
 use crate::editor::{Editor, ParentWindowHandle};
 use crate::event_loop::{EventLoop, MainThreadExecutor, TASK_QUEUE_CAPACITY};
@@ -114,8 +115,8 @@ pub struct Wrapper<P: ClapPlugin> {
     params: Arc<dyn Params>,
     /// The plugin's editor, if it has one. This object does not do anything on its own, but we need
     /// to instantiate this in advance so we don't need to lock the entire [`Plugin`] object when
-    /// creating an editor.
-    editor: Option<Mutex<Box<dyn Editor>>>,
+    /// creating an editor. Wrapped in an `AtomicRefCell` because it needs to be initialized late.
+    editor: AtomicRefCell<Option<Mutex<Box<dyn Editor>>>>,
     /// A handle for the currently active editor instance. The plugin should implement `Drop` on
     /// this handle for its closing behavior.
     editor_handle: Mutex<Option<Box<dyn Any + Send>>>,
@@ -388,7 +389,6 @@ impl<P: ClapPlugin> Wrapper<P> {
     pub fn new(host_callback: *const clap_host) -> Arc<Self> {
         let plugin = P::default();
         let task_executor = Mutex::new(plugin.task_executor());
-        let editor = plugin.editor().map(Mutex::new);
 
         // This is used to allow the plugin to restore preset data from its editor, see the comment
         // on `Self::updated_state_sender`
@@ -551,7 +551,8 @@ impl<P: ClapPlugin> Wrapper<P> {
             plugin: Mutex::new(plugin),
             task_executor,
             params,
-            editor,
+            // Initialized later as it needs a reference to the wrapper for the async executor
+            editor: AtomicRefCell::new(None),
             editor_handle: Mutex::new(None),
             editor_scaling_factor: AtomicF32::new(1.0),
 
@@ -678,6 +679,22 @@ impl<P: ClapPlugin> Wrapper<P> {
         let wrapper = Arc::new(wrapper);
         *wrapper.this.borrow_mut() = Arc::downgrade(&wrapper);
 
+        // The editor also needs to be initialized later so the Async executor can work.
+        *wrapper.editor.borrow_mut() = wrapper
+            .plugin
+            .lock()
+            .editor(AsyncExecutor {
+                inner: Arc::new({
+                    let wrapper = wrapper.clone();
+
+                    move |task| {
+                        let task_posted = wrapper.do_maybe_async(Task::PluginTask(task));
+                        nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+                    }
+                }),
+            })
+            .map(Mutex::new);
+
         wrapper
     }
 
@@ -725,7 +742,7 @@ impl<P: ClapPlugin> Wrapper<P> {
     /// the editor instance is currently locked then nothing will happen, and the request can safely
     /// be ignored.
     pub fn notify_param_values_changed(&self) {
-        if let Some(editor) = &self.editor {
+        if let Some(editor) = self.editor.borrow().as_ref() {
             match editor.try_lock() {
                 Some(editor) => editor.param_values_changed(),
                 None => nih_debug_assert_failure!(
@@ -740,7 +757,10 @@ impl<P: ClapPlugin> Wrapper<P> {
     /// safely be called from any thread. If this returns `false`, then the plugin should reset its
     /// size back to the previous value.
     pub fn request_resize(&self) -> bool {
-        match (&*self.host_gui.borrow(), &self.editor) {
+        match (
+            self.host_gui.borrow().as_ref(),
+            self.editor.borrow().as_ref(),
+        ) {
             (Some(host_gui), Some(editor)) => {
                 let (unscaled_width, unscaled_height) = editor.lock().size();
                 let scaling_factor = self.editor_scaling_factor.load(Ordering::Relaxed);
@@ -2300,7 +2320,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             &wrapper.clap_plugin_audio_ports_config as *const _ as *const c_void
         } else if id == CLAP_EXT_AUDIO_PORTS {
             &wrapper.clap_plugin_audio_ports as *const _ as *const c_void
-        } else if id == CLAP_EXT_GUI && wrapper.editor.is_some() {
+        } else if id == CLAP_EXT_GUI && wrapper.editor.borrow().is_some() {
             // Only report that we support this extension if the plugin has an editor
             &wrapper.clap_plugin_gui as *const _ as *const c_void
         } else if id == CLAP_EXT_LATENCY {
@@ -2686,6 +2706,7 @@ impl<P: ClapPlugin> Wrapper<P> {
 
         if wrapper
             .editor
+            .borrow()
             .as_ref()
             .unwrap()
             .lock()
@@ -2709,7 +2730,8 @@ impl<P: ClapPlugin> Wrapper<P> {
         let wrapper = &*(plugin as *const Self);
 
         // For macOS the scaling factor is always 1
-        let (unscaled_width, unscaled_height) = wrapper.editor.as_ref().unwrap().lock().size();
+        let (unscaled_width, unscaled_height) =
+            wrapper.editor.borrow().as_ref().unwrap().lock().size();
         let scaling_factor = wrapper.editor_scaling_factor.load(Ordering::Relaxed);
         (*width, *height) = (
             (unscaled_width as f32 * scaling_factor).round() as u32,
@@ -2751,7 +2773,8 @@ impl<P: ClapPlugin> Wrapper<P> {
         check_null_ptr!(false, plugin);
         let wrapper = &*(plugin as *const Self);
 
-        let (unscaled_width, unscaled_height) = wrapper.editor.as_ref().unwrap().lock().size();
+        let (unscaled_width, unscaled_height) =
+            wrapper.editor.borrow().as_ref().unwrap().lock().size();
         let scaling_factor = wrapper.editor_scaling_factor.load(Ordering::Relaxed);
         let (editor_width, editor_height) = (
             (unscaled_width as f32 * scaling_factor).round() as u32,
@@ -2793,7 +2816,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 };
 
                 // This extension is only exposed when we have an editor
-                *editor_handle = Some(wrapper.editor.as_ref().unwrap().lock().spawn(
+                *editor_handle = Some(wrapper.editor.borrow().as_ref().unwrap().lock().spawn(
                     ParentWindowHandle { handle },
                     wrapper.clone().make_gui_context(),
                 ));

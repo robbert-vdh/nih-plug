@@ -8,6 +8,7 @@ use crate::context::process::ProcessContext;
 use crate::editor::Editor;
 use crate::midi::MidiConfig;
 use crate::params::Params;
+use crate::prelude::AsyncExecutor;
 use crate::wrapper::clap::features::ClapFeature;
 use crate::wrapper::state::PluginState;
 
@@ -122,7 +123,7 @@ pub trait Plugin: Default + Send + 'static {
     /// access into the editor. You can later modify the parameters through the
     /// [`GuiContext`][crate::prelude::GuiContext] and [`ParamSetter`][crate::prelude::ParamSetter] after the editor
     /// GUI has been created.
-    fn editor(&self) -> Option<Box<dyn Editor>> {
+    fn editor(&self, async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
         None
     }
 
