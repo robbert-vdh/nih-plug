@@ -10,7 +10,10 @@ use crate::params::Params;
 use crate::wrapper::clap::features::ClapFeature;
 use crate::wrapper::state::PluginState;
 
-pub type TaskExecutor<P> = Box<dyn Fn(<P as Plugin>::BackgroundTask) + Send + Sync>;
+/// A function that can execute a plugin's [`BackgroundTask`][Plugin::BackgroundTask]s. A plugin can
+/// dispatch these tasks from the `initialize()` function, the `process()` function, or the GUI, so
+/// they can be deferred for later to avoid blocking realtime contexts.
+pub type TaskExecutor<P> = Box<dyn Fn(<P as Plugin>::BackgroundTask) + Send>;
 
 /// Basic functionality that needs to be implemented by a plugin. The wrappers will use this to
 /// expose the plugin in a particular plugin format.

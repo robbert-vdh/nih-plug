@@ -141,12 +141,12 @@ impl WindowHandler for WrapperWindowHandler {
 
 /// Adapter to make `TaskExecutor<P>` work as a `MainThreadExecutor`.
 pub struct TaskExecutorWrapper<P: Plugin> {
-    pub task_executor: TaskExecutor<P>,
+    pub task_executor: Mutex<TaskExecutor<P>>,
 }
 
 impl<P: Plugin> MainThreadExecutor<P::BackgroundTask> for TaskExecutorWrapper<P> {
     unsafe fn execute(&self, task: P::BackgroundTask) {
-        (self.task_executor)(task)
+        (self.task_executor.lock())(task)
     }
 }
 
@@ -156,7 +156,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
     pub fn new(backend: B, config: WrapperConfig) -> Result<Arc<Self>, WrapperError> {
         let plugin = P::default();
         let task_executor_wrapper = Arc::new(TaskExecutorWrapper {
-            task_executor: plugin.task_executor(),
+            task_executor: Mutex::new(plugin.task_executor()),
         });
         let params = plugin.params();
         let editor = plugin.editor().map(|editor| Arc::new(Mutex::new(editor)));

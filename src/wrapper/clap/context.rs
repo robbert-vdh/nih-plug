@@ -115,7 +115,7 @@ impl<P: ClapPlugin> GuiContext for WrapperGuiContext<P> {
 
 impl<P: ClapPlugin> InitContext<P> for WrapperInitContext<'_, P> {
     fn execute(&self, task: P::BackgroundTask) {
-        (self.wrapper.task_executor)(task);
+        (self.wrapper.task_executor.lock())(task);
     }
 
     fn plugin_api(&self) -> PluginApi {

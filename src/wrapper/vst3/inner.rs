@@ -34,7 +34,7 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// The wrapped plugin instance.
     pub plugin: Mutex<P>,
     /// The plugin's background task executor closure.
-    pub task_executor: TaskExecutor<P>,
+    pub task_executor: Mutex<TaskExecutor<P>>,
     /// The plugin's parameters. These are fetched once during initialization. That way the
     /// `ParamPtr`s are guaranteed to live at least as long as this object and we can interact with
     /// the `Params` object without having to acquire a lock on `plugin`.
@@ -197,7 +197,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
     #[allow(unused_unsafe)]
     pub fn new() -> Arc<Self> {
         let plugin = P::default();
-        let task_executor = plugin.task_executor();
+        let task_executor = Mutex::new(plugin.task_executor());
         let editor = plugin.editor().map(|editor| Arc::new(Mutex::new(editor)));
 
         // This is used to allow the plugin to restore preset data from its editor, see the comment
@@ -527,7 +527,7 @@ impl<P: Vst3Plugin> MainThreadExecutor<Task<P>> for WrapperInner<P> {
         //       function for checking if a to be scheduled task can be handled right there and
         //       then).
         match task {
-            Task::PluginTask(task) => (self.task_executor)(task),
+            Task::PluginTask(task) => (self.task_executor.lock())(task),
             Task::TriggerRestart(flags) => match &*self.component_handler.borrow() {
                 Some(handler) => {
                     handler.restart_component(flags);

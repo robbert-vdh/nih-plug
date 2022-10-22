@@ -117,7 +117,7 @@ impl<P: Vst3Plugin> GuiContext for WrapperGuiContext<P> {
 
 impl<P: Vst3Plugin> InitContext<P> for WrapperInitContext<'_, P> {
     fn execute(&self, task: P::BackgroundTask) {
-        (self.inner.task_executor)(task);
+        (self.inner.task_executor.lock())(task);
     }
 
     fn plugin_api(&self) -> PluginApi {

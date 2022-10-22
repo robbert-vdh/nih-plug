@@ -80,7 +80,7 @@ impl<P: Plugin, B: Backend> GuiContext for WrapperGuiContext<P, B> {
 
 impl<P: Plugin, B: Backend> InitContext<P> for WrapperInitContext<'_, P, B> {
     fn execute(&self, task: P::BackgroundTask) {
-        (self.wrapper.task_executor_wrapper.task_executor)(task);
+        (self.wrapper.task_executor_wrapper.task_executor.lock())(task);
     }
 
     fn plugin_api(&self) -> PluginApi {
