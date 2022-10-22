@@ -1,8 +1,11 @@
 //! A context passed to a plugin's editor.
 
+use std::sync::Arc;
+
 use super::PluginApi;
 use crate::params::internals::ParamPtr;
 use crate::params::Param;
+use crate::plugin::Plugin;
 use crate::wrapper::state::PluginState;
 
 /// Callbacks the plugin can make when the user interacts with its GUI such as updating parameter
@@ -65,11 +68,44 @@ pub trait GuiContext: Send + Sync + 'static {
     fn set_state(&self, state: PluginState);
 }
 
+/// An way to run background tasks from the plugin's GUI, equivalent to
+/// [`ProcessContext::execute_async()`][crate::prelude::ProcessContext::execute_async()]. This is
+/// passed directly to [`Plugin::editor()`] so the plugin can move it into its editor and use it
+/// later.
+///
+/// # Note
+///
+/// This is only intended to be used from the GUI. Use the methods on
+/// [`InitContext`][crate::prelude::InitContext] and
+/// [`ProcessContext`][crate::prelude::ProcessContext] to run tasks during the `initialize()` and
+/// `process()` functions.
+//
+// NOTE: This is separate from `GuiContext` because adding a type parameter there would clutter up a
+//       lot of structs, and may even be incompatible with the way certain GUI libraries work.
+#[derive(Clone)]
+pub struct AsyncExecutor<P: Plugin> {
+    pub(crate) inner: Arc<dyn Fn(P::BackgroundTask)>,
+}
+
 /// A convenience helper for setting parameter values. Any changes made here will be broadcasted to
 /// the host and reflected in the plugin's [`Params`][crate::params::Params] object. These
 /// functions should only be called from the main thread.
 pub struct ParamSetter<'a> {
     pub raw_context: &'a dyn GuiContext,
+}
+
+impl<P: Plugin> AsyncExecutor<P> {
+    /// Run a task on a background thread. This allows deferring expensive background tasks for
+    /// later. This task will likely still be executed on the GUI thread.
+    ///
+    /// # Note
+    ///
+    /// Scheduling the same task multiple times will cause those duplicate tasks to pile up. Try to
+    /// either prevent this from happening, or check whether the task still needs to be completed in
+    /// your task executor.
+    pub fn execute_async(&self, task: P::BackgroundTask) {
+        (self.inner)(task);
+    }
 }
 
 impl<'a> ParamSetter<'a> {

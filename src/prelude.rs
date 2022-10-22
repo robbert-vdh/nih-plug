@@ -11,7 +11,7 @@ pub use crate::formatters;
 pub use crate::util;
 
 pub use crate::buffer::Buffer;
-pub use crate::context::gui::{GuiContext, ParamSetter};
+pub use crate::context::gui::{AsyncExecutor, GuiContext, ParamSetter};
 pub use crate::context::init::InitContext;
 pub use crate::context::process::ProcessContext;
 // This also includes the derive macro
