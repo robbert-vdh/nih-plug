@@ -84,7 +84,7 @@ pub trait GuiContext: Send + Sync + 'static {
 //       lot of structs, and may even be incompatible with the way certain GUI libraries work.
 #[derive(Clone)]
 pub struct AsyncExecutor<P: Plugin> {
-    pub(crate) inner: Arc<dyn Fn(P::BackgroundTask)>,
+    pub(crate) inner: Arc<dyn Fn(P::BackgroundTask) + Send + Sync>,
 }
 
 /// A convenience helper for setting parameter values. Any changes made here will be broadcasted to
