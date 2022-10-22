@@ -8,10 +8,8 @@ code then it will not be listed here.
 
 ## [2022-10-22]
 
-- The `&mut impl ProcessContext` argument to `Plugin::process()` needs to be
-  changed to `&mut impl ProcessContext<Self>`.
-- The `&mut impl InitContext` argument to `Plugin::initialize()` needs to be
-  changed to `&mut impl InitContext<Self>`.
+- The `Editor` trait and the `ParentWindowHandle` struct have been moved from
+  `nih_plug::plugin` to a new `nih_plug::editor` module.
 - NIH-plug has gained support for asynchronously running background tasks in a
   simple, type-safe, and realtime-safe way. This sadly does mean that every
   `Plugin` instance now needs to define a `BackgroundTask` type definition and
@@ -22,24 +20,26 @@ code then it will not be listed here.
   type BackgroundTask = ();
   ```
 
-- The `Editor` trait and the `ParentWindowHandle` struct have been moved from
-  `nih_plug::plugin` to a new `nih_plug::editor` module.
+- The `&mut impl InitContext` argument to `Plugin::initialize()` needs to be
+  changed to `&mut impl InitContext<Self>`.
+- The `&mut impl ProcessContext` argument to `Plugin::process()` needs to be
+  changed to `&mut impl ProcessContext<Self>`.
 
 ## [2022-10-20]
 
-- Similar to the below change, `Plugin` also no longer requires `Sync`.
-- `Editor` and the editor handle returned by `Editor::spawn` now only require
-  `Send` and no longer need `Sync`. This is not a breaking change, but it might
-  be worth being aware of.
-- The `create_egui_editor()` function from `nih_plug_egui` now also takes a
-  build closure to apply initialization logic to the egui context.
-- The `nih_plug::param` module has been renamed to `nih_plug::params`. Code that
-  only uses the prelude module doesn't need to be changed.
 - Some items have been moved out of `nih_plug::param::internals`. The main
   `Params` trait is now located under `nih_plug::param`, and the
   `PersistentTrait` trait, implementations, and helper functions are now part of
   a new `nih_plug::param::persist` module. Code importing the `Params` trait
   through the prelude module doesn't need to be changed.
+- The `nih_plug::param` module has been renamed to `nih_plug::params`. Code that
+  only uses the prelude module doesn't need to be changed.
+- The `create_egui_editor()` function from `nih_plug_egui` now also takes a
+  build closure to apply initialization logic to the egui context.
+- `Editor` and the editor handle returned by `Editor::spawn` now only require
+  `Send` and no longer need `Sync`. This is not a breaking change, but it might
+  be worth being aware of.
+- Similar to the above change, `Plugin` also no longer requires `Sync`.
 
 ## [2022-10-13]
 
@@ -53,9 +53,9 @@ code then it will not be listed here.
 
 ## [2022-09-22]
 
-- `nih_plug_egui` has been updated from egui 0.17 to egui 0.19.
 - `nih_plug_vizia` has been updated. Custom widgets will need to be updated
   because of changes Vizia itself.
+- `nih_plug_egui` has been updated from egui 0.17 to egui 0.19.
 
 ## [2022-09-06]
 
@@ -80,12 +80,12 @@ code then it will not be listed here.
 
 ## [2022-08-19]
 
+- Standalones now use the plugin's default input and output channel counts
+  instead of always defaulting to two inputs and two outputs.
 - `Plugin::DEFAULT_NUM_INPUTS` and `Plugin::DEFAULT_NUM_OUTPUTS` have been
   renamed to `Plugin::DEFAULT_INPUT_CHANNELS` and
   `Plugin::DEFAULT_OUTPUT_CHANNELS` respectively to avoid confusion as these
   constants only affect the main input and output.
-- Standalones now use the plugin's default input and output channel counts
-  instead of always defaulting to two inputs and two outputs.
 
 ## [2022-07-18]
 
@@ -95,14 +95,14 @@ code then it will not be listed here.
 
 ## [2022-07-06]
 
+- There are new `NoteEvent::PolyModulation` and `NoteEvent::MonoAutomation`
+  events as part of polyphonic modulation support for CLAP plugins.
 - The block smoothing API has been reworked. Instead of `Smoother`s having their
   own built-in block buffer, you now need to provide your own mutable slice for
   the smoother to fill. This makes the API easier to understand, more flexible,
   and it allows cloning smoothers without worrying about allocations.In
   addition, the new implementation is much more efficient when the smoothing
   period has ended before or during the block.
-- There are new `NoteEvent::PolyModulation` and `NoteEvent::MonoAutomation`
-  events as part of polyphonic modulation support for CLAP plugins.
 
 ## [2022-07-05]
 
@@ -112,16 +112,16 @@ code then it will not be listed here.
 
 ## [2022-07-04]
 
-- There is a new `NoteEvent::Choke` event the host can send to a plugin to let
-  it know that it should immediately terminate all sound associated with a voice
-  or a key.
-- There is a new `NoteEvent::VoiceTerminated` event a plugin can send to let the
-  host know a voice has been terminated. This needs to be output by CLAP plugins
-  that support polyphonic modulation.
-- Most `NoteEvent` variants now have an additional `voice_id` field.
 - The `CLAP_DESCRIPTION`, `CLAP_MANUAL_URL`, and `CLAP_SUPPORT_URL` associated
   constants from the `ClapPlugin` are now optional and have the type
   `Option<&'static str>` instead of `&'static str`.
+- Most `NoteEvent` variants now have an additional `voice_id` field.
+- There is a new `NoteEvent::VoiceTerminated` event a plugin can send to let the
+  host know a voice has been terminated. This needs to be output by CLAP plugins
+  that support polyphonic modulation.
+- There is a new `NoteEvent::Choke` event the host can send to a plugin to let
+  it know that it should immediately terminate all sound associated with a voice
+  or a key.
 
 ## [2022-07-02]
 
@@ -140,23 +140,23 @@ code then it will not be listed here.
 
 ## [2022-05-27]
 
-- The `Plugin::initialize()` method now takes a `&mut impl InitContext` instead
-  of a `&mut impl ProcessContext`.
 - `Plugin::process()` now takes a new `aux: &mut AuxiliaryBuffers` parameter.
   This was needed to allow auxiliary (sidechain) inputs and outputs.
+- The `Plugin::initialize()` method now takes a `&mut impl InitContext` instead
+  of a `&mut impl ProcessContext`.
 
 ## [2022-05-22]
 
-- Previously calling `param.non_automatable()` when constructing a parameter
-  also made the parameter hidden. Hiding a parameter is now done through
-  `param.hide()`, while `param.non_automatable()` simply makes it so that the
-  parameter can only be changed manually and not through automation or
-  modulation.
 - The current processing mode is now stored in `BufferConfig`. Previously this
   could be fetched through a function on the `ProcessContext`, but this makes
   more sense as it remains constant until a plugin is deactivated. The
   `BufferConfig` now contains a field for the minimum buffer size that may or
   may not be set depending on the plugin API.
+- Previously calling `param.non_automatable()` when constructing a parameter
+  also made the parameter hidden. Hiding a parameter is now done through
+  `param.hide()`, while `param.non_automatable()` simply makes it so that the
+  parameter can only be changed manually and not through automation or
+  modulation.
 
 ## ...
 
