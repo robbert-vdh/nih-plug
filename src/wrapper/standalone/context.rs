@@ -79,12 +79,12 @@ impl<P: Plugin, B: Backend> GuiContext for WrapperGuiContext<P, B> {
 }
 
 impl<P: Plugin, B: Backend> InitContext<P> for WrapperInitContext<'_, P, B> {
-    fn execute(&self, task: P::BackgroundTask) {
-        (self.wrapper.task_executor_wrapper.task_executor.lock())(task);
-    }
-
     fn plugin_api(&self) -> PluginApi {
         PluginApi::Standalone
+    }
+
+    fn execute(&self, task: P::BackgroundTask) {
+        (self.wrapper.task_executor_wrapper.task_executor.lock())(task);
     }
 
     fn set_latency_samples(&self, _samples: u32) {
@@ -97,13 +97,13 @@ impl<P: Plugin, B: Backend> InitContext<P> for WrapperInitContext<'_, P, B> {
 }
 
 impl<P: Plugin, B: Backend> ProcessContext<P> for WrapperProcessContext<'_, P, B> {
+    fn plugin_api(&self) -> PluginApi {
+        PluginApi::Standalone
+    }
+
     fn execute_async(&self, task: P::BackgroundTask) {
         let task_posted = self.wrapper.event_loop.do_maybe_async(task);
         nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
-    }
-
-    fn plugin_api(&self) -> PluginApi {
-        PluginApi::Standalone
     }
 
     #[inline]

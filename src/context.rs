@@ -16,6 +16,9 @@ use crate::wrapper::state::PluginState;
 // The implementing wrapper needs to be able to handle concurrent requests, and it should perform
 // the actual callback within [MainThreadQueue::do_maybe_async].
 pub trait InitContext<P: Plugin> {
+    /// Get the current plugin API.
+    fn plugin_api(&self) -> PluginApi;
+
     /// Run a task directly on this thread. This ensures that the task has finished executing before
     /// the plugin finishes initializing.
     ///
@@ -24,9 +27,6 @@ pub trait InitContext<P: Plugin> {
     /// There is no asynchronous alternative for this function as that may result in incorrect
     /// behavior when doing offline rendering.
     fn execute(&self, task: P::BackgroundTask);
-
-    /// Get the current plugin API.
-    fn plugin_api(&self) -> PluginApi;
 
     /// Update the current latency of the plugin. If the plugin is currently processing audio, then
     /// this may cause audio playback to be restarted.
@@ -51,6 +51,9 @@ pub trait InitContext<P: Plugin> {
 // The implementing wrapper needs to be able to handle concurrent requests, and it should perform
 // the actual callback within [MainThreadQueue::do_maybe_async].
 pub trait ProcessContext<P: Plugin> {
+    /// Get the current plugin API.
+    fn plugin_api(&self) -> PluginApi;
+
     /// Run a task on a background thread. This allows defering expensive background tasks for
     /// alter. As long as creating the `task` is realtime-safe, this operation is too.
     ///
@@ -60,9 +63,6 @@ pub trait ProcessContext<P: Plugin> {
     /// either prevnt this from happening, or check whether the task still needs to be completed in
     /// your task executor.
     fn execute_async(&self, task: P::BackgroundTask);
-
-    /// Get the current plugin API.
-    fn plugin_api(&self) -> PluginApi;
 
     /// Get information about the current transport position and status.
     fn transport(&self) -> &Transport;

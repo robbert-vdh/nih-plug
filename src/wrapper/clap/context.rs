@@ -114,12 +114,12 @@ impl<P: ClapPlugin> GuiContext for WrapperGuiContext<P> {
 }
 
 impl<P: ClapPlugin> InitContext<P> for WrapperInitContext<'_, P> {
-    fn execute(&self, task: P::BackgroundTask) {
-        (self.wrapper.task_executor.lock())(task);
-    }
-
     fn plugin_api(&self) -> PluginApi {
         PluginApi::Clap
+    }
+
+    fn execute(&self, task: P::BackgroundTask) {
+        (self.wrapper.task_executor.lock())(task);
     }
 
     fn set_latency_samples(&self, samples: u32) {
@@ -132,13 +132,13 @@ impl<P: ClapPlugin> InitContext<P> for WrapperInitContext<'_, P> {
 }
 
 impl<P: ClapPlugin> ProcessContext<P> for WrapperProcessContext<'_, P> {
+    fn plugin_api(&self) -> PluginApi {
+        PluginApi::Clap
+    }
+
     fn execute_async(&self, task: P::BackgroundTask) {
         let task_posted = self.wrapper.do_maybe_async(Task::PluginTask(task));
         nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
-    }
-
-    fn plugin_api(&self) -> PluginApi {
-        PluginApi::Clap
     }
 
     #[inline]

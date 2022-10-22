@@ -116,12 +116,12 @@ impl<P: Vst3Plugin> GuiContext for WrapperGuiContext<P> {
 }
 
 impl<P: Vst3Plugin> InitContext<P> for WrapperInitContext<'_, P> {
-    fn execute(&self, task: P::BackgroundTask) {
-        (self.inner.task_executor.lock())(task);
-    }
-
     fn plugin_api(&self) -> PluginApi {
         PluginApi::Vst3
+    }
+
+    fn execute(&self, task: P::BackgroundTask) {
+        (self.inner.task_executor.lock())(task);
     }
 
     fn set_latency_samples(&self, samples: u32) {
@@ -134,13 +134,13 @@ impl<P: Vst3Plugin> InitContext<P> for WrapperInitContext<'_, P> {
 }
 
 impl<P: Vst3Plugin> ProcessContext<P> for WrapperProcessContext<'_, P> {
+    fn plugin_api(&self) -> PluginApi {
+        PluginApi::Vst3
+    }
+
     fn execute_async(&self, task: P::BackgroundTask) {
         let task_posted = self.inner.do_maybe_async(Task::PluginTask(task));
         nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
-    }
-
-    fn plugin_api(&self) -> PluginApi {
-        PluginApi::Vst3
     }
 
     #[inline]
