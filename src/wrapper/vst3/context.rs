@@ -5,7 +5,10 @@ use std::sync::Arc;
 use vst3_sys::vst::IComponentHandler;
 
 use super::inner::{Task, WrapperInner};
-use crate::context::{GuiContext, InitContext, PluginApi, ProcessContext, Transport};
+use crate::context::gui::GuiContext;
+use crate::context::init::InitContext;
+use crate::context::process::{ProcessContext, Transport};
+use crate::context::PluginApi;
 use crate::midi::NoteEvent;
 use crate::params::internals::ParamPtr;
 use crate::plugin::Vst3Plugin;

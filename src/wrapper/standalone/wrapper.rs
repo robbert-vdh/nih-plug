@@ -13,7 +13,7 @@ use std::thread;
 use super::backend::Backend;
 use super::config::WrapperConfig;
 use super::context::{WrapperGuiContext, WrapperInitContext, WrapperProcessContext};
-use crate::context::Transport;
+use crate::context::process::Transport;
 use crate::editor::{Editor, ParentWindowHandle};
 use crate::event_loop::{EventLoop, MainThreadExecutor, OsEventLoop};
 use crate::midi::NoteEvent;

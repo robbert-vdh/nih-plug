@@ -4,7 +4,7 @@ use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
 use std::any::Any;
 use std::sync::Arc;
 
-use crate::context::GuiContext;
+use crate::context::gui::GuiContext;
 
 /// An editor for a [`Plugin`][crate::prelude::Plugin].
 pub trait Editor: Send {

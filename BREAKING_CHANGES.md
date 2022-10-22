@@ -9,7 +9,12 @@ code then it will not be listed here.
 ## [2022-10-22]
 
 - The `Editor` trait and the `ParentWindowHandle` struct have been moved from
-  `nih_plug::plugin` to a new `nih_plug::editor` module.
+  `nih_plug::plugin` to a new `nih_plug::editor` module. If you only use the
+  prelude module then you won't need to change anything.
+- The `nih_plug::context` module has been split up into
+  `nih_plug::context::init`, `nih_plug::context::process`, and
+  `nih_plug::context::gui` to make it clearer which structs go with which
+  context. You again don't have to change anything if you use the prelude.
 - NIH-plug has gained support for asynchronously running background tasks in a
   simple, type-safe, and realtime-safe way. This sadly does mean that every
   `Plugin` instance now needs to define a `BackgroundTask` type definition and

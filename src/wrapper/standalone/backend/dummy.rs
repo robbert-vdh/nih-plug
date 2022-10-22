@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 use super::super::config::WrapperConfig;
 use super::Backend;
 use crate::buffer::Buffer;
-use crate::context::Transport;
+use crate::context::process::Transport;
 use crate::midi::NoteEvent;
 use crate::plugin::{AuxiliaryIOConfig, BusConfig, Plugin};
 

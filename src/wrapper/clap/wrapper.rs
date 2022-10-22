@@ -77,7 +77,7 @@ use super::context::{WrapperGuiContext, WrapperInitContext, WrapperProcessContex
 use super::descriptor::PluginDescriptor;
 use super::util::ClapPtr;
 use crate::buffer::Buffer;
-use crate::context::Transport;
+use crate::context::process::Transport;
 use crate::editor::{Editor, ParentWindowHandle};
 use crate::event_loop::{EventLoop, MainThreadExecutor, TASK_QUEUE_CAPACITY};
 use crate::midi::{MidiConfig, NoteEvent};

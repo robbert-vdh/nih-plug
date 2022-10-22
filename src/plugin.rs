@@ -3,7 +3,8 @@
 use std::sync::Arc;
 
 use crate::buffer::Buffer;
-use crate::context::{InitContext, ProcessContext};
+use crate::context::init::InitContext;
+use crate::context::process::ProcessContext;
 use crate::editor::Editor;
 use crate::midi::MidiConfig;
 use crate::params::Params;

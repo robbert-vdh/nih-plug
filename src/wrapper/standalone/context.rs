@@ -3,7 +3,10 @@ use std::sync::Arc;
 
 use super::backend::Backend;
 use super::wrapper::{GuiTask, Wrapper};
-use crate::context::{GuiContext, InitContext, PluginApi, ProcessContext, Transport};
+use crate::context::gui::GuiContext;
+use crate::context::init::InitContext;
+use crate::context::process::{ProcessContext, Transport};
+use crate::context::PluginApi;
 use crate::event_loop::EventLoop;
 use crate::midi::NoteEvent;
 use crate::params::internals::ParamPtr;

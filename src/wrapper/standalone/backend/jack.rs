@@ -11,7 +11,7 @@ use parking_lot::Mutex;
 use super::super::config::WrapperConfig;
 use super::Backend;
 use crate::buffer::Buffer;
-use crate::context::Transport;
+use crate::context::process::Transport;
 use crate::midi::{MidiConfig, NoteEvent};
 use crate::plugin::Plugin;
 

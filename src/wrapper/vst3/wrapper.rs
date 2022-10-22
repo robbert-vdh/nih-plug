@@ -24,7 +24,7 @@ use super::util::{
 };
 use super::view::WrapperView;
 use crate::buffer::Buffer;
-use crate::context::Transport;
+use crate::context::process::Transport;
 use crate::midi::{MidiConfig, NoteEvent};
 use crate::params::ParamFlags;
 use crate::plugin::{
