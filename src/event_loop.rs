@@ -2,6 +2,8 @@
 
 use std::sync::Arc;
 
+mod background_thread;
+
 #[cfg(all(target_family = "unix", not(target_os = "macos")))]
 mod linux;
 // For now, also use the Linux event loop on macOS so it at least compiles
@@ -9,6 +11,8 @@ mod linux;
 mod linux;
 #[cfg(target_os = "windows")]
 mod windows;
+
+pub(crate) use self::background_thread::BackgroundThread;
 
 #[cfg(all(target_family = "unix", not(target_os = "macos")))]
 pub(crate) use self::linux::LinuxEventLoop as OsEventLoop;
