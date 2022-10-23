@@ -84,14 +84,16 @@ pub trait GuiContext: Send + Sync + 'static {
 // NOTE: This is separate from `GuiContext` because adding a type parameter there would clutter up a
 //       lot of structs, and may even be incompatible with the way certain GUI libraries work.
 pub struct AsyncExecutor<P: Plugin> {
-    pub(crate) inner: Arc<dyn Fn(P::BackgroundTask) + Send + Sync>,
+    pub(crate) execute_background: Arc<dyn Fn(P::BackgroundTask) + Send + Sync>,
+    pub(crate) execute_gui: Arc<dyn Fn(P::BackgroundTask) + Send + Sync>,
 }
 
 // Can't derive this since Rust then requires `P` to also be `Clone`able
 impl<P: Plugin> Clone for AsyncExecutor<P> {
     fn clone(&self) -> Self {
         Self {
-            inner: self.inner.clone(),
+            execute_background: self.execute_background.clone(),
+            execute_gui: self.execute_gui.clone(),
         }
     }
 }
@@ -104,6 +106,19 @@ pub struct ParamSetter<'a> {
 }
 
 impl<P: Plugin> AsyncExecutor<P> {
+    /// Run a task from a background thread. This allows you to defer expensive tasks for later
+    /// without blocking either the process function or the GUI thread. As long as creating the
+    /// `task` is realtime-safe, this operation is too.
+    ///
+    /// # Note
+    ///
+    /// Scheduling the same task multiple times will cause those duplicate tasks to pile up. Try to
+    /// either prevent this from happening, or check whether the task still needs to be completed in
+    /// your task executor.
+    pub fn execute_background(&self, task: P::BackgroundTask) {
+        (self.execute_background)(task);
+    }
+
     /// Run a task from the plugin's GUI thread.
     ///
     /// # Note
@@ -112,7 +127,7 @@ impl<P: Plugin> AsyncExecutor<P> {
     /// either prevent this from happening, or check whether the task still needs to be completed in
     /// your task executor.
     pub fn execute_gui(&self, task: P::BackgroundTask) {
-        (self.inner)(task);
+        (self.execute_gui)(task);
     }
 }
 

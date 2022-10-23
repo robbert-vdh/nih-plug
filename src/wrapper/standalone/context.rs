@@ -67,6 +67,11 @@ impl<P: Plugin, B: Backend> ProcessContext<P> for WrapperProcessContext<'_, P, B
         PluginApi::Standalone
     }
 
+    fn execute_background(&self, task: P::BackgroundTask) {
+        let task_posted = self.wrapper.event_loop.schedule_background(task);
+        nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+    }
+
     fn execute_gui(&self, task: P::BackgroundTask) {
         let task_posted = self.wrapper.event_loop.schedule_gui(task);
         nih_debug_assert!(task_posted, "The task queue is full, dropping task...");

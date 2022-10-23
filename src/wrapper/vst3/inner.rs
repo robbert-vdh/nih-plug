@@ -336,7 +336,15 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             .plugin
             .lock()
             .editor(AsyncExecutor {
-                inner: Arc::new({
+                execute_background: Arc::new({
+                    let wrapper = wrapper.clone();
+
+                    move |task| {
+                        let task_posted = wrapper.schedule_background(Task::PluginTask(task));
+                        nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+                    }
+                }),
+                execute_gui: Arc::new({
                     let wrapper = wrapper.clone();
 
                     move |task| {
@@ -367,9 +375,20 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         }
     }
 
-    /// Either posts the function to the task queue using [`EventLoop::schedule_gui()`] so it can
-    /// be delegated to the main thread, executes the task directly if this is the main thread, or
-    /// runs the task on the host's `IRunLoop` if the GUI is open and it exposes one. This function
+    /// Posts the task to the background task queue using [`EventLoop::schedule_background()`] so it
+    /// can be run in the background without blocking either the GUI or the audio thread.
+    ///
+    /// If the task queue is full, then this will return false.
+    #[must_use]
+    pub fn schedule_background(&self, task: Task<P>) -> bool {
+        let event_loop = self.event_loop.borrow();
+        let event_loop = event_loop.as_ref().unwrap();
+        event_loop.schedule_background(task)
+    }
+
+    /// Either posts the task to the task queue using [`EventLoop::schedule_gui()`] so it can be
+    /// delegated to the main thread, executes the task directly if this is the main thread, or runs
+    /// the task on the host's `IRunLoop` if the GUI is open and it exposes one.
     ///
     /// If the task queue is full, then this will return false.
     #[must_use]

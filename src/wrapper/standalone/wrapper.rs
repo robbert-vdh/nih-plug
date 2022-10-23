@@ -242,7 +242,15 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
             .plugin
             .lock()
             .editor(AsyncExecutor {
-                inner: Arc::new({
+                execute_background: Arc::new({
+                    let wrapper = wrapper.clone();
+
+                    move |task| {
+                        let task_posted = wrapper.event_loop.schedule_background(task);
+                        nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+                    }
+                }),
+                execute_gui: Arc::new({
                     let wrapper = wrapper.clone();
 
                     move |task| {

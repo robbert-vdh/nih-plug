@@ -701,7 +701,15 @@ impl<P: ClapPlugin> Wrapper<P> {
             .plugin
             .lock()
             .editor(AsyncExecutor {
-                inner: Arc::new({
+                execute_background: Arc::new({
+                    let wrapper = wrapper.clone();
+
+                    move |task| {
+                        let task_posted = wrapper.schedule_background(Task::PluginTask(task));
+                        nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+                    }
+                }),
+                execute_gui: Arc::new({
                     let wrapper = wrapper.clone();
 
                     move |task| {

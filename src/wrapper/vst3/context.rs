@@ -61,6 +61,11 @@ impl<P: Vst3Plugin> ProcessContext<P> for WrapperProcessContext<'_, P> {
         PluginApi::Vst3
     }
 
+    fn execute_background(&self, task: P::BackgroundTask) {
+        let task_posted = self.inner.schedule_background(Task::PluginTask(task));
+        nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+    }
+
     fn execute_gui(&self, task: P::BackgroundTask) {
         let task_posted = self.inner.schedule_gui(Task::PluginTask(task));
         nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
