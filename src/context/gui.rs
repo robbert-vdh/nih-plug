@@ -68,10 +68,11 @@ pub trait GuiContext: Send + Sync + 'static {
     fn set_state(&self, state: PluginState);
 }
 
-/// An way to run background tasks from the plugin's GUI, equivalent to
-/// [`ProcessContext::execute_async()`][crate::prelude::ProcessContext::execute_async()]. This is
-/// passed directly to [`Plugin::editor()`] so the plugin can move it into its editor and use it
-/// later.
+/// An way to run background tasks from the plugin's GUI, equivalent to the
+/// [`ProcessContext::execute_background()`][crate::prelude::ProcessContext::execute_background()]
+/// and [`ProcessContext::execute_gui()`][crate::prelude::ProcessContext::execute_gui()] functions.
+/// This is passed directly to [`Plugin::editor()`] so the plugin can move it into its editor and
+/// use it later.
 ///
 /// # Note
 ///
@@ -103,15 +104,14 @@ pub struct ParamSetter<'a> {
 }
 
 impl<P: Plugin> AsyncExecutor<P> {
-    /// Run a task on a background thread. This allows deferring expensive background tasks for
-    /// later. This task will likely still be executed on the GUI thread.
+    /// Run a task from the plugin's GUI thread.
     ///
     /// # Note
     ///
     /// Scheduling the same task multiple times will cause those duplicate tasks to pile up. Try to
     /// either prevent this from happening, or check whether the task still needs to be completed in
     /// your task executor.
-    pub fn execute_async(&self, task: P::BackgroundTask) {
+    pub fn execute_gui(&self, task: P::BackgroundTask) {
         (self.inner)(task);
     }
 }

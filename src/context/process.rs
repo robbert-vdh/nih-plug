@@ -17,15 +17,15 @@ pub trait ProcessContext<P: Plugin> {
     /// Get the current plugin API.
     fn plugin_api(&self) -> PluginApi;
 
-    /// Run a task on a background thread. This allows deferring expensive background tasks for
-    /// alter. As long as creating the `task` is realtime-safe, this operation is too.
+    /// Run a task from the plugin's GUI thread. As long as creating the `task` is realtime-safe,
+    /// this operation is too.
     ///
     /// # Note
     ///
     /// Scheduling the same task multiple times will cause those duplicate tasks to pile up. Try to
     /// either prevent this from happening, or check whether the task still needs to be completed in
     /// your task executor.
-    fn execute_async(&self, task: P::BackgroundTask);
+    fn execute_gui(&self, task: P::BackgroundTask);
 
     /// Get information about the current transport position and status.
     fn transport(&self) -> &Transport;

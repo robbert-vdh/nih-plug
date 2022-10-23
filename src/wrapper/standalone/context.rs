@@ -67,7 +67,7 @@ impl<P: Plugin, B: Backend> ProcessContext<P> for WrapperProcessContext<'_, P, B
         PluginApi::Standalone
     }
 
-    fn execute_async(&self, task: P::BackgroundTask) {
+    fn execute_gui(&self, task: P::BackgroundTask) {
         let task_posted = self.wrapper.event_loop.do_maybe_async(task);
         nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
     }
