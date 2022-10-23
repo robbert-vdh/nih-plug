@@ -1,7 +1,7 @@
 //! An event loop for windows, using an invisible window to hook into the host's message loop. This
 //! has only been tested under Wine with [yabridge](https://github.com/robbert-vdh/yabridge).
 
-use crossbeam::queue::ArrayQueue;
+use crossbeam::channel;
 use std::ffi::{c_void, CString};
 use std::mem;
 use std::ptr;
@@ -51,7 +51,7 @@ pub(crate) struct WindowsEventLoop<T, E> {
     /// A queue of tasks that still need to be performed. When something gets added to this queue
     /// we'll wake up the window, which then continues to pop tasks off this queue until it is
     /// empty.
-    tasks: Arc<ArrayQueue<T>>,
+    tasks_sender: channel::Sender<T>,
 }
 
 impl<T, E> EventLoop<T, E> for WindowsEventLoop<T, E>
@@ -60,8 +60,7 @@ where
     E: MainThreadExecutor<T> + 'static,
 {
     fn new_and_spawn(executor: Arc<E>) -> Self {
-        // We'll pass one copy of the this to the window, and we'll keep the other copy here
-        let tasks = Arc::new(ArrayQueue::new(super::TASK_QUEUE_CAPACITY));
+        let (tasks_sender, tasks_receiver) = channel::bounded(super::TASK_QUEUE_CAPACITY);
 
         // Window classes need to have unique names or else multiple plugins loaded into the same
         // process will end up calling the other plugin's callbacks
@@ -85,7 +84,6 @@ where
         // erased version of the polling loop.
         let callback: PollCallback = {
             let executor = Arc::downgrade(&executor);
-            let tasks = tasks.clone();
 
             Box::new(move || {
                 let executor = match executor.upgrade() {
@@ -96,7 +94,7 @@ where
                     }
                 };
 
-                while let Some(task) = tasks.pop() {
+                while let Ok(task) = tasks_receiver.try_recv() {
                     executor.execute(task, true);
                 }
             })
@@ -128,7 +126,7 @@ where
             main_thread_id: thread::current().id(),
             message_window: window,
             message_window_class_name: class_name,
-            tasks,
+            tasks_sender,
         }
     }
 
@@ -137,7 +135,7 @@ where
             self.executor.execute(task, true);
             true
         } else {
-            let success = self.tasks.push(task).is_ok();
+            let success = self.tasks_sender.try_send(task).is_ok();
             if success {
                 // Instead of polling on a timer, we can just wake up the window whenever there's a
                 // new message.

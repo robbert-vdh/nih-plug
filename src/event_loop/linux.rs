@@ -31,7 +31,7 @@ pub(crate) struct LinuxEventLoop<T, E> {
     worker_thread: Option<JoinHandle<()>>,
     /// A channel for waking up the worker thread and having it perform one of the tasks from
     /// [`Message`].
-    worker_thread_channel: channel::Sender<Message<T>>,
+    tasks_sender: channel::Sender<Message<T>>,
 }
 
 /// A message for communicating with the worker thread.
@@ -48,7 +48,7 @@ where
     E: MainThreadExecutor<T> + 'static,
 {
     fn new_and_spawn(executor: Arc<E>) -> Self {
-        let (sender, receiver) = channel::bounded(super::TASK_QUEUE_CAPACITY);
+        let (tasks_sender, tasks_receiver) = channel::bounded(super::TASK_QUEUE_CAPACITY);
 
         Self {
             executor: executor.clone(),
@@ -57,10 +57,10 @@ where
             worker_thread: Some(
                 thread::Builder::new()
                     .name(String::from("worker"))
-                    .spawn(move || worker_thread(receiver, Arc::downgrade(&executor)))
+                    .spawn(move || worker_thread(tasks_receiver, Arc::downgrade(&executor)))
                     .expect("Could not spawn worker thread"),
             ),
-            worker_thread_channel: sender,
+            tasks_sender,
         }
     }
 
@@ -69,9 +69,7 @@ where
             self.executor.execute(task, true);
             true
         } else {
-            self.worker_thread_channel
-                .try_send(Message::Task(task))
-                .is_ok()
+            self.tasks_sender.try_send(Message::Task(task)).is_ok()
         }
     }
 
@@ -84,7 +82,7 @@ where
 
 impl<T, E> Drop for LinuxEventLoop<T, E> {
     fn drop(&mut self) {
-        self.worker_thread_channel
+        self.tasks_sender
             .send(Message::Shutdown)
             .expect("Failed while sending worker thread shutdown request");
         if let Some(join_handle) = self.worker_thread.take() {
@@ -95,13 +93,13 @@ impl<T, E> Drop for LinuxEventLoop<T, E> {
 
 /// The worker thread used in [`EventLoop`] that executes incoming tasks on the event loop's
 /// executor.
-fn worker_thread<T, E>(receiver: channel::Receiver<Message<T>>, executor: Weak<E>)
+fn worker_thread<T, E>(tasks_receiver: channel::Receiver<Message<T>>, executor: Weak<E>)
 where
     T: Send,
     E: MainThreadExecutor<T>,
 {
     loop {
-        match receiver.recv() {
+        match tasks_receiver.recv() {
             Ok(Message::Task(task)) => match executor.upgrade() {
                 Some(e) => e.execute(task, true),
                 None => {
