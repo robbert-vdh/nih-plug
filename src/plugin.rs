@@ -22,9 +22,9 @@ pub type TaskExecutor<P> = Box<dyn Fn(<P as Plugin>::BackgroundTask) + Send>;
 ///
 /// The main thing you need to do is define a `[Params]` struct containing all of your parameters.
 /// See the trait's documentation for more information on how to do that, or check out the examples.
+/// Most of the other functionality is optional and comes with default trait method implementations.
 ///
-/// This is super basic, and lots of things I didn't need or want to use yet haven't been
-/// implemented. Notable missing features include:
+/// Some notable not yet implemented features include:
 ///
 /// - MIDI SysEx and MIDI2 for CLAP, note expressions, polyphonic modulation and MIDI1 are already
 ///   supported
