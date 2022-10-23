@@ -73,6 +73,12 @@ where
         }
     }
 
+    fn schedule_background(&self, task: T) -> bool {
+        // This event loop implementation already uses a thread that's completely decoupled from the
+        // operating system's or the host's main thread, so we don't need _another_ thread here
+        self.tasks_sender.try_send(Message::Task(task)).is_ok()
+    }
+
     fn is_main_thread(&self) -> bool {
         // FIXME: `thread::current()` may allocate the first time it's called, is there a safe
         //        non-allocating version of this without using huge OS-specific libraries?

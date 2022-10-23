@@ -80,7 +80,7 @@ use crate::buffer::Buffer;
 use crate::context::gui::AsyncExecutor;
 use crate::context::process::Transport;
 use crate::editor::{Editor, ParentWindowHandle};
-use crate::event_loop::{EventLoop, MainThreadExecutor, TASK_QUEUE_CAPACITY};
+use crate::event_loop::{BackgroundThread, EventLoop, MainThreadExecutor, TASK_QUEUE_CAPACITY};
 use crate::midi::{MidiConfig, NoteEvent};
 use crate::params::internals::ParamPtr;
 use crate::params::{ParamFlags, Params};
@@ -265,6 +265,9 @@ pub struct Wrapper<P: ClapPlugin> {
     /// [`host_thread_check`][Self::host_thread_check] thus contains a value), then that extension
     /// is used instead.
     main_thread_id: ThreadId,
+    /// A background thread for running tasks independently from the host'main GUI thread. Useful
+    /// for longer, blocking tasks. Initialized later as it needs a reference to the wrapper.
+    background_thread: AtomicRefCell<Option<BackgroundThread<Task<P>>>>,
 }
 
 /// Tasks that can be sent from the plugin to be executed on the main thread in a non-blocking
@@ -334,6 +337,14 @@ impl<P: ClapPlugin> EventLoop<Task<P>, Wrapper<P>> for Wrapper<P> {
 
             success
         }
+    }
+
+    fn schedule_background(&self, task: Task<P>) -> bool {
+        self.background_thread
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .schedule(task)
     }
 
     fn is_main_thread(&self) -> bool {
@@ -676,6 +687,8 @@ impl<P: ClapPlugin> Wrapper<P> {
 
             tasks: ArrayQueue::new(TASK_QUEUE_CAPACITY),
             main_thread_id: thread::current().id(),
+            // Initialized later as it needs a reference to the wrapper for the executor
+            background_thread: AtomicRefCell::new(None),
         };
 
         // Finally, the wrapper needs to contain a reference to itself so we can create GuiContexts
@@ -698,6 +711,10 @@ impl<P: ClapPlugin> Wrapper<P> {
                 }),
             })
             .map(Mutex::new);
+
+        // Same with the background thread
+        *wrapper.background_thread.borrow_mut() =
+            Some(BackgroundThread::new_and_spawn(wrapper.clone()));
 
         wrapper
     }

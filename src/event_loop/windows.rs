@@ -17,7 +17,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WINDOW_EX_STYLE, WINDOW_STYLE, WM_CREATE, WM_DESTROY, WM_USER, WNDCLASSEXA,
 };
 
-use super::{EventLoop, MainThreadExecutor};
+use super::{BackgroundThread, EventLoop, MainThreadExecutor};
 use crate::util::permit_alloc;
 
 /// The custom message ID for our notify event. If the hidden event loop window receives this, then
@@ -52,6 +52,10 @@ pub(crate) struct WindowsEventLoop<T, E> {
     /// we'll wake up the window, which then continues to pop tasks off this queue until it is
     /// empty.
     tasks_sender: channel::Sender<T>,
+
+    /// A background thread for running tasks independently from the host's GUI thread. Useful for
+    /// longer, blocking tasks.
+    background_thread: BackgroundThread<T>,
 }
 
 impl<T, E> EventLoop<T, E> for WindowsEventLoop<T, E>
@@ -122,11 +126,12 @@ where
         assert!(!window.is_invalid());
 
         Self {
-            executor,
+            executor: executor.clone(),
             main_thread_id: thread::current().id(),
             message_window: window,
             message_window_class_name: class_name,
             tasks_sender,
+            background_thread: BackgroundThread::new_and_spawn(executor),
         }
     }
 
@@ -146,6 +151,10 @@ where
 
             success
         }
+    }
+
+    fn schedule_background(&self, task: T) -> bool {
+        self.background_thread.schedule(task)
     }
 
     fn is_main_thread(&self) -> bool {
