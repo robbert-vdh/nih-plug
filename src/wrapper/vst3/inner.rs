@@ -329,8 +329,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         //        serving multiple plugin instances, Arc can't be used because its reference count
         //        is separate from the internal COM-style reference count.
         let wrapper: Arc<WrapperInner<P>> = wrapper.into();
-        *wrapper.event_loop.borrow_mut() =
-            Some(OsEventLoop::new_and_spawn(Arc::downgrade(&wrapper)));
+        *wrapper.event_loop.borrow_mut() = Some(OsEventLoop::new_and_spawn(wrapper.clone()));
 
         // The editor also needs to be initialized later so the Async executor can work.
         *wrapper.editor.borrow_mut() = wrapper

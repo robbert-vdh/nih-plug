@@ -214,7 +214,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
             // Initialized later as it needs a reference to the wrapper for the async executor
             editor: AtomicRefCell::new(None),
 
-            event_loop: OsEventLoop::new_and_spawn(Arc::downgrade(&task_executor_wrapper)),
+            event_loop: OsEventLoop::new_and_spawn(task_executor_wrapper),
 
             bus_config: BusConfig {
                 num_input_channels: config.input_channels.unwrap_or(P::DEFAULT_INPUT_CHANNELS),

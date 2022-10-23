@@ -3,7 +3,7 @@
 //! delegate expensive processing to another thread.
 
 use crossbeam::channel;
-use std::sync::Weak;
+use std::sync::{Arc, Weak};
 use std::thread::{self, JoinHandle, ThreadId};
 
 use super::{EventLoop, MainThreadExecutor};
@@ -19,7 +19,7 @@ pub(crate) struct LinuxEventLoop<T, E> {
     /// The thing that ends up executing these tasks. The tasks are usually executed from the worker
     /// thread, but if the current thread is the main thread then the task cna also be executed
     /// directly.
-    executor: Weak<E>,
+    executor: Arc<E>,
 
     /// The ID of the main thread. In practice this is the ID of the thread that created this task
     /// queue.
@@ -47,7 +47,7 @@ where
     T: Send + 'static,
     E: MainThreadExecutor<T> + 'static,
 {
-    fn new_and_spawn(executor: Weak<E>) -> Self {
+    fn new_and_spawn(executor: Arc<E>) -> Self {
         let (sender, receiver) = channel::bounded(super::TASK_QUEUE_CAPACITY);
 
         Self {
@@ -57,7 +57,7 @@ where
             worker_thread: Some(
                 thread::Builder::new()
                     .name(String::from("worker"))
-                    .spawn(move || worker_thread(receiver, executor))
+                    .spawn(move || worker_thread(receiver, Arc::downgrade(&executor)))
                     .expect("Could not spawn worker thread"),
             ),
             worker_thread_channel: sender,
@@ -66,19 +66,8 @@ where
 
     fn do_maybe_async(&self, task: T) -> bool {
         if self.is_main_thread() {
-            match self.executor.upgrade() {
-                Some(e) => {
-                    unsafe { e.execute(task) };
-                    true
-                }
-                None => {
-                    nih_trace!(
-                        "The executor doesn't exist but somehow it's still submitting tasks, this \
-                         shouldn't be possible!"
-                    );
-                    false
-                }
-            }
+            unsafe { self.executor.execute(task) };
+            true
         } else {
             self.worker_thread_channel
                 .try_send(Message::Task(task))

@@ -1,6 +1,6 @@
 //! An internal event loop for spooling tasks to the/a GUI thread.
 
-use std::sync::Weak;
+use std::sync::Arc;
 
 #[cfg(all(target_family = "unix", not(target_os = "macos")))]
 mod linux;
@@ -38,10 +38,7 @@ where
 {
     /// Create and start a new event loop. The thread this is called on will be designated as the
     /// main thread, so this should be called when constructing the wrapper.
-    //
-    // TODO: This use of `Weak` is a bit weird outside the context of the VST3 wrapper, but the
-    //       alternatives didn't feel right either.
-    fn new_and_spawn(executor: Weak<E>) -> Self;
+    fn new_and_spawn(executor: Arc<E>) -> Self;
 
     /// Either post the function to the task queue so it can be delegated to the main thread, or
     /// execute the task directly if this is the main thread. This function needs to be callable at

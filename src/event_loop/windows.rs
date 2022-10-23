@@ -6,7 +6,6 @@ use std::ffi::{c_void, CString};
 use std::mem;
 use std::ptr;
 use std::sync::Arc;
-use std::sync::Weak;
 use std::thread::{self, ThreadId};
 use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, PSTR, WPARAM};
 use windows::Win32::System::{
@@ -38,7 +37,7 @@ pub(crate) struct WindowsEventLoop<T, E> {
     /// The thing that ends up executing these tasks. The tasks are usually executed from the worker
     /// thread, but if the current thread is the main thread then the task cna also be executed
     /// directly.
-    executor: Weak<E>,
+    executor: Arc<E>,
 
     /// The ID of the main thread. In practice this is the ID of the thread that created this task
     /// queue.
@@ -60,7 +59,7 @@ where
     T: Send + 'static,
     E: MainThreadExecutor<T> + 'static,
 {
-    fn new_and_spawn(executor: Weak<E>) -> Self {
+    fn new_and_spawn(executor: Arc<E>) -> Self {
         // We'll pass one copy of the this to the window, and we'll keep the other copy here
         let tasks = Arc::new(ArrayQueue::new(super::TASK_QUEUE_CAPACITY));
 
@@ -85,7 +84,7 @@ where
         // can't pass the tasks queue and the executor to it directly, so this is a simple type
         // erased version of the polling loop.
         let callback: PollCallback = {
-            let executor = executor.clone();
+            let executor = Arc::downgrade(&executor);
             let tasks = tasks.clone();
 
             Box::new(move || {
@@ -135,19 +134,8 @@ where
 
     fn do_maybe_async(&self, task: T) -> bool {
         if self.is_main_thread() {
-            match self.executor.upgrade() {
-                Some(e) => {
-                    unsafe { e.execute(task) };
-                    true
-                }
-                None => {
-                    nih_trace!(
-                        "The executor doesn't exist but somehow it's still submitting tasks, this \
-                         shouldn't be possible!"
-                    );
-                    false
-                }
-            }
+            unsafe { e.execute(task) };
+            true
         } else {
             let success = self.tasks.push(task).is_ok();
             if success {
