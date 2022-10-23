@@ -66,7 +66,7 @@ where
 
     fn do_maybe_async(&self, task: T) -> bool {
         if self.is_main_thread() {
-            unsafe { self.executor.execute(task) };
+            self.executor.execute(task, true);
             true
         } else {
             self.worker_thread_channel
@@ -103,7 +103,7 @@ where
     loop {
         match receiver.recv() {
             Ok(Message::Task(task)) => match executor.upgrade() {
-                Some(e) => unsafe { e.execute(task) },
+                Some(e) => e.execute(task, true),
                 None => {
                     nih_trace!(
                         "Received a new task but the executor is no longer alive, shutting down \

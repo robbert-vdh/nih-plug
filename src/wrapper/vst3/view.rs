@@ -486,7 +486,7 @@ impl<P: Vst3Plugin> IEventHandler for RunLoopEventHandler<P> {
         // This gets called from the host's UI thread because we wrote some bytes to the Unix domain
         // socket. We'll read that data from the socket again just to make REAPER happy.
         while let Some(task) = self.tasks.pop() {
-            self.inner.execute(task);
+            self.inner.execute(task, true);
 
             let mut notify_value = 1i8;
             const NOTIFY_VALUE_SIZE: usize = std::mem::size_of::<i8>();

@@ -377,7 +377,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         let event_loop = self.event_loop.borrow();
         let event_loop = event_loop.as_ref().unwrap();
         if event_loop.is_main_thread() {
-            unsafe { self.execute(task) };
+            self.execute(task, true);
             true
         } else {
             // If the editor is open, and the host exposes the `IRunLoop` interface, then we'll run
@@ -535,25 +535,22 @@ impl<P: Vst3Plugin> WrapperInner<P> {
 }
 
 impl<P: Vst3Plugin> MainThreadExecutor<Task<P>> for WrapperInner<P> {
-    unsafe fn execute(&self, task: Task<P>) {
+    fn execute(&self, task: Task<P>, is_gui_thread: bool) {
         // This function is always called from the main thread
-        // TODO: When we add GUI resizing and context menus, this should propagate those events to
-        //       `IRunLoop` on Linux to keep REAPER happy. That does mean a double spool, but we can
-        //       come up with a nicer solution to handle that later (can always add a separate
-        //       function for checking if a to be scheduled task can be handled right there and
-        //       then).
         match task {
             Task::PluginTask(task) => (self.task_executor.lock())(task),
             Task::TriggerRestart(flags) => match &*self.component_handler.borrow() {
-                Some(handler) => {
+                Some(handler) => unsafe {
+                    nih_debug_assert!(is_gui_thread);
                     handler.restart_component(flags);
-                }
+                },
                 None => nih_debug_assert_failure!("Component handler not yet set"),
             },
             Task::RequestResize => match &*self.plug_view.read() {
-                Some(plug_view) => {
+                Some(plug_view) => unsafe {
+                    nih_debug_assert!(is_gui_thread);
                     plug_view.request_resize();
-                }
+                },
                 None => nih_debug_assert_failure!("Can't resize a closed editor"),
             },
         }

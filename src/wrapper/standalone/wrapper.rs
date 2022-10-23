@@ -146,7 +146,7 @@ pub struct TaskExecutorWrapper<P: Plugin> {
 }
 
 impl<P: Plugin> MainThreadExecutor<P::BackgroundTask> for TaskExecutorWrapper<P> {
-    unsafe fn execute(&self, task: P::BackgroundTask) {
+    fn execute(&self, task: P::BackgroundTask, _is_gui_thread: bool) {
         (self.task_executor.lock())(task)
     }
 }

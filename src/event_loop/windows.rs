@@ -97,7 +97,7 @@ where
                 };
 
                 while let Some(task) = tasks.pop() {
-                    unsafe { executor.execute(task) };
+                    executor.execute(task, true);
                 }
             })
         };
@@ -134,7 +134,7 @@ where
 
     fn do_maybe_async(&self, task: T) -> bool {
         if self.is_main_thread() {
-            unsafe { e.execute(task) };
+            self.executor.execute(task, true);
             true
         } else {
             let success = self.tasks.push(task).is_ok();

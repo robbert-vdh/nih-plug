@@ -322,7 +322,7 @@ impl<P: ClapPlugin> EventLoop<Task<P>, Wrapper<P>> for Wrapper<P> {
 
     fn do_maybe_async(&self, task: Task<P>) -> bool {
         if self.is_main_thread() {
-            unsafe { self.execute(task) };
+            self.execute(task, true);
             true
         } else {
             let success = self.tasks.push(task).is_ok();
@@ -351,33 +351,37 @@ impl<P: ClapPlugin> EventLoop<Task<P>, Wrapper<P>> for Wrapper<P> {
 }
 
 impl<P: ClapPlugin> MainThreadExecutor<Task<P>> for Wrapper<P> {
-    unsafe fn execute(&self, task: Task<P>) {
+    fn execute(&self, task: Task<P>, is_gui_thread: bool) {
         // This function is always called from the main thread, from [Self::on_main_thread].
         match task {
             Task::PluginTask(task) => (self.task_executor.lock())(task),
             Task::LatencyChanged => match &*self.host_latency.borrow() {
                 Some(host_latency) => {
+                    nih_debug_assert!(is_gui_thread);
+
                     // XXX: The CLAP docs mention that you should request a restart if this happens
                     //      while the plugin is activated (which is not entirely the same thing as
                     //      is processing, but we'll treat it as the same thing). In practice just
                     //      calling the latency changed function also seems to work just fine.
                     if self.is_processing.load(Ordering::SeqCst) {
-                        clap_call! { &*self.host_callback=>request_restart(&*self.host_callback) };
+                        unsafe_clap_call! { &*self.host_callback=>request_restart(&*self.host_callback) };
                     } else {
-                        clap_call! { host_latency=>changed(&*self.host_callback) };
+                        unsafe_clap_call! { host_latency=>changed(&*self.host_callback) };
                     }
                 }
                 None => nih_debug_assert_failure!("Host does not support the latency extension"),
             },
             Task::VoiceInfoChanged => match &*self.host_voice_info.borrow() {
                 Some(host_voice_info) => {
-                    clap_call! { host_voice_info=>changed(&*self.host_callback) };
+                    nih_debug_assert!(is_gui_thread);
+                    unsafe_clap_call! { host_voice_info=>changed(&*self.host_callback) };
                 }
                 None => nih_debug_assert_failure!("Host does not support the voice-info extension"),
             },
             Task::RescanParamValues => match &*self.host_params.borrow() {
                 Some(host_params) => {
-                    clap_call! { host_params=>rescan(&*self.host_callback, CLAP_PARAM_RESCAN_VALUES) };
+                    nih_debug_assert!(is_gui_thread);
+                    unsafe_clap_call! { host_params=>rescan(&*self.host_callback, CLAP_PARAM_RESCAN_VALUES) };
                 }
                 None => nih_debug_assert_failure!("The host does not support parameters? What?"),
             },
@@ -2352,7 +2356,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         // [Self::do_maybe_async] posts a task to the queue and asks the host to call this function
         // on the main thread, so once that's done we can just handle all requests here
         while let Some(task) = wrapper.tasks.pop() {
-            wrapper.execute(task);
+            wrapper.execute(task, true);
         }
     }
 
