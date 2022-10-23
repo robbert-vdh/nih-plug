@@ -106,9 +106,9 @@ pub struct ParamSetter<'a> {
 }
 
 impl<P: Plugin> AsyncExecutor<P> {
-    /// Run a task from a background thread. This allows you to defer expensive tasks for later
-    /// without blocking either the process function or the GUI thread. As long as creating the
-    /// `task` is realtime-safe, this operation is too.
+    /// Execute a task on a background thread using `[Plugin::task_executor]`. This allows you to
+    /// defer expensive tasks for later without blocking either the process function or the GUI
+    /// thread. As long as creating the `task` is realtime-safe, this operation is too.
     ///
     /// # Note
     ///
@@ -119,7 +119,7 @@ impl<P: Plugin> AsyncExecutor<P> {
         (self.execute_background)(task);
     }
 
-    /// Run a task from the plugin's GUI thread.
+    /// Execute a task on a background thread using `[Plugin::task_executor]`.
     ///
     /// # Note
     ///

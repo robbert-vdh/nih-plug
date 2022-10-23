@@ -17,9 +17,9 @@ pub trait ProcessContext<P: Plugin> {
     /// Get the current plugin API.
     fn plugin_api(&self) -> PluginApi;
 
-    /// Run a task from a background thread. This allows you to defer expensive tasks for later
-    /// without blocking either the process function or the GUI thread. As long as creating the
-    /// `task` is realtime-safe, this operation is too.
+    /// Execute a task on a background thread using `[Plugin::task_executor]`. This allows you to
+    /// defer expensive tasks for later without blocking either the process function or the GUI
+    /// thread. As long as creating the `task` is realtime-safe, this operation is too.
     ///
     /// # Note
     ///
@@ -28,8 +28,8 @@ pub trait ProcessContext<P: Plugin> {
     /// your task executor.
     fn execute_background(&self, task: P::BackgroundTask);
 
-    /// Run a task from the plugin's GUI thread. As long as creating the `task` is realtime-safe,
-    /// this operation is too.
+    /// Execute a task on a background thread using `[Plugin::task_executor]`. As long as creating
+    /// the `task` is realtime-safe, this operation is too.
     ///
     /// # Note
     ///
