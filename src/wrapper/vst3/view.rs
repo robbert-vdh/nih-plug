@@ -515,7 +515,7 @@ impl<P: Vst3Plugin> Drop for RunLoopEventHandler<P> {
                 .borrow()
                 .as_ref()
                 .unwrap()
-                .do_maybe_async(task);
+                .schedule_gui(task);
         }
 
         if posting_failed {

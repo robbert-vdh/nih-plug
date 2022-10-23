@@ -246,7 +246,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
                     let wrapper = wrapper.clone();
 
                     move |task| {
-                        let task_posted = wrapper.event_loop.do_maybe_async(task);
+                        let task_posted = wrapper.event_loop.schedule_gui(task);
                         nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
                     }
                 }),

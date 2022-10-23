@@ -132,7 +132,7 @@ where
         }
     }
 
-    fn do_maybe_async(&self, task: T) -> bool {
+    fn schedule_gui(&self, task: T) -> bool {
         if self.is_main_thread() {
             self.executor.execute(task, true);
             true

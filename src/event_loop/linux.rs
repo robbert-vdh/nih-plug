@@ -25,7 +25,7 @@ pub(crate) struct LinuxEventLoop<T, E> {
     /// queue.
     main_thread_id: ThreadId,
 
-    /// A thread that act as our worker thread. When [`do_maybe_async()`][Self::do_maybe_async()] is
+    /// A thread that act as our worker thread. When [`schedule_gui()`][Self::schedule_gui()] is
     /// called, this thread will be woken up to execute the task on the executor. This is wrapped in
     /// an `Option` so the thread can be taken out of it and joined when this struct gets dropped.
     worker_thread: Option<JoinHandle<()>>,
@@ -64,7 +64,7 @@ where
         }
     }
 
-    fn do_maybe_async(&self, task: T) -> bool {
+    fn schedule_gui(&self, task: T) -> bool {
         if self.is_main_thread() {
             self.executor.execute(task, true);
             true

@@ -55,7 +55,7 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
 
     /// A realtime-safe task queue so the plugin can schedule tasks that need to be run later on the
     /// GUI thread. This field should not be used directly for posting tasks. This should be done
-    /// through [`Self::do_maybe_async()`] instead. That method posts the task to the host's
+    /// through [`Self::schedule_gui()`] instead. That method posts the task to the host's
     /// `IRunLoop` instead of it's available.
     ///
     /// This AtomicRefCell+Option is only needed because it has to be initialized late. There is no
@@ -340,7 +340,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
                     let wrapper = wrapper.clone();
 
                     move |task| {
-                        let task_posted = wrapper.do_maybe_async(Task::PluginTask(task));
+                        let task_posted = wrapper.schedule_gui(Task::PluginTask(task));
                         nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
                     }
                 }),
@@ -367,13 +367,13 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         }
     }
 
-    /// Either posts the function to the task queue using [`EventLoop::do_maybe_async()`] so it can
+    /// Either posts the function to the task queue using [`EventLoop::schedule_gui()`] so it can
     /// be delegated to the main thread, executes the task directly if this is the main thread, or
     /// runs the task on the host's `IRunLoop` if the GUI is open and it exposes one. This function
     ///
     /// If the task queue is full, then this will return false.
     #[must_use]
-    pub fn do_maybe_async(&self, task: Task<P>) -> bool {
+    pub fn schedule_gui(&self, task: Task<P>) -> bool {
         let event_loop = self.event_loop.borrow();
         let event_loop = event_loop.as_ref().unwrap();
         if event_loop.is_main_thread() {
@@ -388,9 +388,9 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             match &*self.plug_view.read() {
                 Some(plug_view) => match plug_view.do_maybe_in_run_loop(task) {
                     Ok(()) => true,
-                    Err(task) => event_loop.do_maybe_async(task),
+                    Err(task) => event_loop.schedule_gui(task),
                 },
-                None => event_loop.do_maybe_async(task),
+                None => event_loop.schedule_gui(task),
             }
         }
     }
@@ -517,7 +517,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
                 .borrow()
                 .as_ref()
                 .unwrap()
-                .do_maybe_async(Task::TriggerRestart(
+                .schedule_gui(Task::TriggerRestart(
                     RestartFlags::kParamValuesChanged as i32,
                 ));
         nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
@@ -528,7 +528,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         let old_latency = self.current_latency.swap(samples, Ordering::SeqCst);
         if old_latency != samples {
             let task_posted =
-                self.do_maybe_async(Task::TriggerRestart(RestartFlags::kLatencyChanged as i32));
+                self.schedule_gui(Task::TriggerRestart(RestartFlags::kLatencyChanged as i32));
             nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
         }
     }

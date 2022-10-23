@@ -320,7 +320,7 @@ impl<P: ClapPlugin> EventLoop<Task<P>, Wrapper<P>> for Wrapper<P> {
         panic!("What are you doing");
     }
 
-    fn do_maybe_async(&self, task: Task<P>) -> bool {
+    fn schedule_gui(&self, task: Task<P>) -> bool {
         if self.is_main_thread() {
             self.execute(task, true);
             true
@@ -692,7 +692,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                     let wrapper = wrapper.clone();
 
                     move |task| {
-                        let task_posted = wrapper.do_maybe_async(Task::PluginTask(task));
+                        let task_posted = wrapper.schedule_gui(Task::PluginTask(task));
                         nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
                     }
                 }),
@@ -1649,7 +1649,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         }
 
         // After the state has been updated, notify the host about the new parameter values
-        let task_posted = self.do_maybe_async(Task::RescanParamValues);
+        let task_posted = self.schedule_gui(Task::RescanParamValues);
         nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
     }
 
@@ -1659,7 +1659,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         //      to keep doing it this way to stay consistent with VST3.
         let old_latency = self.current_latency.swap(samples, Ordering::SeqCst);
         if old_latency != samples {
-            let task_posted = self.do_maybe_async(Task::LatencyChanged);
+            let task_posted = self.schedule_gui(Task::LatencyChanged);
             nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
         }
     }
@@ -1677,7 +1677,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 if clamped_capacity != self.current_voice_capacity.load(Ordering::Relaxed) {
                     self.current_voice_capacity
                         .store(clamped_capacity, Ordering::Relaxed);
-                    let task_posted = self.do_maybe_async(Task::VoiceInfoChanged);
+                    let task_posted = self.schedule_gui(Task::VoiceInfoChanged);
                     nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
                 }
             }
@@ -2353,7 +2353,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         check_null_ptr!((), plugin);
         let wrapper = &*(plugin as *const Self);
 
-        // [Self::do_maybe_async] posts a task to the queue and asks the host to call this function
+        // [Self::schedule_gui] posts a task to the queue and asks the host to call this function
         // on the main thread, so once that's done we can just handle all requests here
         while let Some(task) = wrapper.tasks.pop() {
             wrapper.execute(task, true);

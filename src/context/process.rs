@@ -12,7 +12,7 @@ use crate::plugin::Plugin;
 // # Safety
 //
 // The implementing wrapper needs to be able to handle concurrent requests, and it should perform
-// the actual callback within [MainThreadQueue::do_maybe_async].
+// the actual callback within [MainThreadQueue::schedule_gui].
 pub trait ProcessContext<P: Plugin> {
     /// Get the current plugin API.
     fn plugin_api(&self) -> PluginApi;

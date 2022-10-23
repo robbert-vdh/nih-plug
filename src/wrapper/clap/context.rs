@@ -60,7 +60,7 @@ impl<P: ClapPlugin> ProcessContext<P> for WrapperProcessContext<'_, P> {
     }
 
     fn execute_gui(&self, task: P::BackgroundTask) {
-        let task_posted = self.wrapper.do_maybe_async(Task::PluginTask(task));
+        let task_posted = self.wrapper.schedule_gui(Task::PluginTask(task));
         nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
     }
 

@@ -46,7 +46,7 @@ where
     ///
     /// If the task queue is full, then this will return false.
     #[must_use]
-    fn do_maybe_async(&self, task: T) -> bool;
+    fn schedule_gui(&self, task: T) -> bool;
 
     /// Whether the calling thread is the event loop's main thread. This is usually the thread the
     /// event loop instance was initialized on.
