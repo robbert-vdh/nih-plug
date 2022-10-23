@@ -96,17 +96,16 @@ pub trait Plugin: Default + Send + 'static {
     /// to do offline processing.
     const HARD_REALTIME_ONLY: bool = false;
 
-    /// A type encoding this plugin's different background tasks, if it needs those. This is usually
-    /// an enum type. The task type should not contain any heap allocated data like [`Vec`]s and
-    /// [`Box`]es. Tasks can be send using the methods on the various [`*Context`][crate::context]
-    /// objects.
-    ///
-    /// Use `()` if the plugin does not need any background tasks.
+    /// A type encoding the different background tasks this plugin wants to run, or `()` if it
+    /// doesn't have any background tasks. This is usually set to an enum type. The task type should
+    /// not contain any heap allocated data like [`Vec`]s and [`Box`]es. Tasks can be send using the
+    /// methods on the various [`*Context`][crate::context] objects.
     //
     // NOTE: Sadly it's not yet possible to default this and the `async_executor()` function to
     //       `()`: https://github.com/rust-lang/rust/issues/29661
     type BackgroundTask: Send;
-    /// The plugin's background task executor. See [`BackgroundTask`][Self::BackgroundTask].
+    /// A function that executes the plugin's tasks. Queried once when the plugin instance is
+    /// created. See [`BackgroundTask`][Self::BackgroundTask].
     fn task_executor(&self) -> TaskExecutor<Self> {
         // In the default implementation we can simply ignore the value
         Box::new(|_| ())
