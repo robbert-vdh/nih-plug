@@ -106,7 +106,7 @@ assert_no_alloc = { git = "https://github.com/robbert-vdh/rust-assert-no-alloc.g
 baseview = { git = "https://github.com/robbert-vdh/baseview.git", branch = "feature/resize", features = ["opengl"], optional = true }
 # All the claps!
 clap = { version = "3.2", features = ["derive"], optional = true }
-cpal = { version = "0.13.5", optional = true }
+cpal = { version = "0.14.1", optional = true }
 # The current upstream jack panics when it can't load the JACK library, which breaks the backend fallback
 jack = { git = "https://github.com/robbert-vdh/rust-jack.git", branch = "feature/handle-library-failure", optional = true }
 rtrb = { version = "0.2.2", optional = true }

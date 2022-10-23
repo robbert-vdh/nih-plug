@@ -187,7 +187,7 @@ where
 
         // Fill with background color
         let paint = vg::Paint::color(background_color);
-        canvas.fill_path(&mut path, paint);
+        canvas.fill_path(&mut path, &paint);
 
         // And now for the fun stuff. We'll try to not overlap the border, but we'll draw that last
         // just in case.
@@ -222,7 +222,7 @@ where
                 opacity,
             ));
             paint.set_line_width(TICK_WIDTH * dpi_scale);
-            canvas.stroke_path(&mut path, paint);
+            canvas.stroke_path(&mut path, &paint);
         }
 
         // Draw the hold peak value if the hold time option has been set
@@ -241,12 +241,12 @@ where
 
             let mut paint = vg::Paint::color(vg::Color::rgbaf(0.3, 0.3, 0.3, opacity));
             paint.set_line_width(TICK_WIDTH * dpi_scale);
-            canvas.stroke_path(&mut path, paint);
+            canvas.stroke_path(&mut path, &paint);
         }
 
         // Draw border last
         let mut paint = vg::Paint::color(border_color);
         paint.set_line_width(border_width);
-        canvas.stroke_path(&mut path, paint);
+        canvas.stroke_path(&mut path, &paint);
     }
 }

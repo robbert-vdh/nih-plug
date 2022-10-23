@@ -144,12 +144,12 @@ impl View for ResizeHandle {
 
         // Fill with background color
         let paint = vg::Paint::color(background_color);
-        canvas.fill_path(&mut path, paint);
+        canvas.fill_path(&mut path, &paint);
 
         // Borders are only supported to make debugging easier
         let mut paint = vg::Paint::color(border_color);
         paint.set_line_width(border_width);
-        canvas.stroke_path(&mut path, paint);
+        canvas.stroke_path(&mut path, &paint);
 
         // We'll draw a simple triangle, since we're going flat everywhere anyways and that style
         // tends to not look too tacky
@@ -182,7 +182,7 @@ impl View for ResizeHandle {
         let mut color: vg::Color = cx.font_color().copied().unwrap_or(Color::white()).into();
         color.set_alphaf(color.a * opacity);
         let paint = vg::Paint::color(color);
-        canvas.fill_path(&mut path, paint);
+        canvas.fill_path(&mut path, &paint);
     }
 }
 

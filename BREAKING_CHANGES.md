@@ -6,6 +6,11 @@ new and what's changed, this document lists all breaking changes in reverse
 chronological order. If a new feature did not require any changes to existing
 code then it will not be listed here.
 
+## [2022-10-23]
+
+- `nih_plug_vizia` has been updated. Widgets with custom drawing code will need
+  to be updated because of changes in Vizia itself.
+
 ## [2022-10-22]
 
 - The `Editor` trait and the `ParentWindowHandle` struct have been moved from
