@@ -194,7 +194,7 @@ impl ParamMut for BoolParam {
             .store(modulation_offset, Ordering::Relaxed);
 
         // TODO: This renormalizes this value, which is not necessary
-        self.set_plain_value(self.plain_value());
+        self.set_plain_value(self.unmodulated_plain_value());
     }
 
     fn update_smoother(&self, _sample_rate: f32, _init: bool) {
