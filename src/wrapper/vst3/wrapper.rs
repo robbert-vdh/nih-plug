@@ -388,8 +388,23 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                     param.update_smoother(buffer_config.sample_rate, true);
                 }
 
+                // HACK: This is needed because if you change the latency during
+                //       `IComponent::setActive(true)` then Ardour will reentrantly call
+                //       `IComponent::setActive(true)` again during the previous call. This use of `static`
+                //       is also fine here because the host may only call this from the main thread, so
+                //       multiple simultaneous calls of this function are not allowed.
+                let mut plugin = match self.inner.plugin.try_lock() {
+                    Some(plugin) => plugin,
+                    None => {
+                        nih_debug_assert_failure!(
+                            "The host tried to call IComponent::setActive(true) while it was \
+                             already calling IComponent::setActive(true), returning kResultOk"
+                        );
+                        return kResultOk;
+                    }
+                };
+
                 let bus_config = self.inner.current_bus_config.load();
-                let mut plugin = self.inner.plugin.lock();
                 if plugin.initialize(
                     &bus_config,
                     &buffer_config,
