@@ -1016,7 +1016,23 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
         // This function is also used to reset buffers on the plugin, so we should do the same
         // thing. We don't call `reset()` in `setup_processing()` for that same reason.
         if state {
-            process_wrapper(|| self.inner.plugin.lock().reset());
+            // HACK: See the comment in `IComponent::setActive()`. This is needed to work around
+            //       Ardour bugs.
+            let mut plugin = match self.inner.plugin.try_lock() {
+                Some(plugin) => plugin,
+                None => {
+                    nih_debug_assert_failure!(
+                        "The host tried to call IAudioProcessor::setProcessing(true) during a \
+                         reentrent call to IComponent::setActive(true), returning kResultOk. If \
+                         this is Ardour then it will still call \
+                         IAudioProcessor::setProcessing(true) later and everything will be fine. \
+                         Hopefully."
+                    );
+                    return kResultOk;
+                }
+            };
+
+            process_wrapper(|| plugin.reset());
         }
 
         // We don't have any special handling for suspending and resuming plugins, yet
