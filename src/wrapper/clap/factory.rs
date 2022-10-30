@@ -15,7 +15,8 @@ use crate::plugin::ClapPlugin;
 #[doc(hidden)]
 #[repr(C)]
 pub struct Factory<P: ClapPlugin> {
-    // Keep the vtable as the first field so we can do a simple pointer cast
+    // Keep the vtable as the first field so we can do a simple pointer cast. There's no data
+    // pointer as the API expects this thing to be entirely static, which in our case it isn't.
     pub clap_plugin_factory: clap_plugin_factory,
 
     plugin_descriptor: PluginDescriptor<P>,
@@ -64,7 +65,9 @@ impl<P: ClapPlugin> Factory<P> {
             // Arc does not have a convenient leak function like Box, so this gets a bit awkward
             // This pointer gets turned into an Arc and its reference count decremented in
             // [Wrapper::destroy()]
-            &(*Arc::into_raw(Wrapper::<P>::new(host))).clap_plugin
+            (*Arc::into_raw(Wrapper::<P>::new(host)))
+                .clap_plugin
+                .as_ptr()
         } else {
             ptr::null()
         }
