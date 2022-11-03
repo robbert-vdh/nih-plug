@@ -2110,7 +2110,7 @@ checksum = "4217ad341ebadf8d8e724e264f13e593e0648f5b3e94b3896a5df283be015ecc"
 [[package]]
 name = "jack"
 version = "0.10.0"
-source = "git+https://github.com/robbert-vdh/rust-jack.git?branch=feature/handle-library-failure#1b4055a7b9f6f6bab7646f3dc10cc9355791d706"
+source = "git+https://github.com/robbert-vdh/rust-jack.git?tag=tmp-handle-library-failure#1b4055a7b9f6f6bab7646f3dc10cc9355791d706"
 dependencies = [
  "bitflags",
  "jack-sys",
@@ -2122,7 +2122,7 @@ dependencies = [
 [[package]]
 name = "jack-sys"
 version = "0.4.0"
-source = "git+https://github.com/robbert-vdh/rust-jack.git?branch=feature/handle-library-failure#1b4055a7b9f6f6bab7646f3dc10cc9355791d706"
+source = "git+https://github.com/robbert-vdh/rust-jack.git?tag=tmp-handle-library-failure#1b4055a7b9f6f6bab7646f3dc10cc9355791d706"
 dependencies = [
  "bitflags",
  "lazy_static",
@@ -4311,7 +4311,7 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 1.0.0",
+ "cfg-if 0.1.10",
  "rand 0.8.5",
  "static_assertions",
 ]

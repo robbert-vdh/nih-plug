@@ -107,8 +107,9 @@ baseview = { git = "https://github.com/robbert-vdh/baseview.git", branch = "feat
 # All the claps!
 clap = { version = "3.2", features = ["derive"], optional = true }
 cpal = { version = "0.14.1", optional = true }
-# The current upstream jack panics when it can't load the JACK library, which breaks the backend fallback
-jack = { git = "https://github.com/robbert-vdh/rust-jack.git", branch = "feature/handle-library-failure", optional = true }
+# Current upstream JACK always links to libjack, even when using the default
+# dynamic loading feature
+jack = { git = "https://github.com/robbert-vdh/rust-jack.git", tag = "tmp-handle-library-failure", optional = true }
 rtrb = { version = "0.2.2", optional = true }
 
 # Used for the `vst3` feature
