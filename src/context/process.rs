@@ -124,8 +124,7 @@ pub struct Transport {
     //      something similar in CLAP so it may be best to just ignore that so you can't rely on it
     /// The position in the song in samples. Can be used to calculate the time in seconds if needed.
     pub(crate) pos_samples: Option<i64>,
-    /// The position in the song in quarter notes. Can be used to calculate the time in samples if
-    /// needed.
+    /// The position in the song in seconds. Can be used to calculate the time in samples if needed.
     pub(crate) pos_seconds: Option<f64>,
     /// The position in the song in quarter notes. Can be calculated from the time in seconds and
     /// the tempo if needed.
@@ -197,8 +196,7 @@ impl Transport {
         }
     }
 
-    /// The position in the song in quarter notes. Will be calculated from other information if
-    /// needed.
+    /// The position in the song in seconds. Can be used to calculate the time in samples if needed.
     pub fn pos_seconds(&self) -> Option<f64> {
         match (
             self.pos_samples,
