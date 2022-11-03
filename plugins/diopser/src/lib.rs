@@ -44,7 +44,7 @@ const MAX_AUTOMATION_STEP_SIZE: u32 = 512;
 // improved). Other features I want to implement are:
 // - Briefly muting the output when changing the number of filters to get rid of the clicks
 // - A proper GUI
-struct Diopser {
+pub struct Diopser {
     params: Arc<DiopserParams>,
 
     /// Needed for computing the filter coefficients.
