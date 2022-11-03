@@ -34,7 +34,7 @@ impl Model for Data {}
 
 // Makes sense to also define this here, makes it a bit easier to keep track of
 pub(crate) fn default_state() -> Arc<ViziaState> {
-    ViziaState::from_size(380, 270)
+    ViziaState::from_size(600, 490)
 }
 
 pub(crate) fn create(
@@ -45,6 +45,8 @@ pub(crate) fn create(
         assets::register_noto_sans_light(cx);
         assets::register_noto_sans_thin(cx);
 
+        cx.add_theme(include_str!("theme.css"));
+
         Data {
             params: params.clone(),
         }
@@ -53,24 +55,65 @@ pub(crate) fn create(
         ResizeHandle::new(cx);
 
         VStack::new(cx, |cx| {
-            Label::new(cx, "Diopser")
-                .font(assets::NOTO_SANS_THIN)
-                .font_size(40.0 * POINT_SCALE)
-                .height(Pixels(50.0))
-                .child_top(Stretch(1.0))
-                .child_bottom(Pixels(0.0))
-                // Make this more or less align with the parameters column
-                .right(Percentage(12.0));
-
-            // See the Crisp generic UI for an example using a ScrollView
-            GenericUi::new(cx, Data::params)
-                .width(Percentage(100.0))
-                .height(Auto)
-                .child_top(Pixels(5.0));
-        })
-        .width(Percentage(100.0))
-        .row_between(Pixels(0.0))
-        .child_left(Stretch(1.0))
-        .child_right(Stretch(1.0));
+            top_bar(cx);
+            spectrum_analyzer(cx);
+            other_params(cx);
+        });
     })
+}
+
+/// This contain's the plugin's name, a bypass button, and some other controls.
+fn top_bar(cx: &mut Context) {
+    HStack::new(cx, |cx| {
+        Label::new(cx, "Diopser")
+            .font(assets::NOTO_SANS_THIN)
+            .font_size(50.0 * POINT_SCALE)
+            .top(Pixels(-2.0))
+            .left(Pixels(7.0));
+
+        HStack::new(cx, |cx| {
+            // TODO: Placeholders, replace with the actual elements
+            Element::new(cx)
+                .width(Pixels(210.0))
+                .height(Pixels(30.0))
+                .border_color(Color::rgb(0x0a, 0x0a, 0x0a))
+                .border_width(Pixels(1.0));
+
+            Element::new(cx)
+                .width(Pixels(110.0))
+                .height(Pixels(30.0))
+                .left(Pixels(10.0))
+                .background_color(Color::rgb(0xff, 0xf2, 0x80))
+                .border_color(Color::rgb(0x0a, 0x0a, 0x0a))
+                .border_width(Pixels(1.0));
+
+            Element::new(cx)
+                .width(Pixels(80.0))
+                .height(Pixels(30.0))
+                .left(Pixels(10.0))
+                .background_color(Color::rgb(0xea, 0xea, 0xea))
+                .border_color(Color::rgb(0x0a, 0x0a, 0x0a))
+                .border_width(Pixels(1.0));
+        })
+        .child_space(Pixels(10.0))
+        .left(Stretch(1.0));
+    })
+    .id("top-bar");
+}
+
+/// This shows a spectrum analyzer for the plugin's output, and also acts as an X-Y pad for the
+/// frequency and resonance parameters.
+fn spectrum_analyzer(cx: &mut Context) {
+    Label::new(cx, "When I grow up, I want to be a spectrum analyzer!");
+}
+
+/// The area below the spectrum analyzer that contains all of the other parameters.
+fn other_params(cx: &mut Context) {
+    // Just to center the old generic UI for now
+    ZStack::new(cx, |cx| {
+        GenericUi::new(cx, Data::params).width(Auto).height(Auto);
+    })
+    .width(Percentage(100.0))
+    .height(Stretch(1.0))
+    .child_space(Stretch(1.0));
 }
