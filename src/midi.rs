@@ -353,6 +353,16 @@ impl NoteEvent {
         let event_type = midi_data[0] & midi::EVENT_TYPE_MASK;
         let channel = midi_data[0] & midi::MIDI_CHANNEL_MASK;
         match event_type {
+            // You thought this was a note on? Think again! This is a cleverly disguised note off
+            // event straight from the 80s when Baud rate was still a limiting factor!
+            midi::NOTE_ON if midi_data[2] == 0 => Ok(NoteEvent::NoteOff {
+                timing,
+                voice_id: None,
+                channel,
+                note: midi_data[1],
+                // Few things use release velocity. Just having this be zero here is fine, right?
+                velocity: 0.0,
+            }),
             midi::NOTE_ON => Ok(NoteEvent::NoteOn {
                 timing,
                 voice_id: None,
