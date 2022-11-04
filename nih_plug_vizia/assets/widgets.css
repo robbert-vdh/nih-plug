@@ -26,6 +26,27 @@ generic-ui .label {
   right: 0;
 }
 
+param-button {
+  height: 30px;
+  width: auto;
+  border-color: #0a0a0a;
+  border-width: 1px;
+  background-color: transparent;
+  transition: background-color 0.1 0;
+}
+param-button:hover {
+  background-color: #8080801a;
+  transition: background-color 0.1 0;
+}
+param-button:checked {
+  background-color: #e5e5e5;
+  transition: background-color 0.1 0;
+}
+
+param-button label {
+  /* TODO */
+}
+
 param-slider {
   height: 30px;
   width: 180px;

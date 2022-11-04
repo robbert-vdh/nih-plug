@@ -12,12 +12,14 @@ use vizia::prelude::*;
 use super::ViziaState;
 
 mod generic_ui;
+mod param_button;
 mod param_slider;
 mod peak_meter;
 mod resize_handle;
 pub mod util;
 
 pub use generic_ui::GenericUi;
+pub use param_button::ParamButton;
 pub use param_slider::{ParamSlider, ParamSliderExt, ParamSliderStyle};
 pub use peak_meter::PeakMeter;
 pub use resize_handle::ResizeHandle;
