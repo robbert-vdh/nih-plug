@@ -27,7 +27,7 @@ pub fn reflink_or_combine<P: AsRef<Path>>(
     match (from, compilation_target) {
         ([], _) => anyhow::bail!("The 'from' slice is empty"),
         ([path], _) => {
-            reflink(&path, to.as_ref()).with_context(|| {
+            reflink(path, to.as_ref()).with_context(|| {
                 format!(
                     "Could not copy {} to {}",
                     path.display(),

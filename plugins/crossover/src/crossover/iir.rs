@@ -109,7 +109,7 @@ impl IirCrossover {
                     .crossovers
                     .iter_mut()
                     .zip(band_outputs.iter_mut())
-                    .take(num_bands as usize - 1)
+                    .take(num_bands - 1)
                     .enumerate()
                 {
                     let (lp_samples, hp_samples) = crossover.process_lr24(samples);

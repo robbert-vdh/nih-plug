@@ -408,7 +408,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         // on `Self::updated_state_sender`
         let (updated_state_sender, updated_state_receiver) = channel::bounded(0);
 
-        let plugin_descriptor = Box::new(PluginDescriptor::default());
+        let plugin_descriptor: Box<PluginDescriptor<P>> = Box::default();
 
         // We're not allowed to query any extensions until the init function has been called, so we
         // need a bunch of AtomicRefCells instead
@@ -1966,8 +1966,8 @@ impl<P: ClapPlugin> Wrapper<P> {
                     // process all audio until the end of the buffer.
                     match split_result {
                         Some((next_param_change_sample_idx, next_param_change_event_idx)) => {
-                            block_end = next_param_change_sample_idx as usize;
-                            event_start_idx = next_param_change_event_idx as usize;
+                            block_end = next_param_change_sample_idx;
+                            event_start_idx = next_param_change_event_idx;
                         }
                         None => block_end = process.frames_count as usize,
                     }

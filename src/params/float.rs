@@ -396,7 +396,7 @@ fn decimals_from_step_size(step_size: f32) -> usize {
 
     let mut num_digits = 0;
     for decimals in 0..f32::DIGITS as i32 {
-        if step_size * 10.0f32.powi(decimals) as f32 >= 1.0 {
+        if step_size * 10.0f32.powi(decimals) >= 1.0 {
             num_digits = decimals;
             break;
         }

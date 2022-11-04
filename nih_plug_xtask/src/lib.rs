@@ -393,15 +393,15 @@ fn bundle_plugin(
     // first one.
     let first_lib_path = lib_paths.first().context("Empty library paths slice")?;
 
-    let bundle_clap = symbols::exported(&first_lib_path, "clap_entry")
+    let bundle_clap = symbols::exported(first_lib_path, "clap_entry")
         .with_context(|| format!("Could not parse '{}'", first_lib_path.display()))?;
     // We'll ignore the platofrm-specific entry points for VST2 plugins since there's no reason to
     // create a new Rust VST2 plugin that doesn't work in modern DAWs
     // NOTE: NIH-plug does not support VST2, but we'll support bundling VST2 plugins anyways because
     //       this bundler can also be used standalone.
-    let bundle_vst2 = symbols::exported(&first_lib_path, "VSTPluginMain")
+    let bundle_vst2 = symbols::exported(first_lib_path, "VSTPluginMain")
         .with_context(|| format!("Could not parse '{}'", first_lib_path.display()))?;
-    let bundle_vst3 = symbols::exported(&first_lib_path, "GetPluginFactory")
+    let bundle_vst3 = symbols::exported(first_lib_path, "GetPluginFactory")
         .with_context(|| format!("Could not parse '{}'", first_lib_path.display()))?;
     let bundled_plugin = bundle_clap || bundle_vst2 || bundle_vst3;
 
@@ -514,7 +514,7 @@ fn load_bundler_config() -> Result<Option<BundlerConfig>> {
     }
 
     let result = toml::from_str(
-        &fs::read_to_string(&bundler_config_path)
+        &fs::read_to_string(bundler_config_path)
             .with_context(|| format!("Could not read '{}'", bundler_config_path.display()))?,
     )
     .with_context(|| format!("Could not parse '{}'", bundler_config_path.display()))?;

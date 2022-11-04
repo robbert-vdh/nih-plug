@@ -197,7 +197,7 @@ where
 
         // NOTE: We'll scale this with the nearest integer DPI ratio. That way it will still look
         //       good at 2x scaling, and it won't look blurry at 1.x times scaling.
-        let dpi_scale = cx.logical_to_physical(1.0).floor().max(1.0) as f32;
+        let dpi_scale = cx.logical_to_physical(1.0).floor().max(1.0);
         let bar_tick_coordinates = (bar_ticks_start_x..bar_ticks_end_x)
             .step_by(((TICK_WIDTH + TICK_GAP) * dpi_scale).round() as usize);
         for tick_x in bar_tick_coordinates {
