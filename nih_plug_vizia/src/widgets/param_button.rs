@@ -48,9 +48,7 @@ impl ParamButton {
             .build(cx, move |cx| {
                 Label::new(cx, &param_name);
             })
-            .bind(param_value_lens, |cx, value| {
-                cx.checked(value.map(|v| v >= &0.5));
-            })
+            .checked(param_value_lens.map(|v| v >= &0.5))
     }
 
     /// Set the parameter's normalized value to either 0.0 or 1.0 depending on its current value.
