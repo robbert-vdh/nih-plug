@@ -81,6 +81,12 @@ struct DiopserParams {
     #[persist = "editor-state"]
     editor_state: Arc<ViziaState>,
 
+    /// This plugin really doesn't need its own bypass parameter, but it's still useful to have a
+    /// dedicated one so it can be shown in the GUI. This is linked to the host's bypass if the host
+    /// supports it.
+    #[id = "bypass"]
+    bypass: BoolParam,
+
     /// The number of all-pass filters applied in series.
     #[id = "stages"]
     filter_stages: IntParam,
@@ -143,6 +149,8 @@ impl DiopserParams {
     fn new(should_update_filters: Arc<AtomicBool>) -> Self {
         Self {
             editor_state: editor::default_state(),
+
+            bypass: BoolParam::new("Bypass", false).make_bypass(),
 
             filter_stages: IntParam::new(
                 "Filter Stages",
@@ -295,22 +303,24 @@ impl Plugin for Diopser {
         let smoothing_interval =
             unnormalize_automation_precision(self.params.automation_precision.value());
 
-        for mut channel_samples in buffer.iter_samples() {
-            self.maybe_update_filters(smoothing_interval);
+        if !self.params.bypass.value() {
+            for mut channel_samples in buffer.iter_samples() {
+                self.maybe_update_filters(smoothing_interval);
 
-            // We can compute the filters for both channels at once. The SIMD version thus now only
-            // supports steroo audio.
-            let mut samples = unsafe { channel_samples.to_simd_unchecked() };
+                // We can compute the filters for both channels at once. The SIMD version thus now
+                // only supports steroo audio.
+                let mut samples = unsafe { channel_samples.to_simd_unchecked() };
 
-            for filter in self
-                .filters
-                .iter_mut()
-                .take(self.params.filter_stages.value() as usize)
-            {
-                samples = filter.process(samples);
+                for filter in self
+                    .filters
+                    .iter_mut()
+                    .take(self.params.filter_stages.value() as usize)
+                {
+                    samples = filter.process(samples);
+                }
+
+                unsafe { channel_samples.from_simd_unchecked(samples) };
             }
-
-            unsafe { channel_samples.from_simd_unchecked(samples) };
         }
 
         // Compute a spectrum for the GUI if needed
