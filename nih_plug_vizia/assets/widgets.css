@@ -32,9 +32,9 @@ param-button {
   border-color: #0a0a0a;
   border-width: 1px;
   child-top: 1s;
-  child-right: 5px;
+  child-right: 7px;
   child-bottom: 1s;
-  child-left: 5px;
+  child-left: 7px;
   background-color: #80808000;
   transition: background-color 0.1 0;
 }
