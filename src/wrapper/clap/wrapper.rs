@@ -1574,22 +1574,25 @@ impl<P: ClapPlugin> Wrapper<P> {
                 false
             }
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_MIDI) => {
-                // TODO: We can also handle note on, note off, and polyphonic pressure events, but
-                //       the host should not be sending us those since we prefer CLAP-style events
-                //       on our note ports
-                if P::MIDI_INPUT >= MidiConfig::MidiCCs {
-                    let event = &*(event as *const clap_event_midi);
+                // In the Basic note port type, we'll still handle note on, note off, and polyphonic
+                // pressure events if the host sents us those. But we'll throw away any other MIDI
+                // messages to stay consistent with the VST3 wrapper.
+                let event = &*(event as *const clap_event_midi);
 
-                    match NoteEvent::from_midi(
-                        raw_event.time - current_sample_idx as u32,
-                        event.data,
-                    ) {
-                        Ok(note_event) => {
-                            input_events.push_back(note_event);
-                        }
-                        Err(n) => nih_debug_assert_failure!("Unhandled MIDI message type {}", n),
-                    };
-                }
+                match NoteEvent::from_midi(raw_event.time - current_sample_idx as u32, event.data) {
+                    Ok(
+                        note_event @ (NoteEvent::NoteOn { .. }
+                        | NoteEvent::NoteOff { .. }
+                        | NoteEvent::PolyPressure { .. }),
+                    ) if P::MIDI_INPUT >= MidiConfig::Basic => {
+                        input_events.push_back(note_event);
+                    }
+                    Ok(note_event) if P::MIDI_INPUT >= MidiConfig::MidiCCs => {
+                        input_events.push_back(note_event);
+                    }
+                    Ok(_) => (),
+                    Err(n) => nih_debug_assert_failure!("Unhandled MIDI message type {}", n),
+                };
 
                 false
             }
@@ -2933,10 +2936,10 @@ impl<P: ClapPlugin> Wrapper<P> {
 
                 let info = &mut *info;
                 info.id = 0;
-                info.supported_dialects = CLAP_NOTE_DIALECT_CLAP;
-                if P::MIDI_OUTPUT >= MidiConfig::MidiCCs {
-                    info.supported_dialects |= CLAP_NOTE_DIALECT_MIDI;
-                }
+                // If `P::MIDI_OUTPUT < MidiConfig::MidiCCs` we'll throw away MIDI CCs, pitch bend
+                // messages, and other messages that are not basic note on, off and polyphonic
+                // pressure messages. This way the behavior is the same as the VST3 wrapper.
+                info.supported_dialects = CLAP_NOTE_DIALECT_CLAP | CLAP_NOTE_DIALECT_MIDI;
                 info.preferred_dialect = CLAP_NOTE_DIALECT_CLAP;
                 strlcpy(&mut info.name, "Note Output");
 
