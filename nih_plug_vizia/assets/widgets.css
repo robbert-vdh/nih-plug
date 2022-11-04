@@ -31,29 +31,33 @@ param-button {
   width: auto;
   border-color: #0a0a0a;
   border-width: 1px;
-  background-color: transparent;
+  child-top: 1s;
+  child-right: 5px;
+  child-bottom: 1s;
+  child-left: 5px;
+  background-color: #80808000;
   transition: background-color 0.1 0;
 }
 param-button:hover {
-  background-color: #8080801a;
+  background-color: #80808020;
   transition: background-color 0.1 0;
 }
 param-button:checked {
-  background-color: #e5e5e5;
+  background-color: #808080;
   transition: background-color 0.1 0;
 }
 
-param-button:hover {
-  background-color: #ffaba51a;
+param-button.bypass {
+  background-color: #ffcfcb00;
+  transition: background-color 0.1 0;
+}
+param-button.bypass:hover {
+  background-color: #ffcfcb20;
   transition: background-color 0.1 0;
 }
 param-button.bypass:checked {
-  background-color: #ffaba5;
+  background-color: #ffcfcb;
   transition: background-color 0.1 0;
-}
-
-param-button label {
-  /* TODO */
 }
 
 param-slider {
