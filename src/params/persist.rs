@@ -109,6 +109,36 @@ macro_rules! impl_persistent_field_parking_lot_mutex {
 impl_persistent_field_parking_lot_mutex!(parking_lot::Mutex<T>);
 impl_persistent_field_parking_lot_mutex!(parking_lot::FairMutex<T>);
 
+macro_rules! impl_persistent_atomic {
+    ($ty:ty, $inner_ty:ty) => {
+        impl PersistentField<'_, $inner_ty> for $ty {
+            fn set(&self, new_value: $inner_ty) {
+                self.store(new_value, std::sync::atomic::Ordering::SeqCst);
+            }
+            fn map<F, R>(&self, f: F) -> R
+            where
+                F: Fn(&$inner_ty) -> R,
+            {
+                f(&self.load(std::sync::atomic::Ordering::SeqCst))
+            }
+        }
+    };
+}
+
+impl_persistent_atomic!(std::sync::atomic::AtomicBool, bool);
+impl_persistent_atomic!(std::sync::atomic::AtomicI8, i8);
+impl_persistent_atomic!(std::sync::atomic::AtomicI16, i16);
+impl_persistent_atomic!(std::sync::atomic::AtomicI32, i32);
+impl_persistent_atomic!(std::sync::atomic::AtomicI64, i64);
+impl_persistent_atomic!(std::sync::atomic::AtomicIsize, isize);
+impl_persistent_atomic!(std::sync::atomic::AtomicU8, u8);
+impl_persistent_atomic!(std::sync::atomic::AtomicU16, u16);
+impl_persistent_atomic!(std::sync::atomic::AtomicU32, u32);
+impl_persistent_atomic!(std::sync::atomic::AtomicU64, u64);
+impl_persistent_atomic!(std::sync::atomic::AtomicUsize, usize);
+impl_persistent_atomic!(atomic_float::AtomicF32, f32);
+impl_persistent_atomic!(atomic_float::AtomicF64, f64);
+
 /// Can be used with the `#[serde(with = "nih_plug::params::internals::serialize_atomic_cell")]`
 /// attribute to serialize `AtomicCell<T>`s.
 pub mod serialize_atomic_cell {
