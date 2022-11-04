@@ -87,13 +87,9 @@ fn top_bar(cx: &mut Context) {
                 .border_color(Color::rgb(0x0a, 0x0a, 0x0a))
                 .border_width(Pixels(1.0));
 
-            Element::new(cx)
-                .width(Pixels(80.0))
-                .height(Pixels(30.0))
-                .left(Pixels(10.0))
-                .background_color(Color::rgb(0xea, 0xea, 0xea))
-                .border_color(Color::rgb(0x0a, 0x0a, 0x0a))
-                .border_width(Pixels(1.0));
+            ParamButton::new(cx, Data::params, |params| &params.bypass)
+                .for_bypass()
+                .left(Pixels(10.0));
         })
         .child_space(Pixels(10.0))
         .left(Stretch(1.0));
