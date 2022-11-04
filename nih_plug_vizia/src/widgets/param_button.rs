@@ -85,3 +85,15 @@ impl View for ParamButton {
         });
     }
 }
+
+/// Extension methods for [`ParamButton`] handles.
+pub trait ParamButtonExt {
+    /// Change the colors scheme for a bypass button. This simply adds the `bypass` class.
+    fn for_bypass(self) -> Self;
+}
+
+impl ParamButtonExt for Handle<'_, ParamButton> {
+    fn for_bypass(self) -> Self {
+        self.class("bypass")
+    }
+}

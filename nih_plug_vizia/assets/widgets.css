@@ -43,6 +43,15 @@ param-button:checked {
   transition: background-color 0.1 0;
 }
 
+param-button:hover {
+  background-color: #ffaba51a;
+  transition: background-color 0.1 0;
+}
+param-button.bypass:checked {
+  background-color: #ffaba5;
+  transition: background-color 0.1 0;
+}
+
 param-button label {
   /* TODO */
 }
