@@ -1,5 +1,5 @@
 use nih_plug::prelude::*;
-use parking_lot::RwLock;
+use parking_lot::Mutex;
 use std::sync::Arc;
 
 struct Gain {
@@ -23,7 +23,7 @@ struct GainParams {
     /// together with a preset/state file saved for this plugin. This can be useful for storing
     /// things like sample data.
     #[persist = "industry_secrets"]
-    pub random_data: RwLock<Vec<f32>>,
+    pub random_data: Mutex<Vec<f32>>,
 
     /// You can also nest parameter structs. These will appear as a separate nested group if your
     /// DAW displays parameters in a tree structure.
@@ -86,7 +86,7 @@ impl Default for GainParams {
             .with_string_to_value(formatters::s2v_f32_gain_to_db()),
             // Persisted fields can be initialized like any other fields, and they'll keep their
             // values when restoring the plugin's state.
-            random_data: RwLock::new(Vec::new()),
+            random_data: Mutex::new(Vec::new()),
             sub_params: SubParams {
                 nested_parameter: FloatParam::new(
                     "Unused Nested Parameter",
