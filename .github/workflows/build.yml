@@ -41,11 +41,11 @@ jobs:
 
       - uses: actions/cache@v2
         with:
+          # FIXME: Caching `target/` causes the Windows runner to blow up after some time
           path: |
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            target/
           key: ${{ runner.name }}-${{ matrix.cross-target }}
 
       - name: Set up Rust toolchain
