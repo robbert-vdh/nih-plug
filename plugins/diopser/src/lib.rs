@@ -72,14 +72,16 @@ pub struct Diopser {
     spectrum_output: Arc<SpectrumOutput>,
 }
 
-// TODO: Some combinations of parameters can cause really loud resonance. We should limit the
-//       resonance and filter stages parameter ranges in the GUI until the user unlocks.
 #[derive(Params)]
 struct DiopserParams {
     /// The editor state, saved together with the parameter state so the custom scaling can be
     /// restored.
     #[persist = "editor-state"]
     editor_state: Arc<ViziaState>,
+    /// If this option is enabled, then the filter stages parameter is limited to `[0, 40]`. This is
+    /// editor-only state, and doesn't affect host automation.
+    #[persist = "safe-mode"]
+    safe_mode: Arc<AtomicBool>,
 
     /// This plugin really doesn't need its own bypass parameter, but it's still useful to have a
     /// dedicated one so it can be shown in the GUI. This is linked to the host's bypass if the host
@@ -149,6 +151,7 @@ impl DiopserParams {
     fn new(should_update_filters: Arc<AtomicBool>) -> Self {
         Self {
             editor_state: editor::default_state(),
+            safe_mode: Arc::new(AtomicBool::new(true)),
 
             bypass: BoolParam::new("Bypass", false).make_bypass(),
 

@@ -18,6 +18,7 @@ use nih_plug::prelude::Editor;
 use nih_plug_vizia::vizia::prelude::*;
 use nih_plug_vizia::widgets::*;
 use nih_plug_vizia::{assets, create_vizia_editor, ViziaState, ViziaTheming};
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use crate::DiopserParams;
@@ -28,6 +29,10 @@ const POINT_SCALE: f32 = 0.75;
 #[derive(Lens)]
 struct Data {
     params: Arc<DiopserParams>,
+
+    /// Whether the safe mode button is enabled. The number of filter stages is capped at 40 while
+    /// this is active.
+    safe_mode: Arc<AtomicBool>,
 }
 
 impl Model for Data {}
@@ -49,6 +54,8 @@ pub(crate) fn create(
 
         Data {
             params: params.clone(),
+
+            safe_mode: params.safe_mode.clone(),
         }
         .build(cx);
 
