@@ -1561,7 +1561,9 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                 }
 
                 let result = if buffer_is_valid {
-                    let mut plugin = self.inner.plugin.lock();
+                    // NOTE: `parking_lot`'s mutexes sometimes allocate because of their use of
+                    //       thread locals
+                    let mut plugin = permit_alloc(|| self.inner.plugin.lock());
                     // SAFETY: Shortening these borrows is safe as even if the plugin overwrites the
                     //         slices (which it cannot do without using unsafe code), then they
                     //         would still be reset on the next iteration
