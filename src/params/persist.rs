@@ -1,6 +1,8 @@
 //! Traits and helpers for persistent fields. See the [`Params`][super::Params] trait for more
 //! information.
 
+use std::sync::Arc;
+
 /// Re-export for use in the [`Params`][super::Params] proc-macro.
 pub use serde_json::from_str as deserialize_field;
 /// Re-export for use in the [`Params`][super::Params] proc-macro.
@@ -27,6 +29,41 @@ where
         F: Fn(&T) -> R;
 }
 
+/// Wrapper for implementing an `Arc<I>` wrapper for an `I: PersistentField<T>`. Having both options
+/// gives you more flexibility in data can be shared with an editor.
+macro_rules! impl_persistent_arc {
+    ($ty:ty, T) => {
+        impl<'a, T> PersistentField<'a, T> for Arc<$ty>
+        where
+            T: serde::Serialize + serde::Deserialize<'a> + Send + Sync,
+        {
+            fn set(&self, new_value: T) {
+                self.as_ref().set(new_value);
+            }
+            fn map<F, R>(&self, f: F) -> R
+            where
+                F: Fn(&T) -> R,
+            {
+                self.as_ref().map(f)
+            }
+        }
+    };
+
+    ($ty:ty, $inner_ty:ty) => {
+        impl<'a> PersistentField<'a, $inner_ty> for Arc<$ty> {
+            fn set(&self, new_value: $inner_ty) {
+                self.as_ref().set(new_value);
+            }
+            fn map<F, R>(&self, f: F) -> R
+            where
+                F: Fn(&$inner_ty) -> R,
+            {
+                self.as_ref().map(f)
+            }
+        }
+    };
+}
+
 impl<'a, T> PersistentField<'a, T> for std::sync::RwLock<T>
 where
     T: serde::Serialize + serde::Deserialize<'a> + Send + Sync,
@@ -41,6 +78,7 @@ where
         f(&self.read().expect("Poisoned RwLock on read"))
     }
 }
+impl_persistent_arc!(std::sync::RwLock<T>, T);
 
 impl<'a, T> PersistentField<'a, T> for parking_lot::RwLock<T>
 where
@@ -56,6 +94,7 @@ where
         f(&self.read())
     }
 }
+impl_persistent_arc!(parking_lot::RwLock<T>, T);
 
 impl<'a, T> PersistentField<'a, T> for std::sync::Mutex<T>
 where
@@ -71,6 +110,7 @@ where
         f(&self.lock().expect("Poisoned Mutex"))
     }
 }
+impl_persistent_arc!(std::sync::Mutex<T>, T);
 
 impl<'a, T> PersistentField<'a, T> for atomic_refcell::AtomicRefCell<T>
 where
@@ -86,6 +126,7 @@ where
         f(&self.borrow())
     }
 }
+impl_persistent_arc!(atomic_refcell::AtomicRefCell<T>, T);
 
 macro_rules! impl_persistent_field_parking_lot_mutex {
     ($ty:ty) => {
@@ -103,6 +144,8 @@ macro_rules! impl_persistent_field_parking_lot_mutex {
                 f(&self.lock())
             }
         }
+
+        impl_persistent_arc!($ty, T);
     };
 }
 
@@ -122,6 +165,8 @@ macro_rules! impl_persistent_atomic {
                 f(&self.load(std::sync::atomic::Ordering::SeqCst))
             }
         }
+
+        impl_persistent_arc!($ty, $inner_ty);
     };
 }
 
