@@ -85,6 +85,9 @@
 // Around Rust 1.64 Clippy started throwing this for all instances of `dyn Fn(...) -> ... + Send +
 // Sync`. Creating type aliases for all of these callbacks probably won't make things easier to read.
 #![allow(clippy::type_complexity)]
+// This lint was added in CLAP 1.65 because it thinks `i32::from(foo.bar() <= 4)` is more readable
+// than `if foo.bar() > 4 { 0 } else { 1 }`. I disagree.
+#![allow(clippy::bool_to_int_with_if)]
 
 // These macros are also in the crate root and in the prelude, but having the module itself be pub
 // as well makes it easy to import _just_ the macros without using `#[macro_use] extern crate nih_plug;`
