@@ -21,7 +21,10 @@ use nih_plug_vizia::{assets, create_vizia_editor, ViziaState, ViziaTheming};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
+use self::button::SafeModeButton;
 use crate::DiopserParams;
+
+mod button;
 
 /// VIZIA uses points instead of pixels for text
 const POINT_SCALE: f32 = 0.75;
@@ -86,13 +89,7 @@ fn top_bar(cx: &mut Context) {
                 .border_color(Color::rgb(0x0a, 0x0a, 0x0a))
                 .border_width(Pixels(1.0));
 
-            Element::new(cx)
-                .width(Pixels(110.0))
-                .height(Pixels(30.0))
-                .left(Pixels(10.0))
-                .background_color(Color::rgb(0xff, 0xf2, 0x80))
-                .border_color(Color::rgb(0x0a, 0x0a, 0x0a))
-                .border_width(Pixels(1.0));
+            SafeModeButton::new(cx, Data::safe_mode, "Safe mode").left(Pixels(10.0));
 
             ParamButton::new(cx, Data::params, |params| &params.bypass)
                 .for_bypass()
