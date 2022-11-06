@@ -17,7 +17,7 @@
 use nih_plug::prelude::Editor;
 use nih_plug_vizia::vizia::prelude::*;
 use nih_plug_vizia::widgets::*;
-use nih_plug_vizia::{assets, create_vizia_editor, ViziaState};
+use nih_plug_vizia::{assets, create_vizia_editor, ViziaState, ViziaTheming};
 use std::sync::Arc;
 
 use crate::SpectralCompressorParams;
@@ -41,7 +41,7 @@ pub(crate) fn create(
     params: Arc<SpectralCompressorParams>,
     editor_state: Arc<ViziaState>,
 ) -> Option<Box<dyn Editor>> {
-    create_vizia_editor(editor_state, move |cx, _| {
+    create_vizia_editor(editor_state, ViziaTheming::Custom, move |cx, _| {
         Data {
             params: params.clone(),
         }

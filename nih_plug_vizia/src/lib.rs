@@ -30,14 +30,18 @@ pub mod widgets;
 /// directly to set parameters. Use the `ParamEvent`s instead.
 ///
 /// See [VIZIA](https://github.com/vizia/vizia)'s repository for examples on how to use this.
-pub fn create_vizia_editor<F>(vizia_state: Arc<ViziaState>, app: F) -> Option<Box<dyn Editor>>
+pub fn create_vizia_editor<F>(
+    vizia_state: Arc<ViziaState>,
+    theming: ViziaTheming,
+    app: F,
+) -> Option<Box<dyn Editor>>
 where
     F: Fn(&mut Context, Arc<dyn GuiContext>) + 'static + Send + Sync,
 {
     Some(Box::new(ViziaEditor {
         vizia_state,
         app: Arc::new(app),
-        apply_theming: true,
+        theming,
 
         // TODO: We can't get the size of the window when baseview does its own scaling, so if the
         //       host does not set a scale factor on Windows or Linux we should just use a factor of
@@ -49,27 +53,16 @@ where
     }))
 }
 
-/// The same as [`create_vizia_editor()`] but without changing VIZIA's default styling and font.
-/// This also won't register the styling for any of the widgets that come with `nih_plug_vizia`, or
-/// register the custom fonts. Event handlers for the [`ParamEvent`][widgets::ParamEvent]s are still
-/// set up when using this function instead of [`create_vizia_editor()`].
-pub fn create_vizia_editor_without_theme<F>(
-    vizia_state: Arc<ViziaState>,
-    app: F,
-) -> Option<Box<dyn Editor>>
-where
-    F: Fn(&mut Context, Arc<dyn GuiContext>) + 'static + Send + Sync,
-{
-    Some(Box::new(ViziaEditor {
-        vizia_state,
-        app: Arc::new(app),
-        apply_theming: false,
-
-        #[cfg(target_os = "macos")]
-        scaling_factor: AtomicCell::new(None),
-        #[cfg(not(target_os = "macos"))]
-        scaling_factor: AtomicCell::new(Some(1.0)),
-    }))
+/// Controls what level of theming to apply to the editor.
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Default)]
+pub enum ViziaTheming {
+    /// Disable both `nih_plug_vizia`'s and vizia's built-in theming.
+    None,
+    /// Disable `nih_plug_vizia`'s custom theming.
+    Builtin,
+    /// Apply `nih_plug_vizia`'s custom theming. This is the default.
+    #[default]
+    Custom,
 }
 
 /// State for an `nih_plug_vizia` editor. The scale factor can be manipulated at runtime by changing
@@ -160,9 +153,8 @@ struct ViziaEditor {
     vizia_state: Arc<ViziaState>,
     /// The user's app function.
     app: Arc<dyn Fn(&mut Context, Arc<dyn GuiContext>) + 'static + Send + Sync>,
-    /// Whether to apply `nih_plug_vizia`'s default theme. If this is disabled, then only the event
-    /// handler for `ParamEvent`s is set up.
-    apply_theming: bool,
+    /// What level of theming to apply. See [`ViziaEditorTheming`].
+    theming: ViziaTheming,
 
     /// The scaling factor reported by the host, if any. On macOS this will never be set and we
     /// should use the system scaling factor instead.
@@ -177,15 +169,15 @@ impl Editor for ViziaEditor {
     ) -> Box<dyn std::any::Any + Send> {
         let app = self.app.clone();
         let vizia_state = self.vizia_state.clone();
-        let apply_theming = self.apply_theming;
+        let theming = self.theming;
 
         let (unscaled_width, unscaled_height) = vizia_state.inner_logical_size();
         let system_scaling_factor = self.scaling_factor.load();
         let user_scale_factor = vizia_state.user_scale_factor();
 
-        let window = Application::new(move |cx| {
+        let mut application = Application::new(move |cx| {
             // Set some default styles to match the iced integration
-            if apply_theming {
+            if theming >= ViziaTheming::Custom {
                 // NOTE: vizia's font rendering looks way too dark and thick. Going one font weight
                 //       lower seems to compensate for this.
                 assets::register_fonts(cx);
@@ -220,8 +212,14 @@ impl Editor for ViziaEditor {
                 .unwrap_or(WindowScalePolicy::SystemScaleFactor),
         )
         .inner_size((unscaled_width, unscaled_height))
-        .user_scale_factor(user_scale_factor)
-        .open_parented(&parent);
+        .user_scale_factor(user_scale_factor);
+
+        // This way the plugin can decide to use none of the built in theming
+        if theming == ViziaTheming::None {
+            application = application.ignore_default_theme();
+        }
+
+        let window = application.open_parented(&parent);
 
         self.vizia_state.open.store(true, Ordering::Release);
         Box::new(ViziaEditorHandle {

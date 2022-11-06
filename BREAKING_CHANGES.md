@@ -6,6 +6,13 @@ new and what's changed, this document lists all breaking changes in reverse
 chronological order. If a new feature did not require any changes to existing
 code then it will not be listed here.
 
+## [2022-11-06]
+
+- `nih_plug_vizia::create_vizia_editor_without_theme()` has been removed, and
+  `nih_plug_vizia::create_vizia_editor()` has gained a new argument to specify
+  what amount of theming to apply. This can now also be used to completely
+  disable all theming include Vizia's built-in theme.
+
 ## [2022-10-23]
 
 - `nih_plug_vizia` has been updated. Widgets with custom drawing code will need

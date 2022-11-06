@@ -4464,7 +4464,7 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 [[package]]
 name = "vizia"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#a75ce4d79eb48535c275c937dc05bdff7c0cf192"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#cbb1aa4243dd4a68605922ae5eba735fb716d032"
 dependencies = [
  "vizia_baseview",
  "vizia_core",
@@ -4474,7 +4474,7 @@ dependencies = [
 [[package]]
 name = "vizia_baseview"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#a75ce4d79eb48535c275c937dc05bdff7c0cf192"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#cbb1aa4243dd4a68605922ae5eba735fb716d032"
 dependencies = [
  "baseview 0.1.0 (git+https://github.com/robbert-vdh/baseview.git?branch=feature/resize)",
  "femtovg",
@@ -4488,7 +4488,7 @@ dependencies = [
 [[package]]
 name = "vizia_core"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#a75ce4d79eb48535c275c937dc05bdff7c0cf192"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#cbb1aa4243dd4a68605922ae5eba735fb716d032"
 dependencies = [
  "bitflags",
  "copypasta 0.8.1",
@@ -4516,7 +4516,7 @@ dependencies = [
 [[package]]
 name = "vizia_derive"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#a75ce4d79eb48535c275c937dc05bdff7c0cf192"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#cbb1aa4243dd4a68605922ae5eba735fb716d032"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4526,12 +4526,12 @@ dependencies = [
 [[package]]
 name = "vizia_id"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#a75ce4d79eb48535c275c937dc05bdff7c0cf192"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#cbb1aa4243dd4a68605922ae5eba735fb716d032"
 
 [[package]]
 name = "vizia_input"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#a75ce4d79eb48535c275c937dc05bdff7c0cf192"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#cbb1aa4243dd4a68605922ae5eba735fb716d032"
 dependencies = [
  "bitflags",
  "keyboard-types",
@@ -4541,7 +4541,7 @@ dependencies = [
 [[package]]
 name = "vizia_storage"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#a75ce4d79eb48535c275c937dc05bdff7c0cf192"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#cbb1aa4243dd4a68605922ae5eba735fb716d032"
 dependencies = [
  "morphorm",
  "vizia_id",
@@ -4550,7 +4550,7 @@ dependencies = [
 [[package]]
 name = "vizia_window"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#a75ce4d79eb48535c275c937dc05bdff7c0cf192"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#cbb1aa4243dd4a68605922ae5eba735fb716d032"
 dependencies = [
  "morphorm",
  "vizia_input",
@@ -4559,7 +4559,7 @@ dependencies = [
 [[package]]
 name = "vizia_winit"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#a75ce4d79eb48535c275c937dc05bdff7c0cf192"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#cbb1aa4243dd4a68605922ae5eba735fb716d032"
 dependencies = [
  "console_error_panic_hook",
  "copypasta 0.8.1",
