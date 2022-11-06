@@ -33,7 +33,10 @@ pub mod widgets;
 /// The `theming` argument controls what level of theming to apply. If you use
 /// [`ViziaTheming::Custom`], then you **need** to call
 /// [`nih_plug_vizia::assets::register_noto_sans_light()`][assets::register_noto_sans_light()] at
-/// the start of your app function.
+/// the start of your app function. Vizia's included fonts are also not registered by default. If
+/// you use the Roboto font that normally comes with Vizia or any of its emoji or icon fonts, you
+/// also need to register those using the functions in
+/// [`nih_plug_vizia::vizia_assets`][crate::vizia_assets].
 ///
 /// See [VIZIA](https://github.com/vizia/vizia)'s repository for examples on how to use this.
 pub fn create_vizia_editor<F>(
@@ -64,7 +67,10 @@ where
 pub enum ViziaTheming {
     /// Disable both `nih_plug_vizia`'s and vizia's built-in theming.
     None,
-    /// Disable `nih_plug_vizia`'s custom theming.
+    /// Disable `nih_plug_vizia`'s custom theming. Vizia's included fonts are also not registered by
+    /// default. If you use the Roboto font that normally comes with Vizia or any of its emoji or
+    /// icon fonts, you need to register those using the functions in
+    /// [`nih_plug_vizia::vizia_assets`][crate::vizia_assets].
     Builtin,
     /// Apply `nih_plug_vizia`'s custom theming. This is the default. You **need** to call
     /// [`nih_plug_vizia::assets::register_noto_sans_light()`][assets::register_noto_sans_light()]
