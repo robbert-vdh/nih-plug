@@ -12,6 +12,7 @@ use vizia::prelude::*;
 use super::ViziaState;
 
 mod generic_ui;
+pub mod param_base;
 mod param_button;
 mod param_slider;
 mod peak_meter;

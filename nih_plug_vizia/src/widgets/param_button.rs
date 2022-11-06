@@ -1,9 +1,9 @@
 //! A toggleable button that integrates with NIH-plug's [`Param`] types.
 
-use nih_plug::prelude::{Param, ParamPtr};
+use nih_plug::prelude::Param;
 use vizia::prelude::*;
 
-use super::RawParamEvent;
+use super::param_base::ParamWidgetBase;
 
 /// A toggleable button that integrates with NIH-plug's [`Param`] types. Only makes sense with
 /// [`BoolParam`][nih_plug::prelude::BoolParam]s. Clicking on the button will toggle between the
@@ -11,9 +11,7 @@ use super::RawParamEvent;
 /// button is currently pressed.
 #[derive(Lens)]
 pub struct ParamButton {
-    // We're not allowed to store a reference to the parameter internally, at least not in the
-    // struct that implements [`View`]
-    param_ptr: ParamPtr,
+    param_base: ParamWidgetBase,
 }
 
 impl ParamButton {
@@ -23,45 +21,45 @@ impl ParamButton {
     /// `Params` object to the parameter you want to display a widget for. Parameter changes are
     /// handled by emitting [`ParamEvent`][super::ParamEvent]s which are automatically handled by
     /// the VIZIA wrapper.
-    pub fn new<L, Params, P, F>(cx: &mut Context, params: L, params_to_param: F) -> Handle<Self>
+    pub fn new<L, Params, P, FMap>(
+        cx: &mut Context,
+        params: L,
+        params_to_param: FMap,
+    ) -> Handle<Self>
     where
         L: Lens<Target = Params> + Clone,
-        F: 'static + Fn(&Params) -> &P + Copy,
         Params: 'static,
-        P: Param,
+        P: Param + 'static,
+        FMap: Fn(&Params) -> &P + Copy + 'static,
     {
-        let param_ptr = params
-            .clone()
-            .map(move |params| params_to_param(params).as_ptr())
-            .get(cx);
-        let param_name = params
-            .clone()
-            .map(move |params| params_to_param(params).name().to_owned())
-            .get(cx);
-
         // We'll add the `:checked` pseudoclass when the button is pressed
         // NOTE: We use the normalized value _with modulation_ for this. There's no convenient way
         //       to show both modulated and unmodulated values here.
-        let param_value_lens = params.map(move |params| params_to_param(params).normalized_value());
+        let param_value_lens =
+            ParamWidgetBase::make_lens(params.clone(), params_to_param, |param| {
+                param.normalized_value()
+            });
 
-        Self { param_ptr }
-            .build(cx, move |cx| {
-                Label::new(cx, &param_name);
-            })
-            .checked(param_value_lens.map(|v| v >= &0.5))
+        Self {
+            param_base: ParamWidgetBase::new(cx, params.clone(), params_to_param),
+        }
+        .build(
+            cx,
+            ParamWidgetBase::view(params, params_to_param, move |cx, param_data| {
+                Label::new(cx, param_data.param().name());
+            }),
+        )
+        .checked(param_value_lens.map(|v| v >= &0.5))
     }
 
     /// Set the parameter's normalized value to either 0.0 or 1.0 depending on its current value.
     fn toggle_value(&self, cx: &mut EventContext) {
-        let current_value = unsafe { self.param_ptr.unmodulated_normalized_value() };
+        let current_value = self.param_base.unmodulated_normalized_value();
         let new_value = if current_value >= 0.5 { 0.0 } else { 1.0 };
 
-        cx.emit(RawParamEvent::BeginSetParameter(self.param_ptr));
-        cx.emit(RawParamEvent::SetParameterNormalized(
-            self.param_ptr,
-            new_value,
-        ));
-        cx.emit(RawParamEvent::EndSetParameter(self.param_ptr));
+        self.param_base.begin_set_parameter(cx);
+        self.param_base.set_normalized_value(cx, new_value);
+        self.param_base.end_set_parameter(cx);
     }
 }
 
