@@ -20,6 +20,10 @@ code then it will not be listed here.
   call `nih_plug_vizia::assets::register_noto_sans_light()` for the default
   theming to work. All of the plugins in this repo also use
   `nih_plug_vizia::assets::register_noto_sans_thin()` as a title font.
+- Additionally, the Vizia fork has been updated to not register _any_ default
+  fonts for the same reason. If you previously relied on Vizia's default Roboto
+  font, then you must now call `nih_plug_vizia::vizia_assets::register_roboto()`
+  at the start of your process function.
 
 ## [2022-10-23]
 
