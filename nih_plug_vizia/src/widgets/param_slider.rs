@@ -384,11 +384,11 @@ impl View for ParamSlider {
         });
 
         event.map(|window_event, meta| match window_event {
-            WindowEvent::MouseDown(MouseButton::Left)
             // Vizia always captures the third mouse click as a triple click. Treating that triple
             // click as a regular mouse button makes double click followed by another drag work as
             // expected, instead of requiring a delay or an additional click. Double double click
             // still won't work.
+            WindowEvent::MouseDown(MouseButton::Left)
             | WindowEvent::MouseTripleClick(MouseButton::Left) => {
                 if cx.modifiers.alt() {
                     // ALt+Click brings up a text entry dialog
@@ -397,9 +397,10 @@ impl View for ParamSlider {
                 } else if cx.modifiers.command() {
                     // Ctrl+Click and double click should reset the parameter instead of initiating
                     // a drag operation
-                self.param_base.begin_set_parameter(cx);
-                self.param_base.set_normalized_value(cx, self.param_base.default_normalized_value());
-                self.param_base.end_set_parameter(cx);
+                    self.param_base.begin_set_parameter(cx);
+                    self.param_base
+                        .set_normalized_value(cx, self.param_base.default_normalized_value());
+                    self.param_base.end_set_parameter(cx);
                 } else {
                     self.drag_active = true;
                     cx.capture();
@@ -411,8 +412,10 @@ impl View for ParamSlider {
                     // edit the parameter without jumping to a new value
                     self.param_base.begin_set_parameter(cx);
                     if cx.modifiers.shift() {
-                        self.granular_drag_start_x_value = Some((cx.mouse.cursorx,                             self.param_base.unmodulated_normalized_value()
-));
+                        self.granular_drag_start_x_value = Some((
+                            cx.mouse.cursorx,
+                            self.param_base.unmodulated_normalized_value(),
+                        ));
                     } else {
                         self.granular_drag_start_x_value = None;
                         self.set_normalized_value_drag(
@@ -428,7 +431,8 @@ impl View for ParamSlider {
                 // Ctrl+Click and double click should reset the parameter instead of initiating
                 // a drag operation
                 self.param_base.begin_set_parameter(cx);
-                self.param_base.set_normalized_value(cx, self.param_base.default_normalized_value());
+                self.param_base
+                    .set_normalized_value(cx, self.param_base.default_normalized_value());
                 self.param_base.end_set_parameter(cx);
 
                 meta.consume();
@@ -451,8 +455,10 @@ impl View for ParamSlider {
                     if cx.modifiers.shift() {
                         let (drag_start_x, drag_start_value) =
                             *self.granular_drag_start_x_value.get_or_insert_with(|| {
-                                (cx.mouse.cursorx,                                     self.param_base.unmodulated_normalized_value()
-)
+                                (
+                                    cx.mouse.cursorx,
+                                    self.param_base.unmodulated_normalized_value(),
+                                )
                             });
 
                         self.set_normalized_value_drag(
@@ -479,7 +485,10 @@ impl View for ParamSlider {
                 // position
                 if self.drag_active && self.granular_drag_start_x_value.is_some() {
                     self.granular_drag_start_x_value = None;
-                    self.param_base.set_normalized_value(cx, util::remap_current_entity_x_coordinate(cx, cx.mouse.cursorx));
+                    self.param_base.set_normalized_value(
+                        cx,
+                        util::remap_current_entity_x_coordinate(cx, cx.mouse.cursorx),
+                    );
                 }
             }
             _ => {}
