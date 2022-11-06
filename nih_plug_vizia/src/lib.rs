@@ -29,6 +29,11 @@ pub mod widgets;
 /// restoring state as part of your plugin's preset handling. You should not interact with this
 /// directly to set parameters. Use the `ParamEvent`s instead.
 ///
+/// The `theming` argument controls what level of theming to apply. If you use
+/// [`ViziaTheming::Custom`], then you **need** to call
+/// [`nih_plug_vizia::assets::register_noto_sans_light()`][assets::register_noto_sans_light()] at
+/// the start of your app function.
+///
 /// See [VIZIA](https://github.com/vizia/vizia)'s repository for examples on how to use this.
 pub fn create_vizia_editor<F>(
     vizia_state: Arc<ViziaState>,
@@ -60,7 +65,9 @@ pub enum ViziaTheming {
     None,
     /// Disable `nih_plug_vizia`'s custom theming.
     Builtin,
-    /// Apply `nih_plug_vizia`'s custom theming. This is the default.
+    /// Apply `nih_plug_vizia`'s custom theming. This is the default. You **need** to call
+    /// [`nih_plug_vizia::assets::register_noto_sans_light()`][assets::register_noto_sans_light()]
+    /// at the start of your app function for the font to work correctly.
     #[default]
     Custom,
 }
@@ -180,7 +187,6 @@ impl Editor for ViziaEditor {
             if theming >= ViziaTheming::Custom {
                 // NOTE: vizia's font rendering looks way too dark and thick. Going one font weight
                 //       lower seems to compensate for this.
-                assets::register_fonts(cx);
                 cx.set_default_font(assets::NOTO_SANS_LIGHT);
                 cx.add_theme(include_str!("../assets/theme.css"));
 

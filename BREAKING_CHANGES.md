@@ -12,6 +12,14 @@ code then it will not be listed here.
   `nih_plug_vizia::create_vizia_editor()` has gained a new argument to specify
   what amount of theming to apply. This can now also be used to completely
   disable all theming include Vizia's built-in theme.
+- `nih_plug_vizia::create_vizia_editor()` no longer registers any fonts by
+  default. Even when those fonts are not used, they will still be embedded in
+  the binary, increasing its size by several megabytes. Instead, you can now
+  register individual fonts by calling the
+  `nih_plug_vizia::assets::register_*()` functions. This means that you _must_
+  call `nih_plug_vizia::assets::register_noto_sans_light()` for the default
+  theming to work. All of the plugins in this repo also use
+  `nih_plug_vizia::assets::register_noto_sans_thin()` as a title font.
 
 ## [2022-10-23]
 
