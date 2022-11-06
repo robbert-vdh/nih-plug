@@ -32,24 +32,23 @@ impl ParamButton {
         P: Param + 'static,
         FMap: Fn(&Params) -> &P + Copy + 'static,
     {
-        // We'll add the `:checked` pseudoclass when the button is pressed
-        // NOTE: We use the normalized value _with modulation_ for this. There's no convenient way
-        //       to show both modulated and unmodulated values here.
-        let param_value_lens =
-            ParamWidgetBase::make_lens(params.clone(), params_to_param, |param| {
-                param.normalized_value()
-            });
-
         Self {
             param_base: ParamWidgetBase::new(cx, params.clone(), params_to_param),
         }
         .build(
             cx,
-            ParamWidgetBase::view(params, params_to_param, move |cx, param_data| {
+            ParamWidgetBase::view(params.clone(), params_to_param, move |cx, param_data| {
                 Label::new(cx, param_data.param().name());
             }),
         )
-        .checked(param_value_lens.map(|v| v >= &0.5))
+        // We'll add the `:checked` pseudoclass when the button is pressed
+        // NOTE: We use the normalized value _with modulation_ for this. There's no convenient way
+        //       to show both modulated and unmodulated values here.
+        .checked(ParamWidgetBase::make_lens(
+            params,
+            params_to_param,
+            |param| param.normalized_value() >= 0.5,
+        ))
     }
 
     /// Set the parameter's normalized value to either 0.0 or 1.0 depending on its current value.
