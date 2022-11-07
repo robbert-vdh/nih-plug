@@ -18,6 +18,9 @@ const GRANULAR_DRAG_MULTIPLIER: f32 = 0.1;
 pub struct ParamSlider {
     param_base: ParamWidgetBase,
 
+    /// Will be set to `true` when the field gets Alt+Click'ed which will replace the label with a
+    /// text box.
+    text_input_active: bool,
     /// Will be set to `true` if we're dragging the parameter. Resetting the parameter or entering a
     /// text value should not initiate a drag.
     drag_active: bool,
@@ -26,11 +29,9 @@ pub struct ParamSlider {
     /// active.
     granular_drag_start_x_value: Option<(f32, f32)>,
 
+    // These fields are set through modifiers:
     /// What style to use for the slider.
     style: ParamSliderStyle,
-    /// Will be set to `true` when the field gets Alt+Click'ed which will replace the label with a
-    /// text box.
-    text_input_active: bool,
 }
 
 /// How the [`ParamSlider`] should display its values. Set this using
@@ -87,11 +88,11 @@ impl ParamSlider {
         Self {
             param_base: ParamWidgetBase::new(cx, params.clone(), params_to_param),
 
+            text_input_active: false,
             drag_active: false,
             granular_drag_start_x_value: None,
 
             style: ParamSliderStyle::Centered,
-            text_input_active: false,
         }
         .build(
             cx,
