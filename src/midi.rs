@@ -40,8 +40,8 @@ pub enum NoteEvent {
         channel: u8,
         /// The note's MIDI key number, from 0 to 127.
         note: u8,
-        /// The note's velocity, from 0 to 1. Some plugin APIs may allow higher precision than the
-        /// 127 levels available in MIDI.
+        /// The note's velocity, in the range `[0, 1]`. Some plugin APIs may allow higher precision
+        /// than the 127 levels available in MIDI.
         velocity: f32,
     },
     /// A note off event, available on [`MidiConfig::Basic`] and up. Bitwig Studio does not provide
@@ -55,8 +55,8 @@ pub enum NoteEvent {
         channel: u8,
         /// The note's MIDI key number, from 0 to 127.
         note: u8,
-        /// The note's velocity, from 0 to 1. Some plugin APIs may allow higher precision than the
-        /// 127 levels available in MIDI.
+        /// The note's velocity, in the range `[0, 1]`. Some plugin APIs may allow higher precision
+        /// than the 127 levels available in MIDI.
         velocity: f32,
     },
     /// A note choke event, available on [`MidiConfig::Basic`] and up. When the host sends this to
@@ -168,7 +168,7 @@ pub enum NoteEvent {
         channel: u8,
         /// The note's MIDI key number, from 0 to 127.
         note: u8,
-        /// The note's pressure, from 0 to 1.
+        /// The note's pressure, in the range `[0, 1]`.
         pressure: f32,
     },
     /// A volume expression event, available on [`MidiConfig::Basic`] and up. Not all hosts may
@@ -196,8 +196,8 @@ pub enum NoteEvent {
         channel: u8,
         /// The note's MIDI key number, from 0 to 127.
         note: u8,
-        /// The note's panning from, from -1 to 1, with -1 being panned hard left, and 1 being
-        /// panned hard right.
+        /// The note's panning from, in the range `[-1, 1]`, with -1 being panned hard left, and 1
+        /// being panned hard right.
         pan: f32,
     },
     /// A tuning expression event, available on [`MidiConfig::Basic`] and up. Not all hosts may support
@@ -211,7 +211,7 @@ pub enum NoteEvent {
         channel: u8,
         /// The note's MIDI key number, from 0 to 127.
         note: u8,
-        /// The note's tuning in semitones, from -120 to 120.
+        /// The note's tuning in semitones, in the range `[-128, 128]`.
         tuning: f32,
     },
     /// A vibrato expression event, available on [`MidiConfig::Basic`] and up. Not all hosts may support
@@ -225,7 +225,7 @@ pub enum NoteEvent {
         channel: u8,
         /// The note's MIDI key number, from 0 to 127.
         note: u8,
-        /// The note's vibrato amount, from 0 to 1.
+        /// The note's vibrato amount, in the range `[0, 1]`.
         vibrato: f32,
     },
     /// A expression expression (yes, expression expression) event, available on
@@ -239,7 +239,7 @@ pub enum NoteEvent {
         channel: u8,
         /// The note's MIDI key number, from 0 to 127.
         note: u8,
-        /// The note's expression amount, from 0 to 1.
+        /// The note's expression amount, in the range `[0, 1]`.
         expression: f32,
     },
     /// A brightness expression event, available on [`MidiConfig::Basic`] and up. Not all hosts may support
@@ -253,7 +253,7 @@ pub enum NoteEvent {
         channel: u8,
         /// The note's MIDI key number, from 0 to 127.
         note: u8,
-        /// The note's brightness amount, from 0 to 1.
+        /// The note's brightness amount, in the range `[0, 1]`.
         brightness: f32,
     },
     /// A MIDI channel pressure event, available on [`MidiConfig::MidiCCs`] and up.
