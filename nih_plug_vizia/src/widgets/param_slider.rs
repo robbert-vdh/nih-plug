@@ -32,6 +32,8 @@ pub struct ParamSlider {
     // These fields are set through modifiers:
     /// What style to use for the slider.
     style: ParamSliderStyle,
+    /// A specific label to use instead of displaying the parameter's value.
+    label_override: Option<String>,
 }
 
 /// How the [`ParamSlider`] should display its values. Set this using
@@ -93,6 +95,7 @@ impl ParamSlider {
             granular_drag_start_x_value: None,
 
             style: ParamSliderStyle::Centered,
+            label_override: None,
         }
         .build(
             cx,
@@ -174,6 +177,7 @@ impl ParamSlider {
                                         style,
                                         display_value_lens,
                                         make_preview_value_lens,
+                                        ParamSlider::label_override,
                                     );
                                 })
                                 .hoverable(false);
@@ -265,6 +269,7 @@ impl ParamSlider {
         style: ParamSliderStyle,
         display_value_lens: impl Lens<Target = String>,
         make_preview_value_lens: impl Fn(f32) -> L,
+        label_override_lens: impl Lens<Target = Option<String>>,
     ) {
         let step_count = param.step_count();
 
@@ -296,13 +301,20 @@ impl ParamSlider {
                 .hoverable(false);
             }
             _ => {
-                Label::new(cx, display_value_lens)
+                Binding::new(cx, label_override_lens, move |cx, label_override_lens| {
+                    // If the label override is set then we'll use that. If not, the parameter's
+                    // current display value (before modulation) is used.
+                    match label_override_lens.get(cx) {
+                        Some(label_override) => Label::new(cx, &label_override),
+                        None => Label::new(cx, display_value_lens.clone()),
+                    }
                     .class("value")
                     .class("value--single")
                     .child_space(Stretch(1.0))
                     .height(Stretch(1.0))
                     .width(Stretch(1.0))
                     .hoverable(false);
+                });
             }
         };
     }
@@ -548,10 +560,20 @@ impl View for ParamSlider {
 pub trait ParamSliderExt {
     /// Change how the [`ParamSlider`] visualizes the current value.
     fn set_style(self, style: ParamSliderStyle) -> Self;
+
+    /// Manually set a fixed label for the slider instead of displaying the current value. This is
+    /// currently not reactive.
+    fn with_label(self, value: impl Into<String>) -> Self;
 }
 
 impl ParamSliderExt for Handle<'_, ParamSlider> {
     fn set_style(self, style: ParamSliderStyle) -> Self {
         self.modify(|param_slider: &mut ParamSlider| param_slider.style = style)
+    }
+
+    fn with_label(self, value: impl Into<String>) -> Self {
+        self.modify(|param_slider: &mut ParamSlider| {
+            param_slider.label_override = Some(value.into())
+        })
     }
 }
