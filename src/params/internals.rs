@@ -64,7 +64,7 @@ impl ParamPtr {
     param_ptr_forward!(pub unsafe fn name(&self) -> &str);
     param_ptr_forward!(pub unsafe fn unit(&self) -> &'static str);
     param_ptr_forward!(pub unsafe fn poly_modulation_id(&self) -> Option<u32>);
-    param_ptr_forward!(pub unsafe fn normalized_value(&self) -> f32);
+    param_ptr_forward!(pub unsafe fn modulated_normalized_value(&self) -> f32);
     param_ptr_forward!(pub unsafe fn unmodulated_normalized_value(&self) -> f32);
     param_ptr_forward!(pub unsafe fn default_normalized_value(&self) -> f32);
     param_ptr_forward!(pub unsafe fn step_count(&self) -> Option<usize>);
@@ -90,12 +90,12 @@ impl ParamPtr {
     ///
     /// Calling this function is only safe as long as the object this `ParamPtr` was created for is
     /// still alive.
-    pub unsafe fn plain_value(&self) -> f32 {
+    pub unsafe fn modulated_plain_value(&self) -> f32 {
         match self {
-            ParamPtr::FloatParam(p) => (**p).plain_value(),
-            ParamPtr::IntParam(p) => (**p).plain_value() as f32,
-            ParamPtr::BoolParam(p) => (**p).normalized_value(),
-            ParamPtr::EnumParam(p) => (**p).plain_value() as f32,
+            ParamPtr::FloatParam(p) => (**p).modulated_plain_value(),
+            ParamPtr::IntParam(p) => (**p).modulated_plain_value() as f32,
+            ParamPtr::BoolParam(p) => (**p).modulated_normalized_value(),
+            ParamPtr::EnumParam(p) => (**p).modulated_plain_value() as f32,
         }
     }
 
@@ -131,7 +131,7 @@ impl ParamPtr {
         match self {
             ParamPtr::FloatParam(p) => (**p).default_plain_value(),
             ParamPtr::IntParam(p) => (**p).default_plain_value() as f32,
-            ParamPtr::BoolParam(p) => (**p).normalized_value(),
+            ParamPtr::BoolParam(p) => (**p).modulated_normalized_value(),
             ParamPtr::EnumParam(p) => (**p).default_plain_value() as f32,
         }
     }

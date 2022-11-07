@@ -66,11 +66,11 @@ impl<'a, P: Param> ParamSlider<'a, P> {
     }
 
     fn plain_value(&self) -> P::Plain {
-        self.param.plain_value()
+        self.param.modulated_plain_value()
     }
 
     fn normalized_value(&self) -> f32 {
-        self.param.normalized_value()
+        self.param.modulated_normalized_value()
     }
 
     fn string_value(&self) -> String {

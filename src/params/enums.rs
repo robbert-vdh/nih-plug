@@ -102,7 +102,11 @@ impl<T: Enum + PartialEq> Display for EnumParam<T> {
 
 impl Display for EnumParamInner {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.variants[self.inner.plain_value() as usize])
+        write!(
+            f,
+            "{}",
+            self.variants[self.inner.modulated_plain_value() as usize]
+        )
     }
 }
 
@@ -122,13 +126,13 @@ impl<T: Enum + PartialEq> Param for EnumParam<T> {
     }
 
     #[inline]
-    fn plain_value(&self) -> Self::Plain {
-        T::from_index(self.inner.plain_value() as usize)
+    fn modulated_plain_value(&self) -> Self::Plain {
+        T::from_index(self.inner.modulated_plain_value() as usize)
     }
 
     #[inline]
-    fn normalized_value(&self) -> f32 {
-        self.inner.normalized_value()
+    fn modulated_normalized_value(&self) -> f32 {
+        self.inner.modulated_normalized_value()
     }
 
     #[inline]
@@ -200,13 +204,13 @@ impl Param for EnumParamInner {
     }
 
     #[inline]
-    fn plain_value(&self) -> Self::Plain {
-        self.inner.plain_value()
+    fn modulated_plain_value(&self) -> Self::Plain {
+        self.inner.modulated_plain_value()
     }
 
     #[inline]
-    fn normalized_value(&self) -> f32 {
-        self.inner.normalized_value()
+    fn modulated_normalized_value(&self) -> f32 {
+        self.inner.modulated_normalized_value()
     }
 
     #[inline]
@@ -329,7 +333,7 @@ impl<T: Enum + PartialEq + 'static> EnumParam<T> {
     /// Get the active enum variant.
     #[inline]
     pub fn value(&self) -> T {
-        self.plain_value()
+        self.modulated_plain_value()
     }
 
     /// Enable polyphonic modulation for this parameter. The ID is used to uniquely identify this

@@ -192,7 +192,7 @@ impl<'a, P: Param> ParamSlider<'a, P> {
         //       avoid this normalized->plain->normalized conversion for parameters that don't need
         //       it
         let plain_value = self.param.preview_plain(normalized_value);
-        let current_plain_value = self.param.plain_value();
+        let current_plain_value = self.param.modulated_plain_value();
         if plain_value != current_plain_value {
             // For the aforementioned snapping
             let normalized_plain_value = self.param.preview_normalized(plain_value);
@@ -331,7 +331,7 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
                         // When holding down shift while clicking on a parameter we want to
                         // granuarly edit the parameter without jumping to a new value
                         self.state.granular_drag_start_x_value =
-                            Some((cursor_position.x, self.param.normalized_value()));
+                            Some((cursor_position.x, self.param.modulated_normalized_value()));
                     } else {
                         shell.publish(ParamMessage::BeginSetParameter(self.param.as_ptr()));
                         self.state.drag_active = true;
@@ -367,7 +367,7 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
                             .state
                             .granular_drag_start_x_value
                             .get_or_insert_with(|| {
-                                (cursor_position.x, self.param.normalized_value())
+                                (cursor_position.x, self.param.modulated_normalized_value())
                             });
 
                         self.set_normalized_value(
@@ -484,7 +484,7 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
             // We'll visualize the difference between the current value and the default value if the
             // default value lies somewhere in the middle and the parameter is continuous. Otherwise
             // this appraoch looks a bit jarring.
-            let current_value = self.param.normalized_value();
+            let current_value = self.param.modulated_normalized_value();
             let default_value = self.param.default_normalized_value();
             let fill_start_x = util::remap_rect_x_t(
                 &bounds_without_borders,

@@ -749,7 +749,7 @@ impl<P: Vst3Plugin> IEditController for Wrapper<P> {
 
     unsafe fn get_param_normalized(&self, id: u32) -> f64 {
         match self.inner.param_by_hash.get(&id) {
-            Some(param_ptr) => param_ptr.normalized_value() as f64,
+            Some(param_ptr) => param_ptr.modulated_normalized_value() as f64,
             _ => 0.5,
         }
     }

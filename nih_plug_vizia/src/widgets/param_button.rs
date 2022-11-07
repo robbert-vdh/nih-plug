@@ -47,7 +47,7 @@ impl ParamButton {
         .checked(ParamWidgetBase::make_lens(
             params,
             params_to_param,
-            |param| param.normalized_value() >= 0.5,
+            |param| param.modulated_normalized_value() >= 0.5,
         ))
     }
 

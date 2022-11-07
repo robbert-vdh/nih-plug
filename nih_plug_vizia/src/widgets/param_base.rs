@@ -212,9 +212,9 @@ impl ParamWidgetBase {
     param_ptr_forward!(pub fn name(&self) -> &str);
     param_ptr_forward!(pub fn unit(&self) -> &'static str);
     param_ptr_forward!(pub fn poly_modulation_id(&self) -> Option<u32>);
-    param_ptr_forward!(pub fn plain_value(&self) -> f32);
+    param_ptr_forward!(pub fn modulated_plain_value(&self) -> f32);
     param_ptr_forward!(pub fn unmodulated_plain_value(&self) -> f32);
-    param_ptr_forward!(pub fn normalized_value(&self) -> f32);
+    param_ptr_forward!(pub fn modulated_normalized_value(&self) -> f32);
     param_ptr_forward!(pub fn unmodulated_normalized_value(&self) -> f32);
     param_ptr_forward!(pub fn default_plain_value(&self) -> f32);
     param_ptr_forward!(pub fn default_normalized_value(&self) -> f32);

@@ -189,7 +189,7 @@ impl ParamSlider {
 
                                 (
                                     modulation_start,
-                                    param.normalized_value() - modulation_start,
+                                    param.modulated_normalized_value() - modulation_start,
                                 )
                             }
                         }

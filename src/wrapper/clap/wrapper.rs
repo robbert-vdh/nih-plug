@@ -3027,7 +3027,7 @@ impl<P: ClapPlugin> Wrapper<P> {
 
         match wrapper.param_by_hash.get(&param_id) {
             Some(param_ptr) => {
-                *value = param_ptr.normalized_value() as f64
+                *value = param_ptr.modulated_normalized_value() as f64
                     * param_ptr.step_count().unwrap_or(1) as f64;
 
                 true

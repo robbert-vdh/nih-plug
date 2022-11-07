@@ -83,23 +83,24 @@ pub trait Param: Display {
     fn poly_modulation_id(&self) -> Option<u32>;
 
     /// Get the unnormalized value for this parameter.
-    fn plain_value(&self) -> Self::Plain;
+    fn modulated_plain_value(&self) -> Self::Plain;
 
     /// Get the normalized `[0, 1]` value for this parameter.
-    fn normalized_value(&self) -> f32;
+    fn modulated_normalized_value(&self) -> f32;
 
     /// Get the unnormalized value for this parameter before any (monophonic) modulation coming from
     /// the host has been applied. If the host is not currently modulating this parameter than this
-    /// will be the same as [`plain_value()`][Self::plain_value()]. This may be useful for
-    /// displaying modulation differently in plugin GUIs. Right now only CLAP plugins in Bitwig
-    /// Studio use modulation.
+    /// will be the same as [`modulated_plain_value()`][Self::modulated_plain_value()]. This may be
+    /// useful for displaying modulation differently in plugin GUIs. Right now only CLAP plugins in
+    /// Bitwig Studio use modulation.
     fn unmodulated_plain_value(&self) -> Self::Plain;
 
     /// Get the normalized `[0, 1]` value for this parameter before any (monophonic) modulation
     /// coming from the host has been applied. If the host is not currently modulating this
-    /// parameter than this will be the same as [`plain_value()`][Self::plain_value()]. This may be
-    /// useful for displaying modulation differently in plugin GUIs. Right now only CLAP plugins in
-    /// Bitwig Studio use modulation.
+    /// parameter than this will be the same as
+    /// [`modulated_normalized_value()`][Self::modulated_normalized_value()]. This may be useful for
+    /// displaying modulation differently in plugin GUIs. Right now only CLAP plugins in Bitwig
+    /// Studio use modulation.
     fn unmodulated_normalized_value(&self) -> f32;
 
     /// Get the unnormalized default value for this parameter.

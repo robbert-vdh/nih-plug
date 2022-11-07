@@ -6,6 +6,15 @@ new and what's changed, this document lists all breaking changes in reverse
 chronological order. If a new feature did not require any changes to existing
 code then it will not be listed here.
 
+## [2022-11-07]
+
+- `Param::plain_value()` and `Param::normalized_value()` have been renamed to
+  `Param::modulated_plain_value()` and `Param::modulated_normalized_value()`.
+  These functions are only used when creating GUIs, so this shouldn't break any
+  other plugin code. This change was made to make it extra clear that these
+  values do include monophonic modulation, as it's very easy to mistakenly use
+  the wrong value when handling user input in GUI widgets.
+
 ## [2022-11-06]
 
 - `nih_plug_vizia::create_vizia_editor_without_theme()` has been removed, and
