@@ -99,14 +99,36 @@ impl ParamSlider {
                 Binding::new(cx, ParamSlider::style, move |cx, style| {
                     let style = style.get(cx);
 
-                    let default_value = param_data.param().default_normalized_value();
-                    let step_count = param_data.param().step_count();
+                    // Needs to be moved into the below closures, and it can't be `Copy`
+                    let param_data = param_data.clone();
 
                     // Can't use `.to_string()` here as that would include the modulation.
                     let unmodulated_normalized_value_lens =
                         param_data.make_lens(|param| param.unmodulated_normalized_value());
                     let display_value_lens = param_data.make_lens(|param| {
                         param.normalized_value_to_string(param.unmodulated_normalized_value(), true)
+                    });
+
+                    // The resulting tuple `(start_t, delta)` corresponds to the start and the
+                    // signed width of the bar. `start_t` is in `[0, 1]`, and `delta` is in
+                    // `[-1, 1]`.
+                    let fill_start_delta_lens = {
+                        let param_data = param_data.clone();
+                        unmodulated_normalized_value_lens.map(move |current_value| {
+                            Self::compute_fill_start_delta(
+                                style,
+                                param_data.param(),
+                                *current_value,
+                            )
+                        })
+                    };
+
+                    // If the parameter is being modulated by the host (this only works for CLAP
+                    // plugins with hosts that support this), then this is the difference
+                    // between the 'true' value and the current value after modulation has been
+                    // applied. This follows the same format as `fill_start_delta_lens`.
+                    let modulation_start_delta_lens = param_data.make_lens(move |param| {
+                        Self::compute_modulation_fill_start_delta(style, param)
                     });
 
                     // This is used to draw labels for `CurrentStepLabeled`
@@ -119,82 +141,6 @@ impl ParamSlider {
                         }
                     };
 
-                    // The resulting tuple `(start_t, delta)` corresponds to the start and the
-                    // signed width of the bar. `start_t` is in `[0, 1]`, and `delta` is in
-                    // `[-1, 1]`.
-                    let draw_fill_from_default = matches!(style, ParamSliderStyle::Centered)
-                        && step_count.is_none()
-                        && (0.45..=0.55).contains(&default_value);
-                    let fill_start_delta_lens = unmodulated_normalized_value_lens.map({
-                        let param_data = param_data.clone();
-
-                        move |current_value| {
-                            match style {
-                                ParamSliderStyle::Centered if draw_fill_from_default => {
-                                    let delta = (default_value - current_value).abs();
-
-                                    // Don't draw the filled portion at all if it could have been a
-                                    // rounding error since those slivers just look weird
-                                    (
-                                        default_value.min(*current_value),
-                                        if delta >= 1e-3 { delta } else { 0.0 },
-                                    )
-                                }
-                                ParamSliderStyle::Centered | ParamSliderStyle::FromLeft => {
-                                    (0.0, *current_value)
-                                }
-                                ParamSliderStyle::CurrentStep { even: true }
-                                | ParamSliderStyle::CurrentStepLabeled { even: true }
-                                    if step_count.is_some() =>
-                                {
-                                    // Assume the normalized value is distributed evenly
-                                    // across the range.
-                                    let step_count = step_count.unwrap() as f32;
-                                    let discrete_values = step_count + 1.0;
-                                    let previous_step =
-                                        (current_value * step_count) / discrete_values;
-
-                                    (previous_step, discrete_values.recip())
-                                }
-                                ParamSliderStyle::CurrentStep { .. }
-                                | ParamSliderStyle::CurrentStepLabeled { .. } => {
-                                    let previous_step =
-                                        param_data.param().previous_normalized_step(*current_value);
-                                    let next_step =
-                                        param_data.param().next_normalized_step(*current_value);
-
-                                    (
-                                        (previous_step + current_value) / 2.0,
-                                        ((next_step - current_value)
-                                            + (current_value - previous_step))
-                                            / 2.0,
-                                    )
-                                }
-                            }
-                        }
-                    });
-
-                    // If the parameter is being modulated by the host (this only works for CLAP
-                    // plugins with hosts that support this), then this is the difference
-                    // between the 'true' value and the current value after modulation has been
-                    // applied.
-                    let modulation_start_delta_lens = param_data.make_lens(move |param| {
-                        match style {
-                            // Don't show modulation for stepped parameters since it wouldn't
-                            // make a lot of sense visually
-                            ParamSliderStyle::CurrentStep { .. }
-                            | ParamSliderStyle::CurrentStepLabeled { .. } => (0.0, 0.0),
-                            ParamSliderStyle::Centered | ParamSliderStyle::FromLeft => {
-                                let modulation_start = param.unmodulated_normalized_value();
-
-                                (
-                                    modulation_start,
-                                    param.modulated_normalized_value() - modulation_start,
-                                )
-                            }
-                        }
-                    });
-
                     // Only draw the text input widget when it gets focussed. Otherwise, overlay the
                     // label with the slider. Creating the textbox based on
                     // `ParamSliderInternal::text_input_active` lets us focus the textbox when it gets
@@ -204,124 +150,30 @@ impl ParamSlider {
                         ParamSlider::text_input_active,
                         move |cx, text_input_active| {
                             if text_input_active.get(cx) {
-                                Textbox::new(cx, display_value_lens.clone())
-                                    .class("value-entry")
-                                    .on_submit(|cx, string, success| {
-                                        if success {
-                                            cx.emit(ParamSliderEvent::TextInput(string))
-                                        } else {
-                                            cx.emit(ParamSliderEvent::CancelTextInput);
-                                        }
-                                    })
-                                    .on_build(|cx| {
-                                        cx.emit(TextEvent::StartEdit);
-                                        cx.emit(TextEvent::SelectAll);
-                                    })
-                                    // `.child_space(Stretch(1.0))` no longer works
-                                    .class("align_center")
-                                    .child_top(Stretch(1.0))
-                                    .child_bottom(Stretch(1.0))
-                                    .height(Stretch(1.0))
-                                    .width(Stretch(1.0));
+                                Self::text_input_view(cx, display_value_lens.clone());
                             } else {
-                                let display_value_lens = display_value_lens.clone();
+                                // All of this data needs to be moved into the `ZStack` closure, and
+                                // the `Map` lens combinator isn't `Copy`
+                                let param_data = param_data.clone();
                                 let fill_start_delta_lens = fill_start_delta_lens.clone();
                                 let modulation_start_delta_lens =
                                     modulation_start_delta_lens.clone();
+                                let display_value_lens = display_value_lens.clone();
                                 let make_preview_value_lens = make_preview_value_lens.clone();
 
                                 ZStack::new(cx, move |cx| {
-                                    // The filled bar portion. This can be visualized in a couple
-                                    // different ways depending on the current style property. See
-                                    // [`ParamSliderStyle`].
-                                    Element::new(cx)
-                                        .class("fill")
-                                        .height(Stretch(1.0))
-                                        .left(
-                                            fill_start_delta_lens
-                                                .clone()
-                                                .map(|(start_t, _)| Percentage(start_t * 100.0)),
-                                        )
-                                        .width(
-                                            fill_start_delta_lens
-                                                .map(|(_, delta)| Percentage(delta * 100.0)),
-                                        )
-                                        // Hovering is handled on the param slider as a whole, this
-                                        // should not affect that
-                                        .hoverable(false);
-
-                                    // If the parameter is being modulated, then we'll display another
-                                    // filled bar showing the current modulation delta
-                                    // VIZIA's bindings make this a bit, uh, difficult to read
-                                    Element::new(cx)
-                                        .class("fill")
-                                        .class("fill--modulation")
-                                        .height(Stretch(1.0))
-                                        .visibility(
-                                            modulation_start_delta_lens
-                                                .clone()
-                                                .map(|(_, delta)| *delta != 0.0),
-                                        )
-                                        // Widths cannot be negative, so we need to compensate the start
-                                        // position if the width does happen to be negative
-                                        .width(
-                                            modulation_start_delta_lens
-                                                .clone()
-                                                .map(|(_, delta)| Percentage(delta.abs() * 100.0)),
-                                        )
-                                        .left(modulation_start_delta_lens.map(
-                                            |(start_t, delta)| {
-                                                if *delta < 0.0 {
-                                                    Percentage((start_t + delta) * 100.0)
-                                                } else {
-                                                    Percentage(start_t * 100.0)
-                                                }
-                                            },
-                                        ))
-                                        .hoverable(false);
-
-                                    // Either display the current value, or display all values over the
-                                    // parameter's steps
-                                    // TODO: Do the same thing as in the iced widget where we draw the
-                                    //       text overlapping the fill area slightly differently. We can
-                                    //       set the cip region directly in vizia.
-                                    match (style, step_count) {
-                                        (
-                                            ParamSliderStyle::CurrentStepLabeled { .. },
-                                            Some(step_count),
-                                        ) => {
-                                            HStack::new(cx, |cx| {
-                                                // There are step_count + 1 possible values for a
-                                                // discrete parameter
-                                                for value in 0..step_count + 1 {
-                                                    let normalized_value =
-                                                        value as f32 / step_count as f32;
-                                                    let preview_lens =
-                                                        make_preview_value_lens(normalized_value);
-
-                                                    Label::new(cx, preview_lens)
-                                                        .class("value")
-                                                        .class("value--multiple")
-                                                        .child_space(Stretch(1.0))
-                                                        .height(Stretch(1.0))
-                                                        .width(Stretch(1.0))
-                                                        .hoverable(false);
-                                                }
-                                            })
-                                            .height(Stretch(1.0))
-                                            .width(Stretch(1.0))
-                                            .hoverable(false);
-                                        }
-                                        _ => {
-                                            Label::new(cx, display_value_lens)
-                                                .class("value")
-                                                .class("value--single")
-                                                .child_space(Stretch(1.0))
-                                                .height(Stretch(1.0))
-                                                .width(Stretch(1.0))
-                                                .hoverable(false);
-                                        }
-                                    };
+                                    Self::slider_fill_view(
+                                        cx,
+                                        fill_start_delta_lens,
+                                        modulation_start_delta_lens,
+                                    );
+                                    Self::slider_label_view(
+                                        cx,
+                                        param_data.param(),
+                                        style,
+                                        display_value_lens,
+                                        make_preview_value_lens,
+                                    );
                                 })
                                 .hoverable(false);
                             }
@@ -330,6 +182,201 @@ impl ParamSlider {
                 });
             }),
         )
+    }
+
+    /// Create a text input that's shown in place of the slider.
+    fn text_input_view(cx: &mut Context, display_value_lens: impl Lens<Target = String>) {
+        Textbox::new(cx, display_value_lens)
+            .class("value-entry")
+            .on_submit(|cx, string, success| {
+                if success {
+                    cx.emit(ParamSliderEvent::TextInput(string))
+                } else {
+                    cx.emit(ParamSliderEvent::CancelTextInput);
+                }
+            })
+            .on_build(|cx| {
+                cx.emit(TextEvent::StartEdit);
+                cx.emit(TextEvent::SelectAll);
+            })
+            // `.child_space(Stretch(1.0))` no longer works
+            .class("align_center")
+            .child_top(Stretch(1.0))
+            .child_bottom(Stretch(1.0))
+            .height(Stretch(1.0))
+            .width(Stretch(1.0));
+    }
+
+    /// Create the fill part of the slider.
+    fn slider_fill_view(
+        cx: &mut Context,
+        fill_start_delta_lens: impl Lens<Target = (f32, f32)>,
+        modulation_start_delta_lens: impl Lens<Target = (f32, f32)>,
+    ) {
+        // The filled bar portion. This can be visualized in a couple different ways depending on
+        // the current style property. See [`ParamSliderStyle`].
+        Element::new(cx)
+            .class("fill")
+            .height(Stretch(1.0))
+            .left(
+                fill_start_delta_lens
+                    .clone()
+                    .map(|(start_t, _)| Percentage(start_t * 100.0)),
+            )
+            .width(fill_start_delta_lens.map(|(_, delta)| Percentage(delta * 100.0)))
+            // Hovering is handled on the param slider as a whole, this
+            // should not affect that
+            .hoverable(false);
+
+        // If the parameter is being modulated, then we'll display another
+        // filled bar showing the current modulation delta
+        // VIZIA's bindings make this a bit, uh, difficult to read
+        Element::new(cx)
+            .class("fill")
+            .class("fill--modulation")
+            .height(Stretch(1.0))
+            .visibility(
+                modulation_start_delta_lens
+                    .clone()
+                    .map(|(_, delta)| *delta != 0.0),
+            )
+            // Widths cannot be negative, so we need to compensate the start
+            // position if the width does happen to be negative
+            .width(
+                modulation_start_delta_lens
+                    .clone()
+                    .map(|(_, delta)| Percentage(delta.abs() * 100.0)),
+            )
+            .left(modulation_start_delta_lens.map(|(start_t, delta)| {
+                if *delta < 0.0 {
+                    Percentage((start_t + delta) * 100.0)
+                } else {
+                    Percentage(start_t * 100.0)
+                }
+            }))
+            .hoverable(false);
+    }
+
+    /// Create the text part of the slider. Shown on top of the fill using a `ZStack`.
+    fn slider_label_view<P: Param, L: Lens<Target = String>>(
+        cx: &mut Context,
+        param: &P,
+        style: ParamSliderStyle,
+        display_value_lens: impl Lens<Target = String>,
+        make_preview_value_lens: impl Fn(f32) -> L,
+    ) {
+        let step_count = param.step_count();
+
+        // Either display the current value, or display all values over the
+        // parameter's steps
+        // TODO: Do the same thing as in the iced widget where we draw the
+        //       text overlapping the fill area slightly differently. We can
+        //       set the cip region directly in vizia.
+        match (style, step_count) {
+            (ParamSliderStyle::CurrentStepLabeled { .. }, Some(step_count)) => {
+                HStack::new(cx, |cx| {
+                    // There are step_count + 1 possible values for a
+                    // discrete parameter
+                    for value in 0..step_count + 1 {
+                        let normalized_value = value as f32 / step_count as f32;
+                        let preview_lens = make_preview_value_lens(normalized_value);
+
+                        Label::new(cx, preview_lens)
+                            .class("value")
+                            .class("value--multiple")
+                            .child_space(Stretch(1.0))
+                            .height(Stretch(1.0))
+                            .width(Stretch(1.0))
+                            .hoverable(false);
+                    }
+                })
+                .height(Stretch(1.0))
+                .width(Stretch(1.0))
+                .hoverable(false);
+            }
+            _ => {
+                Label::new(cx, display_value_lens)
+                    .class("value")
+                    .class("value--single")
+                    .child_space(Stretch(1.0))
+                    .height(Stretch(1.0))
+                    .width(Stretch(1.0))
+                    .hoverable(false);
+            }
+        };
+    }
+
+    /// Calculate the start position and width of the slider's fill region based on the selected
+    /// style, the parameter's current value, and the parameter's step sizes. The resulting tuple
+    /// `(start_t, delta)` corresponds to the start and the signed width of the bar. `start_t` is in
+    /// `[0, 1]`, and `delta` is in `[-1, 1]`.
+    fn compute_fill_start_delta<P: Param>(
+        style: ParamSliderStyle,
+        param: &P,
+        current_value: f32,
+    ) -> (f32, f32) {
+        let default_value = param.default_normalized_value();
+        let step_count = param.step_count();
+        let draw_fill_from_default = matches!(style, ParamSliderStyle::Centered)
+            && step_count.is_none()
+            && (0.45..=0.55).contains(&default_value);
+
+        match style {
+            ParamSliderStyle::Centered if draw_fill_from_default => {
+                let delta = (default_value - current_value).abs();
+
+                // Don't draw the filled portion at all if it could have been a
+                // rounding error since those slivers just look weird
+                (
+                    default_value.min(current_value),
+                    if delta >= 1e-3 { delta } else { 0.0 },
+                )
+            }
+            ParamSliderStyle::Centered | ParamSliderStyle::FromLeft => (0.0, current_value),
+            ParamSliderStyle::CurrentStep { even: true }
+            | ParamSliderStyle::CurrentStepLabeled { even: true }
+                if step_count.is_some() =>
+            {
+                // Assume the normalized value is distributed evenly
+                // across the range.
+                let step_count = step_count.unwrap() as f32;
+                let discrete_values = step_count + 1.0;
+                let previous_step = (current_value * step_count) / discrete_values;
+
+                (previous_step, discrete_values.recip())
+            }
+            ParamSliderStyle::CurrentStep { .. } | ParamSliderStyle::CurrentStepLabeled { .. } => {
+                let previous_step = param.previous_normalized_step(current_value);
+                let next_step = param.next_normalized_step(current_value);
+
+                (
+                    (previous_step + current_value) / 2.0,
+                    ((next_step - current_value) + (current_value - previous_step)) / 2.0,
+                )
+            }
+        }
+    }
+
+    /// The same as `compute_fill_start_delta`, but just showing the modulation offset.
+    fn compute_modulation_fill_start_delta<P: Param>(
+        style: ParamSliderStyle,
+        param: &P,
+    ) -> (f32, f32) {
+        match style {
+            // Don't show modulation for stepped parameters since it wouldn't
+            // make a lot of sense visually
+            ParamSliderStyle::CurrentStep { .. } | ParamSliderStyle::CurrentStepLabeled { .. } => {
+                (0.0, 0.0)
+            }
+            ParamSliderStyle::Centered | ParamSliderStyle::FromLeft => {
+                let modulation_start = param.unmodulated_normalized_value();
+
+                (
+                    modulation_start,
+                    param.modulated_normalized_value() - modulation_start,
+                )
+            }
+        }
     }
 
     /// `self.param_base.set_normalized_value()`, but resulting from a mouse drag. When using the
