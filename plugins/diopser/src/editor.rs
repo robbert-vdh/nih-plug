@@ -82,12 +82,8 @@ fn top_bar(cx: &mut Context) {
             .left(Pixels(7.0));
 
         HStack::new(cx, |cx| {
-            // TODO: Placeholders, replace with the actual elements
-            Element::new(cx)
-                .width(Pixels(210.0))
-                .height(Pixels(30.0))
-                .border_color(Color::rgb(0x0a, 0x0a, 0x0a))
-                .border_width(Pixels(1.0));
+            ParamSlider::new(cx, Data::params, |params| &params.automation_precision)
+                .with_label("Automation Precision");
 
             SafeModeButton::new(cx, Data::safe_mode, "Safe mode").left(Pixels(10.0));
 
