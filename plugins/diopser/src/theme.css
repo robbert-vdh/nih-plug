@@ -17,3 +17,8 @@ param-button.safe-mode:checked {
   background-color: #fff280;
   transition: background-color 0.1 0;
 }
+
+#automation-precision {
+  /* Can't use width: auto here, but we'll try to roughly match the padding of the top bar buttons */
+  width: 170px;
+}

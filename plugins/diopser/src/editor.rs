@@ -83,7 +83,8 @@ fn top_bar(cx: &mut Context) {
 
         HStack::new(cx, |cx| {
             ParamSlider::new(cx, Data::params, |params| &params.automation_precision)
-                .with_label("Automation Precision");
+                .with_label("Automation Precision")
+                .id("automation-precision");
 
             SafeModeButton::new(cx, Data::safe_mode, "Safe mode").left(Pixels(10.0));
 
