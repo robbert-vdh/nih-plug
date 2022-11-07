@@ -26,7 +26,8 @@ pub enum MidiConfig {
 /// [`util`][crate::util] module for convenient conversion functions.
 ///
 /// All of the timings are sample offsets withing the current buffer. All sample, channel and note
-/// numbers are zero-indexed.
+/// numbers are zero-indexed. All integer `from n to m` are exclusive, and they are equivalent to
+/// the `n..m` range in Rust.
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[non_exhaustive]
 pub enum NoteEvent {
