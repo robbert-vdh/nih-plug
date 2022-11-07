@@ -81,9 +81,9 @@ pub enum NoteEvent {
         /// The voice's unique identifier. Setting this allows a single voice to be terminated if
         /// the plugin allows multiple overlapping voices for a single key.
         voice_id: Option<i32>,
-        /// The note's channel, from 0 to 16, and the note's MIDI key number, from 0 to 127.
+        /// The note's channel, from 0 to 16.
         channel: u8,
-        /// The note's MIDI key number
+        /// The note's MIDI key number, from 0 to 127.
         note: u8,
     },
     /// A polyphonic modulation event, available on [`MidiConfig::Basic`] and up. This will only be
@@ -294,7 +294,7 @@ pub enum NoteEvent {
         timing: u32,
         /// The affected channel, from 0 to 16.
         channel: u8,
-        /// The program number.
+        /// The program number, from 0 to 127.
         program: u8,
     },
 }
