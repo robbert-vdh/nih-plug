@@ -120,24 +120,28 @@ pub trait Param: Display {
     /// `from` if the value is at the start of its range. This is mainly used for scroll wheel
     /// interaction in plugin GUIs. When the parameter is not discrete then a step should cover one
     /// hundredth of the normalized range instead.
-    fn previous_step(&self, from: Self::Plain) -> Self::Plain;
+    ///
+    /// If `finer` is true, then the step size should be decreased if the parameter is continuous.
+    fn previous_step(&self, from: Self::Plain, finer: bool) -> Self::Plain;
 
     /// Returns the next step from a specific value for this parameter. This can be the same as
     /// `from` if the value is at the end of its range. This is mainly used for scroll wheel
     /// interaction in plugin GUIs. When the parameter is not discrete then a step should cover one
     /// hundredth of the normalized range instead.
-    fn next_step(&self, from: Self::Plain) -> Self::Plain;
+    ///
+    /// If `finer` is true, then the step size should be decreased if the parameter is continuous.
+    fn next_step(&self, from: Self::Plain, finer: bool) -> Self::Plain;
 
     /// The same as [`previous_step()`][Self::previous_step()], but for normalized values. This is
     /// mostly useful for GUI widgets.
-    fn previous_normalized_step(&self, from: f32) -> f32 {
-        self.preview_normalized(self.previous_step(self.preview_plain(from)))
+    fn previous_normalized_step(&self, from: f32, finer: bool) -> f32 {
+        self.preview_normalized(self.previous_step(self.preview_plain(from), finer))
     }
 
     /// The same as [`next_step()`][Self::next_step()], but for normalized values. This is mostly
     /// useful for GUI widgets.
-    fn next_normalized_step(&self, from: f32) -> f32 {
-        self.preview_normalized(self.next_step(self.preview_plain(from)))
+    fn next_normalized_step(&self, from: f32, finer: bool) -> f32 {
+        self.preview_normalized(self.next_step(self.preview_plain(from), finer))
     }
 
     /// Get the string representation for a normalized value. Used as part of the wrappers. Most

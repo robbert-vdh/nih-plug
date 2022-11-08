@@ -105,11 +105,11 @@ impl Param for BoolParam {
         Some(1)
     }
 
-    fn previous_step(&self, _from: Self::Plain) -> Self::Plain {
+    fn previous_step(&self, _from: Self::Plain, _finer: bool) -> Self::Plain {
         false
     }
 
-    fn next_step(&self, _from: Self::Plain) -> Self::Plain {
+    fn next_step(&self, _from: Self::Plain, _finer: bool) -> Self::Plain {
         true
     }
 

@@ -122,11 +122,11 @@ impl Param for IntParam {
         Some(self.range.step_count())
     }
 
-    fn previous_step(&self, from: Self::Plain) -> Self::Plain {
+    fn previous_step(&self, from: Self::Plain, _finer: bool) -> Self::Plain {
         self.range.previous_step(from)
     }
 
-    fn next_step(&self, from: Self::Plain) -> Self::Plain {
+    fn next_step(&self, from: Self::Plain, _finer: bool) -> Self::Plain {
         self.range.next_step(from)
     }
 

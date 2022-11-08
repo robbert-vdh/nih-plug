@@ -364,8 +364,8 @@ impl ParamSlider {
                 (previous_step, discrete_values.recip())
             }
             ParamSliderStyle::CurrentStep { .. } | ParamSliderStyle::CurrentStepLabeled { .. } => {
-                let previous_step = param.previous_normalized_step(current_value);
-                let next_step = param.next_normalized_step(current_value);
+                let previous_step = param.previous_normalized_step(current_value, false);
+                let next_step = param.next_normalized_step(current_value, false);
 
                 (
                     (previous_step + current_value) / 2.0,
@@ -570,13 +570,15 @@ impl View for ParamSlider {
                     let mut current_value = self.param_base.unmodulated_normalized_value();
 
                     while self.scrolled_lines >= 1.0 {
-                        current_value = self.param_base.next_normalized_step(current_value);
+                        current_value = self.param_base.next_normalized_step(current_value, false);
                         self.param_base.set_normalized_value(cx, current_value);
                         self.scrolled_lines -= 1.0;
                     }
 
                     while self.scrolled_lines <= -1.0 {
-                        current_value = self.param_base.previous_normalized_step(current_value);
+                        current_value = self
+                            .param_base
+                            .previous_normalized_step(current_value, false);
                         self.param_base.set_normalized_value(cx, current_value);
                         self.scrolled_lines += 1.0;
                     }

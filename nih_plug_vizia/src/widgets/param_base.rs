@@ -219,8 +219,8 @@ impl ParamWidgetBase {
     param_ptr_forward!(pub fn default_plain_value(&self) -> f32);
     param_ptr_forward!(pub fn default_normalized_value(&self) -> f32);
     param_ptr_forward!(pub fn step_count(&self) -> Option<usize>);
-    param_ptr_forward!(pub fn previous_normalized_step(&self, from: f32) -> f32);
-    param_ptr_forward!(pub fn next_normalized_step(&self, from: f32) -> f32);
+    param_ptr_forward!(pub fn previous_normalized_step(&self, from: f32, finer: bool) -> f32);
+    param_ptr_forward!(pub fn next_normalized_step(&self, from: f32, finer: bool) -> f32);
     param_ptr_forward!(pub fn normalized_value_to_string(&self, normalized: f32, include_unit: bool) -> String);
     param_ptr_forward!(pub fn string_to_normalized_value(&self, string: &str) -> Option<f32>);
     param_ptr_forward!(pub fn preview_normalized(&self, plain: f32) -> f32);

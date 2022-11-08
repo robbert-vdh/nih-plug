@@ -6,6 +6,13 @@ new and what's changed, this document lists all breaking changes in reverse
 chronological order. If a new feature did not require any changes to existing
 code then it will not be listed here.
 
+## [2022-11-08]
+
+- The `Param::{next_previous}{_step,_normalized_step}()` functions now take an
+  additional boolean argument to indicate that the range must be finer. This is
+  used for floating point parameters to chop the range up into smaller segments
+  when using Shift+scroll.
+
 ## [2022-11-07]
 
 - `Param::plain_value()` and `Param::normalized_value()` have been renamed to

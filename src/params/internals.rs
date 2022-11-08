@@ -68,8 +68,8 @@ impl ParamPtr {
     param_ptr_forward!(pub unsafe fn unmodulated_normalized_value(&self) -> f32);
     param_ptr_forward!(pub unsafe fn default_normalized_value(&self) -> f32);
     param_ptr_forward!(pub unsafe fn step_count(&self) -> Option<usize>);
-    param_ptr_forward!(pub unsafe fn previous_normalized_step(&self, from: f32) -> f32);
-    param_ptr_forward!(pub unsafe fn next_normalized_step(&self, from: f32) -> f32);
+    param_ptr_forward!(pub unsafe fn previous_normalized_step(&self, from: f32, finer: bool) -> f32);
+    param_ptr_forward!(pub unsafe fn next_normalized_step(&self, from: f32, finer: bool) -> f32);
     param_ptr_forward!(pub unsafe fn normalized_value_to_string(&self, normalized: f32, include_unit: bool) -> String);
     param_ptr_forward!(pub unsafe fn string_to_normalized_value(&self, string: &str) -> Option<f32>);
     param_ptr_forward!(pub unsafe fn flags(&self) -> ParamFlags);

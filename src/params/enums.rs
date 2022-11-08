@@ -154,12 +154,12 @@ impl<T: Enum + PartialEq> Param for EnumParam<T> {
         self.inner.step_count()
     }
 
-    fn previous_step(&self, from: Self::Plain) -> Self::Plain {
-        T::from_index(self.inner.previous_step(T::to_index(from) as i32) as usize)
+    fn previous_step(&self, from: Self::Plain, finer: bool) -> Self::Plain {
+        T::from_index(self.inner.previous_step(T::to_index(from) as i32, finer) as usize)
     }
 
-    fn next_step(&self, from: Self::Plain) -> Self::Plain {
-        T::from_index(self.inner.next_step(T::to_index(from) as i32) as usize)
+    fn next_step(&self, from: Self::Plain, finer: bool) -> Self::Plain {
+        T::from_index(self.inner.next_step(T::to_index(from) as i32, finer) as usize)
     }
 
     fn normalized_value_to_string(&self, normalized: f32, include_unit: bool) -> String {
@@ -232,12 +232,12 @@ impl Param for EnumParamInner {
         Some(self.len() - 1)
     }
 
-    fn previous_step(&self, from: Self::Plain) -> Self::Plain {
-        self.inner.previous_step(from)
+    fn previous_step(&self, from: Self::Plain, finer: bool) -> Self::Plain {
+        self.inner.previous_step(from, finer)
     }
 
-    fn next_step(&self, from: Self::Plain) -> Self::Plain {
-        self.inner.next_step(from)
+    fn next_step(&self, from: Self::Plain, finer: bool) -> Self::Plain {
+        self.inner.next_step(from, finer)
     }
 
     fn normalized_value_to_string(&self, normalized: f32, _include_unit: bool) -> String {

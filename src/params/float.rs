@@ -130,12 +130,12 @@ impl Param for FloatParam {
         None
     }
 
-    fn previous_step(&self, from: Self::Plain) -> Self::Plain {
-        self.range.previous_step(from, self.step_size)
+    fn previous_step(&self, from: Self::Plain, finer: bool) -> Self::Plain {
+        self.range.previous_step(from, self.step_size, finer)
     }
 
-    fn next_step(&self, from: Self::Plain) -> Self::Plain {
-        self.range.next_step(from, self.step_size)
+    fn next_step(&self, from: Self::Plain, finer: bool) -> Self::Plain {
+        self.range.next_step(from, self.step_size, finer)
     }
 
     fn normalized_value_to_string(&self, normalized: f32, include_unit: bool) -> String {
