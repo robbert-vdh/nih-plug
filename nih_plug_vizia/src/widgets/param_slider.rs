@@ -12,8 +12,6 @@ const GRANULAR_DRAG_MULTIPLIER: f32 = 0.1;
 
 /// A slider that integrates with NIH-plug's [`Param`] types. Use the
 /// [`set_style()`][ParamSliderExt::set_style()] method to change how the value gets displayed.
-///
-/// TODO: Handle scrolling for steps (and shift+scroll for smaller steps?)
 #[derive(Lens)]
 pub struct ParamSlider {
     param_base: ParamWidgetBase,
@@ -30,6 +28,11 @@ pub struct ParamSlider {
     granular_drag_start_x_value: Option<(f32, f32)>,
 
     // These fields are set through modifiers:
+    /// Whether or not to listen to scroll events for changing the parameter's value in steps.
+    use_scroll_wheel: bool,
+    /// The number of (fractional) scrolled lines that have not yet been turned into parameter
+    /// change events. This is needed to support trackpads with smooth scrolling.
+    scrolled_lines: f32,
     /// What style to use for the slider.
     style: ParamSliderStyle,
     /// A specific label to use instead of displaying the parameter's value.
@@ -94,6 +97,8 @@ impl ParamSlider {
             drag_active: false,
             granular_drag_start_x_value: None,
 
+            use_scroll_wheel: true,
+            scrolled_lines: 0.0,
             style: ParamSliderStyle::Centered,
             label_override: None,
         }
@@ -551,6 +556,36 @@ impl View for ParamSlider {
                     );
                 }
             }
+            WindowEvent::MouseScroll(_scroll_x, scroll_y) if self.use_scroll_wheel => {
+                // With a regular scroll wheel `scroll_y` will only ever be -1 or 1, but with smooth
+                // scrolling trackpads being a thing `scroll_y` could be anything.
+                self.scrolled_lines += scroll_y;
+
+                if self.scrolled_lines.abs() >= 1.0 {
+                    // Scrolling while dragging needs to be taken into account here
+                    if !self.drag_active {
+                        self.param_base.begin_set_parameter(cx);
+                    }
+
+                    let mut current_value = self.param_base.unmodulated_normalized_value();
+
+                    while self.scrolled_lines >= 1.0 {
+                        current_value = self.param_base.next_normalized_step(current_value);
+                        self.param_base.set_normalized_value(cx, current_value);
+                        self.scrolled_lines -= 1.0;
+                    }
+
+                    while self.scrolled_lines <= -1.0 {
+                        current_value = self.param_base.previous_normalized_step(current_value);
+                        self.param_base.set_normalized_value(cx, current_value);
+                        self.scrolled_lines += 1.0;
+                    }
+
+                    if !self.drag_active {
+                        self.param_base.end_set_parameter(cx);
+                    }
+                }
+            }
             _ => {}
         });
     }
@@ -558,6 +593,10 @@ impl View for ParamSlider {
 
 /// Extension methods for [`ParamSlider`] handles.
 pub trait ParamSliderExt {
+    /// Don't respond to scroll wheel events. Useful when this slider is used as part of a scrolling
+    /// view.
+    fn disable_scroll_wheel(self) -> Self;
+
     /// Change how the [`ParamSlider`] visualizes the current value.
     fn set_style(self, style: ParamSliderStyle) -> Self;
 
@@ -567,6 +606,10 @@ pub trait ParamSliderExt {
 }
 
 impl ParamSliderExt for Handle<'_, ParamSlider> {
+    fn disable_scroll_wheel(self) -> Self {
+        self.modify(|param_slider: &mut ParamSlider| param_slider.use_scroll_wheel = false)
+    }
+
     fn set_style(self, style: ParamSliderStyle) -> Self {
         self.modify(|param_slider: &mut ParamSlider| param_slider.style = style)
     }
