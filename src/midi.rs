@@ -39,10 +39,10 @@ pub enum NoteEvent {
         voice_id: Option<i32>,
         /// The note's channel, from 0 to 16.
         channel: u8,
-        /// The note's MIDI key number, from 0 to 127.
+        /// The note's MIDI key number, from 0 to 128.
         note: u8,
         /// The note's velocity, in the range `[0, 1]`. Some plugin APIs may allow higher precision
-        /// than the 127 levels available in MIDI.
+        /// than the 128 levels available in MIDI.
         velocity: f32,
     },
     /// A note off event, available on [`MidiConfig::Basic`] and up. Bitwig Studio does not provide
@@ -54,10 +54,10 @@ pub enum NoteEvent {
         voice_id: Option<i32>,
         /// The note's channel, from 0 to 16.
         channel: u8,
-        /// The note's MIDI key number, from 0 to 127.
+        /// The note's MIDI key number, from 0 to 128.
         note: u8,
         /// The note's velocity, in the range `[0, 1]`. Some plugin APIs may allow higher precision
-        /// than the 127 levels available in MIDI.
+        /// than the 128 levels available in MIDI.
         velocity: f32,
     },
     /// A note choke event, available on [`MidiConfig::Basic`] and up. When the host sends this to
@@ -70,7 +70,7 @@ pub enum NoteEvent {
         voice_id: Option<i32>,
         /// The note's channel, from 0 to 16.
         channel: u8,
-        /// The note's MIDI key number, from 0 to 127.
+        /// The note's MIDI key number, from 0 to 128.
         note: u8,
     },
 
@@ -84,7 +84,7 @@ pub enum NoteEvent {
         voice_id: Option<i32>,
         /// The note's channel, from 0 to 16.
         channel: u8,
-        /// The note's MIDI key number, from 0 to 127.
+        /// The note's MIDI key number, from 0 to 128.
         note: u8,
     },
     /// A polyphonic modulation event, available on [`MidiConfig::Basic`] and up. This will only be
@@ -167,7 +167,7 @@ pub enum NoteEvent {
         voice_id: Option<i32>,
         /// The note's channel, from 0 to 16.
         channel: u8,
-        /// The note's MIDI key number, from 0 to 127.
+        /// The note's MIDI key number, from 0 to 128.
         note: u8,
         /// The note's pressure, in the range `[0, 1]`.
         pressure: f32,
@@ -181,7 +181,7 @@ pub enum NoteEvent {
         voice_id: Option<i32>,
         /// The note's channel, from 0 to 16.
         channel: u8,
-        /// The note's MIDI key number, from 0 to 127.
+        /// The note's MIDI key number, from 0 to 128.
         note: u8,
         /// The note's voltage gain ratio, where 1.0 is unity gain.
         gain: f32,
@@ -195,7 +195,7 @@ pub enum NoteEvent {
         voice_id: Option<i32>,
         /// The note's channel, from 0 to 16.
         channel: u8,
-        /// The note's MIDI key number, from 0 to 127.
+        /// The note's MIDI key number, from 0 to 128.
         note: u8,
         /// The note's panning from, in the range `[-1, 1]`, with -1 being panned hard left, and 1
         /// being panned hard right.
@@ -210,7 +210,7 @@ pub enum NoteEvent {
         voice_id: Option<i32>,
         /// The note's channel, from 0 to 16.
         channel: u8,
-        /// The note's MIDI key number, from 0 to 127.
+        /// The note's MIDI key number, from 0 to 128.
         note: u8,
         /// The note's tuning in semitones, in the range `[-128, 128]`.
         tuning: f32,
@@ -224,7 +224,7 @@ pub enum NoteEvent {
         voice_id: Option<i32>,
         /// The note's channel, from 0 to 16.
         channel: u8,
-        /// The note's MIDI key number, from 0 to 127.
+        /// The note's MIDI key number, from 0 to 128.
         note: u8,
         /// The note's vibrato amount, in the range `[0, 1]`.
         vibrato: f32,
@@ -238,7 +238,7 @@ pub enum NoteEvent {
         voice_id: Option<i32>,
         /// The note's channel, from 0 to 16.
         channel: u8,
-        /// The note's MIDI key number, from 0 to 127.
+        /// The note's MIDI key number, from 0 to 128.
         note: u8,
         /// The note's expression amount, in the range `[0, 1]`.
         expression: f32,
@@ -252,7 +252,7 @@ pub enum NoteEvent {
         voice_id: Option<i32>,
         /// The note's channel, from 0 to 16.
         channel: u8,
-        /// The note's MIDI key number, from 0 to 127.
+        /// The note's MIDI key number, from 0 to 128.
         note: u8,
         /// The note's brightness amount, in the range `[0, 1]`.
         brightness: f32,
@@ -295,7 +295,7 @@ pub enum NoteEvent {
         timing: u32,
         /// The affected channel, from 0 to 16.
         channel: u8,
-        /// The program number, from 0 to 127.
+        /// The program number, from 0 to 128.
         program: u8,
     },
 }
