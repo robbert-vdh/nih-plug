@@ -585,6 +585,8 @@ impl View for ParamSlider {
                         self.param_base.end_set_parameter(cx);
                     }
                 }
+
+                meta.consume();
             }
             _ => {}
         });

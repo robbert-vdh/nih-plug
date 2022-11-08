@@ -80,6 +80,8 @@ impl<L: Lens<Target = Arc<AtomicBool>>> View for SafeModeButton<L> {
                         self.scrolled_lines += 1.0;
                     }
                 }
+
+                meta.consume();
             }
             _ => {}
         });

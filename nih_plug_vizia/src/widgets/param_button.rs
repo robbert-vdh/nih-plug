@@ -104,6 +104,8 @@ impl View for ParamButton {
 
                     self.param_base.end_set_parameter(cx);
                 }
+
+                meta.consume();
             }
             _ => {}
         });
