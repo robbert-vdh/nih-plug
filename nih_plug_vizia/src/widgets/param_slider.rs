@@ -562,6 +562,8 @@ impl View for ParamSlider {
                 self.scrolled_lines += scroll_y;
 
                 if self.scrolled_lines.abs() >= 1.0 {
+                    let use_finer_steps = cx.modifiers.shift();
+
                     // Scrolling while dragging needs to be taken into account here
                     if !self.drag_active {
                         self.param_base.begin_set_parameter(cx);
@@ -570,7 +572,9 @@ impl View for ParamSlider {
                     let mut current_value = self.param_base.unmodulated_normalized_value();
 
                     while self.scrolled_lines >= 1.0 {
-                        current_value = self.param_base.next_normalized_step(current_value, false);
+                        current_value = self
+                            .param_base
+                            .next_normalized_step(current_value, use_finer_steps);
                         self.param_base.set_normalized_value(cx, current_value);
                         self.scrolled_lines -= 1.0;
                     }
@@ -578,7 +582,7 @@ impl View for ParamSlider {
                     while self.scrolled_lines <= -1.0 {
                         current_value = self
                             .param_base
-                            .previous_normalized_step(current_value, false);
+                            .previous_normalized_step(current_value, use_finer_steps);
                         self.param_base.set_normalized_value(cx, current_value);
                         self.scrolled_lines += 1.0;
                     }
