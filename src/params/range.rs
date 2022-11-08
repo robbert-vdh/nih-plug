@@ -134,19 +134,24 @@ impl FloatRange {
     /// size is not set, then the normalized range is split into 100 segments instead.
     pub fn previous_step(&self, from: f32, step_size: Option<f32>) -> f32 {
         // This one's slightly more involved than the integer version. We'll split the normalized
-        // range up into 100 segments, but if `self.step_size` is set then we'll use that. Ideally
-        // we might want to split the range up into at most 100 segments, falling back to the step
-        // size if the total number of steps would be smaller than that, but since ranges can be
-        // nonlinear that's a bit difficult to pull off.
-        // TODO: At some point, implement the above mentioned step size quantization
+        // range up into 100 segments, but if `self.step_size` would cause the range to be devided
+        // into less than 100 segments then we'll use that.
         match self {
             FloatRange::Linear { min, max }
             | FloatRange::Skewed { min, max, .. }
-            | FloatRange::SymmetricalSkewed { min, max, .. } => match step_size {
-                Some(step_size) => from - step_size,
-                None => self.unnormalize(self.normalize(from) - 0.01),
+            | FloatRange::SymmetricalSkewed { min, max, .. } => {
+                let naive_step = self.unnormalize(self.normalize(from) - 0.01);
+
+                match step_size {
+                    // Use the naive step size if it is larger than the configured step size
+                    Some(step_size) if (naive_step - from).abs() > step_size => {
+                        self.snap_to_step(naive_step, step_size)
+                    }
+                    Some(step_size) => from - step_size,
+                    None => naive_step,
+                }
+                .clamp(*min, *max)
             }
-            .clamp(*min, *max),
             FloatRange::Reversed(range) => range.next_step(from, step_size),
         }
     }
@@ -158,11 +163,18 @@ impl FloatRange {
         match self {
             FloatRange::Linear { min, max }
             | FloatRange::Skewed { min, max, .. }
-            | FloatRange::SymmetricalSkewed { min, max, .. } => match step_size {
-                Some(step_size) => from + step_size,
-                None => self.unnormalize(self.normalize(from) + 0.01),
+            | FloatRange::SymmetricalSkewed { min, max, .. } => {
+                let naive_step = self.unnormalize(self.normalize(from) + 0.01);
+
+                match step_size {
+                    Some(step_size) if (naive_step - from).abs() > step_size => {
+                        self.snap_to_step(naive_step, step_size)
+                    }
+                    Some(step_size) => from + step_size,
+                    None => naive_step,
+                }
+                .clamp(*min, *max)
             }
-            .clamp(*min, *max),
             FloatRange::Reversed(range) => range.previous_step(from, step_size),
         }
     }
