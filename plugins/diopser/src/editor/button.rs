@@ -23,6 +23,10 @@ use std::sync::Arc;
 #[derive(Lens)]
 pub struct SafeModeButton<L: Lens<Target = Arc<AtomicBool>>> {
     lens: L,
+
+    /// The number of (fractional) scrolled lines that have not yet been turned into parameter
+    /// change events. This is needed to support trackpads with smooth scrolling.
+    scrolled_lines: f32,
 }
 
 impl<L: Lens<Target = Arc<AtomicBool>>> SafeModeButton<L> {
@@ -31,14 +35,16 @@ impl<L: Lens<Target = Arc<AtomicBool>>> SafeModeButton<L> {
     where
         T: ToString,
     {
-        Self { lens: lens.clone() }
-            .build(cx, move |cx| {
-                Label::new(cx, label);
-            })
-            .checked(lens.map(|v| v.load(Ordering::Relaxed)))
-            // We'll pretend this is a param-button, so this class is used for assigning a unique
-            // color
-            .class("safe-mode")
+        Self {
+            lens: lens.clone(),
+            scrolled_lines: 0.0,
+        }
+        .build(cx, move |cx| {
+            Label::new(cx, label);
+        })
+        .checked(lens.map(|v| v.load(Ordering::Relaxed)))
+        // We'll pretend this is a param-button, so this class is used for assigning a unique color
+        .class("safe-mode")
     }
 }
 
@@ -50,8 +56,8 @@ impl<L: Lens<Target = Arc<AtomicBool>>> View for SafeModeButton<L> {
 
     fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
         event.map(|window_event, meta| match window_event {
-            WindowEvent::MouseDown(MouseButton::Left)
             // We don't need special double and triple click handling
+            WindowEvent::MouseDown(MouseButton::Left)
             | WindowEvent::MouseDoubleClick(MouseButton::Left)
             | WindowEvent::MouseTripleClick(MouseButton::Left) => {
                 // We can just unconditionally toggle the boolean here
@@ -59,6 +65,21 @@ impl<L: Lens<Target = Arc<AtomicBool>>> View for SafeModeButton<L> {
                 atomic.fetch_xor(true, Ordering::AcqRel);
 
                 meta.consume();
+            }
+            WindowEvent::MouseScroll(_scroll_x, scroll_y) => {
+                self.scrolled_lines += scroll_y;
+
+                if self.scrolled_lines.abs() >= 1.0 {
+                    let atomic = self.lens.get(cx);
+
+                    if self.scrolled_lines >= 1.0 {
+                        atomic.store(true, Ordering::SeqCst);
+                        self.scrolled_lines -= 1.0;
+                    } else {
+                        atomic.store(false, Ordering::SeqCst);
+                        self.scrolled_lines += 1.0;
+                    }
+                }
             }
             _ => {}
         });
