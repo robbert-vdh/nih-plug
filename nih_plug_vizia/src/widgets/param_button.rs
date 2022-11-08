@@ -12,6 +12,13 @@ use super::param_base::ParamWidgetBase;
 #[derive(Lens)]
 pub struct ParamButton {
     param_base: ParamWidgetBase,
+
+    // These fields are set through modifiers:
+    /// Whether or not to listen to scroll events for changing the parameter's value in steps.
+    use_scroll_wheel: bool,
+    /// The number of (fractional) scrolled lines that have not yet been turned into parameter
+    /// change events. This is needed to support trackpads with smooth scrolling.
+    scrolled_lines: f32,
 }
 
 impl ParamButton {
@@ -34,6 +41,9 @@ impl ParamButton {
     {
         Self {
             param_base: ParamWidgetBase::new(cx, params.clone(), params_to_param),
+
+            use_scroll_wheel: true,
+            scrolled_lines: 0.0,
         }
         .build(
             cx,
@@ -69,12 +79,31 @@ impl View for ParamButton {
 
     fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
         event.map(|window_event, meta| match window_event {
-            WindowEvent::MouseDown(MouseButton::Left)
             // We don't need special double and triple click handling
+            WindowEvent::MouseDown(MouseButton::Left)
             | WindowEvent::MouseDoubleClick(MouseButton::Left)
             | WindowEvent::MouseTripleClick(MouseButton::Left) => {
                 self.toggle_value(cx);
                 meta.consume();
+            }
+            WindowEvent::MouseScroll(_scroll_x, scroll_y) if self.use_scroll_wheel => {
+                // With a regular scroll wheel `scroll_y` will only ever be -1 or 1, but with smooth
+                // scrolling trackpads being a thing `scroll_y` could be anything.
+                self.scrolled_lines += scroll_y;
+
+                if self.scrolled_lines.abs() >= 1.0 {
+                    self.param_base.begin_set_parameter(cx);
+
+                    if self.scrolled_lines >= 1.0 {
+                        self.param_base.set_normalized_value(cx, 1.0);
+                        self.scrolled_lines -= 1.0;
+                    } else {
+                        self.param_base.set_normalized_value(cx, 0.0);
+                        self.scrolled_lines += 1.0;
+                    }
+
+                    self.param_base.end_set_parameter(cx);
+                }
             }
             _ => {}
         });
@@ -83,11 +112,19 @@ impl View for ParamButton {
 
 /// Extension methods for [`ParamButton`] handles.
 pub trait ParamButtonExt {
+    /// Don't respond to scroll wheel events. Useful when this button is used as part of a scrolling
+    /// view.
+    fn disable_scroll_wheel(self) -> Self;
+
     /// Change the colors scheme for a bypass button. This simply adds the `bypass` class.
     fn for_bypass(self) -> Self;
 }
 
 impl ParamButtonExt for Handle<'_, ParamButton> {
+    fn disable_scroll_wheel(self) -> Self {
+        self.modify(|param_slider: &mut ParamButton| param_slider.use_scroll_wheel = false)
+    }
+
     fn for_bypass(self) -> Self {
         self.class("bypass")
     }
