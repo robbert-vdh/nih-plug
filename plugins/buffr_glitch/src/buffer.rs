@@ -49,6 +49,23 @@ impl RingBuffer {
         for buffer in self.buffers.iter_mut() {
             buffer.fill(0.0);
         }
+
         self.next_write_pos = 0;
+    }
+
+    /// Push a sample to the buffer. The write position is advanced whenever the last channel is
+    /// written to.
+    pub fn push(&mut self, channel_idx: usize, sample: f32) {
+        self.buffers[channel_idx][self.next_write_pos] = sample;
+
+        // TODO: This can be done more efficiently, but you really won't notice the performance
+        //       impact here
+        if channel_idx == self.buffers.len() - 1 {
+            self.next_write_pos += 1;
+
+            if self.next_write_pos == self.buffers[0].len() {
+                self.next_write_pos = 0;
+            }
+        }
     }
 }

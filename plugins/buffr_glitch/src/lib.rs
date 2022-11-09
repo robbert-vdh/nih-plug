@@ -90,10 +90,16 @@ impl Plugin for BuffrGlitch {
 
     fn process(
         &mut self,
-        _buffer: &mut Buffer,
+        buffer: &mut Buffer,
         _aux: &mut AuxiliaryBuffers,
         _context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
+        for channel_samples in buffer.iter_samples() {
+            for (channel_idx, sample) in channel_samples.into_iter().enumerate() {
+                self.buffer.push(channel_idx, *sample);
+            }
+        }
+
         ProcessStatus::Normal
     }
 }
