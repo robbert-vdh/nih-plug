@@ -17,8 +17,15 @@
 use nih_plug::prelude::*;
 use std::sync::Arc;
 
+mod buffer;
+
 struct BuffrGlitch {
     params: Arc<BuffrGlitchParams>,
+
+    sample_rate: f32,
+    /// The ring buffer we'll write samples to. When a key is held down, we'll stop writing samples
+    /// and instead keep reading from this buffer until the key is released.
+    buffer: buffer::RingBuffer,
 }
 
 #[derive(Params)]
@@ -28,6 +35,9 @@ impl Default for BuffrGlitch {
     fn default() -> Self {
         Self {
             params: Arc::new(BuffrGlitchParams::default()),
+
+            sample_rate: 1.0,
+            buffer: buffer::RingBuffer::default(),
         }
     }
 }
@@ -57,6 +67,25 @@ impl Plugin for BuffrGlitch {
 
     fn accepts_bus_config(&self, config: &BusConfig) -> bool {
         config.num_input_channels == config.num_output_channels && config.num_input_channels > 0
+    }
+
+    fn initialize(
+        &mut self,
+        bus_config: &BusConfig,
+        buffer_config: &BufferConfig,
+        _context: &mut impl InitContext<Self>,
+    ) -> bool {
+        self.sample_rate = buffer_config.sample_rate;
+        self.buffer.resize(
+            bus_config.num_input_channels as usize,
+            buffer_config.sample_rate,
+        );
+
+        true
+    }
+
+    fn reset(&mut self) {
+        self.buffer.reset();
     }
 
     fn process(
