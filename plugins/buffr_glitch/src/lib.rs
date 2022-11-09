@@ -44,7 +44,7 @@ impl Plugin for BuffrGlitch {
     const URL: &'static str = "https://github.com/robbert-vdh/nih-plug";
     const EMAIL: &'static str = "mail@robbertvanderhelm.nl";
 
-    const VERSION: &'static str = "0.1.0";
+    const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
     const DEFAULT_INPUT_CHANNELS: u32 = 2;
     const DEFAULT_OUTPUT_CHANNELS: u32 = 2;

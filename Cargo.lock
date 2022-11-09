@@ -1084,7 +1084,7 @@ dependencies = [
 
 [[package]]
 name = "diopser"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "nih_plug",
  "nih_plug_vizia",
@@ -4011,7 +4011,7 @@ dependencies = [
 
 [[package]]
 name = "spectral_compressor"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "nih_plug",
  "nih_plug_vizia",
