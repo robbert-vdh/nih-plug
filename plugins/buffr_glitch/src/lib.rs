@@ -33,9 +33,24 @@ struct BuffrGlitch {
     midi_note_id: Option<u8>,
 }
 
-// TODO: Normalize option
 #[derive(Params)]
-struct BuffrGlitchParams {}
+struct BuffrGlitchParams {
+    /// Controls if and how grains are normalization.
+    #[id = "normalization_mode"]
+    normalization_mode: EnumParam<NormalizationMode>,
+}
+
+/// Controls how grains are normalized.
+#[derive(Enum, Debug, PartialEq, Eq)]
+pub enum NormalizationMode {
+    /// Don't normalize at all
+    #[id = "none"]
+    None,
+    /// Automatically normalize based on the recording buffer's RMS value.
+    #[id = "auto"]
+    Auto,
+    // TODO: Explicit RMS target
+}
 
 impl Default for BuffrGlitch {
     fn default() -> Self {
@@ -52,7 +67,9 @@ impl Default for BuffrGlitch {
 
 impl Default for BuffrGlitchParams {
     fn default() -> Self {
-        Self {}
+        Self {
+            normalization_mode: EnumParam::new("Normalization", NormalizationMode::Auto),
+        }
     }
 }
 
@@ -124,7 +141,10 @@ impl Plugin for BuffrGlitch {
 
                         // We'll copy audio to the playback buffer to match the pitch of the note
                         // that was just played
-                        self.buffer.prepare_playback(util::midi_note_to_freq(note));
+                        self.buffer.prepare_playback(
+                            util::midi_note_to_freq(note),
+                            self.params.normalization_mode.value(),
+                        );
                     }
                     NoteEvent::NoteOff { note, .. } if self.midi_note_id == Some(note) => {
                         // A NoteOff for the currently playing note immediately ends playback

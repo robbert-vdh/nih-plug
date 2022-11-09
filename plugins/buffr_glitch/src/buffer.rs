@@ -16,6 +16,8 @@
 
 use nih_plug::prelude::*;
 
+use crate::NormalizationMode;
+
 /// A super simple ring buffer abstraction that records audio into a recording ring buffer, and then
 /// copies audio to a playback buffer when a note is pressed so audio can be repeated while still
 /// recording audio for further key presses. This needs to be able to store at least the number of
@@ -94,7 +96,7 @@ impl RingBuffer {
 
     /// Prepare the playback buffers to play back audio at the specified frequency. This copies
     /// audio from the ring buffers to the playback buffers.
-    pub fn prepare_playback(&mut self, frequency: f32) {
+    pub fn prepare_playback(&mut self, frequency: f32, normalization_mode: NormalizationMode) {
         let note_period_samples = (frequency.recip() * self.sample_rate).ceil() as usize;
 
         // We'll copy the last `note_period_samples` samples from the recording ring buffers to the
@@ -115,6 +117,22 @@ impl RingBuffer {
                 .copy_from_slice(&recording_buffer[recording_buffer.len() - copy_num_from_end..]);
             playback_buffer[copy_num_from_end..]
                 .copy_from_slice(&recording_buffer[..copy_num_from_start]);
+        }
+
+        // The playback buffer is normalized as necessary. This prevents small grains from being
+        // either way quieter or way louder than the origianl audio.
+        match normalization_mode {
+            NormalizationMode::None => (),
+            NormalizationMode::Auto => {
+                let normalization_factor =
+                    calculate_rms(&self.recording_buffers) / calculate_rms(&self.playback_buffers);
+
+                for buffer in self.playback_buffers.iter_mut() {
+                    for sample in buffer.iter_mut() {
+                        *sample *= normalization_factor;
+                    }
+                }
+            }
         }
 
         // Reading from the buffer should always start at the beginning
@@ -138,4 +156,21 @@ impl RingBuffer {
 
         sample
     }
+}
+
+/// Get the RMS value of an entire buffer. This is used for (automatic) normalization.
+///
+/// # Panics
+///
+/// This will panic of `buffers` is empty.
+fn calculate_rms(buffers: &[Vec<f32>]) -> f32 {
+    nih_debug_assert_ne!(buffers.len(), 0);
+
+    let sum_of_squares: f32 = buffers
+        .iter()
+        .map(|buffer| buffer.iter().map(|sample| (sample * sample)).sum::<f32>())
+        .sum();
+    let num_samples = buffers.len() * buffers[0].len();
+
+    (sum_of_squares / num_samples as f32).sqrt()
 }
