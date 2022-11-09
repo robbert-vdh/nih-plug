@@ -59,6 +59,8 @@ impl Plugin for BuffrGlitch {
     const DEFAULT_INPUT_CHANNELS: u32 = 2;
     const DEFAULT_OUTPUT_CHANNELS: u32 = 2;
 
+    const MIDI_INPUT: MidiConfig = MidiConfig::Basic;
+
     type BackgroundTask = ();
 
     fn params(&self) -> Arc<dyn Params> {
