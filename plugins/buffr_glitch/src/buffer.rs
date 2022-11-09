@@ -118,8 +118,9 @@ impl RingBuffer {
             let copy_num_from_end = note_period_samples - copy_num_from_start;
             playback_buffer[0..copy_num_from_end]
                 .copy_from_slice(&recording_buffer[recording_buffer.len() - copy_num_from_end..]);
-            playback_buffer[copy_num_from_end..]
-                .copy_from_slice(&recording_buffer[..copy_num_from_start]);
+            playback_buffer[copy_num_from_end..].copy_from_slice(
+                &recording_buffer[self.next_write_pos - copy_num_from_start..self.next_write_pos],
+            );
         }
 
         // The playback buffer is normalized as necessary. This prevents small grains from being
