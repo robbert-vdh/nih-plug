@@ -19,6 +19,10 @@ use std::sync::Arc;
 
 mod buffer;
 
+/// The maximum number of octaves the sample can be pitched down. This is used in calculating the
+/// recording buffer's size.
+pub const MAX_OCTAVE_SHIFT: u32 = 2;
+
 struct BuffrGlitch {
     params: Arc<BuffrGlitchParams>,
 
@@ -38,6 +42,10 @@ struct BuffrGlitchParams {
     /// Controls if and how grains are normalization.
     #[id = "normalization_mode"]
     normalization_mode: EnumParam<NormalizationMode>,
+    /// The number of octaves the input signal should be increased or decreased by. Useful to allow
+    /// larger grain sizes.
+    #[id = "octave_shift"]
+    octave_shift: IntParam,
 }
 
 /// Controls how grains are normalized.
@@ -69,6 +77,14 @@ impl Default for BuffrGlitchParams {
     fn default() -> Self {
         Self {
             normalization_mode: EnumParam::new("Normalization", NormalizationMode::Auto),
+            octave_shift: IntParam::new(
+                "Octave Shift",
+                0,
+                IntRange::Linear {
+                    min: -(MAX_OCTAVE_SHIFT as i32),
+                    max: MAX_OCTAVE_SHIFT as i32,
+                },
+            ),
         }
     }
 }
@@ -140,9 +156,12 @@ impl Plugin for BuffrGlitch {
                         self.midi_note_id = Some(note);
 
                         // We'll copy audio to the playback buffer to match the pitch of the note
-                        // that was just played
+                        // that was just played. The octave shift parameter makes it possible to get
+                        // larger window sizes.
+                        let note_frequency = util::midi_note_to_freq(note)
+                            * 2.0f32.powi(self.params.octave_shift.value());
                         self.buffer.prepare_playback(
-                            util::midi_note_to_freq(note),
+                            note_frequency,
                             self.params.normalization_mode.value(),
                         );
                     }

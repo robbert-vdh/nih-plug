@@ -16,7 +16,7 @@
 
 use nih_plug::prelude::*;
 
-use crate::NormalizationMode;
+use crate::{NormalizationMode, MAX_OCTAVE_SHIFT};
 
 /// A super simple ring buffer abstraction that records audio into a recording ring buffer, and then
 /// copies audio to a playback buffer when a note is pressed so audio can be repeated while still
@@ -47,9 +47,12 @@ impl RingBuffer {
     /// MIDI note 0 at the specified sample rate, rounded up to a power of two. Make sure to call
     /// [`reset()`][Self::reset()] after this.
     pub fn resize(&mut self, num_channels: usize, sample_rate: f32) {
-        let note_frequency = util::midi_note_to_freq(0);
-        let note_period_samples = (note_frequency.recip() * sample_rate).ceil() as usize;
-        let buffer_len = note_period_samples.next_power_of_two();
+        // NOTE: We need to take the octave shift into account
+        let lowest_note_frequency =
+            util::midi_note_to_freq(0) / 2.0f32.powi(MAX_OCTAVE_SHIFT as i32);
+        let loest_note_period_samples =
+            (lowest_note_frequency.recip() * sample_rate).ceil() as usize;
+        let buffer_len = loest_note_period_samples.next_power_of_two();
 
         // Used later to compute period sizes in samples based on frequencies
         self.sample_rate = sample_rate;
