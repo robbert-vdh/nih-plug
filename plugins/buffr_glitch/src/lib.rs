@@ -42,6 +42,11 @@ struct BuffrGlitchParams {
     /// Controls if and how grains are normalization.
     #[id = "normalization_mode"]
     normalization_mode: EnumParam<NormalizationMode>,
+    /// From 0 to 1, how much of the dry signal to mix in. This defaults to 1 but it can be turned
+    /// down to use Buffr Glitch as more of a synth.
+    #[id = "dry_mix"]
+    dry_amount: FloatParam,
+
     /// The number of octaves the input signal should be increased or decreased by. Useful to allow
     /// larger grain sizes.
     #[id = "octave_shift"]
@@ -77,6 +82,17 @@ impl Default for BuffrGlitchParams {
     fn default() -> Self {
         Self {
             normalization_mode: EnumParam::new("Normalization", NormalizationMode::Auto),
+            dry_amount: FloatParam::new(
+                "Dry Amount",
+                1.0,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_smoother(SmoothingStyle::Linear(10.0))
+            .with_step_size(0.01)
+            .with_unit("%")
+            .with_value_to_string(formatters::v2s_f32_percentage(0))
+            .with_string_to_value(formatters::s2v_f32_percentage()),
+
             octave_shift: IntParam::new(
                 "Octave Shift",
                 0,
@@ -141,6 +157,8 @@ impl Plugin for BuffrGlitch {
         let mut next_event = context.next_event();
 
         for (sample_idx, channel_samples) in buffer.iter_samples().enumerate() {
+            let dry_amount = self.params.dry_amount.smoothed.next();
+
             // TODO: Split blocks based on events when adding polyphony, this is just a simple proof
             //       of concept
             while let Some(event) = next_event {
@@ -189,6 +207,8 @@ impl Plugin for BuffrGlitch {
             } else {
                 for (channel_idx, sample) in channel_samples.into_iter().enumerate() {
                     self.buffer.push(channel_idx, *sample);
+
+                    *sample *= dry_amount;
                 }
             }
         }
