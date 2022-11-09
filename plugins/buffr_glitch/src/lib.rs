@@ -45,7 +45,7 @@ struct BuffrGlitchParams {
     /// From 0 to 1, how much of the dry signal to mix in. This defaults to 1 but it can be turned
     /// down to use Buffr Glitch as more of a synth.
     #[id = "dry_mix"]
-    dry_amount: FloatParam,
+    dry_level: FloatParam,
 
     /// The number of octaves the input signal should be increased or decreased by. Useful to allow
     /// larger grain sizes.
@@ -82,16 +82,19 @@ impl Default for BuffrGlitchParams {
     fn default() -> Self {
         Self {
             normalization_mode: EnumParam::new("Normalization", NormalizationMode::Auto),
-            dry_amount: FloatParam::new(
-                "Dry Amount",
+            dry_level: FloatParam::new(
+                "Dry Level",
                 1.0,
-                FloatRange::Linear { min: 0.0, max: 1.0 },
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: FloatRange::gain_skew_factor(util::MINUS_INFINITY_DB, 0.0),
+                },
             )
-            .with_smoother(SmoothingStyle::Linear(10.0))
-            .with_step_size(0.01)
-            .with_unit("%")
-            .with_value_to_string(formatters::v2s_f32_percentage(0))
-            .with_string_to_value(formatters::s2v_f32_percentage()),
+            .with_smoother(SmoothingStyle::Exponential(10.0))
+            .with_unit(" dB")
+            .with_value_to_string(formatters::v2s_f32_gain_to_db(1))
+            .with_string_to_value(formatters::s2v_f32_gain_to_db()),
 
             octave_shift: IntParam::new(
                 "Octave Shift",
@@ -157,7 +160,7 @@ impl Plugin for BuffrGlitch {
         let mut next_event = context.next_event();
 
         for (sample_idx, channel_samples) in buffer.iter_samples().enumerate() {
-            let dry_amount = self.params.dry_amount.smoothed.next();
+            let dry_amount = self.params.dry_level.smoothed.next();
 
             // TODO: Split blocks based on events when adding polyphony, this is just a simple proof
             //       of concept
