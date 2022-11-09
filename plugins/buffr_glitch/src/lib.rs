@@ -26,8 +26,14 @@ struct BuffrGlitch {
     /// The ring buffer we'll write samples to. When a key is held down, we'll stop writing samples
     /// and instead keep reading from this buffer until the key is released.
     buffer: buffer::RingBuffer,
+
+    /// The MIDI note ID of the last note, if a note pas pressed.
+    //
+    // TODO: Add polyphony support, this is just a quick proof of concept.
+    midi_note_id: Option<u8>,
 }
 
+// TODO: Normalize option
 #[derive(Params)]
 struct BuffrGlitchParams {}
 
@@ -38,6 +44,8 @@ impl Default for BuffrGlitch {
 
             sample_rate: 1.0,
             buffer: buffer::RingBuffer::default(),
+
+            midi_note_id: None,
         }
     }
 }
@@ -88,17 +96,61 @@ impl Plugin for BuffrGlitch {
 
     fn reset(&mut self) {
         self.buffer.reset();
+        self.midi_note_id = None;
     }
 
     fn process(
         &mut self,
         buffer: &mut Buffer,
         _aux: &mut AuxiliaryBuffers,
-        _context: &mut impl ProcessContext<Self>,
+        context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
-        for channel_samples in buffer.iter_samples() {
-            for (channel_idx, sample) in channel_samples.into_iter().enumerate() {
-                self.buffer.push(channel_idx, *sample);
+        let mut next_event = context.next_event();
+
+        for (sample_idx, channel_samples) in buffer.iter_samples().enumerate() {
+            // TODO: Split blocks based on events when adding polyphony, this is just a simple proof
+            //       of concept
+            while let Some(event) = next_event {
+                if event.timing() > sample_idx as u32 {
+                    break;
+                }
+
+                match event {
+                    NoteEvent::NoteOn { note, .. } => {
+                        // We don't keep a stack of notes right now. At some point we'll want to
+                        // make this polyphonic anyways.
+                        // TOOD: Also add an option to use velocity or poly pressure
+                        self.midi_note_id = Some(note);
+
+                        // We'll copy audio to the playback buffer to match the pitch of the note
+                        // that was just played
+                        self.buffer.prepare_playback(util::midi_note_to_freq(note));
+                    }
+                    NoteEvent::NoteOff { note, .. } if self.midi_note_id == Some(note) => {
+                        // A NoteOff for the currently playing note immediately ends playback
+                        self.midi_note_id = None;
+                    }
+                    _ => (),
+                }
+
+                next_event = context.next_event();
+            }
+
+            // When a note is being held, we'll replace the input audio with the looping contents of
+            // the playback buffer
+            if self.midi_note_id.is_some() {
+                for (channel_idx, sample) in channel_samples.into_iter().enumerate() {
+                    // New audio still needs to be recorded when the note is held to prepare for new
+                    // notes
+                    // TODO: At some point also handle polyphony here
+                    self.buffer.push(channel_idx, *sample);
+
+                    *sample = self.buffer.next_playback_sample(channel_idx);
+                }
+            } else {
+                for (channel_idx, sample) in channel_samples.into_iter().enumerate() {
+                    self.buffer.push(channel_idx, *sample);
+                }
             }
         }
 
