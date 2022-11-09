@@ -476,6 +476,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "buffr_glitch"
+version = "0.1.0"
+dependencies = [
+ "nih_plug",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

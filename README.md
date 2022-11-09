@@ -40,6 +40,12 @@ the plugins.
 
 Scroll down for more information on the underlying plugin framework.
 
+- [**Buffr Glitch**](plugins/buffr_glitch) is the plugin for you if you enjoy
+  the sound of a CD player skipping This plugin is essentially a MIDI triggered
+  buffer repeat plugin. When you play a note, the plugin will sample the period
+  corresponding to that note's frequency and use that as a single waveform
+  cycle. This can end up sounding like an in-tune glitch when used sparingly, or
+  like a weird synthesizer when used less subtly.
 - [**Crisp**](plugins/crisp) adds a bright crispy top end to any low bass sound.
   Inspired by Polarity's [Fake Distortion](https://youtu.be/MKfFn4L1zeg) video.
 - [**Crossover**](plugins/crossover) is as boring as it sounds. It cleanly

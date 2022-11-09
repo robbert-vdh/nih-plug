@@ -30,6 +30,7 @@ members = [
   "plugins/examples/sine",
   "plugins/examples/stft",
 
+  "plugins/buffr_glitch",
   "plugins/crisp",
   "plugins/crossover",
   "plugins/diopser",

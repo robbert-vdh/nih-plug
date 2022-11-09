@@ -4,6 +4,9 @@
 # [package_name]
 # name = "Human Readable Plugin Name"  # defaults to <package_name>
 
+[buffr_glitch]
+name = "Buffr Glitch"
+
 [crisp]
 name = "Crisp"
 
