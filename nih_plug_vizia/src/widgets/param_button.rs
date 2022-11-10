@@ -22,12 +22,8 @@ pub struct ParamButton {
 }
 
 impl ParamButton {
-    /// Creates a new [`ParamButton`] for the given parameter. To accommodate VIZIA's mapping system,
-    /// you'll need to provide a lens containing your `Params` implementation object (check out how
-    /// the `Data` struct is used in `gain_gui_vizia`) and a projection function that maps the
-    /// `Params` object to the parameter you want to display a widget for. Parameter changes are
-    /// handled by emitting [`ParamEvent`][super::ParamEvent]s which are automatically handled by
-    /// the VIZIA wrapper.
+    /// Creates a new [`ParamButton`] for the given parameter. See
+    /// [`ParamSlider`][super::ParamSlider] for more information on this function's arguments.
     pub fn new<L, Params, P, FMap>(
         cx: &mut Context,
         params: L,
