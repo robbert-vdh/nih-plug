@@ -16,6 +16,15 @@ pub struct ParamLabel {
     /// Will be set to `true` when the field gets Alt+Click'ed which will replace the label with a
     /// text box.
     text_input_active: bool,
+
+    /// The label's orientation. Automatically deduced from the widget's width and height.
+    orientation: Orientation,
+    // HACK: These two fields are needed because vizia doesn't support rotating in layouts, so you
+    //       need to hack around this using explicit sizes.
+    /// This element's width in pixels, used to explicitly set the size of the contained label or textbox.
+    width: Units,
+    /// This element's height in pixels, used to explicitly set the size of the contained label or textbox.
+    height: Units,
 }
 
 enum ParamLabelEvent {
@@ -30,7 +39,8 @@ impl ParamLabel {
     /// [`ParamSlider`][super::ParamSlider] for more information on this function's arguments.
     ///
     /// To make this work, you'll need to set a fixed (non-auto) width and height on the
-    /// `ParamLabel`.
+    /// `ParamLabel`. If the label is taller than it is wide, then the widget will be drawn
+    /// vertically.
     pub fn new<L, Params, P, FMap>(
         cx: &mut Context,
         params: L,
@@ -47,6 +57,11 @@ impl ParamLabel {
             param_base: ParamWidgetBase::new(cx, params.clone(), params_to_param),
 
             text_input_active: false,
+
+            // Automatically overridden in the `WindowEvent::GeometryChanged` handler
+            orientation: Orientation::Horizontal,
+            width: Pixels(0.0),
+            height: Pixels(0.0),
         }
         .build(
             cx,
@@ -77,16 +92,19 @@ impl ParamLabel {
                                     cx.emit(TextEvent::SelectAll);
                                 })
                                 .class("align_center")
-                                .child_top(Stretch(1.0))
-                                .child_bottom(Stretch(1.0))
-                                .height(Stretch(1.0))
-                                .width(Stretch(1.0));
+                                .child_space(Stretch(1.0))
+                                .rotate(ParamLabel::orientation.map(orientation_to_rotation))
+                                // HACK: Work around for vizia not supporting rotations
+                                .height(ParamLabel::height)
+                                .width(ParamLabel::width);
                         } else {
                             Label::new(cx, &param_name)
                                 .class("param-name")
                                 .child_space(Stretch(1.0))
-                                .height(Stretch(1.0))
-                                .width(Stretch(1.0));
+                                .rotate(ParamLabel::orientation.map(orientation_to_rotation))
+                                // Same as above
+                                .height(ParamLabel::height)
+                                .width(ParamLabel::width);
                         }
                     },
                 );
@@ -122,6 +140,21 @@ impl View for ParamLabel {
         });
 
         event.map(|window_event, meta| match window_event {
+            WindowEvent::GeometryChanged(_) => {
+                let width = cx.cache.get_width(cx.current());
+                let height = cx.cache.get_height(cx.current());
+
+                self.width = Pixels(width);
+                self.height = Pixels(height);
+
+                // The orientiation is automatically set based on the widget's aspect ratio
+                if width >= height {
+                    self.orientation = Orientation::Horizontal;
+                } else {
+                    self.orientation = Orientation::Vertical;
+                }
+            }
+
             // We don't handle Ctrl+click/double click for reset right now, only value entry is
             // supported here
             WindowEvent::MouseDown(MouseButton::Left)
@@ -137,5 +170,14 @@ impl View for ParamLabel {
             }
             _ => {}
         });
+    }
+}
+
+/// Convert an [`Orientation`] to the desired rotation in degrees.
+fn orientation_to_rotation(orientation: &Orientation) -> f32 {
+    match orientation {
+        Orientation::Horizontal => 0.0,
+        // 90 degrees counterclickwise, so the text goes from bottom to top
+        Orientation::Vertical => 270.0,
     }
 }
