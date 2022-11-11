@@ -115,7 +115,7 @@ impl Default for LoudnessWarWinnerParams {
 impl Plugin for LoudnessWarWinner {
     const NAME: &'static str = "Loudness War Winner";
     const VENDOR: &'static str = "Robbert van der Helm";
-    const URL: &'static str = "https://github.com/robbert-vdh/nih-plug";
+    const URL: &'static str = env!("CARGO_PKG_HOMEPAGE");
     const EMAIL: &'static str = "mail@robbertvanderhelm.nl";
 
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");

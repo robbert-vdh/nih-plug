@@ -113,6 +113,8 @@ impl Default for GainParams {
 impl Plugin for Gain {
     const NAME: &'static str = "Gain";
     const VENDOR: &'static str = "Moist Plugins GmbH";
+    // You can use `env!("CARGO_PKG_HOMEPAGE")` to reference the homepage field from the
+    // `Cargo.toml` file here
     const URL: &'static str = "https://youtu.be/dQw4w9WgXcQ";
     const EMAIL: &'static str = "info@example.com";
 
