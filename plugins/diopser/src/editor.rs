@@ -55,7 +55,7 @@ pub(crate) fn create(
         assets::register_noto_sans_light(cx);
         assets::register_noto_sans_thin(cx);
 
-        cx.add_theme(include_str!("theme.css"));
+        cx.add_theme(include_str!("editor/theme.css"));
 
         Data {
             params: params.clone(),
