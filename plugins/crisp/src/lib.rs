@@ -333,6 +333,11 @@ impl Plugin for Crisp {
         nih_debug_assert_eq!(bus_config.num_output_channels, NUM_CHANNELS);
         self.sample_rate = buffer_config.sample_rate;
 
+        // The filter coefficients need to be reinitialized when loading a patch
+        self.update_rm_input_lpf();
+        self.update_noise_hpf();
+        self.update_noise_lpf();
+
         true
     }
 
