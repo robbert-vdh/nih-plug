@@ -33,6 +33,7 @@ const HANDLE_WIDTH_PX: f32 = 20.0;
 //
 // TODO: Text entry for the x-parameter
 // TODO: Tooltip
+#[derive(Lens)]
 pub struct XyPad {
     x_param_base: ParamWidgetBase,
     y_param_base: ParamWidgetBase,
@@ -43,13 +44,19 @@ pub struct XyPad {
     /// This keeps track of whether the user has pressed shift and a granular drag is active. This
     /// works exactly the same as in `ParamSlider`.
     granular_drag_status: Option<GranularDragStatus>,
+
+    // Used to position the tooltip so it's anchored to the mouse cursor, set in the `MouseMove`
+    // event handler so the tooltip stays at the top right of the mouse cursor.
+    tooltip_pos_x: Units,
+    tooltip_pos_y: Units,
 }
 
 /// The [`XyPad`]'s handle. This is a separate eleemnt to allow easier positioning.
 struct XyPadHandle;
 
+// TODO: Vizia's derive macro requires this to be pub
 #[derive(Debug, Clone, Copy)]
-struct GranularDragStatus {
+pub struct GranularDragStatus {
     /// The mouse's X-coordinate when the granular drag was started.
     pub starting_x_coordinate: f32,
     /// The normalized value when the granular drag was started for the X-parameter.
@@ -84,6 +91,9 @@ impl XyPad {
 
             drag_active: false,
             granular_drag_status: None,
+
+            tooltip_pos_x: Pixels(0.0),
+            tooltip_pos_y: Pixels(0.0),
         }
         .build(
             cx,
@@ -107,14 +117,46 @@ impl XyPad {
                                 Percentage((1.0 - param.unmodulated_normalized_value()) * 100.0)
                             });
 
+                            // Can't use `.to_string()` here as that would include the modulation.
+                            let x_display_value_lens = x_param_data.make_lens(|param| {
+                                param.normalized_value_to_string(
+                                    param.unmodulated_normalized_value(),
+                                    true,
+                                )
+                            });
+                            let y_display_value_lens = y_param_data.make_lens(|param| {
+                                param.normalized_value_to_string(
+                                    param.unmodulated_normalized_value(),
+                                    true,
+                                )
+                            });
+
                             XyPadHandle::new(cx)
+                                .position_type(PositionType::SelfDirected)
                                 .top(y_position_lens)
                                 .left(x_position_lens)
                                 // TODO: It would be much nicer if this could be set in the
                                 //       stylesheet, but Vizia doesn't support that right now
                                 .translate((-(HANDLE_WIDTH_PX / 2.0), -(HANDLE_WIDTH_PX / 2.0)))
                                 .width(Pixels(HANDLE_WIDTH_PX))
-                                .height(Pixels(HANDLE_WIDTH_PX));
+                                .height(Pixels(HANDLE_WIDTH_PX))
+                                .hoverable(false);
+
+                            // The stylesheet makes the tooltip visible when hovering over the X-Y
+                            // pad. Its position is set to the mouse coordinate in the event
+                            // handler. If there's enough space, the tooltip is drawn at the top
+                            // right of the mouse cursor.
+                            VStack::new(cx, move |cx| {
+                                // The X-parameter is the 'important' one, so we'll display that at
+                                // the bottom since it's closer to the mouse cursor
+                                Label::new(cx, y_display_value_lens);
+                                Label::new(cx, x_display_value_lens);
+                            })
+                            .class("xy-pad__tooltip")
+                            .left(XyPad::tooltip_pos_x)
+                            .top(XyPad::tooltip_pos_y)
+                            .position_type(PositionType::SelfDirected)
+                            .hoverable(false);
                         },
                     );
                 },
@@ -243,6 +285,29 @@ impl View for XyPad {
                 }
             }
             WindowEvent::MouseMove(x, y) => {
+                // This is used to position the tooltip to the top right of the mouse cursor
+                let bounds = cx.cache.get_bounds(cx.current());
+                let relative_x = x - bounds.x;
+                let relative_y = y - bounds.y;
+
+                // If there's not enough space at the top right, we'll move the tooltip to the
+                // bottom and/or the left
+                let tooltip_entity = cx
+                    .tree
+                    .get_last_child(cx.current())
+                    .expect("Missing child view in X-Y pad");
+                let tooltip_bounds = cx.cache.get_bounds(tooltip_entity);
+                self.tooltip_pos_x = if (relative_x + tooltip_bounds.w + 4.0) >= bounds.w {
+                    Pixels(relative_x - 2.0 - tooltip_bounds.w)
+                } else {
+                    Pixels(relative_x + 2.0)
+                };
+                self.tooltip_pos_y = if (relative_y - tooltip_bounds.h - 4.0) <= 0.0 {
+                    Pixels(relative_y + 2.0)
+                } else {
+                    Pixels(relative_y - 2.0 - tooltip_bounds.h)
+                };
+
                 if self.drag_active {
                     // If shift is being held then the drag should be more granular instead of
                     // absolute

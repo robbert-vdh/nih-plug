@@ -36,6 +36,24 @@ xy-pad {
   overflow: hidden;
 }
 
+xy-pad .xy-pad__tooltip {
+  opacity: 0;
+  transition: opacity 0.1 0;
+
+  background-color: #e5e5e5;
+  border-color: #0a0a0a;
+  border-width: 1px;
+  width: auto;
+  height: auto;
+  child-right: 5px;
+  child-left: 5px;
+}
+
+xy-pad:hover .xy-pad__tooltip {
+  opacity: 1;
+  transition: opacity 0.1 0;
+}
+
 xy-pad__handle {
   background-color: #e5e5e5;
   border-color: #0a0a0a;
