@@ -225,7 +225,7 @@ impl DiopserParams {
             .with_smoother(SmoothingStyle::Logarithmic(100.0))
             .with_value_to_string(formatters::v2s_f32_rounded(2)),
             filter_spread_octaves: FloatParam::new(
-                "Filter Spread Octaves",
+                "Filter Spread",
                 0.0,
                 FloatRange::SymmetricalSkewed {
                     min: -5.0,
@@ -234,6 +234,7 @@ impl DiopserParams {
                     center: 0.0,
                 },
             )
+            .with_unit(" octaves")
             .with_step_size(0.01)
             .with_smoother(SmoothingStyle::Linear(100.0)),
             filter_spread_style: EnumParam::new("Filter Spread Style", SpreadStyle::Octaves)
