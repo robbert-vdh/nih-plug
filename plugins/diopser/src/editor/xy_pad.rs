@@ -124,6 +124,24 @@ impl XyPad {
         self.y_param_base.set_normalized_value(cx, y_value);
     }
 
+    /// Set a normalized value for both parameters based on mouse coordinates.
+    /// `begin_set_parameters()` needs to be called first.
+    fn set_normalized_values_for_mouse_pos(
+        &self,
+        cx: &mut EventContext,
+        (x_pos, y_pos): (f32, f32),
+    ) {
+        self.set_normalized_values(
+            cx,
+            (
+                util::remap_current_entity_x_coordinate(cx, x_pos),
+                // We want the top of the widget to be 1.0 and the bottom to be 0.0,
+                // this is the opposite of how the y-coordinate works
+                1.0 - util::remap_current_entity_y_coordinate(cx, y_pos),
+            ),
+        );
+    }
+
     /// Should be called at the end of a drag operation.
     fn end_set_parameters(&self, cx: &mut EventContext) {
         self.x_param_base.end_set_parameter(cx);
@@ -173,10 +191,10 @@ impl View for XyPad {
                     //     ));
                     // } else {
                     //     self.granular_drag_start_x_value = None;
-                    //     self.set_normalized_value_drag(
-                    //         cx,
-                    //         util::remap_current_entity_x_coordinate(cx, cx.mouse.cursorx),
-                    //     );
+                    self.set_normalized_values_for_mouse_pos(
+                        cx,
+                        (cx.mouse.cursorx, cx.mouse.cursory),
+                    );
                     // }
                 }
 
@@ -234,15 +252,7 @@ impl View for XyPad {
                     //     );
                     // }
 
-                    self.set_normalized_values(
-                        cx,
-                        (
-                            util::remap_current_entity_x_coordinate(cx, *x),
-                            // We want the top of the widget to be 1.0 and the bottom to be 0.0,
-                            // this is the opposite of how the y-coordinate works
-                            1.0 - util::remap_current_entity_y_coordinate(cx, *y),
-                        ),
-                    );
+                    self.set_normalized_values_for_mouse_pos(cx, (*x, *y));
                 }
             }
             // TODO: Granular dragging
