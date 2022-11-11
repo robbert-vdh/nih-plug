@@ -1086,6 +1086,7 @@ dependencies = [
 name = "diopser"
 version = "0.3.0"
 dependencies = [
+ "atomic_float",
  "nih_plug",
  "nih_plug_vizia",
  "open",
