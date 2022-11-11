@@ -117,8 +117,43 @@ impl ParamWidgetBase {
     /// Create a view using the a parameter's data. This is not tied to a particular
     /// [`ParamWidgetBase`] instance, but it allows you to easily create lenses for the parameter's
     /// values and access static parameter data.
-    ///
-    /// This can be used directly as an argument to [`View::build()`].
+    pub fn view<L, Params, P, FMap, F, R>(
+        cx: &mut Context,
+        params: L,
+        params_to_param: FMap,
+        content: F,
+    ) -> R
+    where
+        L: Lens<Target = Params> + Clone,
+        Params: 'static,
+        P: Param + 'static,
+        FMap: Fn(&Params) -> &P + Copy + 'static,
+        F: FnOnce(&mut Context, ParamWidgetData<L, Params, P, FMap>) -> R,
+    {
+        // We'll provide the raw `&P` to the callbacks to make creating parameter widgets more
+        // convenient.
+        // SAFETY: This &P won't outlive this function, and in the context of NIH-plug &P will
+        //         outlive the editor
+        let param: &P = unsafe {
+            &*params
+                .clone()
+                .map(move |params| params_to_param(params) as *const P)
+                .get(cx)
+        };
+
+        // The widget can use this to access data parameter data and to create lenses for working
+        // with the parameter's values
+        let param_data = ParamWidgetData {
+            param,
+            params,
+            params_to_param,
+        };
+
+        content(cx, param_data)
+    }
+
+    /// A shorthand for [`view()`][Self::view()] that can be used directly as an argument to
+    /// [`View::build()`].
     pub fn build_view<L, Params, P, FMap, F, R>(
         params: L,
         params_to_param: FMap,
@@ -131,28 +166,7 @@ impl ParamWidgetBase {
         FMap: Fn(&Params) -> &P + Copy + 'static,
         F: FnOnce(&mut Context, ParamWidgetData<L, Params, P, FMap>) -> R,
     {
-        move |cx| {
-            // We'll provide the raw `&P` to the callbacks to make creating parameter widgets more
-            // convenient.
-            // SAFETY: This &P won't outlive this function, and in the context of NIH-plug &P will
-            //         outlive the editor
-            let param: &P = unsafe {
-                &*params
-                    .clone()
-                    .map(move |params| params_to_param(params) as *const P)
-                    .get(cx)
-            };
-
-            // The widget can use this to access data parameter data and to create lenses for working
-            // with the parameter's values
-            let param_data = ParamWidgetData {
-                param,
-                params,
-                params_to_param,
-            };
-
-            content(cx, param_data)
-        }
+        move |cx| Self::view(cx, params, params_to_param, content)
     }
 
     /// Convenience function for using [`ParamWidgetData::make_lens()`]. Whenever possible,
