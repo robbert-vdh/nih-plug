@@ -105,23 +105,25 @@ impl XyPad {
 
     /// Should be called at the start of a drag operation.
     fn begin_set_parameters(&self, cx: &mut EventContext) {
-        self.x_param_base.begin_set_parameter(cx);
+        // NOTE: Since the X-parameter is the main parmaeter, we'll always modify this parameter
+        //       last so the host will keep this parameter highlighted
         self.y_param_base.begin_set_parameter(cx);
+        self.x_param_base.begin_set_parameter(cx);
     }
 
     /// Resets both parameters. `begin_set_parameters()` needs to be called first.
     fn reset_parameters(&self, cx: &mut EventContext) {
-        self.x_param_base
-            .set_normalized_value(cx, self.x_param_base.default_normalized_value());
         self.y_param_base
             .set_normalized_value(cx, self.y_param_base.default_normalized_value());
+        self.x_param_base
+            .set_normalized_value(cx, self.x_param_base.default_normalized_value());
     }
 
     /// Set a normalized value for both parameters. `begin_set_parameters()` needs to be called
     /// first.
     fn set_normalized_values(&self, cx: &mut EventContext, (x_value, y_value): (f32, f32)) {
-        self.x_param_base.set_normalized_value(cx, x_value);
         self.y_param_base.set_normalized_value(cx, y_value);
+        self.x_param_base.set_normalized_value(cx, x_value);
     }
 
     /// Set a normalized value for both parameters based on mouse coordinates.
