@@ -105,11 +105,6 @@ fn top_bar(cx: &mut Context) {
 /// frequency and resonance parameters.
 fn spectrum_analyzer(cx: &mut Context) {
     Label::new(cx, "When I grow up, I want to be a spectrum analyzer!");
-    ParamLabel::new(cx, Data::params, |params| &params.filter_frequency);
-    // This is automatically rotated vertically
-    ParamLabel::new(cx, Data::params, |params| &params.filter_resonance)
-        .width(Pixels(20.0))
-        .height(Pixels(180.0));
 }
 
 /// The area below the spectrum analyzer that contains all of the other parameters.

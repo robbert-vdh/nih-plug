@@ -60,25 +60,6 @@ param-button.bypass:checked {
   transition: background-color 0.1 0;
 }
 
-param-label {
-  /* These should be overridden when the widget is used */
-  height: 20px;
-  width: 180px;
-}
-
-/* This is a textbox, but we want it to appear just like the label */
-param-label .value-entry {
-  /* Vizia doesn't support the unset value */
-  background-color: transparent;
-  border-width: 0px;
-}
-param-slider .value-entry .caret {
-  background-color: #0a0a0a;
-}
-param-slider .value-entry .selection {
-  background-color: #0a0a0a30;
-}
-
 param-slider {
   height: 30px;
   width: 180px;
