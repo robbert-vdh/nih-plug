@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use nih_plug::prelude::Editor;
+use nih_plug::prelude::{Editor, Plugin};
 use nih_plug_vizia::vizia::prelude::*;
 use nih_plug_vizia::widgets::*;
 use nih_plug_vizia::{assets, create_vizia_editor, ViziaState, ViziaTheming};
@@ -22,7 +22,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use self::button::SafeModeButton;
-use crate::DiopserParams;
+use crate::{Diopser, DiopserParams};
 
 mod button;
 
@@ -30,6 +30,9 @@ const EDITOR_WIDTH: u32 = 600;
 const EDITOR_HEIGHT: u32 = 490;
 
 const SPECTRUM_ANALYZER_HEIGHT: u32 = 260;
+
+const DARK_GRAY: Color = Color::rgb(0xc4, 0xc4, 0xc4);
+const DARKER_GRAY: Color = Color::rgb(0x69, 0x69, 0x69);
 
 #[derive(Lens)]
 struct Data {
@@ -81,7 +84,12 @@ fn top_bar(cx: &mut Context) {
             .font(assets::NOTO_SANS_THIN)
             .font_size(37.0)
             .top(Pixels(-2.0))
-            .left(Pixels(7.0));
+            .left(Pixels(8.0));
+        Label::new(cx, Diopser::VERSION)
+            .color(DARKER_GRAY)
+            .top(Stretch(1.0))
+            .bottom(Pixels(7.5))
+            .left(Pixels(2.0));
 
         HStack::new(cx, |cx| {
             ParamSlider::new(cx, Data::params, |params| &params.automation_precision)
@@ -123,7 +131,7 @@ fn spectrum_analyzer(cx: &mut Context) {
             Label::new(cx, "When I grow up, I want to be a spectrum analyzer!")
                 .child_space(Stretch(1.0))
                 .width(Percentage(100.0))
-                .background_color(Color::rgb(0xc4, 0xc4, 0xc4))
+                .background_color(DARK_GRAY)
                 .height(Pixels(SPECTRUM_ANALYZER_HEIGHT as f32));
 
             Label::new(cx, "Frequency")
