@@ -30,7 +30,7 @@ mod button;
 const EDITOR_WIDTH: u32 = 600;
 const EDITOR_HEIGHT: u32 = 490;
 
-const SPECTRUM_ANALYZER_HEIGHT: u32 = 260;
+const SPECTRUM_ANALYZER_HEIGHT: f32 = 260.0;
 
 const DARK_GRAY: Color = Color::rgb(0xc4, 0xc4, 0xc4);
 const DARKER_GRAY: Color = Color::rgb(0x69, 0x69, 0x69);
@@ -120,7 +120,7 @@ fn top_bar(cx: &mut Context) {
 /// This shows a spectrum analyzer for the plugin's output, and also acts as an X-Y pad for the
 /// frequency and resonance parameters.
 fn spectrum_analyzer(cx: &mut Context) {
-    const LABEL_HEIGHT: u32 = 20;
+    const LABEL_HEIGHT: f32 = 20.0;
 
     HStack::new(cx, |cx| {
         Label::new(cx, "Resonance")
@@ -129,8 +129,8 @@ fn spectrum_analyzer(cx: &mut Context) {
             //       least visually does the right thing
             .text_wrap(false)
             .rotate(270.0f32)
-            .width(Pixels(LABEL_HEIGHT as f32))
-            .height(Pixels(SPECTRUM_ANALYZER_HEIGHT as f32))
+            .width(Pixels(LABEL_HEIGHT))
+            .height(Pixels(SPECTRUM_ANALYZER_HEIGHT))
             // HACK: The `.space()` on the HStack doesn't seem to work correctly here
             .left(Pixels(10.0))
             .right(Pixels(-5.0))
@@ -150,7 +150,7 @@ fn spectrum_analyzer(cx: &mut Context) {
             .child_space(Stretch(1.0))
             .width(Percentage(100.0))
             .background_color(DARK_GRAY)
-            .height(Pixels(SPECTRUM_ANALYZER_HEIGHT as f32));
+            .height(Pixels(SPECTRUM_ANALYZER_HEIGHT));
 
             Label::new(cx, "Frequency")
                 .font_size(18.0)
