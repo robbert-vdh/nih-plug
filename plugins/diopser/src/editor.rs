@@ -26,6 +26,7 @@ use self::button::SafeModeButton;
 use crate::{Diopser, DiopserParams};
 
 mod button;
+mod xy_pad;
 
 const EDITOR_WIDTH: u32 = 600;
 const EDITOR_HEIGHT: u32 = 490;
@@ -140,12 +141,14 @@ fn spectrum_analyzer(cx: &mut Context) {
             ZStack::new(cx, |cx| {
                 Label::new(cx, "When I grow up, I want to be a spectrum analyzer!");
 
-                Label::new(
+                xy_pad::XyPad::new(
                     cx,
-                    "When I close my eyes sometimes I\npretend to be an X-Y pad.",
+                    Data::params,
+                    |params| &params.filter_frequency,
+                    |params| &params.filter_resonance,
                 )
-                .font_size(25.0)
-                .rotate(17.0f32);
+                .width(Percentage(100.0))
+                .height(Percentage(100.0));
             })
             .child_space(Stretch(1.0))
             .width(Percentage(100.0))

@@ -31,3 +31,7 @@ param-button.safe-mode:checked {
   /* Can't use width: auto here, but we'll try to roughly match the padding of the top bar buttons */
   width: 170px;
 }
+
+xy-pad {
+  overflow: hidden;
+}
