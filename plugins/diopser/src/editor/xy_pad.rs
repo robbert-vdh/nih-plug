@@ -19,6 +19,10 @@ use nih_plug_vizia::vizia::prelude::*;
 use nih_plug_vizia::widgets::param_base::ParamWidgetBase;
 use nih_plug_vizia::widgets::util::{self, ModifiersExt};
 
+/// When shift+dragging the X-Y pad, one pixel dragged corresponds to this much change in the
+/// normalized parameter.
+const GRANULAR_DRAG_MULTIPLIER: f32 = 0.1;
+
 // TODO: Vizia doesn't let you do this -50% translation programmatically yet, so this is hardcoded
 //       for now
 const HANDLE_WIDTH_PX: f32 = 20.0;
@@ -29,7 +33,6 @@ const HANDLE_WIDTH_PX: f32 = 20.0;
 //
 // TODO: Text entry for the x-parameter
 // TODO: Tooltip
-// TODO: Granular dragging
 pub struct XyPad {
     x_param_base: ParamWidgetBase,
     y_param_base: ParamWidgetBase,
@@ -37,10 +40,25 @@ pub struct XyPad {
     /// Will be set to `true` if we're dragging the parameter. Resetting the parameter or entering a
     /// text value should not initiate a drag.
     drag_active: bool,
+    /// This keeps track of whether the user has pressed shift and a granular drag is active. This
+    /// works exactly the same as in `ParamSlider`.
+    granular_drag_status: Option<GranularDragStatus>,
 }
 
 /// The [`XyPad`]'s handle. This is a separate eleemnt to allow easier positioning.
 struct XyPadHandle;
+
+#[derive(Debug, Clone, Copy)]
+struct GranularDragStatus {
+    /// The mouse's X-coordinate when the granular drag was started.
+    pub starting_x_coordinate: f32,
+    /// The normalized value when the granular drag was started for the X-parameter.
+    pub x_starting_value: f32,
+    /// The mouse's Y-coordinate when the granular drag was started.
+    pub starting_y_coordinate: f32,
+    /// The normalized value when the granular drag was started for the Y-parameter.
+    pub y_starting_value: f32,
+}
 
 impl XyPad {
     /// Creates a new [`XyPad`] for the given parameter. See
@@ -65,6 +83,7 @@ impl XyPad {
             y_param_base: ParamWidgetBase::new(cx, params.clone(), params_to_y_param),
 
             drag_active: false,
+            granular_drag_status: None,
         }
         .build(
             cx,
@@ -182,22 +201,23 @@ impl View for XyPad {
                     cx.focus();
                     cx.set_active(true);
 
-                    // When holding down shift while clicking on a parameter we want to granuarly
+                    // When holding down shift while clicking on the X-Y pad we want to granuarly
                     // edit the parameter without jumping to a new value
                     self.begin_set_parameters(cx);
-                    // TODO: Granular dragging
-                    // if cx.modifiers.shift() {
-                    //     self.granular_drag_start_x_value = Some((
-                    //         cx.mouse.cursorx,
-                    //         self.param_base.unmodulated_normalized_value(),
-                    //     ));
-                    // } else {
-                    //     self.granular_drag_start_x_value = None;
-                    self.set_normalized_values_for_mouse_pos(
-                        cx,
-                        (cx.mouse.cursorx, cx.mouse.cursory),
-                    );
-                    // }
+                    if cx.modifiers.shift() {
+                        self.granular_drag_status = Some(GranularDragStatus {
+                            starting_x_coordinate: cx.mouse.cursorx,
+                            x_starting_value: self.x_param_base.unmodulated_normalized_value(),
+                            starting_y_coordinate: cx.mouse.cursory,
+                            y_starting_value: self.y_param_base.unmodulated_normalized_value(),
+                        });
+                    } else {
+                        self.granular_drag_status = None;
+                        self.set_normalized_values_for_mouse_pos(
+                            cx,
+                            (cx.mouse.cursorx, cx.mouse.cursory),
+                        );
+                    }
                 }
 
                 meta.consume();
@@ -226,49 +246,57 @@ impl View for XyPad {
                 if self.drag_active {
                     // If shift is being held then the drag should be more granular instead of
                     // absolute
-                    // TODO: Granular dragging
-                    // if cx.modifiers.shift() {
-                    //     let (drag_start_x, drag_start_value) =
-                    //         *self.granular_drag_start_x_value.get_or_insert_with(|| {
-                    //             (
-                    //                 cx.mouse.cursorx,
-                    //                 self.param_base.unmodulated_normalized_value(),
-                    //             )
-                    //         });
+                    // TODO: Mouse warping is really needed here, but it's not exposed right now
+                    if cx.modifiers.shift() {
+                        let granular_drag_status =
+                            *self
+                                .granular_drag_status
+                                .get_or_insert_with(|| GranularDragStatus {
+                                    starting_x_coordinate: *x,
+                                    x_starting_value: self
+                                        .x_param_base
+                                        .unmodulated_normalized_value(),
+                                    starting_y_coordinate: *y,
+                                    y_starting_value: self
+                                        .y_param_base
+                                        .unmodulated_normalized_value(),
+                                });
 
-                    //     self.set_normalized_value_drag(
-                    //         cx,
-                    //         util::remap_current_entity_x_coordinate(
-                    //             cx,
-                    //             // This can be optimized a bit
-                    //             util::remap_current_entity_x_t(cx, drag_start_value)
-                    //                 + (*x - drag_start_x) * GRANULAR_DRAG_MULTIPLIER,
-                    //         ),
-                    //     );
-                    // } else {
-                    //     self.granular_drag_start_x_value = None;
-
-                    //     self.set_normalized_value_drag(
-                    //         cx,
-                    //         util::remap_current_entity_x_coordinate(cx, *x),
-                    //     );
-                    // }
-
-                    self.set_normalized_values_for_mouse_pos(cx, (*x, *y));
+                        self.set_normalized_values_for_mouse_pos(
+                            cx,
+                            (
+                                // This can be optimized a bit
+                                util::remap_current_entity_x_t(
+                                    cx,
+                                    granular_drag_status.x_starting_value,
+                                ) + ((*x - granular_drag_status.starting_x_coordinate)
+                                    * GRANULAR_DRAG_MULTIPLIER),
+                                (util::remap_current_entity_y_t(
+                                    cx,
+                                    // NOTE: Just like above, the corodinates go from top to bottom
+                                    //       while we want the X-Y pad to go from bottom to top
+                                    1.0 - granular_drag_status.y_starting_value,
+                                ) + ((*y - granular_drag_status.starting_y_coordinate)
+                                    * GRANULAR_DRAG_MULTIPLIER)),
+                            ),
+                        );
+                    } else {
+                        self.granular_drag_status = None;
+                        self.set_normalized_values_for_mouse_pos(cx, (*x, *y));
+                    }
                 }
             }
-            // TODO: Granular dragging
-            // WindowEvent::KeyUp(_, Some(Key::Shift)) => {
-            //     // If this happens while dragging, snap back to reality uh I mean the current screen
-            //     // position
-            //     if self.drag_active && self.granular_drag_start_x_value.is_some() {
-            //         self.granular_drag_start_x_value = None;
-            //         self.param_base.set_normalized_value(
-            //             cx,
-            //             util::remap_current_entity_x_coordinate(cx, cx.mouse.cursorx),
-            //         );
-            //     }
-            // }
+            WindowEvent::KeyUp(_, Some(Key::Shift)) => {
+                // If this happens while dragging, snap back to reality uh I mean the current screen
+                // position
+                if self.drag_active && self.granular_drag_status.is_some() {
+                    self.granular_drag_status = None;
+                    self.set_normalized_values_for_mouse_pos(
+                        cx,
+                        (cx.mouse.cursorx, cx.mouse.cursory),
+                    );
+                }
+            }
             // TODO: Scrolling, because why not. Could be useful on laptops/with touchpads.
             _ => {}
         });
