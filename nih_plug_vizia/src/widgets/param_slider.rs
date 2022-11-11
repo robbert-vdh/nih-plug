@@ -25,7 +25,7 @@ pub struct ParamSlider {
     /// We keep track of the start coordinate and normalized value when holding down Shift while
     /// dragging for higher precision dragging. This is a `None` value when granular dragging is not
     /// active.
-    granular_drag_start_x_value: Option<(f32, f32)>,
+    granular_drag_status: Option<GranularDragStatus>,
 
     // These fields are set through modifiers:
     /// Whether or not to listen to scroll events for changing the parameter's value in steps.
@@ -67,6 +67,15 @@ enum ParamSliderEvent {
     TextInput(String),
 }
 
+// TODO: Vizia's lens derive macro requires this to be marked as pub
+#[derive(Debug, Clone, Copy)]
+pub struct GranularDragStatus {
+    /// The mouse's X-coordinate when the granular drag was started.
+    pub starting_x_coordinate: f32,
+    /// The normalized value when the granular drag was started.
+    pub starting_value: f32,
+}
+
 impl ParamSlider {
     /// Creates a new [`ParamSlider`] for the given parameter. To accommodate VIZIA's mapping system,
     /// you'll need to provide a lens containing your `Params` implementation object (check out how
@@ -95,7 +104,7 @@ impl ParamSlider {
 
             text_input_active: false,
             drag_active: false,
-            granular_drag_start_x_value: None,
+            granular_drag_status: None,
 
             use_scroll_wheel: true,
             scrolled_lines: 0.0,
@@ -477,12 +486,12 @@ impl View for ParamSlider {
                     // edit the parameter without jumping to a new value
                     self.param_base.begin_set_parameter(cx);
                     if cx.modifiers.shift() {
-                        self.granular_drag_start_x_value = Some((
-                            cx.mouse.cursorx,
-                            self.param_base.unmodulated_normalized_value(),
-                        ));
+                        self.granular_drag_status = Some(GranularDragStatus {
+                            starting_x_coordinate: cx.mouse.cursorx,
+                            starting_value: self.param_base.unmodulated_normalized_value(),
+                        });
                     } else {
-                        self.granular_drag_start_x_value = None;
+                        self.granular_drag_status = None;
                         self.set_normalized_value_drag(
                             cx,
                             util::remap_current_entity_x_coordinate(cx, cx.mouse.cursorx),
@@ -518,25 +527,28 @@ impl View for ParamSlider {
                     // If shift is being held then the drag should be more granular instead of
                     // absolute
                     if cx.modifiers.shift() {
-                        let (drag_start_x, drag_start_value) =
-                            *self.granular_drag_start_x_value.get_or_insert_with(|| {
-                                (
-                                    cx.mouse.cursorx,
-                                    self.param_base.unmodulated_normalized_value(),
-                                )
-                            });
+                        let granular_drag_status =
+                            *self
+                                .granular_drag_status
+                                .get_or_insert_with(|| GranularDragStatus {
+                                    starting_x_coordinate: *x,
+                                    starting_value: self.param_base.unmodulated_normalized_value(),
+                                });
 
                         self.set_normalized_value_drag(
                             cx,
                             util::remap_current_entity_x_coordinate(
                                 cx,
                                 // This can be optimized a bit
-                                util::remap_current_entity_x_t(cx, drag_start_value)
-                                    + (*x - drag_start_x) * GRANULAR_DRAG_MULTIPLIER,
+                                util::remap_current_entity_x_t(
+                                    cx,
+                                    granular_drag_status.starting_value,
+                                ) + ((*x - granular_drag_status.starting_x_coordinate)
+                                    * GRANULAR_DRAG_MULTIPLIER),
                             ),
                         );
                     } else {
-                        self.granular_drag_start_x_value = None;
+                        self.granular_drag_status = None;
 
                         self.set_normalized_value_drag(
                             cx,
@@ -548,8 +560,8 @@ impl View for ParamSlider {
             WindowEvent::KeyUp(_, Some(Key::Shift)) => {
                 // If this happens while dragging, snap back to reality uh I mean the current screen
                 // position
-                if self.drag_active && self.granular_drag_start_x_value.is_some() {
-                    self.granular_drag_start_x_value = None;
+                if self.drag_active && self.granular_drag_status.is_some() {
+                    self.granular_drag_status = None;
                     self.param_base.set_normalized_value(
                         cx,
                         util::remap_current_entity_x_coordinate(cx, cx.mouse.cursorx),
