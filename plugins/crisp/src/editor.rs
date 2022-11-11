@@ -22,9 +22,6 @@ use std::sync::Arc;
 
 use crate::CrispParams;
 
-/// VIZIA uses points instead of pixels for text
-const POINT_SCALE: f32 = 0.75;
-
 #[derive(Lens)]
 struct Data {
     params: Arc<CrispParams>,
@@ -55,7 +52,7 @@ pub(crate) fn create(
         VStack::new(cx, |cx| {
             Label::new(cx, "Crisp")
                 .font(assets::NOTO_SANS_THIN)
-                .font_size(40.0 * POINT_SCALE)
+                .font_size(30.0)
                 .height(Pixels(50.0))
                 .child_top(Stretch(1.0))
                 .child_bottom(Pixels(0.0))

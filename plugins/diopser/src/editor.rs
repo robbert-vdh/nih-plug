@@ -26,9 +26,6 @@ use crate::DiopserParams;
 
 mod button;
 
-/// VIZIA uses points instead of pixels for text
-const POINT_SCALE: f32 = 0.75;
-
 const EDITOR_WIDTH: u32 = 600;
 const EDITOR_HEIGHT: u32 = 490;
 
@@ -80,7 +77,7 @@ fn top_bar(cx: &mut Context) {
     HStack::new(cx, |cx| {
         Label::new(cx, "Diopser")
             .font(assets::NOTO_SANS_THIN)
-            .font_size(50.0 * POINT_SCALE)
+            .font_size(40.0)
             .top(Pixels(-2.0))
             .left(Pixels(7.0));
 
