@@ -136,21 +136,38 @@ pub fn v2s_f32_hz_then_khz(digits: usize) -> Arc<dyn Fn(f32) -> String + Send + 
 }
 
 /// Convert an input in the same format at that of [`v2s_f32_hz_then_khz()] to a Hertz value. This
-/// additionally also accepts note names in the same format as [`s2v_i32_note_formatter()`].
+/// additionally also accepts note names in the same format as [`s2v_i32_note_formatter()`], and
+/// optionally also with cents in the form of `D#5, -23 ct.`.
 pub fn s2v_f32_hz_then_khz() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> {
     // FIXME: This is a very crude way to reuse the note value formatter. There's no real runtime
     //        penalty for doing it this way, but it does look less pretty.
     let note_formatter = s2v_i32_note_formatter();
 
     Arc::new(move |string| {
+        let string = string.trim();
+
         // If the user inputs a note representation, then we'll use that
-        if let Some(midi_note_number) = note_formatter(string) {
+        if let Some((midi_note_number_str, cents_str)) = string.split_once(',') {
+            // If it contains a comma we'll also try parsing cents
+            let cents_str = cents_str
+                .trim_start_matches([' ', '+', 'c', 'e', 'n', 't', 's', '.'])
+                .trim_end();
+
+            if let (Some(midi_note_number), Ok(cents)) = (
+                note_formatter(midi_note_number_str),
+                cents_str.parse::<i32>(),
+            ) {
+                let plain_note_freq = util::midi_note_to_freq(midi_note_number.clamp(0, 127) as u8);
+                let cents_multiplier = 2.0f32.powf(cents as f32 / 100.0);
+                return Some(plain_note_freq * cents_multiplier);
+            }
+        } else if let Some(midi_note_number) = note_formatter(string) {
             return Some(util::midi_note_to_freq(midi_note_number.clamp(0, 127) as u8));
         }
 
-        let string = string.trim();
+        // Otherwise we'll accept values in either Hz (with or without unit) or kHz
         let cleaned_string = string
-            .trim_end_matches(&[' ', 'k', 'K', 'h', 'H', 'z', 'Z'])
+            .trim_end_matches([' ', 'k', 'K', 'h', 'H', 'z', 'Z'])
             .parse()
             .ok();
         match string.get(string.len().saturating_sub(3)..) {
