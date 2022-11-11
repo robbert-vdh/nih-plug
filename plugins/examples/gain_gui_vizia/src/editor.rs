@@ -9,8 +9,6 @@ use std::time::Duration;
 
 use crate::GainParams;
 
-const STYLE: &str = r#""#;
-
 #[derive(Lens)]
 struct Data {
     params: Arc<GainParams>,
@@ -32,8 +30,6 @@ pub(crate) fn create(
     create_vizia_editor(editor_state, ViziaTheming::Custom, move |cx, _| {
         assets::register_noto_sans_light(cx);
         assets::register_noto_sans_thin(cx);
-
-        cx.add_theme(STYLE);
 
         Data {
             params: params.clone(),
