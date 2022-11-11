@@ -4,6 +4,15 @@
   width: 100%;
 }
 
+#param-sliders .param-label {
+  width: 140px;
+  height: 30px;
+  child-top: 1s;
+  child-right: 10px;
+  child-bottom: 1s;
+  child-left: 1s;
+}
+
 /* The safe mode button reuses the param-button element's style with a different class */
 param-button.safe-mode {
   background-color: #fff28000;
