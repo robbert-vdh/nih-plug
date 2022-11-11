@@ -1084,7 +1084,7 @@ dependencies = [
 
 [[package]]
 name = "diopser"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "nih_plug",
  "nih_plug_vizia",
