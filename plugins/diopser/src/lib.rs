@@ -306,6 +306,8 @@ impl Plugin for Diopser {
         let smoothing_interval =
             unnormalize_automation_precision(self.params.automation_precision.value());
 
+        // TODO: At some point when I have too much time, a crossfade for the bypass. And maybe also
+        //       for the filter stages.
         if !self.params.bypass.value() {
             for mut channel_samples in buffer.iter_samples() {
                 self.maybe_update_filters(smoothing_interval);
