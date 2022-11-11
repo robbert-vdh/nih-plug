@@ -43,7 +43,7 @@ impl ParamButton {
         }
         .build(
             cx,
-            ParamWidgetBase::view(params.clone(), params_to_param, move |cx, param_data| {
+            ParamWidgetBase::build_view(params.clone(), params_to_param, move |cx, param_data| {
                 Label::new(cx, param_data.param().name());
             }),
         )

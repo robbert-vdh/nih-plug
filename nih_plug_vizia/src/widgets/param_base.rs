@@ -119,7 +119,7 @@ impl ParamWidgetBase {
     /// values and access static parameter data.
     ///
     /// This can be used directly as an argument to [`View::build()`].
-    pub fn view<L, Params, P, FMap, F, R>(
+    pub fn build_view<L, Params, P, FMap, F, R>(
         params: L,
         params_to_param: FMap,
         content: F,
