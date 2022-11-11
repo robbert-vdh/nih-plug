@@ -128,11 +128,20 @@ fn spectrum_analyzer(cx: &mut Context) {
             .child_space(Stretch(1.0));
 
         VStack::new(cx, |cx| {
-            Label::new(cx, "When I grow up, I want to be a spectrum analyzer!")
-                .child_space(Stretch(1.0))
-                .width(Percentage(100.0))
-                .background_color(DARK_GRAY)
-                .height(Pixels(SPECTRUM_ANALYZER_HEIGHT as f32));
+            ZStack::new(cx, |cx| {
+                Label::new(cx, "When I grow up, I want to be a spectrum analyzer!");
+
+                Label::new(
+                    cx,
+                    "When I close my eyes sometimes I\npretend to be an X-Y pad.",
+                )
+                .font_size(25.0)
+                .rotate(17.0f32);
+            })
+            .child_space(Stretch(1.0))
+            .width(Percentage(100.0))
+            .background_color(DARK_GRAY)
+            .height(Pixels(SPECTRUM_ANALYZER_HEIGHT as f32));
 
             Label::new(cx, "Frequency")
                 .font_size(18.0)
