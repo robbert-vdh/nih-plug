@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use nih_plug::nih_debug_assert_failure;
 use nih_plug::prelude::{Editor, Plugin};
 use nih_plug_vizia::vizia::prelude::*;
 use nih_plug_vizia::widgets::*;
@@ -84,7 +85,15 @@ fn top_bar(cx: &mut Context) {
             .font(assets::NOTO_SANS_THIN)
             .font_size(37.0)
             .top(Pixels(-2.0))
-            .left(Pixels(8.0));
+            .left(Pixels(8.0))
+            .on_mouse_down(|_, _| {
+                // Try to open the Diopser plugin's page when clicking on the title. If this fails
+                // then that's not a problem
+                let result = open::that(Diopser::URL);
+                if cfg!(debug) && result.is_err() {
+                    nih_debug_assert_failure!("Failed to open web browser: {:?}", result);
+                }
+            });
         Label::new(cx, Diopser::VERSION)
             .color(DARKER_GRAY)
             .top(Stretch(1.0))

@@ -21,4 +21,5 @@ nih_plug_vizia = { path = "../../nih_plug_vizia" }
 
 # For the GUI
 realfft = "3.0"
+open = "3.0"
 triple_buffer = "6.0"
