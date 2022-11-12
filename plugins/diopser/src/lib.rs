@@ -209,7 +209,7 @@ impl DiopserParams {
             // This needs quite a bit of smoothing to avoid artifacts
             .with_smoother(SmoothingStyle::Logarithmic(100.0))
             // This includes the unit
-            .with_value_to_string(formatters::v2s_f32_hz_then_khz(0))
+            .with_value_to_string(formatters::v2s_f32_hz_then_khz_with_note_name(0, true))
             .with_string_to_value(formatters::s2v_f32_hz_then_khz()),
             filter_resonance: FloatParam::new(
                 "Filter Resonance",
