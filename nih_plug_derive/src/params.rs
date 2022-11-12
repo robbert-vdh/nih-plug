@@ -31,9 +31,9 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
     // keys at compile time.
     // TODO: This duplication check doesn't work for nested fields since we don't know anything
     //       about the fields on the nested structs
-    let mut params: Vec<Param> = Vec::new();
+    let mut params: Vec<AnyParam> = Vec::new();
     let mut persistent_fields: Vec<PersistentField> = Vec::new();
-    let mut nested_params: Vec<NestedParams> = Vec::new();
+    let mut group_params: Vec<NestedParams> = Vec::new();
     for field in fields.named {
         let field_name = match &field.ident {
             Some(ident) => ident,
@@ -62,7 +62,10 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                         // This is a vector since we want to preserve the order. If structs get
                         // large enough to the point where a linear search starts being expensive,
                         // then the plugin should probably start splitting up their parameters.
-                        if params.iter().any(|p| p.id == s) {
+                        if params.iter().any(|p| match p {
+                            AnyParam::Single(param) => param.id == s,
+                            _ => false,
+                        }) {
                             return syn::Error::new(
                                 field.span(),
                                 "Multiple parameters with the same ID found",
@@ -71,10 +74,10 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                             .into();
                         }
 
-                        params.push(Param {
+                        params.push(AnyParam::Single(Param {
                             id: s,
                             field: field_name.clone(),
-                        });
+                        }));
 
                         processed_attribute = true;
                     }
@@ -204,7 +207,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                             }
                         }
 
-                        nested_params.push(match (nested_array, nested_id_prefix) {
+                        let param = match (nested_array, nested_id_prefix) {
                             (true, None) => NestedParams::Array {
                                 field: field_name.clone(),
                                 group: nested_group,
@@ -226,7 +229,20 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                                 .to_compile_error()
                                 .into()
                             }
-                        });
+                        };
+
+                        // Grouped parameters are handled differently than nested parameters:
+                        // DAWs that support grouped parameters usually display parameter groups below "regular" ones
+                        // in a tree view. To keep the order consistent with those, group parameters are collected
+                        // separately, so they can be inserted at the end of the parameter list.
+                        // Nested parameters without a group on the other hand are merely an implementation detail of
+                        // the plugin and thus should not behave different than regular parameters to the user. Because
+                        // of this, they are inserted alongside the "regular" ones.
+                        if param.is_group() {
+                            group_params.push(param);
+                        } else {
+                            params.push(AnyParam::Nested(param));
+                        }
 
                         processed_attribute = true;
                     }
@@ -247,21 +263,17 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
     // The next step is build the gathered information into tokens that can be spliced into a
     // `Params` implementation
     let param_map_tokens = {
-        // `param_map` adds the parameters from this struct, and then handles the nested tokens.
-        let param_mapping_self_tokens = params.into_iter().map(
-            |Param {field, id}| quote! { (String::from(#id), self.#field.as_ptr(), String::new()) },
-        );
-
-        let param_mapping_nested_tokens = nested_params.iter().map(|p| p.to_token());
+        let param_mapping_self_tokens = params.into_iter().map(|p| p.to_token());
+        let param_mapping_group_tokens = group_params.iter().map(|p| p.to_token());
 
         quote! {
             // This may not be in scope otherwise, used to call .as_ptr()
             use ::nih_plug::params::Param;
 
             #[allow(unused_mut)]
-            let mut param_map = vec![#(#param_mapping_self_tokens),*];
-
-            #(param_map.extend(#param_mapping_nested_tokens); )*
+            let mut param_map = Vec::new();
+            #(param_map.extend(#param_mapping_self_tokens); )*
+            #(param_map.extend(#param_mapping_group_tokens); )*
 
             param_map
         }
@@ -318,7 +330,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                 .unzip();
 
         let (serialize_fields_nested_tokens, deserialize_fields_nested_tokens): (Vec<_>, Vec<_>) =
-            nested_params
+            group_params
                 .iter()
                 .map(|nested| match nested {
                     NestedParams::Inline { field, .. } | NestedParams::Prefixed { field, .. } => (
@@ -390,6 +402,23 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
     .into()
 }
 
+#[derive(Debug)]
+enum AnyParam {
+    Single(Param),
+    Nested(NestedParams),
+}
+
+impl AnyParam {
+    fn to_token(&self) -> proc_macro2::TokenStream {
+        match self {
+            AnyParam::Single(Param { field, id }) => {
+                quote! { [(String::from(#id), self.#field.as_ptr(), String::new())] }
+            }
+            AnyParam::Nested(params) => params.to_token(),
+        }
+    }
+}
+
 /// A parameter that should be added to the parameter map.
 #[derive(Debug)]
 struct Param {
@@ -434,6 +463,20 @@ enum NestedParams {
 }
 
 impl NestedParams {
+    fn is_group(&self) -> bool {
+        let group = match self {
+            NestedParams::Inline { field: _, group } => group,
+            NestedParams::Prefixed {
+                field: _,
+                id_prefix: _,
+                group,
+            } => group,
+            NestedParams::Array { field: _, group } => group,
+        };
+
+        group.is_some()
+    }
+
     fn to_token(&self) -> proc_macro2::TokenStream {
         // How nested parameters are handled depends on the `NestedParams` variant.
         // These are pairs of `(parameter_id, param_ptr, param_group)`. The specific

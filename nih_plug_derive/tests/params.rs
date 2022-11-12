@@ -106,11 +106,12 @@ mod param_order {
     fn nested() {
         let p = NestedParams::default();
 
-        // Parameters must have the same order as they are defined in. Nested parameters are put in the end though.
+        // Parameters must have the same order as they are defined in. The position of nested parameters which are not
+        // grouped explicitly is preserved.
         let param_ids: Vec<String> = p.param_map().into_iter().map(|(id, _, _)| id).collect();
         assert_eq!(
             param_ids,
-            ["one", "three", "two_one", "two_two", "two_three"]
+            ["one", "two_one", "two_two", "two_three", "three",]
         );
     }
 }
