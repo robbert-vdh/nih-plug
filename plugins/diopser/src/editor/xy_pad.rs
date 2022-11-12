@@ -344,23 +344,28 @@ impl View for XyPad {
                                         .unmodulated_normalized_value(),
                                 });
 
+                        // These positions should be compensated for the DPI scale so it remains
+                        // consistent
+                        let start_x = util::remap_current_entity_x_t(
+                            cx,
+                            granular_drag_status.x_starting_value,
+                        );
+                        let delta_x = ((*x - granular_drag_status.starting_x_coordinate)
+                            * GRANULAR_DRAG_MULTIPLIER)
+                            * dpi_scale;
+                        let start_y = util::remap_current_entity_y_t(
+                            cx,
+                            // NOTE: Just like above, the corodinates go from top to bottom
+                            //       while we want the X-Y pad to go from bottom to top
+                            1.0 - granular_drag_status.y_starting_value,
+                        );
+                        let delta_y = ((*y - granular_drag_status.starting_y_coordinate)
+                            * GRANULAR_DRAG_MULTIPLIER)
+                            * dpi_scale;
+
                         self.set_normalized_values_for_mouse_pos(
                             cx,
-                            (
-                                // This can be optimized a bit
-                                util::remap_current_entity_x_t(
-                                    cx,
-                                    granular_drag_status.x_starting_value,
-                                ) + ((*x - granular_drag_status.starting_x_coordinate)
-                                    * GRANULAR_DRAG_MULTIPLIER),
-                                (util::remap_current_entity_y_t(
-                                    cx,
-                                    // NOTE: Just like above, the corodinates go from top to bottom
-                                    //       while we want the X-Y pad to go from bottom to top
-                                    1.0 - granular_drag_status.y_starting_value,
-                                ) + ((*y - granular_drag_status.starting_y_coordinate)
-                                    * GRANULAR_DRAG_MULTIPLIER)),
-                            ),
+                            (start_x + delta_x, start_y + delta_y),
                         );
                     } else {
                         self.granular_drag_status = None;

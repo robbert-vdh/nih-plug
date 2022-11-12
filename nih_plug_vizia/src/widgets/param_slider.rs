@@ -535,17 +535,17 @@ impl View for ParamSlider {
                                     starting_value: self.param_base.unmodulated_normalized_value(),
                                 });
 
+                        // These positions should be compensated for the DPI scale so it remains
+                        // consistent
+                        let start_x =
+                            util::remap_current_entity_x_t(cx, granular_drag_status.starting_value);
+                        let delta_x = ((*x - granular_drag_status.starting_x_coordinate)
+                            * GRANULAR_DRAG_MULTIPLIER)
+                            * cx.style.dpi_factor as f32;
+
                         self.set_normalized_value_drag(
                             cx,
-                            util::remap_current_entity_x_coordinate(
-                                cx,
-                                // This can be optimized a bit
-                                util::remap_current_entity_x_t(
-                                    cx,
-                                    granular_drag_status.starting_value,
-                                ) + ((*x - granular_drag_status.starting_x_coordinate)
-                                    * GRANULAR_DRAG_MULTIPLIER),
-                            ),
+                            util::remap_current_entity_x_coordinate(cx, start_x + delta_x),
                         );
                     } else {
                         self.granular_drag_status = None;
