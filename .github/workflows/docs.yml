@@ -33,7 +33,7 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-          key: ${{ runner.name }}-${{ matrix.cross-target }}
+          key: ${{ matrix.name }}-${{ matrix.cross-target }}
       - uses: actions/cache@v2
         with:
           if: "!startsWith(matrix.os, 'windows')"
@@ -42,7 +42,7 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: ${{ runner.name }}-${{ matrix.cross-target }}
+          key: ${{ matrix.name }}-${{ matrix.cross-target }}
 
       - name: Set up Rust toolchain
         uses: actions-rs/toolchain@v1
