@@ -194,7 +194,7 @@ pub fn s2v_i32_power_of_two() -> Arc<dyn Fn(&str) -> Option<i32> + Send + Sync> 
 /// C4 and 69 is A4 (nice).
 pub fn v2s_i32_note_formatter() -> Arc<dyn Fn(i32) -> String + Send + Sync> {
     Arc::new(move |value| {
-        let note_name = util::NOTES[value as usize % 12];
+        let note_name = util::NOTES[value.rem_euclid(12) as usize];
         let octave = (value / 12) - 1;
         format!("{note_name}{octave}")
     })
