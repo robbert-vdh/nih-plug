@@ -302,7 +302,12 @@ impl View for XyPad {
                     .get_last_child(cx.current())
                     .expect("Missing child view in X-Y pad");
                 let tooltip_bounds = cx.cache.get_bounds(tooltip_entity);
-                self.tooltip_pos_x = if (relative_x + tooltip_bounds.w + 4.0) >= bounds.w {
+                // NOTE: The width can vary drastically depending on the frequency value, so we'll
+                //       hardcode a minimum width in this comparison to avoid this from jumping
+                //       around. The parameter value updates are a bit delayed when dragging the
+                //       parameter, so we may be using an old width here.
+                self.tooltip_pos_x = if (relative_x + tooltip_bounds.w.max(150.0) + 4.0) >= bounds.w
+                {
                     Pixels(relative_x - 2.0 - tooltip_bounds.w)
                 } else {
                     Pixels(relative_x + 2.0)
