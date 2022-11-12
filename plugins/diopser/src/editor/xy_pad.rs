@@ -148,8 +148,13 @@ impl XyPad {
                             // right of the mouse cursor.
                             VStack::new(cx, move |cx| {
                                 // The X-parameter is the 'important' one, so we'll display that at
-                                // the bottom since it's closer to the mouse cursor
-                                Label::new(cx, y_display_value_lens);
+                                // the bottom since it's closer to the mouse cursor. We'll also
+                                // hardcode the `Q: ` prefix for now to make it a bit clearer and to
+                                // reduce the length difference between the lines a bit.
+                                Label::new(
+                                    cx,
+                                    y_display_value_lens.map(|value| format!("Q: {value}")),
+                                );
                                 Label::new(cx, x_display_value_lens);
                             })
                             .class("xy-pad__tooltip")
