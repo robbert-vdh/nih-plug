@@ -11,3 +11,6 @@ proc-macro = true
 [dependencies]
 syn = { version = "1.0", features = ["extra-traits"] }
 quote = "1.0"
+
+[dev-dependencies]
+nih_plug = { path = ".." }

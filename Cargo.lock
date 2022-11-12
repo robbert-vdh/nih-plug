@@ -2640,6 +2640,7 @@ source = "git+https://github.com/robbert-vdh/nih_plug_assets.git#a04e327923e120b
 name = "nih_plug_derive"
 version = "0.1.0"
 dependencies = [
+ "nih_plug",
  "quote",
  "syn",
 ]
