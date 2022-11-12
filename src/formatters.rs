@@ -183,15 +183,15 @@ pub fn s2v_f32_hz_then_khz() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> {
         if let Some((midi_note_number_str, cents_str)) = string.split_once(',') {
             // If it contains a comma we'll also try parsing cents
             let cents_str = cents_str
-                .trim_start_matches([' ', '+', 'c', 'e', 'n', 't', 's', '.'])
-                .trim_end();
+                .trim_start_matches([' ', '+'])
+                .trim_end_matches([' ', 'C', 'c', 'E', 'e', 'N', 'n', 'T', 't', 'S', 's', '.']);
 
             if let (Some(midi_note_number), Ok(cents)) = (
                 note_formatter(midi_note_number_str),
                 cents_str.parse::<i32>(),
             ) {
                 let plain_note_freq = util::f32_midi_note_to_freq(midi_note_number as f32);
-                let cents_multiplier = 2.0f32.powf(cents as f32 / 100.0);
+                let cents_multiplier = 2.0f32.powf(cents as f32 / 100.0 / 12.0);
                 return Some(plain_note_freq * cents_multiplier);
             }
         } else if let Some(midi_note_number) = note_formatter(string) {
