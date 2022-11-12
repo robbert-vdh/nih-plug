@@ -295,6 +295,10 @@ impl View for XyPad {
                 let relative_x = x - bounds.x;
                 let relative_y = y - bounds.y;
 
+                // These positions need to take DPI scaling into account
+                let dpi_scale = cx.style.dpi_factor as f32;
+                let padding = 2.0 * dpi_scale;
+
                 // If there's not enough space at the top right, we'll move the tooltip to the
                 // bottom and/or the left
                 let tooltip_entity = cx
@@ -306,17 +310,20 @@ impl View for XyPad {
                 //       hardcode a minimum width in this comparison to avoid this from jumping
                 //       around. The parameter value updates are a bit delayed when dragging the
                 //       parameter, so we may be using an old width here.
-                self.tooltip_pos_x = if (relative_x + tooltip_bounds.w.max(150.0) + 4.0) >= bounds.w
-                {
-                    Pixels(relative_x - 2.0 - tooltip_bounds.w)
+                let tooltip_pos_x =
+                    if (relative_x + tooltip_bounds.w.max(150.0) + (padding * 2.0)) >= bounds.w {
+                        relative_x - padding - tooltip_bounds.w
+                    } else {
+                        relative_x + padding
+                    };
+                let tooltip_pos_y = if (relative_y - tooltip_bounds.h - (padding * 2.0)) <= 0.0 {
+                    relative_y + padding
                 } else {
-                    Pixels(relative_x + 2.0)
+                    relative_y - padding - tooltip_bounds.h
                 };
-                self.tooltip_pos_y = if (relative_y - tooltip_bounds.h - 4.0) <= 0.0 {
-                    Pixels(relative_y + 2.0)
-                } else {
-                    Pixels(relative_y - 2.0 - tooltip_bounds.h)
-                };
+
+                self.tooltip_pos_x = Pixels(tooltip_pos_x / dpi_scale);
+                self.tooltip_pos_y = Pixels(tooltip_pos_y / dpi_scale);
 
                 if self.drag_active {
                     // If shift is being held then the drag should be more granular instead of
