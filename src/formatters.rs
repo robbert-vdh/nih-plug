@@ -157,12 +157,12 @@ pub fn s2v_f32_hz_then_khz() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> {
                 note_formatter(midi_note_number_str),
                 cents_str.parse::<i32>(),
             ) {
-                let plain_note_freq = util::midi_note_to_freq(midi_note_number.clamp(0, 127) as u8);
+                let plain_note_freq = util::f32_midi_note_to_freq(midi_note_number as f32);
                 let cents_multiplier = 2.0f32.powf(cents as f32 / 100.0);
                 return Some(plain_note_freq * cents_multiplier);
             }
         } else if let Some(midi_note_number) = note_formatter(string) {
-            return Some(util::midi_note_to_freq(midi_note_number.clamp(0, 127) as u8));
+            return Some(util::f32_midi_note_to_freq(midi_note_number as f32));
         }
 
         // Otherwise we'll accept values in either Hz (with or without unit) or kHz
