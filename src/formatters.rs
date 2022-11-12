@@ -135,6 +135,39 @@ pub fn v2s_f32_hz_then_khz(digits: usize) -> Arc<dyn Fn(f32) -> String + Send + 
     })
 }
 
+/// [`v2s_f32_hz_then_khz()`], but also includes the note name. Can be used with
+/// [`s2v_f32_hz_then_khz()`].
+pub fn v2s_f32_hz_then_khz_with_note_name(
+    digits: usize,
+    include_cents: bool,
+) -> Arc<dyn Fn(f32) -> String + Send + Sync> {
+    Arc::new(move |value| {
+        // This is the inverse of the formula in `f32_midi_note_to_freq`
+        let fractional_note = ((value / 440.0).log2() * 12.0) + 69.0;
+        let note = fractional_note.round();
+        let cents = ((fractional_note - note) * 100.0) as i32;
+
+        let note_name = util::NOTES[(note as i32).rem_euclid(12) as usize];
+        let octave = (note as i32 / 12) - 1;
+        let note_str = if cents == 0 || !include_cents {
+            format!("{note_name}{octave}")
+        } else {
+            format!("{note_name}{octave}, {cents:+} ct.")
+        };
+
+        if value < 1000.0 {
+            format!("{:.digits$} Hz, {}", value, note_str)
+        } else {
+            format!(
+                "{:.digits$} kHz, {}",
+                value / 1000.0,
+                note_str,
+                digits = digits.max(1)
+            )
+        }
+    })
+}
+
 /// Convert an input in the same format at that of [`v2s_f32_hz_then_khz()] to a Hertz value. This
 /// additionally also accepts note names in the same format as [`s2v_i32_note_formatter()`], and
 /// optionally also with cents in the form of `D#5, -23 ct.`.
