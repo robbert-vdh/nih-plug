@@ -149,32 +149,30 @@ pub fn main_with_args(command_name: &str, args: impl IntoIterator<Item = String>
 
 /// Change the current directory into the Cargo workspace's root.
 ///
-/// This is using a heuristic to find the workspace root, walking up directories
-/// from `CARGO_MANIFEST_DIR` until another `Cargo.toml` is found, and assuming
-/// that is the active workspace.
+/// This is using a heuristic to find the workspace root. It considers all ancestor directories of
+/// either `CARGO_MANIFEST_DIR` or the current directory, and finds the leftmost one containing a
+/// `Cargo.toml` file.
 pub fn chdir_workspace_root() -> Result<()> {
-    let xtask_project_dir = std::env::var("CARGO_MANIFEST_DIR")
-        .context("'$CARGO_MANIFEST_DIR' was not set, are you running this binary directly?")?;
-    let workspace_root = Path::new(&xtask_project_dir).parent().context(
-        "'$CARGO_MANIFEST_DIR' has an unexpected value, are you running this binary directly?",
-    )?;
+    // This is either the directory of the xtask binary when using `nih_plug_xtask` normally, or any
+    // random project when using it through `cargo nih-plug`.
+    let project_dir = std::env::var("CARGO_MANIFEST_DIR")
+        .map(PathBuf::from)
+        .or_else(|_| std::env::current_dir())
+        .context(
+            "'$CARGO_MANIFEST_DIR' was not set and the current working directory could not be \
+             found",
+        )?;
 
-    // If `workspace_root` is not actually the workspace's root because this xtask binary's `Cargo.toml`
-    // file is in a sub-subdirectory, then we'll walk up the directory stack until we hopefully find
-    // it.
-    let workspace_root = if workspace_root.join("Cargo.toml").exists() {
-        workspace_root
-    } else {
-        let mut workspace_root_candidate = workspace_root;
-        loop {
-            workspace_root_candidate = workspace_root_candidate
-                .parent()
-                .context("Reached the file system root without finding a parent Cargo.toml file")?;
-            if workspace_root_candidate.join("Cargo.toml").exists() {
-                break workspace_root_candidate;
-            }
-        }
-    };
+    let workspace_root = project_dir
+        .ancestors()
+        .filter(|dir| dir.join("Cargo.toml").exists())
+        .last()
+        .with_context(|| {
+            format!(
+                "Could not find a 'Cargo.toml' file in '{}' or any of its parent directories",
+                project_dir.display()
+            )
+        })?;
 
     std::env::set_current_dir(workspace_root)
         .context("Could not change to workspace root directory")
