@@ -166,6 +166,8 @@ pub fn chdir_workspace_root() -> Result<()> {
     let workspace_root = project_dir
         .ancestors()
         .filter(|dir| dir.join("Cargo.toml").exists())
+        // The ancestors are ordered starting from `project_dir` going up to the filesystem root. So
+        // this is the leftmost matching ancestor.
         .last()
         .with_context(|| {
             format!(
