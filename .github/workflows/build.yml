@@ -40,17 +40,17 @@ jobs:
           sudo apt-get install -y libasound2-dev libgl-dev libjack-dev libxcb1-dev libxcb-icccm4-dev libxcursor-dev libxkbcommon-dev libxcb-shape0-dev libxcb-xfixes0-dev
 
       - uses: actions/cache@v2
+        # FIXME: Caching `target/` causes the Windows runner to blow up after some time
+        if: startsWith(matrix.os, 'windows')
         with:
-          # FIXME: Caching `target/` causes the Windows runner to blow up after some time
-          if: startsWith(matrix.os, 'windows')
           path: |
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
           key: ${{ matrix.name }}-${{ matrix.cross-target }}
       - uses: actions/cache@v2
+        if: "!startsWith(matrix.os, 'windows')"
         with:
-          if: "!startsWith(matrix.os, 'windows')"
           path: |
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
