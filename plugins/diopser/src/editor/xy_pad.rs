@@ -18,7 +18,6 @@ use nih_plug::prelude::Param;
 use nih_plug_vizia::vizia::prelude::*;
 use nih_plug_vizia::widgets::param_base::ParamWidgetBase;
 use nih_plug_vizia::widgets::util::{self, ModifiersExt};
-use nih_plug_vizia::widgets::RawParamEvent;
 
 /// When shift+dragging the X-Y pad, one pixel dragged corresponds to this much change in the
 /// normalized parameter.
@@ -66,6 +65,11 @@ pub struct GranularDragStatus {
     pub starting_y_coordinate: f32,
     /// The normalized value when the granular drag was started for the Y-parameter.
     pub y_starting_value: f32,
+}
+
+enum XyPadEvent {
+    /// The tooltip's size has changed. This causes us to recompute the tooltip position.
+    TooltipWidthChanged,
 }
 
 impl XyPad {
@@ -162,6 +166,14 @@ impl XyPad {
                             .left(XyPad::tooltip_pos_x)
                             .top(XyPad::tooltip_pos_y)
                             .position_type(PositionType::SelfDirected)
+                            .on_geo_changed(|cx, change_flags| {
+                                // When a new parameter value causes the width of the tooltip to
+                                // change, we must recompute its position so it stays anchored to
+                                // the mouse cursor
+                                if change_flags.intersects(GeometryChanged::WIDTH_CHANGED) {
+                                    cx.emit(XyPadEvent::TooltipWidthChanged);
+                                }
+                            })
                             .hoverable(false);
                         },
                     );
@@ -271,16 +283,16 @@ impl View for XyPad {
 
     fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
         event.map(|window_event, _meta| {
-            if let RawParamEvent::ParametersChanged = window_event {
-                // The tooltip tracks the mouse position, but it also needs to be recomputed when
-                // the parameter changes while the tooltip is still visible. Without this the
-                // position maya be off when the parameter is automated, or because of the samll
-                // delay between interacting with a parameter and the parameter changing.
-                // FIXME: This _may_ improve the positioning but it most likely doesn't. Relayouting
-                //        happens _after_ this event.
-                if cx.hovered() == cx.current() {
-                    self.update_tooltip_pos(cx);
-                }
+            // With an `if let` clippy complains about the irrefutable match, but in case we add
+            // more events it's a good idea to prevent this from acting as a wildcard.
+            let XyPadEvent::TooltipWidthChanged = window_event;
+
+            // The tooltip tracks the mouse position, but it also needs to be recomputed when
+            // the parameter changes while the tooltip is still visible. Without this the
+            // position maya be off when the parameter is automated, or because of the samll
+            // delay between interacting with a parameter and the parameter changing.
+            if cx.hovered() == cx.current() {
+                self.update_tooltip_pos(cx);
             }
         });
 
@@ -344,7 +356,8 @@ impl View for XyPad {
             }
             WindowEvent::MouseMove(x, y) => {
                 // The tooltip should track the mouse position. This is also recomputed whenever
-                // parameter values change so it stays in the correct position.
+                // parameter values change (and thus the tooltip's width changes) so it stays in the
+                // correct position.
                 self.update_tooltip_pos(cx);
 
                 if self.drag_active {
