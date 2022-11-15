@@ -88,7 +88,10 @@ impl Editor for ViziaEditor {
                     .compare_exchange(true, false, Ordering::AcqRel, Ordering::Relaxed)
                     .is_ok()
                 {
-                    cx.emit(RawParamEvent::ParametersChanged);
+                    cx.emit_custom(
+                        Event::new(RawParamEvent::ParametersChanged)
+                            .propagate(Propagation::Subtree),
+                    );
                 }
             }
         });
