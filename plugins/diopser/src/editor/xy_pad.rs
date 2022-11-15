@@ -282,7 +282,7 @@ impl View for XyPad {
     }
 
     fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
-        event.map(|window_event, _meta| {
+        event.map(|window_event, meta| {
             // With an `if let` clippy complains about the irrefutable match, but in case we add
             // more events it's a good idea to prevent this from acting as a wildcard.
             let XyPadEvent::TooltipWidthChanged = window_event;
@@ -294,6 +294,8 @@ impl View for XyPad {
             if cx.hovered() == cx.current() {
                 self.update_tooltip_pos(cx);
             }
+
+            meta.consume();
         });
 
         event.map(|window_event, meta| match window_event {
