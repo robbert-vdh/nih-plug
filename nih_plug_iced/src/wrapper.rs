@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use crate::futures::FutureExt;
 use crate::{
-    futures, subscription, Application, Color, Command, Element, IcedEditor, Subscription,
-    WindowQueue, WindowScalePolicy, WindowSubs,
+    futures, subscription, Application, Color, Command, Element, IcedEditor, ParameterUpdate,
+    Subscription, WindowQueue, WindowScalePolicy, WindowSubs,
 };
 
 /// Wraps an `iced_baseview` [`Application`] around [`IcedEditor`]. Needed to allow editors to
@@ -19,7 +19,7 @@ pub(crate) struct IcedEditorWrapperApplication<E: IcedEditor> {
     /// We will receive notifications about parameters being changed on here. Whenever a parameter
     /// update gets sent, we will trigger a [`Message::parameterUpdate`] which causes the UI to be
     /// redrawn.
-    parameter_updates_receiver: Arc<channel::Receiver<crate::ParameterUpdate>>,
+    parameter_updates_receiver: Arc<channel::Receiver<ParameterUpdate>>,
 }
 
 /// This wraps around `E::Message` to add a parameter update message which can be handled directly
@@ -53,7 +53,7 @@ impl<E: IcedEditor> Application for IcedEditorWrapperApplication<E> {
     type Message = Message<E>;
     type Flags = (
         Arc<dyn GuiContext>,
-        Arc<channel::Receiver<crate::ParameterUpdate>>,
+        Arc<channel::Receiver<ParameterUpdate>>,
         E::InitializationFlags,
     );
 
