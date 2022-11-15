@@ -3,10 +3,11 @@
 use baseview::{WindowHandle, WindowScalePolicy};
 use crossbeam::atomic::AtomicCell;
 use nih_plug::prelude::{Editor, GuiContext, ParentWindowHandle};
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use vizia::prelude::*;
 
+use crate::widgets::RawParamEvent;
 use crate::{assets, widgets, ViziaState, ViziaTheming};
 
 /// An [`Editor`] implementation that calls an vizia draw loop.
@@ -20,6 +21,13 @@ pub(crate) struct ViziaEditor {
     /// The scaling factor reported by the host, if any. On macOS this will never be set and we
     /// should use the system scaling factor instead.
     pub(crate) scaling_factor: AtomicCell<Option<f32>>,
+
+    /// Whether to emit a parameters changed event during the next idle callback. This is set in the
+    /// `parameter_values_changed()` implementation and it can be used by widgets to explicitly
+    /// check for new parameter values. This is useful when the parameter value is (indirectly) used
+    /// to compute a property in an event handler. Like when positioning an element based on the
+    /// display value's width.
+    pub(crate) emit_parameters_changed_event: Arc<AtomicBool>,
 }
 
 impl Editor for ViziaEditor {
@@ -72,7 +80,18 @@ impl Editor for ViziaEditor {
                 .unwrap_or(WindowScalePolicy::SystemScaleFactor),
         )
         .inner_size((unscaled_width, unscaled_height))
-        .user_scale_factor(user_scale_factor);
+        .user_scale_factor(user_scale_factor)
+        .on_idle({
+            let emit_parameters_changed_event = self.emit_parameters_changed_event.clone();
+            move |cx| {
+                if emit_parameters_changed_event
+                    .compare_exchange(true, false, Ordering::AcqRel, Ordering::Relaxed)
+                    .is_ok()
+                {
+                    cx.emit(RawParamEvent::ParametersChanged);
+                }
+            }
+        });
 
         // This way the plugin can decide to use none of the built in theming
         if theming == ViziaTheming::None {
@@ -102,8 +121,9 @@ impl Editor for ViziaEditor {
     }
 
     fn param_values_changed(&self) {
-        // TODO: Update the GUI when this happens, right now this happens automatically as a result
-        //       of of the reactivity
+        // This will cause a future idle callback to send a parameters changed event.
+        self.emit_parameters_changed_event
+            .store(true, Ordering::Relaxed);
     }
 }
 

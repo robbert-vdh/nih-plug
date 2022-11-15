@@ -61,6 +61,9 @@ pub enum RawParamEvent {
     SetParameterNormalized(ParamPtr, f32),
     /// End an automation gesture for a parameter.
     EndSetParameter(ParamPtr),
+    /// Sent by the wrapper to indicate that one or more parameter values have changed. Useful when
+    /// using properties based on a parameter's value that are computed inside of an event handler.
+    ParametersChanged,
 }
 
 /// Handles parameter updates for VIZIA GUIs. Registered in
@@ -89,6 +92,8 @@ impl Model for ParamModel {
                 self.context.raw_set_parameter_normalized(p, v)
             },
             RawParamEvent::EndSetParameter(p) => unsafe { self.context.raw_end_set_parameter(p) },
+            // This can be used by widgets to be notified when parameter values have changed
+            RawParamEvent::ParametersChanged => (),
         });
     }
 }
