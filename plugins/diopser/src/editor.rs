@@ -42,6 +42,7 @@ struct Data {
 
     /// Whether the safe mode button is enabled. The number of filter stages is capped at 40 while
     /// this is active.
+    /// TODO: Actually hook up safe mode
     safe_mode: Arc<AtomicBool>,
 }
 
