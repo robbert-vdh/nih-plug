@@ -44,6 +44,15 @@ const MAX_AUTOMATION_STEP_SIZE: u32 = 512;
 /// The maximum number of samples to iterate over at a time.
 const MAX_BLOCK_SIZE: usize = 64;
 
+/// The filter frequency parameter's range. Also used in the `SpectrumAnalyzer` widget.
+pub(crate) fn filter_frequency_range() -> FloatRange {
+    FloatRange::Skewed {
+        min: 5.0, // This must never reach 0
+        max: 20_000.0,
+        factor: FloatRange::skew_factor(-2.5),
+    }
+}
+
 // All features from the original Diopser have been implemented (and the spread control has been
 // improved). Other features I want to implement are:
 // - Briefly muting the output when changing the number of filters to get rid of the clicks
@@ -200,11 +209,9 @@ impl DiopserParams {
             filter_frequency: FloatParam::new(
                 "Filter Frequency",
                 200.0,
-                FloatRange::Skewed {
-                    min: 5.0, // This must never reach 0
-                    max: 20_000.0,
-                    factor: FloatRange::skew_factor(-2.5),
-                },
+                // This value is also used in the spectrum analyzer to match the spectrum analyzer
+                // with this parameter which is bound to the X-Y pad's X-axis
+                filter_frequency_range(),
             )
             // This needs quite a bit of smoothing to avoid artifacts
             .with_smoother(SmoothingStyle::Logarithmic(100.0))
