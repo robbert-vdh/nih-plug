@@ -32,7 +32,6 @@ const HANDLE_WIDTH_PX: f32 = 20.0;
 /// Alt+clicking to enter a specific value.
 //
 // TODO: Text entry for the x-parameter
-// TODO: Tooltip
 #[derive(Lens)]
 pub struct XyPad {
     x_param_base: ParamWidgetBase,
