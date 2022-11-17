@@ -117,10 +117,10 @@ mod param_order {
             param_ids,
             [
                 "one",
-                "three",
                 "group1_one",
                 "group1_two",
                 "group1_three",
+                "three",
                 "group2_one",
                 "group2_two",
                 "group2_three",
