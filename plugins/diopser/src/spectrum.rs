@@ -26,8 +26,9 @@ pub const SPECTRUM_WINDOW_SIZE: usize = 2048;
 // Don't need that much precision here
 const SPECTRUM_WINDOW_OVERLAP: usize = 2;
 
-/// The amplitudes of all frequency bins in a windowed FFT of the input, minus the DC offset bin.
-pub type Spectrum = [f32; SPECTRUM_WINDOW_SIZE / 2];
+/// The amplitudes of all frequency bins in a windowed FFT of the input. Also includes the DC offset
+/// bin which we don't draw, just to make this a bit less confusing.
+pub type Spectrum = [f32; SPECTRUM_WINDOW_SIZE / 2 + 1];
 /// A receiver for a spectrum computed by [`SpectrumInput`].
 pub type SpectrumOutput = triple_buffer::Output<Spectrum>;
 
@@ -57,14 +58,14 @@ impl SpectrumInput {
     /// Create a new spectrum input and output pair. The output should be moved to the editor.
     pub fn new(num_channels: usize) -> (SpectrumInput, SpectrumOutput) {
         let (triple_buffer_input, triple_buffer_output) =
-            TripleBuffer::new(&[0.0; SPECTRUM_WINDOW_SIZE / 2]).split();
+            TripleBuffer::new(&[0.0; SPECTRUM_WINDOW_SIZE / 2 + 1]).split();
 
         let input = Self {
             stft: util::StftHelper::new(num_channels, SPECTRUM_WINDOW_SIZE, 0),
             num_channels,
 
             triple_buffer_input,
-            spectrum_result_buffer: [0.0; SPECTRUM_WINDOW_SIZE / 2],
+            spectrum_result_buffer: [0.0; SPECTRUM_WINDOW_SIZE / 2 + 1],
 
             plan: RealFftPlanner::new().plan_fft_forward(SPECTRUM_WINDOW_SIZE),
             compensated_window_function: util::window::hann(SPECTRUM_WINDOW_SIZE)
@@ -98,12 +99,11 @@ impl SpectrumInput {
                 // To be able to reuse `real_fft_scratch_buffer` this function is called per
                 // channel, so we need to use the channel index to do any pre- or post-processing.
                 // Gain compensation has already been baked into the window function.
+                // TODO: This obviously needs a low-pass/moving average
                 if channel_idx == 0 {
                     for (bin, spectrum_result) in self
                         .complex_fft_buffer
                         .iter()
-                        // We don't care about the DC bin
-                        .skip(1)
                         .zip(&mut self.spectrum_result_buffer)
                     {
                         *spectrum_result = bin.norm();
