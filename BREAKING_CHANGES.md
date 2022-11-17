@@ -6,6 +6,12 @@ new and what's changed, this document lists all breaking changes in reverse
 chronological order. If a new feature did not require any changes to existing
 code then it will not be listed here.
 
+## [2022-11-17]
+
+- The order of `#[nested]` parameters in the parameter list now always follows
+  the declaration order instead of nested parameters being ordered below regular
+  parameters.
+
 ## [2022-11-08]
 
 - The `Param::{next_previous}{_step,_normalized_step}()` functions now take an
