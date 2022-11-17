@@ -157,3 +157,69 @@ mod param_order {
         );
     }
 }
+
+mod param_groups {
+    use super::*;
+
+    #[test]
+    fn flat() {
+        let p = FlatParams::default();
+
+        // These groups should be all empty
+        let param_groups: Vec<String> = p
+            .param_map()
+            .into_iter()
+            .map(|(_, _, group)| group)
+            .collect();
+        assert_eq!(param_groups, ["", "", ""]);
+    }
+
+    #[test]
+    fn grouped() {
+        let p = GroupedParams::default();
+
+        let param_groups: Vec<String> = p
+            .param_map()
+            .into_iter()
+            .map(|(_, _, group)| group)
+            .collect();
+        assert_eq!(
+            param_groups,
+            [
+                "",
+                "Some Group",
+                "Some Group",
+                "Some Group",
+                "",
+                "Another Group",
+                "Another Group",
+                "Another Group",
+            ]
+        );
+    }
+
+    #[test]
+    fn nested() {
+        let p = NestedParams::default();
+
+        // The nested structs here don't have any groups assigned to them
+        let param_groups: Vec<String> = p
+            .param_map()
+            .into_iter()
+            .map(|(_, _, group)| group)
+            .collect();
+        assert_eq!(param_groups, ["", "", "", "", ""]);
+    }
+
+    #[test]
+    fn nested_array() {
+        let p = NestedArrayParams::default();
+
+        let param_groups: Vec<String> = p
+            .param_map()
+            .into_iter()
+            .map(|(_, _, group)| group)
+            .collect();
+        assert_eq!(param_groups, ["", "", "", "", "", "", "", "", "", "", ""]);
+    }
+}
