@@ -63,7 +63,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                         // large enough to the point where a linear search starts being expensive,
                         // then the plugin should probably start splitting up their parameters.
                         if params.iter().any(|p| match p {
-                            AnyParam::Single(param) => param.id == s,
+                            AnyParam::Single { id, .. } => &s == id,
                             _ => false,
                         }) {
                             return syn::Error::new(
@@ -74,10 +74,10 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                             .into();
                         }
 
-                        params.push(AnyParam::Single(Param {
+                        params.push(AnyParam::Single {
                             id: s,
                             field: field_name.clone(),
-                        }));
+                        });
 
                         processed_attribute = true;
                     }
@@ -402,30 +402,32 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
     .into()
 }
 
+/// A parameter defined on this struct using the `#[id = "..."]` attribute, or another object that
+/// also implements `Params` tagged with one of the variations on the `#[nested]` attribute.
+// TODO: Rename to Param
 #[derive(Debug)]
 enum AnyParam {
-    Single(Param),
+    /// A parameter that should be added to the parameter map.
+    Single {
+        /// The name of the parameter's field on the struct.
+        field: syn::Ident,
+        /// The parameter's unique ID.
+        id: syn::LitStr,
+    },
+    /// Another struct also implementing `Params`. This object's parameters are inlined in the
+    /// parameter list.
     Nested(NestedParams),
 }
 
 impl AnyParam {
     fn to_token(&self) -> proc_macro2::TokenStream {
         match self {
-            AnyParam::Single(Param { field, id }) => {
+            AnyParam::Single { field, id } => {
                 quote! { [(String::from(#id), self.#field.as_ptr(), String::new())] }
             }
             AnyParam::Nested(params) => params.to_token(),
         }
     }
-}
-
-/// A parameter that should be added to the parameter map.
-#[derive(Debug)]
-struct Param {
-    /// The name of the parameter's field on the struct.
-    field: syn::Ident,
-    /// The parameter's unique ID.
-    id: syn::LitStr,
 }
 
 /// A field containing data that must be stored in the plugin's state.
