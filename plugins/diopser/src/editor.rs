@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use atomic_float::AtomicF32;
 use nih_plug::nih_debug_assert_failure;
 use nih_plug::prelude::{Editor, Plugin};
 use nih_plug_vizia::vizia::prelude::*;
@@ -37,15 +38,17 @@ const SPECTRUM_ANALYZER_HEIGHT: f32 = 260.0;
 const DARK_GRAY: Color = Color::rgb(0xc4, 0xc4, 0xc4);
 const DARKER_GRAY: Color = Color::rgb(0x69, 0x69, 0x69);
 
-#[derive(Lens)]
-struct Data {
-    params: Arc<DiopserParams>,
+#[derive(Lens, Clone)]
+pub(crate) struct Data {
+    pub(crate) params: Arc<DiopserParams>,
 
-    spectrum: Arc<Mutex<SpectrumOutput>>,
+    /// The plugin's current sample rate.
+    pub(crate) sample_rate: Arc<AtomicF32>,
+    pub(crate) spectrum: Arc<Mutex<SpectrumOutput>>,
     /// Whether the safe mode button is enabled. The number of filter stages is capped at 40 while
     /// this is active.
     /// TODO: Actually hook up safe mode
-    safe_mode: Arc<AtomicBool>,
+    pub(crate) safe_mode: Arc<AtomicBool>,
 }
 
 impl Model for Data {}
@@ -55,24 +58,14 @@ pub(crate) fn default_state() -> Arc<ViziaState> {
     ViziaState::from_size(EDITOR_WIDTH, EDITOR_HEIGHT)
 }
 
-pub(crate) fn create(
-    params: Arc<DiopserParams>,
-    spectrum: Arc<Mutex<SpectrumOutput>>,
-    editor_state: Arc<ViziaState>,
-) -> Option<Box<dyn Editor>> {
+pub(crate) fn create(editor_data: Data, editor_state: Arc<ViziaState>) -> Option<Box<dyn Editor>> {
     create_vizia_editor(editor_state, ViziaTheming::Custom, move |cx, _| {
         assets::register_noto_sans_light(cx);
         assets::register_noto_sans_thin(cx);
 
         cx.add_theme(include_str!("editor/theme.css"));
 
-        Data {
-            params: params.clone(),
-
-            spectrum: spectrum.clone(),
-            safe_mode: params.safe_mode.clone(),
-        }
-        .build(cx);
+        editor_data.clone().build(cx);
 
         ResizeHandle::new(cx);
 

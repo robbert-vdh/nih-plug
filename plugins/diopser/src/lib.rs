@@ -299,8 +299,13 @@ impl Plugin for Diopser {
 
     fn editor(&self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
         editor::create(
-            self.params.clone(),
-            self.spectrum_output.clone(),
+            editor::Data {
+                params: self.params.clone(),
+
+                sample_rate: self.sample_rate.clone(),
+                spectrum: self.spectrum_output.clone(),
+                safe_mode: self.params.safe_mode.clone(),
+            },
             self.params.editor_state.clone(),
         )
     }
