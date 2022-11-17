@@ -70,22 +70,48 @@ impl Default for NestedParams {
     }
 }
 
+#[derive(Params)]
+struct NestedArrayParams {
+    #[id = "one"]
+    pub one: BoolParam,
+
+    #[nested(array, group = "Nested Params")]
+    pub lots_of_twos: [FlatParams; 3],
+
+    #[id = "three"]
+    pub three: IntParam,
+}
+
+impl Default for NestedArrayParams {
+    fn default() -> Self {
+        NestedArrayParams {
+            one: BoolParam::new("one", true),
+            lots_of_twos: [
+                FlatParams::default(),
+                FlatParams::default(),
+                FlatParams::default(),
+            ],
+            three: IntParam::new("three", 0, IntRange::Linear { min: 0, max: 100 }),
+        }
+    }
+}
+
 mod param_order {
     use super::*;
+
     #[test]
     fn flat() {
         let p = FlatParams::default();
 
         // Parameters must have the same order as they are defined in
         let param_ids: Vec<String> = p.param_map().into_iter().map(|(id, _, _)| id).collect();
-        assert_eq!(param_ids, ["one", "two", "three",]);
+        assert_eq!(param_ids, ["one", "two", "three"]);
     }
 
     #[test]
     fn grouped() {
         let p = GroupedParams::default();
 
-        // Parameters must have the same order as they are defined in. Groups are put in the end though.
         let param_ids: Vec<String> = p.param_map().into_iter().map(|(id, _, _)| id).collect();
         assert_eq!(
             param_ids,
@@ -106,12 +132,28 @@ mod param_order {
     fn nested() {
         let p = NestedParams::default();
 
-        // Parameters must have the same order as they are defined in. The position of nested parameters which are not
-        // grouped explicitly is preserved.
+        // Parameters must have the same order as they are defined in. The position of nested
+        // parameters which are not grouped explicitly is preserved.
+        let param_ids: Vec<String> = p.param_map().into_iter().map(|(id, _, _)| id).collect();
+
+        assert_eq!(
+            param_ids,
+            ["one", "two_one", "two_two", "two_three", "three"]
+        );
+    }
+
+    #[test]
+    fn nested_array() {
+        let p = NestedArrayParams::default();
+
+        // Arrays of nested parameter structs have generated IDs
         let param_ids: Vec<String> = p.param_map().into_iter().map(|(id, _, _)| id).collect();
         assert_eq!(
             param_ids,
-            ["one", "two_one", "two_two", "two_three", "three",]
+            [
+                "one", "one_1", "two_1", "three_2", "one_2", "two_2", "three_2", "one_3", "two_3",
+                "three_3", "three"
+            ]
         );
     }
 }
