@@ -48,6 +48,12 @@ impl Default for GroupedParams {
     }
 }
 
+#[derive(Default, Params)]
+struct GroupedGroupedParams {
+    #[nested(group = "Top-level group")]
+    pub one: GroupedParams,
+}
+
 #[derive(Params)]
 struct NestedParams {
     #[id = "one"]
@@ -129,6 +135,27 @@ mod param_order {
     }
 
     #[test]
+    fn grouped_groups() {
+        let p = GroupedGroupedParams::default();
+
+        // These don't have ID prefixes, so the IDs should be the same as in `groups()`
+        let param_ids: Vec<String> = p.param_map().into_iter().map(|(id, _, _)| id).collect();
+        assert_eq!(
+            param_ids,
+            [
+                "one",
+                "group1_one",
+                "group1_two",
+                "group1_three",
+                "three",
+                "group2_one",
+                "group2_two",
+                "group2_three",
+            ]
+        );
+    }
+
+    #[test]
     fn nested() {
         let p = NestedParams::default();
 
@@ -151,7 +178,7 @@ mod param_order {
         assert_eq!(
             param_ids,
             [
-                "one", "one_1", "two_1", "three_2", "one_2", "two_2", "three_2", "one_3", "two_3",
+                "one", "one_1", "two_1", "three_1", "one_2", "two_2", "three_2", "one_3", "two_3",
                 "three_3", "three"
             ]
         );
@@ -199,6 +226,30 @@ mod param_groups {
     }
 
     #[test]
+    fn grouped_groups() {
+        let p = GroupedGroupedParams::default();
+
+        let param_groups: Vec<String> = p
+            .param_map()
+            .into_iter()
+            .map(|(_, _, group)| group)
+            .collect();
+        assert_eq!(
+            param_groups,
+            [
+                "Top-level group",
+                "Top-level group/Some Group",
+                "Top-level group/Some Group",
+                "Top-level group/Some Group",
+                "Top-level group",
+                "Top-level group/Another Group",
+                "Top-level group/Another Group",
+                "Top-level group/Another Group",
+            ]
+        );
+    }
+
+    #[test]
     fn nested() {
         let p = NestedParams::default();
 
@@ -215,11 +266,27 @@ mod param_groups {
     fn nested_array() {
         let p = NestedArrayParams::default();
 
+        // The groups get a numeric suffix here
         let param_groups: Vec<String> = p
             .param_map()
             .into_iter()
             .map(|(_, _, group)| group)
             .collect();
-        assert_eq!(param_groups, ["", "", "", "", "", "", "", "", "", "", ""]);
+        assert_eq!(
+            param_groups,
+            [
+                "",
+                "Nested Params 1",
+                "Nested Params 1",
+                "Nested Params 1",
+                "Nested Params 2",
+                "Nested Params 2",
+                "Nested Params 2",
+                "Nested Params 3",
+                "Nested Params 3",
+                "Nested Params 3",
+                ""
+            ]
+        );
     }
 }
