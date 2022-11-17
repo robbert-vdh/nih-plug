@@ -24,7 +24,7 @@ use nih_plug::prelude::*;
 use nih_plug_vizia::ViziaState;
 use std::simd::f32x2;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use crate::spectrum::{SpectrumInput, SpectrumOutput};
 
@@ -78,7 +78,7 @@ pub struct Diopser {
     /// When the GUI is open we compute the spectrum on the audio thread and send it to the GUI.
     spectrum_input: SpectrumInput,
     /// This can be cloned and moved into the editor.
-    spectrum_output: Arc<SpectrumOutput>,
+    spectrum_output: Arc<Mutex<SpectrumOutput>>,
 }
 
 #[derive(Params)]
@@ -158,7 +158,7 @@ impl Default for Diopser {
             next_filter_smoothing_in: 1,
 
             spectrum_input,
-            spectrum_output: Arc::new(spectrum_output),
+            spectrum_output: Arc::new(Mutex::new(spectrum_output)),
         }
     }
 }
@@ -298,7 +298,11 @@ impl Plugin for Diopser {
     }
 
     fn editor(&self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
-        editor::create(self.params.clone(), self.params.editor_state.clone())
+        editor::create(
+            self.params.clone(),
+            self.spectrum_output.clone(),
+            self.params.editor_state.clone(),
+        )
     }
 
     fn accepts_bus_config(&self, config: &BusConfig) -> bool {

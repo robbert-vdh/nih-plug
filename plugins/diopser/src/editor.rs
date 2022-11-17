@@ -20,9 +20,10 @@ use nih_plug_vizia::vizia::prelude::*;
 use nih_plug_vizia::widgets::*;
 use nih_plug_vizia::{assets, create_vizia_editor, ViziaState, ViziaTheming};
 use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use self::button::SafeModeButton;
+use crate::spectrum::SpectrumOutput;
 use crate::{Diopser, DiopserParams};
 
 mod button;
@@ -40,6 +41,7 @@ const DARKER_GRAY: Color = Color::rgb(0x69, 0x69, 0x69);
 struct Data {
     params: Arc<DiopserParams>,
 
+    spectrum: Arc<Mutex<SpectrumOutput>>,
     /// Whether the safe mode button is enabled. The number of filter stages is capped at 40 while
     /// this is active.
     /// TODO: Actually hook up safe mode
@@ -55,6 +57,7 @@ pub(crate) fn default_state() -> Arc<ViziaState> {
 
 pub(crate) fn create(
     params: Arc<DiopserParams>,
+    spectrum: Arc<Mutex<SpectrumOutput>>,
     editor_state: Arc<ViziaState>,
 ) -> Option<Box<dyn Editor>> {
     create_vizia_editor(editor_state, ViziaTheming::Custom, move |cx, _| {
@@ -66,6 +69,7 @@ pub(crate) fn create(
         Data {
             params: params.clone(),
 
+            spectrum: spectrum.clone(),
             safe_mode: params.safe_mode.clone(),
         }
         .build(cx);
