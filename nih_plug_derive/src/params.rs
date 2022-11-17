@@ -31,7 +31,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
     // keys at compile time.
     // TODO: This duplication check doesn't work for nested fields since we don't know anything
     //       about the fields on the nested structs
-    let mut params: Vec<AnyParam> = Vec::new();
+    let mut params: Vec<Param> = Vec::new();
     let mut persistent_fields: Vec<PersistentField> = Vec::new();
     let mut group_params: Vec<NestedParams> = Vec::new();
     for field in fields.named {
@@ -63,7 +63,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                         // large enough to the point where a linear search starts being expensive,
                         // then the plugin should probably start splitting up their parameters.
                         if params.iter().any(|p| match p {
-                            AnyParam::Single { id, .. } => &s == id,
+                            Param::Single { id, .. } => &s == id,
                             _ => false,
                         }) {
                             return syn::Error::new(
@@ -74,7 +74,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                             .into();
                         }
 
-                        params.push(AnyParam::Single {
+                        params.push(Param::Single {
                             id: s,
                             field: field_name.clone(),
                         });
@@ -241,7 +241,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                         if param.is_group() {
                             group_params.push(param);
                         } else {
-                            params.push(AnyParam::Nested(param));
+                            params.push(Param::Nested(param));
                         }
 
                         processed_attribute = true;
@@ -404,9 +404,8 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
 
 /// A parameter defined on this struct using the `#[id = "..."]` attribute, or another object that
 /// also implements `Params` tagged with one of the variations on the `#[nested]` attribute.
-// TODO: Rename to Param
 #[derive(Debug)]
-enum AnyParam {
+enum Param {
     /// A parameter that should be added to the parameter map.
     Single {
         /// The name of the parameter's field on the struct.
@@ -419,13 +418,13 @@ enum AnyParam {
     Nested(NestedParams),
 }
 
-impl AnyParam {
+impl Param {
     fn to_token(&self) -> proc_macro2::TokenStream {
         match self {
-            AnyParam::Single { field, id } => {
+            Param::Single { field, id } => {
                 quote! { [(String::from(#id), self.#field.as_ptr(), String::new())] }
             }
-            AnyParam::Nested(params) => params.to_token(),
+            Param::Nested(params) => params.to_token(),
         }
     }
 }
