@@ -47,6 +47,8 @@ xy-pad .xy-pad__tooltip {
   background-color: #e5e5e5;
   border-color: #0a0a0a;
   border-width: 1px;
+  /* This mimics the text box border radius, everything else is squared off so this adds a bit of flair */
+  border-radius: 3px;
   width: auto;
   height: auto;
   child-right: 5px;
