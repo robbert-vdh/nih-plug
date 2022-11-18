@@ -20,6 +20,8 @@ Limiter](../safety_limiter), which is made for this exact purpose.
 This is a port of https://github.com/robbert-vdh/diopser with more features and
 much better performance.
 
+![Screenshot](https://i.imgur.com/QLtHtQL.png)
+
 <sup id="disperser">
   *Disperser is a trademark of Kilohearts AB. Diopser is in no way related to
   Disperser or Kilohearts AB.
