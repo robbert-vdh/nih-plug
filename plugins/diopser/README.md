@@ -9,23 +9,29 @@ regular equalizers or dynamics processors, especially when applied to low
 pitched or wide band sounds. More extreme settings will make everything sound
 like a cartoon laser beam, or a psytrance kickdrum.
 
-Because this plugin lets you crank every parameter up to 11, you may want to
-avoid rapidly sweeping the frequency parameter down all the way to 5 Hertz when
-you have many filter stages enabled. Because of the way these filters work, this
-may cause comparatively loud resonances in the 0-15 Hertz range. In that case
-you may want to use a peak limiter after this plugin until you understand how it
-reacts to different changes, or maybe you'll want to check out [Safety
-Limiter](../safety_limiter), which is made for this exact purpose.
+![Screenshot](https://i.imgur.com/QLtHtQL.png)
 
 This is a port of https://github.com/robbert-vdh/diopser with more features and
 much better performance.
-
-![Screenshot](https://i.imgur.com/QLtHtQL.png)
 
 <sup id="disperser">
   *Disperser is a trademark of Kilohearts AB. Diopser is in no way related to
   Disperser or Kilohearts AB.
 </sup>
+
+## Tips
+
+- Alt+click on the spectrum analyzer to enter to enter a frequency value in
+  Hertz or musical notes.
+- Hold down Alt/Option while dragging the filter frequency around to snap to
+  whole notes.
+- Because this plugin lets you crank every parameter up to 11, you may want to
+  avoid rapidly sweeping the frequency parameter down all the way to 5 Hertz
+  when you have many filter stages enabled. Because of the way these filters
+  work, this may cause comparatively loud resonances in the 0-15 Hertz range. In
+  that case you may want to use a peak limiter after this plugin until you
+  understand how it reacts to different changes. Or maybe you'll want to check
+  out [Safety Limiter](../safety_limiter), which is made for this exact purpose.
 
 ## Download
 
