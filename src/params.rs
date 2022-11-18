@@ -230,10 +230,7 @@ pub(crate) trait ParamMut: Param {
 /// Finally, the `Params` object may include parameters from other objects. Setting a group name is
 /// optional, but some hosts can use this information to display the parameters in a tree structure.
 /// Parameter IDs and persisting keys still need to be **unique** when using nested parameter
-/// structs. This currently has the following caveats:
-///
-/// - Enforcing that parameter IDs and persist keys are unique does not work across nested structs.
-/// - Deserializing persisted fields will give false positives about fields not existing.
+/// structs.
 ///
 /// Take a look at the example gain example plugin to see how this is used.
 ///
@@ -242,10 +239,9 @@ pub(crate) trait ParamMut: Param {
 /// Adding this attribute to a `Params` sub-object works similarly to the regular `#[nested]`
 /// attribute, but it also adds an ID to all parameters from the nested object. If a parameter in
 /// the nested nested object normally has parameter ID `bar`, the parameter's ID will now be renamed
-/// to `foo_bar`. _This makes it possible to reuse same parameter struct with different names and
+/// to `foo_bar`. The same thing happens with persistent field keys to support multiple copies of
+/// the field. _This makes it possible to reuse the same parameter struct with different names and
 /// parameter indices._
-///
-/// This does **not** support persistent fields.
 ///
 /// ## `#[nested(array, group_name = "Foo")]`
 ///
@@ -253,9 +249,7 @@ pub(crate) trait ParamMut: Param {
 /// with an `id_name`, except that it will iterate over the array and create unique indices for all
 /// nested parameters. If the nested parameters object has a parameter called `bar`, then that
 /// parameter will belong to the group `Foo {array_index + 1}`, and it will have the renamed
-/// parameter ID `bar_{array_index + 1}`.
-///
-/// This does **not** support persistent fields.
+/// parameter ID `bar_{array_index + 1}`. The same thing applies to persistent field keys.
 ///
 /// # Safety
 ///

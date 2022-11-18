@@ -8,6 +8,14 @@ code then it will not be listed here.
 
 ## [2022-11-17]
 
+- The `Params` derive macro now also properly supports persistent fields in
+  `#[nested]` parameter structs. This takes `#[nested(id_prefix = "...")]` and
+  `#[nested(array)]` into account to allow multiple copies of a persistent
+  field. This may break existing usages as serialized field data without a
+  matching preffix or suffix is no longer passed to the child object.
+
+## [2022-11-17]
+
 - The order of `#[nested]` parameters in the parameter list now always follows
   the declaration order instead of nested parameters being ordered below regular
   parameters.

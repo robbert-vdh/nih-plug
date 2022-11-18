@@ -313,6 +313,7 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                 })
                 .unzip();
 
+        // ID prefixes are also added for nested objects
         let (serialize_fields_nested_tokens, deserialize_fields_nested_tokens): (Vec<_>, Vec<_>) =
             params
                 .iter()
@@ -321,23 +322,60 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                     Param::Nested(nested) => Some(nested),
                 })
                 .map(|nested| match nested {
-                    NestedParams::Inline { field, .. } | NestedParams::Prefixed { field, .. } => (
-                        // TODO: For some reason the macro won't parse correctly if you inline this
+                    NestedParams::Inline { field, .. } => (
+                        quote! { serialized.extend(self.#field.serialize_fields()); },
+                        quote! { self.#field.deserialize_fields(serialized); },
+                    ),
+                    NestedParams::Prefixed {
+                        field, id_prefix, ..
+                    } => (
                         quote! {
-                            let inlineme = self.#field.serialize_fields();
-                            serialized.extend(inlineme);
+                            let prefixed = self
+                                .#field
+                                .serialize_fields()
+                                .into_iter()
+                                .map(|(key, value)| (format!("{}_{}", #id_prefix, key), value));
+
+                            serialized.extend(prefixed);
                         },
-                        quote! { self.#field.deserialize_fields(serialized) },
+                        quote! {
+                            let prefix = format!("{}_", #id_prefix);
+                            let matching_fields = serialized
+                                .iter()
+                                .filter_map(|(key, value)| {
+                                    let original_key = key.strip_prefix(&prefix)?;
+                                    Some((original_key.to_owned(), value.to_owned()))
+                                })
+                                .collect();
+
+                            self.#field.deserialize_fields(&matching_fields);
+                        },
                     ),
                     NestedParams::Array { field, .. } => (
                         quote! {
-                            for field in self.#field.iter() {
-                                 serialized.extend(field.serialize_fields());
+                            for (field_idx, field) in self.#field.iter().enumerate() {
+                                let idx = field_idx + 1;
+                                let suffixed = field
+                                    .serialize_fields()
+                                    .into_iter()
+                                    .map(|(key, value)| (format!("{}_{}", key, idx), value));
+
+                                serialized.extend(suffixed);
                             }
                         },
                         quote! {
-                            for field in self.#field.iter() {
-                                field.deserialize_fields(serialized);
+                            for (field_idx, field) in self.#field.iter().enumerate() {
+                                let idx = field_idx + 1;
+                                let suffix = format!("_{}", idx);
+                                let matching_fields = serialized
+                                    .iter()
+                                    .filter_map(|(key, value)| {
+                                        let original_key = key.strip_suffix(&suffix)?;
+                                        Some((original_key.to_owned(), value.to_owned()))
+                                    })
+                                    .collect();
+
+                                field.deserialize_fields(&matching_fields);
                             }
                         },
                     ),
