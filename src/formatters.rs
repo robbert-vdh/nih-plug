@@ -255,11 +255,19 @@ pub fn s2v_i32_note_formatter() -> Arc<dyn Fn(&str) -> Option<i32> + Send + Sync
             return None;
         }
 
-        // A valid trimmed string will either be be two characters (we already checked the length),
-        // or two characters separated by spaces
+        // A valid trimmed string will either be be at least two characters (we already checked the
+        // length) or at least three characters if the second character is a hash, and there may be
+        // spaces in between the note name and the octave number
         let (note_name, octave) = string
             .split_once(|c: char| c.is_whitespace())
-            .unwrap_or_else(|| (&string[..1], &string[1..]));
+            .unwrap_or_else(|| {
+                // Sharps need to be handled separately
+                if string.len() > 2 && &string[1..2] == "#" {
+                    (&string[..2], &string[2..])
+                } else {
+                    (&string[..1], &string[1..])
+                }
+            });
 
         let note_id = util::NOTES
             .iter()
