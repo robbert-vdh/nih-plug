@@ -86,7 +86,7 @@ impl View for SpectrumAnalyzer {
             // We'll match up the bin's x-coordinate with the filter frequency parameter
             let frequency = (bin_idx as f32 / spectrum.len() as f32) * nyquist;
             let t = self.frequency_range.normalize(frequency);
-            if !(0.0..=1.0).contains(&t) {
+            if t <= 0.0 || t >= 1.0 {
                 continue;
             }
 
