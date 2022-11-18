@@ -32,6 +32,10 @@ param-button.safe-mode:checked {
   width: 170px;
 }
 
+spectrum-analyzer {
+  color: #0a0a0a;
+}
+
 xy-pad {
   overflow: hidden;
 }

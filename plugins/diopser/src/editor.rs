@@ -27,6 +27,7 @@ use self::button::SafeModeButton;
 use crate::spectrum::SpectrumOutput;
 use crate::{Diopser, DiopserParams};
 
+mod analyzer;
 mod button;
 mod xy_pad;
 
@@ -137,7 +138,9 @@ fn spectrum_analyzer(cx: &mut Context) {
 
         VStack::new(cx, |cx| {
             ZStack::new(cx, |cx| {
-                Label::new(cx, "When I grow up, I want to be a spectrum analyzer!");
+                analyzer::SpectrumAnalyzer::new(cx, Data::spectrum, Data::sample_rate)
+                    .width(Percentage(100.0))
+                    .height(Percentage(100.0));
 
                 xy_pad::XyPad::new(
                     cx,
@@ -148,7 +151,6 @@ fn spectrum_analyzer(cx: &mut Context) {
                 .width(Percentage(100.0))
                 .height(Percentage(100.0));
             })
-            .child_space(Stretch(1.0))
             .width(Percentage(100.0))
             .background_color(DARK_GRAY)
             .height(Pixels(SPECTRUM_ANALYZER_HEIGHT));
