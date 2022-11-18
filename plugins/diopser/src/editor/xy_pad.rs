@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use nih_plug::prelude::Param;
+use nih_plug::prelude::{FloatRange, Param};
 use nih_plug_vizia::vizia::prelude::*;
 use nih_plug_vizia::widgets::param_base::ParamWidgetBase;
 use nih_plug_vizia::widgets::util::{self, ModifiersExt};
@@ -36,6 +36,11 @@ const HANDLE_WIDTH_PX: f32 = 20.0;
 pub struct XyPad {
     x_param_base: ParamWidgetBase,
     y_param_base: ParamWidgetBase,
+
+    /// The same range as that used by the filter frequency parameter. This is used to snap to
+    /// frequencies when holding Alt while dragging.
+    /// NOTE: This is hardcoded to work with the filter frequency parameter.
+    frequency_range: FloatRange,
 
     /// Will be set to `true` if we're dragging the parameter. Resetting the parameter or entering a
     /// text value should not initiate a drag.
@@ -92,6 +97,8 @@ impl XyPad {
         Self {
             x_param_base: ParamWidgetBase::new(cx, params.clone(), params_to_x_param),
             y_param_base: ParamWidgetBase::new(cx, params.clone(), params_to_y_param),
+
+            frequency_range: crate::filter_frequency_range(),
 
             drag_active: false,
             granular_drag_status: None,
@@ -210,16 +217,25 @@ impl XyPad {
         &self,
         cx: &mut EventContext,
         (x_pos, y_pos): (f32, f32),
+        snap_to_whole_notes: bool,
     ) {
-        self.set_normalized_values(
-            cx,
-            (
-                util::remap_current_entity_x_coordinate(cx, x_pos),
-                // We want the top of the widget to be 1.0 and the bottom to be 0.0,
-                // this is the opposite of how the y-coordinate works
-                1.0 - util::remap_current_entity_y_coordinate(cx, y_pos),
-            ),
-        );
+        // When snapping to whole notes, we'll transform the normalized value back to unnormalized
+        // (this is hardcoded for the filter frequency parameter)
+        let mut x_value = util::remap_current_entity_x_coordinate(cx, x_pos);
+        if snap_to_whole_notes {
+            let x_freq = self.frequency_range.unnormalize(x_value);
+            let fractional_note = nih_plug::util::freq_to_midi_note(x_freq);
+            let note = fractional_note.round();
+            let note_freq = nih_plug::util::f32_midi_note_to_freq(note);
+
+            x_value = self.frequency_range.normalize(note_freq);
+        }
+
+        // We want the top of the widget to be 1.0 and the bottom to be 0.0, this is the opposite of
+        // how the y-coordinate works
+        let y_value = 1.0 - util::remap_current_entity_y_coordinate(cx, y_pos);
+
+        self.set_normalized_values(cx, (x_value, y_value));
     }
 
     /// Should be called at the end of a drag operation.
@@ -329,6 +345,7 @@ impl View for XyPad {
                         self.set_normalized_values_for_mouse_pos(
                             cx,
                             (cx.mouse.cursorx, cx.mouse.cursory),
+                            false,
                         );
                     }
                 }
@@ -364,10 +381,10 @@ impl View for XyPad {
                 if self.drag_active {
                     let dpi_scale = cx.style.dpi_factor as f32;
 
-                    // If shift is being held then the drag should be more granular instead of
-                    // absolute
-                    // TODO: Mouse warping is really needed here, but it's not exposed right now
                     if cx.modifiers.shift() {
+                        // If shift is being held then the drag should be more granular instead of
+                        // absolute
+                        // TODO: Mouse warping is really needed here, but it's not exposed right now
                         let granular_drag_status =
                             *self
                                 .granular_drag_status
@@ -401,13 +418,17 @@ impl View for XyPad {
                             * GRANULAR_DRAG_MULTIPLIER)
                             * dpi_scale;
 
+                        // This also takes the Alt+drag note snapping into account
                         self.set_normalized_values_for_mouse_pos(
                             cx,
                             (start_x + delta_x, start_y + delta_y),
+                            cx.modifiers.alt(),
                         );
                     } else {
+                        // When alt is pressed _while_ dragging, the frequency parameter on the
+                        // X-axis snaps to whole notes
                         self.granular_drag_status = None;
-                        self.set_normalized_values_for_mouse_pos(cx, (*x, *y));
+                        self.set_normalized_values_for_mouse_pos(cx, (*x, *y), cx.modifiers.alt());
                     }
                 }
             }
@@ -415,10 +436,13 @@ impl View for XyPad {
                 // If this happens while dragging, snap back to reality uh I mean the current screen
                 // position
                 if self.drag_active && self.granular_drag_status.is_some() {
+                    // When alt is pressed _while_ dragging, the frequency parameter on the X-axis
+                    // snaps to whole notes
                     self.granular_drag_status = None;
                     self.set_normalized_values_for_mouse_pos(
                         cx,
                         (cx.mouse.cursorx, cx.mouse.cursory),
+                        cx.modifiers.alt(),
                     );
                 }
             }
