@@ -26,6 +26,10 @@ pub const SPECTRUM_WINDOW_SIZE: usize = 2048;
 // Don't need that much precision here
 const SPECTRUM_WINDOW_OVERLAP: usize = 2;
 
+/// The time it takes for the spectrum to go down 12 dB. The upwards step is immediate like in a
+/// peak meter.
+const SMOOTHING_DECAY_MS: f32 = 100.0;
+
 /// The amplitudes of all frequency bins in a windowed FFT of the input. Also includes the DC offset
 /// bin which we don't draw, just to make this a bit less confusing.
 pub type Spectrum = [f32; SPECTRUM_WINDOW_SIZE / 2 + 1];
@@ -38,6 +42,11 @@ pub struct SpectrumInput {
     stft: util::StftHelper,
     /// The number of channels we're working on.
     num_channels: usize,
+
+    /// The spectrum behaves like a peak meter. If the new value is higher than the previous one, it
+    /// jump up immediately. Otherwise the old value is multiplied by this weight and the new value
+    /// by one minus this weight.
+    smoothing_decay_weight: f32,
 
     /// A way to send data to the corresponding [`SpectrumOutput`]. `spectrum_result_buffer` gets
     /// copied into this buffer every time a new spectrum is available.
@@ -64,6 +73,9 @@ impl SpectrumInput {
             stft: util::StftHelper::new(num_channels, SPECTRUM_WINDOW_SIZE, 0),
             num_channels,
 
+            // This is set in `initialize()` based on the sample rate
+            smoothing_decay_weight: 0.0,
+
             triple_buffer_input,
             spectrum_result_buffer: [0.0; SPECTRUM_WINDOW_SIZE / 2 + 1],
 
@@ -79,12 +91,25 @@ impl SpectrumInput {
         (input, triple_buffer_output)
     }
 
+    /// Update the smoothing using the specified sample rate. Called in `initialize()`.
+    pub fn update_sample_rate(&mut self, sample_rate: f32) {
+        // We'll express the dacay rate in the time it takes for the moving average to drop by 12 dB
+        // NOTE: The effective sample rate accounts for the STFT interval, **and** for the number of
+        //       channels. We'll average both channels to mono-ish.
+        let effective_sample_rate = sample_rate / SPECTRUM_WINDOW_SIZE as f32
+            * SPECTRUM_WINDOW_OVERLAP as f32
+            * self.num_channels as f32;
+        let decay_samples = (SMOOTHING_DECAY_MS / 1000.0 * effective_sample_rate) as f64;
+
+        self.smoothing_decay_weight = 0.25f64.powf(decay_samples.recip()) as f32
+    }
+
     /// Compute the spectrum for a buffer and send it to the corresponding output pair.
     pub fn compute(&mut self, buffer: &Buffer) {
         self.stft.process_analyze_only(
             buffer,
             SPECTRUM_WINDOW_OVERLAP,
-            |channel_idx, real_fft_scratch_buffer| {
+            |_channel_idx, real_fft_scratch_buffer| {
                 multiply_with_window(real_fft_scratch_buffer, &self.compensated_window_function);
 
                 self.plan
@@ -96,33 +121,22 @@ impl SpectrumInput {
                     )
                     .unwrap();
 
-                // To be able to reuse `real_fft_scratch_buffer` this function is called per
-                // channel, so we need to use the channel index to do any pre- or post-processing.
-                // Gain compensation has already been baked into the window function.
-                // TODO: This obviously needs a low-pass/moving average
-                if channel_idx == 0 {
-                    for (bin, spectrum_result) in self
-                        .complex_fft_buffer
-                        .iter()
-                        .zip(&mut self.spectrum_result_buffer)
-                    {
-                        *spectrum_result = bin.norm();
-                    }
-                } else {
-                    for (bin, spectrum_result) in self
-                        .complex_fft_buffer
-                        .iter()
-                        .skip(1)
-                        .zip(&mut self.spectrum_result_buffer)
-                    {
-                        *spectrum_result += bin.norm();
-                    }
-                }
-
-                let num_channels_recip = (self.num_channels as f32).recip();
-                if channel_idx == self.num_channels - 1 {
-                    for bin in &mut self.spectrum_result_buffer {
-                        *bin *= num_channels_recip;
+                // We'll use peak meter-like behavior for the spectrum analyzer to make things
+                // easier to dial in. Values that are higher than the old value snap to the new
+                // value immediately, lower values decay gradually. This also results in quasi-mono
+                // summing since this same callback will be called for both channels. Gain
+                // compensation has already been baked into the window function.
+                for (bin, spectrum_result) in self
+                    .complex_fft_buffer
+                    .iter()
+                    .zip(&mut self.spectrum_result_buffer)
+                {
+                    let magnetude = bin.norm();
+                    if magnetude > *spectrum_result {
+                        *spectrum_result = magnetude;
+                    } else {
+                        *spectrum_result = (*spectrum_result * self.smoothing_decay_weight)
+                            + (magnetude * (1.0 - self.smoothing_decay_weight));
                     }
                 }
 

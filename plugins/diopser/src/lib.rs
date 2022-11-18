@@ -331,6 +331,10 @@ impl Plugin for Diopser {
         self.sample_rate
             .store(buffer_config.sample_rate, Ordering::Relaxed);
 
+        // The spectrum is smoothed so it decays gradually
+        self.spectrum_input
+            .update_sample_rate(buffer_config.sample_rate);
+
         true
     }
 
