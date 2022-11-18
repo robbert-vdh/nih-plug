@@ -128,12 +128,17 @@ impl RingBuffer {
         match normalization_mode {
             NormalizationMode::None => (),
             NormalizationMode::Auto => {
-                let normalization_factor =
-                    calculate_rms(&self.recording_buffers) / calculate_rms(&self.playback_buffers);
+                // Prevent this from causing divisions by zero or making very loud clicks when audio
+                // playback has just started
+                let playback_rms = calculate_rms(&self.playback_buffers);
+                if playback_rms > 0.001 {
+                    let recording_rms = calculate_rms(&self.recording_buffers);
+                    let normalization_factor = recording_rms / playback_rms;
 
-                for buffer in self.playback_buffers.iter_mut() {
-                    for sample in buffer.iter_mut() {
-                        *sample *= normalization_factor;
+                    for buffer in self.playback_buffers.iter_mut() {
+                        for sample in buffer.iter_mut() {
+                            *sample *= normalization_factor;
+                        }
                     }
                 }
             }
