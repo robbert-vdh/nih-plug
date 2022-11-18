@@ -383,7 +383,7 @@ dependencies = [
 [[package]]
 name = "baseview"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/baseview.git?branch=feature/resize#b5d0751c82c3fd0301366f1f31c07f3cd53aa52f"
+source = "git+https://github.com/robbert-vdh/baseview.git?branch=feature/resize#1fe5befc795750f83b625bd114af4e1260bbc710"
 dependencies = [
  "cocoa",
  "core-foundation",
@@ -2060,9 +2060,9 @@ checksum = "b2cf49df1085dcfb171460e4592597b84abe50d900fb83efb6e41b20fefd6c2c"
 
 [[package]]
 name = "indexmap"
-version = "1.9.1"
+version = "1.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10a35a97730320ffe8e2d410b5d3b69279b98d2c14bdb8b70ea89ecf7888d41e"
+checksum = "1885e79c1fc4b10f0e172c475f458b7f7b93061064d98c3293e98c5ba0c8b399"
 dependencies = [
  "autocfg",
  "hashbrown",
@@ -3838,9 +3838,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.87"
+version = "1.0.88"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ce777b7b150d76b9cf60d28b55f5847135a003f7d7350c6be7a773508ce7d45"
+checksum = "8e8b3801309262e8184d9687fb697586833e939767aea0dda89f5a8e650e8bd7"
 dependencies = [
  "itoa 1.0.4",
  "ryu",
@@ -4500,7 +4500,7 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 [[package]]
 name = "vizia"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#54b0a96532fa179bc3aae9e14a45eb85227696fb"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#db1632ea3c23373985e3ac44ca6201bc1be277c1"
 dependencies = [
  "vizia_baseview",
  "vizia_core",
@@ -4510,7 +4510,7 @@ dependencies = [
 [[package]]
 name = "vizia_baseview"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#54b0a96532fa179bc3aae9e14a45eb85227696fb"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#db1632ea3c23373985e3ac44ca6201bc1be277c1"
 dependencies = [
  "baseview 0.1.0 (git+https://github.com/robbert-vdh/baseview.git?branch=feature/resize)",
  "femtovg",
@@ -4524,7 +4524,7 @@ dependencies = [
 [[package]]
 name = "vizia_core"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#54b0a96532fa179bc3aae9e14a45eb85227696fb"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#db1632ea3c23373985e3ac44ca6201bc1be277c1"
 dependencies = [
  "bitflags",
  "copypasta 0.8.1",
@@ -4552,7 +4552,7 @@ dependencies = [
 [[package]]
 name = "vizia_derive"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#54b0a96532fa179bc3aae9e14a45eb85227696fb"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#db1632ea3c23373985e3ac44ca6201bc1be277c1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4562,12 +4562,12 @@ dependencies = [
 [[package]]
 name = "vizia_id"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#54b0a96532fa179bc3aae9e14a45eb85227696fb"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#db1632ea3c23373985e3ac44ca6201bc1be277c1"
 
 [[package]]
 name = "vizia_input"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#54b0a96532fa179bc3aae9e14a45eb85227696fb"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#db1632ea3c23373985e3ac44ca6201bc1be277c1"
 dependencies = [
  "bitflags",
  "keyboard-types",
@@ -4577,7 +4577,7 @@ dependencies = [
 [[package]]
 name = "vizia_storage"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#54b0a96532fa179bc3aae9e14a45eb85227696fb"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#db1632ea3c23373985e3ac44ca6201bc1be277c1"
 dependencies = [
  "morphorm",
  "vizia_id",
@@ -4586,7 +4586,7 @@ dependencies = [
 [[package]]
 name = "vizia_window"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#54b0a96532fa179bc3aae9e14a45eb85227696fb"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#db1632ea3c23373985e3ac44ca6201bc1be277c1"
 dependencies = [
  "morphorm",
  "vizia_input",
@@ -4595,7 +4595,7 @@ dependencies = [
 [[package]]
 name = "vizia_winit"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#54b0a96532fa179bc3aae9e14a45eb85227696fb"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#db1632ea3c23373985e3ac44ca6201bc1be277c1"
 dependencies = [
  "console_error_panic_hook",
  "copypasta 0.8.1",
