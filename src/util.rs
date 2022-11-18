@@ -57,6 +57,13 @@ pub fn f32_midi_note_to_freq(note: f32) -> f32 {
     2.0f32.powf((note - 69.0) / 12.0) * 440.0
 }
 
+/// The inverse of [`f32_midi_note_to_freq()`]. This returns a fractional note number. Round to a
+/// whole number, subtract that from the result, and multiply the fractional part by 100 to get the
+/// number of cents.
+pub fn freq_to_midi_note(freq: f32) -> f32 {
+    ((freq / 440.0).log2() * 12.0) + 69.0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

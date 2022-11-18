@@ -143,7 +143,7 @@ pub fn v2s_f32_hz_then_khz_with_note_name(
 ) -> Arc<dyn Fn(f32) -> String + Send + Sync> {
     Arc::new(move |value| {
         // This is the inverse of the formula in `f32_midi_note_to_freq`
-        let fractional_note = ((value / 440.0).log2() * 12.0) + 69.0;
+        let fractional_note = util::freq_to_midi_note(value);
         let note = fractional_note.round();
         let cents = ((fractional_note - note) * 100.0) as i32;
 
