@@ -26,6 +26,7 @@ pub fn permit_alloc<T, F: FnOnce() -> T>(func: F) -> T {
 }
 
 /// Convert decibels to a voltage gain ratio, treating anything below -100 dB as minus infinity.
+#[inline]
 pub fn db_to_gain(dbs: f32) -> f32 {
     if dbs > MINUS_INFINITY_DB {
         10.0f32.powf(dbs * 0.05)
@@ -36,6 +37,7 @@ pub fn db_to_gain(dbs: f32) -> f32 {
 
 /// Convert a voltage gain ratio to decibels. Gain ratios that aren't positive will be treated as
 /// [`MINUS_INFINITY_DB`].
+#[inline]
 pub fn gain_to_db(gain: f32) -> f32 {
     if gain > MINUS_INFINITY_GAIN {
         gain.log10() * 20.0
@@ -46,6 +48,7 @@ pub fn gain_to_db(gain: f32) -> f32 {
 
 /// Convert a MIDI note ID to a frequency at A4 = 440 Hz equal temperament and middle C = note 60 =
 /// C4.
+#[inline]
 pub fn midi_note_to_freq(note: u8) -> f32 {
     f32_midi_note_to_freq(note as f32)
 }
@@ -53,6 +56,7 @@ pub fn midi_note_to_freq(note: u8) -> f32 {
 /// The same as [`midi_note_to_freq()`], but for arbitrary note numbers including those outside of
 /// the MIDI range. This also supports fractional note numbers, which is useful when working with
 /// cents.
+#[inline]
 pub fn f32_midi_note_to_freq(note: f32) -> f32 {
     2.0f32.powf((note - 69.0) / 12.0) * 440.0
 }
@@ -60,6 +64,7 @@ pub fn f32_midi_note_to_freq(note: f32) -> f32 {
 /// The inverse of [`f32_midi_note_to_freq()`]. This returns a fractional note number. Round to a
 /// whole number, subtract that from the result, and multiply the fractional part by 100 to get the
 /// number of cents.
+#[inline]
 pub fn freq_to_midi_note(freq: f32) -> f32 {
     ((freq / 440.0).log2() * 12.0) + 69.0
 }
