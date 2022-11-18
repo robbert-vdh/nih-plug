@@ -32,6 +32,8 @@ much better performance.
   that case you may want to use a peak limiter after this plugin until you
   understand how it reacts to different changes. Or maybe you'll want to check
   out [Safety Limiter](../safety_limiter), which is made for this exact purpose.
+- Change the number of filter stages to immediately reset the filters and stop
+  ringing.
 
 ## Download
 
