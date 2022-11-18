@@ -30,8 +30,6 @@ const HANDLE_WIDTH_PX: f32 = 20.0;
 /// An X-Y pad that controlers two parameters at the same time by binding them to one of the two
 /// axes. This specific implementation has a tooltip for the X-axis parmaeter and allows
 /// Alt+clicking to enter a specific value.
-//
-// TODO: Text entry for the x-parameter
 #[derive(Lens)]
 pub struct XyPad {
     x_param_base: ParamWidgetBase,
@@ -42,6 +40,9 @@ pub struct XyPad {
     /// NOTE: This is hardcoded to work with the filter frequency parameter.
     frequency_range: FloatRange,
 
+    /// Will be set to `true` when the X-Y pad gets Alt+Click'ed. This will replace the handle with
+    /// a text input box.
+    text_input_active: bool,
     /// Will be set to `true` if we're dragging the parameter. Resetting the parameter or entering a
     /// text value should not initiate a drag.
     drag_active: bool,
@@ -74,6 +75,10 @@ pub struct GranularDragStatus {
 enum XyPadEvent {
     /// The tooltip's size has changed. This causes us to recompute the tooltip position.
     TooltipWidthChanged,
+    /// Text input has been cancelled without submitting a new value.
+    CancelTextInput,
+    /// A new value has been sent by the text input dialog after pressing Enter.
+    TextInput(String),
 }
 
 impl XyPad {
@@ -100,6 +105,7 @@ impl XyPad {
 
             frequency_range: crate::filter_frequency_range(),
 
+            text_input_active: false,
             drag_active: false,
             granular_drag_status: None,
 
@@ -142,50 +148,95 @@ impl XyPad {
                                 )
                             });
 
-                            XyPadHandle::new(cx)
-                                .position_type(PositionType::SelfDirected)
-                                .top(y_position_lens)
-                                .left(x_position_lens)
-                                // TODO: It would be much nicer if this could be set in the
-                                //       stylesheet, but Vizia doesn't support that right now
-                                .translate((-(HANDLE_WIDTH_PX / 2.0), -(HANDLE_WIDTH_PX / 2.0)))
-                                .width(Pixels(HANDLE_WIDTH_PX))
-                                .height(Pixels(HANDLE_WIDTH_PX))
-                                .hoverable(false);
-
-                            // The stylesheet makes the tooltip visible when hovering over the X-Y
-                            // pad. Its position is set to the mouse coordinate in the event
-                            // handler. If there's enough space, the tooltip is drawn at the top
-                            // right of the mouse cursor.
-                            VStack::new(cx, move |cx| {
-                                // The X-parameter is the 'important' one, so we'll display that at
-                                // the bottom since it's closer to the mouse cursor. We'll also
-                                // hardcode the `Q: ` prefix for now to make it a bit clearer and to
-                                // reduce the length difference between the lines a bit.
-                                Label::new(
-                                    cx,
-                                    y_display_value_lens.map(|value| format!("Q: {value}")),
-                                );
-                                Label::new(cx, x_display_value_lens);
-                            })
-                            .class("xy-pad__tooltip")
-                            .left(XyPad::tooltip_pos_x)
-                            .top(XyPad::tooltip_pos_y)
-                            .position_type(PositionType::SelfDirected)
-                            .on_geo_changed(|cx, change_flags| {
-                                // When a new parameter value causes the width of the tooltip to
-                                // change, we must recompute its position so it stays anchored to
-                                // the mouse cursor
-                                if change_flags.intersects(GeometryChanged::WIDTH_CHANGED) {
-                                    cx.emit(XyPadEvent::TooltipWidthChanged);
-                                }
-                            })
-                            .hoverable(false);
+                            // When the X-Y pad gets Alt+clicked, we'll replace it with a text input
+                            // box for the frequency parameter
+                            Binding::new(
+                                cx,
+                                XyPad::text_input_active,
+                                move |cx, text_input_active| {
+                                    if text_input_active.get(cx) {
+                                        Self::text_input_view(cx, x_display_value_lens.clone());
+                                    } else {
+                                        Self::xy_pad_handle_view(
+                                            cx,
+                                            x_position_lens.clone(),
+                                            y_position_lens.clone(),
+                                            x_display_value_lens.clone(),
+                                            y_display_value_lens.clone(),
+                                        );
+                                    }
+                                },
+                            );
                         },
                     );
                 },
             ),
         )
+    }
+
+    /// Create a text input that's shown in place of the X-Y pad's handle.
+    fn text_input_view(cx: &mut Context, x_display_value_lens: impl Lens<Target = String>) {
+        Textbox::new(cx, x_display_value_lens)
+            .class("xy-pad__value-entry")
+            .on_submit(|cx, string, success| {
+                if success {
+                    cx.emit(XyPadEvent::TextInput(string))
+                } else {
+                    cx.emit(XyPadEvent::CancelTextInput);
+                }
+            })
+            .on_build(|cx| {
+                cx.emit(TextEvent::StartEdit);
+                cx.emit(TextEvent::SelectAll);
+            })
+            .class("align_center")
+            .space(Stretch(1.0));
+    }
+
+    /// Draws the X-Y pad's handle and the tooltip.
+    fn xy_pad_handle_view(
+        cx: &mut Context,
+        x_position_lens: impl Lens<Target = Units>,
+        y_position_lens: impl Lens<Target = Units>,
+        x_display_value_lens: impl Lens<Target = String>,
+        y_display_value_lens: impl Lens<Target = String>,
+    ) {
+        XyPadHandle::new(cx)
+            .position_type(PositionType::SelfDirected)
+            .top(y_position_lens)
+            .left(x_position_lens)
+            // TODO: It would be much nicer if this could be set in the
+            //       stylesheet, but Vizia doesn't support that right now
+            .translate((-(HANDLE_WIDTH_PX / 2.0), -(HANDLE_WIDTH_PX / 2.0)))
+            .width(Pixels(HANDLE_WIDTH_PX))
+            .height(Pixels(HANDLE_WIDTH_PX))
+            .hoverable(false);
+
+        // The stylesheet makes the tooltip visible when hovering over the X-Y
+        // pad. Its position is set to the mouse coordinate in the event
+        // handler. If there's enough space, the tooltip is drawn at the top
+        // right of the mouse cursor.
+        VStack::new(cx, move |cx| {
+            // The X-parameter is the 'important' one, so we'll display that at
+            // the bottom since it's closer to the mouse cursor. We'll also
+            // hardcode the `Q: ` prefix for now to make it a bit clearer and to
+            // reduce the length difference between the lines a bit.
+            Label::new(cx, y_display_value_lens.map(|value| format!("Q: {value}")));
+            Label::new(cx, x_display_value_lens);
+        })
+        .class("xy-pad__tooltip")
+        .left(XyPad::tooltip_pos_x)
+        .top(XyPad::tooltip_pos_y)
+        .position_type(PositionType::SelfDirected)
+        .on_geo_changed(|cx, change_flags| {
+            // When a new parameter value causes the width of the tooltip to
+            // change, we must recompute its position so it stays anchored to
+            // the mouse cursor
+            if change_flags.intersects(GeometryChanged::WIDTH_CHANGED) {
+                cx.emit(XyPadEvent::TooltipWidthChanged);
+            }
+        })
+        .hoverable(false);
     }
 
     /// Should be called at the start of a drag operation.
@@ -224,6 +275,7 @@ impl XyPad {
         let mut x_value = util::remap_current_entity_x_coordinate(cx, x_pos);
         if snap_to_whole_notes {
             let x_freq = self.frequency_range.unnormalize(x_value);
+
             let fractional_note = nih_plug::util::freq_to_midi_note(x_freq);
             let note = fractional_note.round();
             let note_freq = nih_plug::util::f32_midi_note_to_freq(note);
@@ -257,10 +309,15 @@ impl XyPad {
 
         // If there's not enough space at the top right, we'll move the tooltip to the
         // bottom and/or the left
-        let tooltip_entity = cx
+        // NOTE: This is hardcoded to find the tooltip. The Binding also counts as a child.
+        let binding_entity = cx
             .tree
             .get_last_child(cx.current())
             .expect("Missing child view in X-Y pad");
+        let tooltip_entity = cx
+            .tree
+            .get_last_child(binding_entity)
+            .expect("Missing child view in X-Y pad binding");
         let tooltip_bounds = cx.cache.get_bounds(tooltip_entity);
         // NOTE: The width can vary drastically depending on the frequency value, so we'll
         //       hardcode a minimum width in this comparison to avoid this from jumping
@@ -298,16 +355,36 @@ impl View for XyPad {
 
     fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
         event.map(|window_event, meta| {
-            // With an `if let` clippy complains about the irrefutable match, but in case we add
-            // more events it's a good idea to prevent this from acting as a wildcard.
-            let XyPadEvent::TooltipWidthChanged = window_event;
+            match window_event {
+                XyPadEvent::TooltipWidthChanged => {
+                    // The tooltip tracks the mouse position, but it also needs to be recomputed when
+                    // the parameter changes while the tooltip is still visible. Without this the
+                    // position maya be off when the parameter is automated, or because of the samll
+                    // delay between interacting with a parameter and the parameter changing.
+                    if cx.hovered() == cx.current() {
+                        self.update_tooltip_pos(cx);
+                    }
+                }
+                XyPadEvent::CancelTextInput => {
+                    self.text_input_active = false;
+                    cx.set_active(false);
 
-            // The tooltip tracks the mouse position, but it also needs to be recomputed when
-            // the parameter changes while the tooltip is still visible. Without this the
-            // position maya be off when the parameter is automated, or because of the samll
-            // delay between interacting with a parameter and the parameter changing.
-            if cx.hovered() == cx.current() {
-                self.update_tooltip_pos(cx);
+                    meta.consume();
+                }
+                XyPadEvent::TextInput(string) => {
+                    // This controls the X-parameter directly
+                    if let Some(normalized_value) =
+                        self.x_param_base.string_to_normalized_value(string)
+                    {
+                        self.x_param_base.begin_set_parameter(cx);
+                        self.x_param_base.set_normalized_value(cx, normalized_value);
+                        self.x_param_base.end_set_parameter(cx);
+                    }
+
+                    self.text_input_active = false;
+
+                    meta.consume();
+                }
             }
 
             meta.consume();
@@ -316,8 +393,11 @@ impl View for XyPad {
         event.map(|window_event, meta| match window_event {
             WindowEvent::MouseDown(MouseButton::Left)
             | WindowEvent::MouseTripleClick(MouseButton::Left) => {
-                // TODO: Alt+click text entry
-                if cx.modifiers.command() {
+                if cx.modifiers.alt() {
+                    // ALt+Click brings up a text entry dialog
+                    self.text_input_active = true;
+                    cx.set_active(true);
+                } else if cx.modifiers.command() {
                     // Ctrl+Click and double click should reset the parameter instead of initiating
                     // a drag operation
                     self.begin_set_parameters(cx);

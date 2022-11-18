@@ -58,6 +58,26 @@ xy-pad:hover .xy-pad__tooltip {
   transition: opacity 0.1 0;
 }
 
+/* This is a textbox, we want it to somewhat resemble the tooltip */
+xy-pad .xy-pad__value-entry {
+  background-color: #e5e5e5;
+  border-color: #0a0a0a;
+  border-width: 1px;
+  child-right: 5px;
+  child-left: 5px;
+}
+xy-pad .xy-pad__value-entry .textbox_container {
+  overflow: visible;
+  text-wrap: false;
+  width: auto;
+}
+xy-pad .xy-pad__value-entry .caret {
+  background-color: #0a0a0a;
+}
+xy-pad .xy-pad__value-entry .selection {
+  background-color: #0a0a0a30;
+}
+
 xy-pad__handle {
   background-color: #e5e5e5;
   border-color: #0a0a0a;
