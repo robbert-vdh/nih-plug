@@ -180,7 +180,15 @@ pub fn s2v_f32_hz_then_khz() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> {
         let string = string.trim();
 
         // If the user inputs a note representation, then we'll use that
-        if let Some((midi_note_number_str, cents_str)) = string.split_once(',') {
+        if let Some(midi_note_number) = note_formatter(string) {
+            return Some(util::f32_midi_note_to_freq(midi_note_number as f32));
+        }
+
+        // This can also contain semitones. If we cannot parse this as a note name, we'll try
+        // parsing it as a frequency instead. We'll also `XXX Hz, C3` where `XXX Hz` does not match
+        // C3 since the user may just edit that of the text input box while leaving the note name
+        // untouched.
+        let string = if let Some((midi_note_number_str, cents_str)) = string.split_once(',') {
             // If it contains a comma we'll also try parsing cents
             let cents_str = cents_str
                 .trim_start_matches([' ', '+'])
@@ -194,9 +202,15 @@ pub fn s2v_f32_hz_then_khz() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> {
                 let cents_multiplier = 2.0f32.powf(cents as f32 / 100.0 / 12.0);
                 return Some(plain_note_freq * cents_multiplier);
             }
-        } else if let Some(midi_note_number) = note_formatter(string) {
-            return Some(util::f32_midi_note_to_freq(midi_note_number as f32));
-        }
+
+            // NOTE: As mentioned above, if the input contained a `,` we'll try parsing the part
+            //       before the comma as a frequency string if we could not parse the right hand
+            //       side has a note string. This can happen if the user edits the output of
+            //       `v2s_f32_hz_then_khz_with_note_name()`.
+            midi_note_number_str
+        } else {
+            string
+        };
 
         // Otherwise we'll accept values in either Hz (with or without unit) or kHz
         let cleaned_string = string
