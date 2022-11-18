@@ -189,6 +189,8 @@ impl DiopserParams {
                         if value { 1.0 } else { 0.0 },
                     );
                 }))
+                .with_value_to_string(formatters::s2v_bool_bypass())
+                .with_string_to_value(formatters::v2s_bool_bypass())
                 .make_bypass(),
 
             filter_stages: IntParam::new(
