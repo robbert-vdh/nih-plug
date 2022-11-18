@@ -21,8 +21,8 @@ more difficult to run unsigned code on macOS.
 
 ### Building
 
-After installing [Rust](https://rustup.rs/), you can compile the Loudness War
-Winner as follows:
+After installing [Rust](https://rustup.rs/), you can compile Buffr Glitch as
+follows:
 
 ```shell
 cargo xtask bundle buffr_glitch --release
