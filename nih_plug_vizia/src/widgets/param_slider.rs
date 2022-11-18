@@ -469,8 +469,8 @@ impl View for ParamSlider {
                     self.text_input_active = true;
                     cx.set_active(true);
                 } else if cx.modifiers.command() {
-                    // Ctrl+Click and double click should reset the parameter instead of initiating
-                    // a drag operation
+                    // Ctrl+Click, double click, and right clicks should reset the parameter instead
+                    // of initiating a drag operation
                     self.param_base.begin_set_parameter(cx);
                     self.param_base
                         .set_normalized_value(cx, self.param_base.default_normalized_value());
@@ -501,9 +501,12 @@ impl View for ParamSlider {
 
                 meta.consume();
             }
-            WindowEvent::MouseDoubleClick(MouseButton::Left) => {
-                // Ctrl+Click and double click should reset the parameter instead of initiating
-                // a drag operation
+            WindowEvent::MouseDoubleClick(MouseButton::Left)
+            | WindowEvent::MouseDown(MouseButton::Right)
+            | WindowEvent::MouseDoubleClick(MouseButton::Right)
+            | WindowEvent::MouseTripleClick(MouseButton::Right) => {
+                // Ctrl+Click, double click, and right clicks should reset the parameter instead of
+                // initiating a drag operation
                 self.param_base.begin_set_parameter(cx);
                 self.param_base
                     .set_normalized_value(cx, self.param_base.default_normalized_value());

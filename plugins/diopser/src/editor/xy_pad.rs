@@ -398,8 +398,8 @@ impl View for XyPad {
                     self.text_input_active = true;
                     cx.set_active(true);
                 } else if cx.modifiers.command() {
-                    // Ctrl+Click and double click should reset the parameter instead of initiating
-                    // a drag operation
+                    // Ctrl+Click, double click, and right clicks should reset the parameter instead
+                    // of initiating a drag operation
                     self.begin_set_parameters(cx);
                     self.reset_parameters(cx);
                     self.end_set_parameters(cx);
@@ -432,9 +432,12 @@ impl View for XyPad {
 
                 meta.consume();
             }
-            WindowEvent::MouseDoubleClick(MouseButton::Left) => {
-                // Ctrl+Click and double click should reset the parameters instead of initiating a
-                // drag operation
+            WindowEvent::MouseDoubleClick(MouseButton::Left)
+            | WindowEvent::MouseDown(MouseButton::Right)
+            | WindowEvent::MouseDoubleClick(MouseButton::Right)
+            | WindowEvent::MouseTripleClick(MouseButton::Right) => {
+                // Ctrl+Click, double click, and right clicks should reset the parameter instead of
+                // initiating a drag operation
                 self.begin_set_parameters(cx);
                 self.reset_parameters(cx);
                 self.end_set_parameters(cx);
