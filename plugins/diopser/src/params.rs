@@ -18,6 +18,14 @@ pub const MIN_AUTOMATION_STEP_SIZE: u32 = 1;
 /// expensive, so updating them in larger steps can be useful.
 pub const MAX_AUTOMATION_STEP_SIZE: u32 = 512;
 
+/// The filter stages parameter's range. Also used in the safe mode utilities.
+pub fn filter_stages_range() -> IntRange {
+    IntRange::Linear {
+        min: 0,
+        max: MAX_NUM_FILTERS as i32,
+    }
+}
+
 /// The filter frequency parameter's range. Also used in the `SpectrumAnalyzer` widget.
 pub fn filter_frequency_range() -> FloatRange {
     FloatRange::Skewed {
@@ -117,18 +125,12 @@ impl DiopserParams {
                 .with_string_to_value(formatters::s2v_bool_bypass())
                 .make_bypass(),
 
-            filter_stages: IntParam::new(
-                "Filter Stages",
-                0,
-                IntRange::Linear {
-                    min: 0,
-                    max: MAX_NUM_FILTERS as i32,
+            filter_stages: IntParam::new("Filter Stages", 0, filter_stages_range()).with_callback(
+                {
+                    let should_update_filters = should_update_filters.clone();
+                    Arc::new(move |_| should_update_filters.store(true, Ordering::Release))
                 },
-            )
-            .with_callback({
-                let should_update_filters = should_update_filters.clone();
-                Arc::new(move |_| should_update_filters.store(true, Ordering::Release))
-            }),
+            ),
 
             // Smoothed parameters don't need the callback as we can just look at whether the
             // smoother is still smoothing
