@@ -41,7 +41,8 @@ pub enum ClapFeature {
     Stereo,
     Surround,
     Ambisonic,
-    /// A non-predefined feature. Hosts may display this among its plugin categories.
+    /// A non-predefined feature. Hosts may display this among its plugin categories. Custom
+    /// features _must_ be prefixed by a namespace in the format `namespace:feature_name`.
     Custom(&'static str),
 }
 
