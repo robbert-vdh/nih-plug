@@ -254,7 +254,7 @@ impl ClapPlugin for LoudnessWarWinner {
         ClapFeature::Limiter,
         ClapFeature::Distortion,
         ClapFeature::Utility,
-        ClapFeature::Custom("pain"),
+        ClapFeature::Custom("nih:pain"),
     ];
 }
 

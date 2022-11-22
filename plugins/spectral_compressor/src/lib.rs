@@ -594,8 +594,8 @@ impl ClapPlugin for SpectralCompressor {
         ClapFeature::Stereo,
         ClapFeature::PhaseVocoder,
         ClapFeature::Compressor,
-        ClapFeature::Custom("spectral"),
-        ClapFeature::Custom("sosig"),
+        ClapFeature::Custom("nih:spectral"),
+        ClapFeature::Custom("nih:sosig"),
     ];
 }
 
