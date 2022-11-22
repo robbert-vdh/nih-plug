@@ -1973,7 +1973,6 @@ impl<P: ClapPlugin> Wrapper<P> {
                     }
                 }
 
-                // Right now we don't handle any auxiliary outputs
                 // This vector has been preallocated to contain enough slices as there are output
                 // channels. If the host does not provide outputs or if it does not provide the
                 // required number of channels (should not happen, but Ableton Live does this for
