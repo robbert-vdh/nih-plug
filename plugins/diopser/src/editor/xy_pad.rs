@@ -49,6 +49,11 @@ pub struct XyPad {
     /// This keeps track of whether the user has pressed shift and a granular drag is active. This
     /// works exactly the same as in `ParamSlider`.
     granular_drag_status: Option<GranularDragStatus>,
+    /// The number of (fractional) scrolled lines that have not yet been turned into parameter
+    /// change events. This is needed to support trackpads with smooth scrolling. This probably
+    /// doesn't make much sense for devices without horizontal scrolling, but we'll support it
+    /// anyways because why not.
+    scrolled_lines: (f32, f32),
 
     // Used to position the tooltip so it's anchored to the mouse cursor, set in the `MouseMove`
     // event handler so the tooltip stays at the top right of the mouse cursor.
@@ -108,6 +113,7 @@ impl XyPad {
             text_input_active: false,
             drag_active: false,
             granular_drag_status: None,
+            scrolled_lines: (0.0, 0.0),
 
             tooltip_pos_x: Pixels(0.0),
             tooltip_pos_y: Pixels(0.0),
@@ -529,7 +535,50 @@ impl View for XyPad {
                     );
                 }
             }
-            // TODO: Scrolling, because why not. Could be useful on laptops/with touchpads.
+            WindowEvent::MouseScroll(scroll_x, scroll_y) => {
+                // With a regular scroll wheel `scroll_*` will only ever be -1 or 1, but with smooth
+                // scrolling trackpads being a these `scroll_*` can be anything.
+                let (remaining_scroll_x, remaining_scroll_y) = &mut self.scrolled_lines;
+                *remaining_scroll_x += scroll_x;
+                *remaining_scroll_y += scroll_y;
+
+                for (param_base, scrolled_lines) in [
+                    (&self.x_param_base, remaining_scroll_x),
+                    (&self.y_param_base, remaining_scroll_y),
+                ] {
+                    if scrolled_lines.abs() >= 1.0 {
+                        let use_finer_steps = cx.modifiers.shift();
+
+                        // Scrolling while dragging needs to be taken into account here
+                        if !self.drag_active {
+                            param_base.begin_set_parameter(cx);
+                        }
+
+                        let mut current_value = param_base.unmodulated_normalized_value();
+
+                        while *scrolled_lines >= 1.0 {
+                            current_value =
+                                param_base.next_normalized_step(current_value, use_finer_steps);
+                            param_base.set_normalized_value(cx, current_value);
+                            *scrolled_lines -= 1.0;
+                        }
+
+                        while *scrolled_lines <= -1.0 {
+                            current_value =
+                                param_base.previous_normalized_step(current_value, use_finer_steps);
+                            param_base.set_normalized_value(cx, current_value);
+                            *scrolled_lines += 1.0;
+                        }
+
+                        if !self.drag_active {
+                            param_base.end_set_parameter(cx);
+                        }
+                    }
+                }
+
+                meta.consume();
+            }
+
             _ => {}
         });
     }
