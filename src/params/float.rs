@@ -86,6 +86,9 @@ impl Display for FloatParam {
     }
 }
 
+// `Params` can not be implemented outside of NIH-plug itself because `ParamPtr` is also closed
+impl super::Sealed for FloatParam {}
+
 impl Param for FloatParam {
     type Plain = f32;
 

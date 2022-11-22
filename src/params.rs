@@ -53,12 +53,27 @@ bitflags::bitflags! {
     }
 }
 
+// See https://rust-lang.github.io/api-guidelines/future-proofing.html for more information
+mod sealed {
+    /// Dummy trait to prevent [`Param`] from being implemented outside of NIH-plug. This is not
+    /// possible because of the way `ParamPtr` works, so it's best to just make it flat out impossible.
+    pub trait Sealed {}
+}
+pub(crate) use sealed::Sealed;
+
 /// Describes a single parameter of any type. Most parameter implementations also have a field
 /// called `value` that and a field called `smoothed`. The former stores the latest unsmoothed
 /// value, and the latter can be used to access the smoother. These two fields should be used in DSP
 /// code to either get the parameter's current (smoothed) value. In UI code the getters from this
 /// trait should be used instead.
-pub trait Param: Display {
+///
+/// # Sealed
+///
+/// This trait cannot be implemented outside of NIH-plug itself. If you want to create new
+/// abstractions around parameters, consider wrapping them in a struct instead. Then use the
+/// `#[nested(id_prefix = "foo")]` syntax from the [`Params`] trait to reuse that wrapper in
+/// multiple places.
+pub trait Param: Display + sealed::Sealed {
     /// The plain parameter type.
     type Plain: PartialEq;
 

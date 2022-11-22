@@ -78,6 +78,9 @@ impl Display for IntParam {
     }
 }
 
+// `Params` can not be implemented outside of NIH-plug itself because `ParamPtr` is also closed
+impl super::Sealed for IntParam {}
+
 impl Param for IntParam {
     type Plain = i32;
 

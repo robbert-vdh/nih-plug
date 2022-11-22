@@ -110,6 +110,9 @@ impl Display for EnumParamInner {
     }
 }
 
+// `Params` can not be implemented outside of NIH-plug itself because `ParamPtr` is also closed
+impl<T: Enum + PartialEq> super::Sealed for EnumParam<T> {}
+
 impl<T: Enum + PartialEq> Param for EnumParam<T> {
     type Plain = T;
 
@@ -187,6 +190,9 @@ impl<T: Enum + PartialEq> Param for EnumParam<T> {
         self.inner.as_ptr()
     }
 }
+
+// `Params` can not be implemented outside of NIH-plug itself because `ParamPtr` is also closed
+impl super::Sealed for EnumParamInner {}
 
 impl Param for EnumParamInner {
     type Plain = i32;
