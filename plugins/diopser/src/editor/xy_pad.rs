@@ -19,6 +19,8 @@ use nih_plug_vizia::vizia::prelude::*;
 use nih_plug_vizia::widgets::param_base::ParamWidgetBase;
 use nih_plug_vizia::widgets::util::{self, ModifiersExt};
 
+use crate::params;
+
 /// When shift+dragging the X-Y pad, one pixel dragged corresponds to this much change in the
 /// normalized parameter.
 const GRANULAR_DRAG_MULTIPLIER: f32 = 0.1;
@@ -108,7 +110,7 @@ impl XyPad {
             x_param_base: ParamWidgetBase::new(cx, params.clone(), params_to_x_param),
             y_param_base: ParamWidgetBase::new(cx, params.clone(), params_to_y_param),
 
-            frequency_range: crate::filter_frequency_range(),
+            frequency_range: params::filter_frequency_range(),
 
             text_input_active: false,
             drag_active: false,

@@ -22,6 +22,7 @@ use nih_plug_vizia::vizia::vg;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 
+use crate::params;
 use crate::spectrum::SpectrumOutput;
 
 /// A very abstract spectrum analyzer. This draws the magnitude spectrum's bins as vertical lines
@@ -51,7 +52,7 @@ impl SpectrumAnalyzer {
             spectrum: spectrum.get(cx),
             sample_rate: sample_rate.get(cx),
 
-            frequency_range: crate::filter_frequency_range(),
+            frequency_range: params::filter_frequency_range(),
         }
         .build(
             cx,

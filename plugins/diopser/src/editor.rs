@@ -24,8 +24,9 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use self::button::SafeModeButton;
+use crate::params::DiopserParams;
 use crate::spectrum::SpectrumOutput;
-use crate::{Diopser, DiopserParams};
+use crate::Diopser;
 
 mod analyzer;
 mod button;

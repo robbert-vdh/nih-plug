@@ -21,37 +21,20 @@ compile_error!("Compiling without SIMD support is currently not supported");
 
 use atomic_float::AtomicF32;
 use nih_plug::prelude::*;
-use nih_plug_vizia::ViziaState;
 use std::simd::f32x2;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
+use crate::params::{DiopserParams, SpreadStyle};
 use crate::spectrum::{SpectrumInput, SpectrumOutput};
 
 mod editor;
 mod filter;
+mod params;
 mod spectrum;
-
-/// How many all-pass filters we can have in series at most. The filter stages parameter determines
-/// how many filters are actually active.
-const MAX_NUM_FILTERS: usize = 512;
-/// The minimum step size for smoothing the filter parameters.
-const MIN_AUTOMATION_STEP_SIZE: u32 = 1;
-/// The maximum step size for smoothing the filter parameters. Updating these parameters can be
-/// expensive, so updating them in larger steps can be useful.
-const MAX_AUTOMATION_STEP_SIZE: u32 = 512;
 
 /// The maximum number of samples to iterate over at a time.
 const MAX_BLOCK_SIZE: usize = 64;
-
-/// The filter frequency parameter's range. Also used in the `SpectrumAnalyzer` widget.
-pub(crate) fn filter_frequency_range() -> FloatRange {
-    FloatRange::Skewed {
-        min: 5.0, // This must never reach 0
-        max: 20_000.0,
-        factor: FloatRange::skew_factor(-2.5),
-    }
-}
 
 // All features from the original Diopser have been implemented (and the spread control has been
 // improved). Other features I want to implement are:
@@ -67,7 +50,7 @@ pub struct Diopser {
     /// All of the all-pass filters, with vectorized coefficients so they can be calculated for
     /// multiple channels at once. [`DiopserParams::num_stages`] controls how many filters are
     /// actually active.
-    filters: [filter::Biquad<f32x2>; MAX_NUM_FILTERS],
+    filters: [filter::Biquad<f32x2>; params::MAX_NUM_FILTERS],
     /// When the bypass parameter is toggled, this smoother fades between 0.0 and 1.0. This lets us
     /// crossfade the dry and the wet signal to avoid clicks. The smoothing target is set in a
     /// callback handler on the bypass parameter.
@@ -90,57 +73,6 @@ pub struct Diopser {
     spectrum_output: Arc<Mutex<SpectrumOutput>>,
 }
 
-#[derive(Params)]
-struct DiopserParams {
-    /// The editor state, saved together with the parameter state so the custom scaling can be
-    /// restored.
-    #[persist = "editor-state"]
-    editor_state: Arc<ViziaState>,
-    /// If this option is enabled, then the filter stages parameter is limited to `[0, 40]`. This is
-    /// editor-only state, and doesn't affect host automation.
-    #[persist = "safe-mode"]
-    safe_mode: Arc<AtomicBool>,
-
-    /// This plugin really doesn't need its own bypass parameter, but it's still useful to have a
-    /// dedicated one so it can be shown in the GUI. This is linked to the host's bypass if the host
-    /// supports it.
-    #[id = "bypass"]
-    bypass: BoolParam,
-
-    /// The number of all-pass filters applied in series.
-    #[id = "stages"]
-    filter_stages: IntParam,
-
-    /// The filter's center frequqency. When this is applied, the filters are spread around this
-    /// frequency.
-    #[id = "cutoff"]
-    filter_frequency: FloatParam,
-    /// The Q parameter for the filters.
-    #[id = "res"]
-    filter_resonance: FloatParam,
-    /// Controls a frequency spread between the filter stages in octaves. When this value is 0, the
-    /// same coefficients are used for every filter. Otherwise, the earliest stage's frequency will
-    /// be offset by `-filter_spread_octave_amount`, while the latest stage will be offset by
-    /// `filter_spread_octave_amount`. If the filter spread style is set to linear then the negative
-    /// range will cover the same frequency range as the positive range.
-    #[id = "spread"]
-    filter_spread_octaves: FloatParam,
-    /// How the spread range should be distributed. The octaves mode will sound more musical while
-    /// the linear mode can be useful for sound design purposes.
-    #[id = "spstyl"]
-    filter_spread_style: EnumParam<SpreadStyle>,
-
-    /// The precision of the automation, determines the step size. This is presented to the userq as
-    /// a percentage, and it's stored here as `[0, 1]` float because smaller step sizes are more
-    /// precise so having this be an integer would result in odd situations.
-    #[id = "autopr"]
-    automation_precision: FloatParam,
-
-    /// Very important.
-    #[id = "ignore"]
-    very_important: BoolParam,
-}
-
 impl Default for Diopser {
     fn default() -> Self {
         let sample_rate = Arc::new(AtomicF32::new(1.0));
@@ -160,7 +92,7 @@ impl Default for Diopser {
 
             sample_rate,
 
-            filters: [filter::Biquad::default(); MAX_NUM_FILTERS],
+            filters: [filter::Biquad::default(); params::MAX_NUM_FILTERS],
             bypass_smoother,
 
             should_update_filters,
@@ -170,121 +102,6 @@ impl Default for Diopser {
             spectrum_output: Arc::new(Mutex::new(spectrum_output)),
         }
     }
-}
-
-impl DiopserParams {
-    fn new(
-        sample_rate: Arc<AtomicF32>,
-        should_update_filters: Arc<AtomicBool>,
-        bypass_smoother: Arc<Smoother<f32>>,
-    ) -> Self {
-        Self {
-            editor_state: editor::default_state(),
-            safe_mode: Arc::new(AtomicBool::new(true)),
-
-            bypass: BoolParam::new("Bypass", false)
-                .with_callback(Arc::new(move |value| {
-                    bypass_smoother.set_target(
-                        sample_rate.load(Ordering::Relaxed),
-                        if value { 1.0 } else { 0.0 },
-                    );
-                }))
-                .with_value_to_string(formatters::v2s_bool_bypass())
-                .with_string_to_value(formatters::s2v_bool_bypass())
-                .make_bypass(),
-
-            filter_stages: IntParam::new(
-                "Filter Stages",
-                0,
-                IntRange::Linear {
-                    min: 0,
-                    max: MAX_NUM_FILTERS as i32,
-                },
-            )
-            .with_callback({
-                let should_update_filters = should_update_filters.clone();
-                Arc::new(move |_| should_update_filters.store(true, Ordering::Release))
-            }),
-
-            // Smoothed parameters don't need the callback as we can just look at whether the
-            // smoother is still smoothing
-            filter_frequency: FloatParam::new(
-                "Filter Frequency",
-                200.0,
-                // This value is also used in the spectrum analyzer to match the spectrum analyzer
-                // with this parameter which is bound to the X-Y pad's X-axis
-                filter_frequency_range(),
-            )
-            // This needs quite a bit of smoothing to avoid artifacts
-            .with_smoother(SmoothingStyle::Logarithmic(100.0))
-            // This includes the unit
-            .with_value_to_string(formatters::v2s_f32_hz_then_khz_with_note_name(0, true))
-            .with_string_to_value(formatters::s2v_f32_hz_then_khz()),
-            filter_resonance: FloatParam::new(
-                "Filter Resonance",
-                // The actual default neutral Q-value would be `sqrt(2) / 2`, but this value
-                // produces slightly less ringing.
-                0.5,
-                FloatRange::Skewed {
-                    min: 0.01, // This must also never reach 0
-                    max: 30.0,
-                    factor: FloatRange::skew_factor(-2.5),
-                },
-            )
-            .with_smoother(SmoothingStyle::Logarithmic(100.0))
-            .with_value_to_string(formatters::v2s_f32_rounded(2)),
-            filter_spread_octaves: FloatParam::new(
-                "Filter Spread",
-                0.0,
-                FloatRange::SymmetricalSkewed {
-                    min: -5.0,
-                    max: 5.0,
-                    factor: FloatRange::skew_factor(-1.0),
-                    center: 0.0,
-                },
-            )
-            .with_unit(" octaves")
-            .with_step_size(0.01)
-            .with_smoother(SmoothingStyle::Linear(100.0)),
-            filter_spread_style: EnumParam::new("Filter Spread Style", SpreadStyle::Octaves)
-                .with_callback(Arc::new(move |_| {
-                    should_update_filters.store(true, Ordering::Release)
-                })),
-
-            very_important: BoolParam::new("Don't touch this", true)
-                .with_value_to_string(Arc::new(|value| {
-                    String::from(if value { "please don't" } else { "stop it" })
-                }))
-                .with_string_to_value(Arc::new(|string| {
-                    let string = string.trim();
-                    if string.eq_ignore_ascii_case("please don't") {
-                        Some(true)
-                    } else if string.eq_ignore_ascii_case("stop it") {
-                        Some(false)
-                    } else {
-                        None
-                    }
-                }))
-                .hide_in_generic_ui(),
-
-            automation_precision: FloatParam::new(
-                "Automation precision",
-                normalize_automation_precision(128),
-                FloatRange::Linear { min: 0.0, max: 1.0 },
-            )
-            .with_unit("%")
-            .with_value_to_string(formatters::v2s_f32_percentage(0))
-            .with_string_to_value(formatters::s2v_f32_percentage()),
-        }
-    }
-}
-
-#[derive(Enum, Debug, PartialEq)]
-enum SpreadStyle {
-    #[id = "octaves"]
-    Octaves,
-    #[id = "linear"]
-    Linear,
 }
 
 impl Plugin for Diopser {
@@ -357,7 +174,7 @@ impl Plugin for Diopser {
         // necessary, and allow smoothing only every n samples using the automation precision
         // parameter
         let smoothing_interval =
-            unnormalize_automation_precision(self.params.automation_precision.value());
+            params::unnormalize_automation_precision(self.params.automation_precision.value());
 
         // The bypass parameter controls a smoother so we can crossfade between the dry and the wet
         // signals as needed
@@ -506,16 +323,6 @@ impl Diopser {
             }
         }
     }
-}
-
-fn normalize_automation_precision(step_size: u32) -> f32 {
-    (MAX_AUTOMATION_STEP_SIZE - step_size) as f32
-        / (MAX_AUTOMATION_STEP_SIZE - MIN_AUTOMATION_STEP_SIZE) as f32
-}
-
-fn unnormalize_automation_precision(normalized: f32) -> u32 {
-    MAX_AUTOMATION_STEP_SIZE
-        - (normalized * (MAX_AUTOMATION_STEP_SIZE - MIN_AUTOMATION_STEP_SIZE) as f32).round() as u32
 }
 
 impl ClapPlugin for Diopser {
