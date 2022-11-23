@@ -20,6 +20,7 @@
 compile_error!("Compiling without SIMD support is currently not supported");
 
 use atomic_float::AtomicF32;
+use editor::SafeModeClamper;
 use nih_plug::prelude::*;
 use std::simd::f32x2;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -130,7 +131,7 @@ impl Plugin for Diopser {
 
                 sample_rate: self.sample_rate.clone(),
                 spectrum: self.spectrum_output.clone(),
-                safe_mode: self.params.safe_mode.clone(),
+                safe_mode_clamper: SafeModeClamper::new(self.params.clone()),
             },
             self.params.editor_state.clone(),
         )

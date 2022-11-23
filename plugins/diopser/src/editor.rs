@@ -20,7 +20,6 @@ use nih_plug::prelude::{Editor, Plugin};
 use nih_plug_vizia::vizia::prelude::*;
 use nih_plug_vizia::widgets::*;
 use nih_plug_vizia::{assets, create_vizia_editor, ViziaState, ViziaTheming};
-use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use self::button::SafeModeButton;
@@ -30,7 +29,10 @@ use crate::Diopser;
 
 mod analyzer;
 mod button;
+mod safe_mode;
 mod xy_pad;
+
+pub use safe_mode::SafeModeClamper;
 
 const EDITOR_WIDTH: u32 = 600;
 const EDITOR_HEIGHT: u32 = 490;
@@ -49,8 +51,7 @@ pub(crate) struct Data {
     pub(crate) spectrum: Arc<Mutex<SpectrumOutput>>,
     /// Whether the safe mode button is enabled. The number of filter stages is capped at 40 while
     /// this is active.
-    /// TODO: Actually hook up safe mode
-    pub(crate) safe_mode: Arc<AtomicBool>,
+    pub(crate) safe_mode_clamper: SafeModeClamper,
 }
 
 impl Model for Data {}
@@ -106,7 +107,7 @@ fn top_bar(cx: &mut Context) {
                 .with_label("Automation Precision")
                 .id("automation-precision");
 
-            SafeModeButton::new(cx, Data::safe_mode, "Safe mode").left(Pixels(10.0));
+            SafeModeButton::new(cx, Data::safe_mode_clamper, "Safe mode").left(Pixels(10.0));
 
             ParamButton::new(cx, Data::params, |params| &params.bypass)
                 .for_bypass()
