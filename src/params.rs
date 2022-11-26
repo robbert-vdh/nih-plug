@@ -5,7 +5,7 @@
 //! information.
 
 use std::collections::BTreeMap;
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 use std::sync::Arc;
 
 use self::internals::ParamPtr;
@@ -73,7 +73,7 @@ pub(crate) use sealed::Sealed;
 /// abstractions around parameters, consider wrapping them in a struct instead. Then use the
 /// `#[nested(id_prefix = "foo")]` syntax from the [`Params`] trait to reuse that wrapper in
 /// multiple places.
-pub trait Param: Display + sealed::Sealed {
+pub trait Param: Display + Debug + sealed::Sealed {
     /// The plain parameter type.
     type Plain: PartialEq;
 

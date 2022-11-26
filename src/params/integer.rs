@@ -1,7 +1,7 @@
 //! Stepped integer parameters.
 
 use atomic_float::AtomicF32;
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::Arc;
 
@@ -74,6 +74,17 @@ impl Display for IntParam {
         match &self.value_to_string {
             Some(func) => write!(f, "{}{}", func(self.value()), self.unit),
             _ => write!(f, "{}{}", self.value(), self.unit),
+        }
+    }
+}
+
+impl Debug for IntParam {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // This uses the above `Display` instance to show the value
+        if self.modulated_plain_value() != self.unmodulated_plain_value() {
+            write!(f, "{}: {} (modulated)", &self.name, &self)
+        } else {
+            write!(f, "{}: {}", &self.name, &self)
         }
     }
 }

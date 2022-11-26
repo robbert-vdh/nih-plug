@@ -1,6 +1,6 @@
 //! Enum parameters. `enum` is a keyword, so `enums` it is.
 
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -96,7 +96,7 @@ pub struct EnumParamInner {
 
 impl<T: Enum + PartialEq> Display for EnumParam<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.inner.fmt(f)
+        Display::fmt(&self.inner, f)
     }
 }
 
@@ -107,6 +107,23 @@ impl Display for EnumParamInner {
             "{}",
             self.variants[self.inner.modulated_plain_value() as usize]
         )
+    }
+}
+
+impl<T: Enum + PartialEq> Debug for EnumParam<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Debug::fmt(&self.inner, f)
+    }
+}
+
+impl Debug for EnumParamInner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // This uses the above `Display` instance to show the value
+        if self.inner.modulated_plain_value() != self.inner.unmodulated_plain_value() {
+            write!(f, "{}: {} (modulated)", &self.name(), &self)
+        } else {
+            write!(f, "{}: {}", &self.name(), &self)
+        }
     }
 }
 

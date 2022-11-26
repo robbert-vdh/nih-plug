@@ -1,7 +1,7 @@
 //! Simple boolean parameters.
 
 use atomic_float::AtomicF32;
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -57,6 +57,17 @@ impl Display for BoolParam {
             (v, Some(func)) => write!(f, "{}", func(v)),
             (true, None) => write!(f, "On"),
             (false, None) => write!(f, "Off"),
+        }
+    }
+}
+
+impl Debug for BoolParam {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // This uses the above `Display` instance to show the value
+        if self.value.load(Ordering::Relaxed) != self.unmodulated_value.load(Ordering::Relaxed) {
+            write!(f, "{}: {} (modulated)", &self.name, &self)
+        } else {
+            write!(f, "{}: {}", &self.name, &self)
         }
     }
 }
