@@ -142,6 +142,15 @@ impl XyPad {
                                 Percentage((1.0 - param.unmodulated_normalized_value()) * 100.0)
                             });
 
+                            // Another handle is drawn below the regular handle to show the
+                            // modualted value
+                            let modulated_x_position_lens = x_param_data.make_lens(|param| {
+                                Percentage(param.modulated_normalized_value() * 100.0)
+                            });
+                            let modulated_y_position_lens = y_param_data.make_lens(|param| {
+                                Percentage((1.0 - param.modulated_normalized_value()) * 100.0)
+                            });
+
                             // Can't use `.to_string()` here as that would include the modulation.
                             let x_display_value_lens = x_param_data.make_lens(|param| {
                                 param.normalized_value_to_string(
@@ -165,6 +174,11 @@ impl XyPad {
                                     if text_input_active.get(cx) {
                                         Self::text_input_view(cx, x_display_value_lens.clone());
                                     } else {
+                                        Self::xy_pad_modulation_handle_view(
+                                            cx,
+                                            modulated_x_position_lens.clone(),
+                                            modulated_y_position_lens.clone(),
+                                        );
                                         Self::xy_pad_handle_view(
                                             cx,
                                             x_position_lens.clone(),
@@ -245,6 +259,24 @@ impl XyPad {
             }
         })
         .hoverable(false);
+    }
+
+    /// The secondary handle that shows the modulated value if the plugin is being monophonically
+    /// modualted.
+    fn xy_pad_modulation_handle_view(
+        cx: &mut Context,
+        modulated_x_position_lens: impl Lens<Target = Units>,
+        modulated_y_position_lens: impl Lens<Target = Units>,
+    ) {
+        XyPadHandle::new(cx)
+            .class("xy-pad__handle--modulated")
+            .position_type(PositionType::SelfDirected)
+            .top(modulated_y_position_lens)
+            .left(modulated_x_position_lens)
+            .translate((-(HANDLE_WIDTH_PX / 2.0), -(HANDLE_WIDTH_PX / 2.0)))
+            .width(Pixels(HANDLE_WIDTH_PX))
+            .height(Pixels(HANDLE_WIDTH_PX))
+            .hoverable(false);
     }
 
     /// Should be called at the start of a drag operation.

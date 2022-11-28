@@ -86,3 +86,7 @@ xy-pad__handle {
   border-width: 1px;
   border-radius: 50%;
 }
+.xy-pad__handle--modulated {
+  background-color: #a4eafc69;
+  border-color: #a4eafc96;
+}
