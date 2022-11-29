@@ -41,7 +41,7 @@ pub fn filter_frequency_range() -> FloatRange {
 }
 
 /// The filter frequency parameters minimum value in safe mode.
-pub const FILTER_FREQUENCY_RESTRICTED_MIN: f32 = 20.0;
+pub const FILTER_FREQUENCY_RESTRICTED_MIN: f32 = 35.0;
 /// The filter frequency parameters maximum value in safe mode.
 pub const FILTER_FREQUENCY_RESTRICTED_MAX: f32 = 22_000.0;
 
