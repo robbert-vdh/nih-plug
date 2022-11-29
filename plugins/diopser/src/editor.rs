@@ -23,6 +23,7 @@ use nih_plug_vizia::{assets, create_vizia_editor, ViziaState, ViziaTheming};
 use std::sync::{Arc, Mutex};
 
 use self::button::SafeModeButton;
+use self::slider::RestrictedParamSlider;
 use crate::params::DiopserParams;
 use crate::spectrum::SpectrumOutput;
 use crate::Diopser;
@@ -30,6 +31,7 @@ use crate::Diopser;
 mod analyzer;
 mod button;
 mod safe_mode;
+mod slider;
 mod xy_pad;
 
 pub use safe_mode::SafeModeClamper;
@@ -173,7 +175,12 @@ fn other_params(cx: &mut Context) {
     VStack::new(cx, |cx| {
         HStack::new(cx, move |cx| {
             Label::new(cx, "Filter Stages").class("param-label");
-            ParamSlider::new(cx, Data::params, |params| &params.filter_stages);
+            RestrictedParamSlider::new(
+                cx,
+                Data::params,
+                |params| &params.filter_stages,
+                Data::safe_mode_clamper,
+            );
         })
         .bottom(Pixels(10.0));
 
