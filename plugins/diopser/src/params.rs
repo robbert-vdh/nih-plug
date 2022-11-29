@@ -26,6 +26,11 @@ pub fn filter_stages_range() -> IntRange {
     }
 }
 
+/// The filter stages parameters minimum value in safe mode.
+pub const FILTER_STAGES_RESTRICTED_MIN: i32 = 0;
+/// The filter stages parameters maximum value in safe mode.
+pub const FILTER_STAGES_RESTRICTED_MAX: i32 = 40;
+
 /// The filter frequency parameter's range. Also used in the `SpectrumAnalyzer` widget.
 pub fn filter_frequency_range() -> FloatRange {
     FloatRange::Skewed {

@@ -21,8 +21,6 @@ use nih_plug_vizia::vizia::prelude::*;
 use nih_plug_vizia::widgets::param_base::ParamWidgetBase;
 use nih_plug_vizia::widgets::util::{self, ModifiersExt};
 
-use super::SafeModeClamper;
-
 /// When shift+dragging a parameter, one pixel dragged corresponds to this much change in the
 /// normalized parameter.
 const GRANULAR_DRAG_MULTIPLIER: f32 = 0.1;
@@ -30,9 +28,17 @@ const GRANULAR_DRAG_MULTIPLIER: f32 = 0.1;
 /// A simplified version of `ParamSlider` that works with Diopser's safe mode. The slider's range is
 /// restricted when safe mode is enabled.
 #[derive(Lens)]
-pub struct RestrictedParamSlider<LSafeMode: Lens<Target = SafeModeClamper>> {
-    safe_mode: LSafeMode,
+pub struct RestrictedParamSlider {
     param_base: ParamWidgetBase,
+
+    /// Renormalizes the parameter's normalized value to a `[0, 1]` value that is used to display
+    /// the parameter. This range may end up zooming in on a part of the parameter's original range
+    /// when safe mode is enabled.
+    renormalize_display: Box<dyn Fn(f32) -> f32>,
+    /// The inverse of `renormalize_display`. This is used to map a normalized `[0, 1]` screen
+    /// coordinate back to a `[0, 1]` normalized parameter value. These values may be different when
+    /// safe mode is enabled.
+    renormalize_event: Box<dyn Fn(f32) -> f32>,
 
     /// Will be set to `true` when the field gets Alt+Click'ed which will replace the label with a
     /// text box.
@@ -68,26 +74,27 @@ pub struct GranularDragStatus {
     pub starting_value: f32,
 }
 
-impl<LSafeMode: Lens<Target = SafeModeClamper>> RestrictedParamSlider<LSafeMode> {
+impl RestrictedParamSlider {
     /// See the original `ParamSlider`.
-    pub fn new<LParams, Params, P, FMap>(
+    pub fn new<L, Params, P, FMap>(
         cx: &mut Context,
-        params: LParams,
+        params: L,
         params_to_param: FMap,
-        safe_mode: LSafeMode,
+        renormalize_display: impl Fn(f32) -> f32 + Clone + 'static,
+        renormalize_event: impl Fn(f32) -> f32 + 'static,
     ) -> Handle<Self>
     where
-        LParams: Lens<Target = Params> + Clone,
+        L: Lens<Target = Params> + Clone,
         Params: 'static,
         P: Param + 'static,
         FMap: Fn(&Params) -> &P + Copy + 'static,
     {
-        // We'll visualize the difference between the current value and the default value if the
-        // default value lies somewhere in the middle and the parameter is continuous. Otherwise
-        // this approach looks a bit jarring.
+        // See the original `ParamSlider` implementation for more details.
         Self {
-            safe_mode,
             param_base: ParamWidgetBase::new(cx, params.clone(), params_to_param),
+
+            renormalize_display: Box::new(renormalize_display.clone()),
+            renormalize_event: Box::new(renormalize_event),
 
             text_input_active: false,
             drag_active: false,
@@ -100,8 +107,6 @@ impl<LSafeMode: Lens<Target = SafeModeClamper>> RestrictedParamSlider<LSafeMode>
             cx,
             ParamWidgetBase::build_view(params, params_to_param, move |cx, param_data| {
                 // Can't use `.to_string()` here as that would include the modulation.
-                let unmodulated_normalized_value_lens =
-                    param_data.make_lens(|param| param.unmodulated_normalized_value());
                 let display_value_lens = param_data.make_lens(|param| {
                     param.normalized_value_to_string(param.unmodulated_normalized_value(), true)
                 });
@@ -110,9 +115,14 @@ impl<LSafeMode: Lens<Target = SafeModeClamper>> RestrictedParamSlider<LSafeMode>
                 // signed width of the bar. `start_t` is in `[0, 1]`, and `delta` is in
                 // `[-1, 1]`.
                 let fill_start_delta_lens = {
-                    let param_data = param_data.clone();
-                    unmodulated_normalized_value_lens.map(move |current_value| {
-                        Self::compute_fill_start_delta(param_data.param(), *current_value)
+                    let renormalize_display = renormalize_display.clone();
+
+                    param_data.make_lens(move |param| {
+                        Self::compute_fill_start_delta(
+                            renormalize_display(param.default_normalized_value()),
+                            param.step_count(),
+                            renormalize_display(param.unmodulated_normalized_value()),
+                        )
                     })
                 };
 
@@ -120,8 +130,12 @@ impl<LSafeMode: Lens<Target = SafeModeClamper>> RestrictedParamSlider<LSafeMode>
                 // plugins with hosts that support this), then this is the difference
                 // between the 'true' value and the current value after modulation has been
                 // applied. This follows the same format as `fill_start_delta_lens`.
-                let modulation_start_delta_lens = param_data
-                    .make_lens(move |param| Self::compute_modulation_fill_start_delta(param));
+                let modulation_start_delta_lens = param_data.make_lens(move |param| {
+                    Self::compute_modulation_fill_start_delta(
+                        renormalize_display(param.modulated_normalized_value()),
+                        renormalize_display(param.unmodulated_normalized_value()),
+                    )
+                });
 
                 // Only draw the text input widget when it gets focussed. Otherwise, overlay the
                 // label with the slider. Creating the textbox based on
@@ -129,7 +143,7 @@ impl<LSafeMode: Lens<Target = SafeModeClamper>> RestrictedParamSlider<LSafeMode>
                 // created.
                 Binding::new(
                     cx,
-                    RestrictedParamSlider::<LSafeMode>::text_input_active,
+                    RestrictedParamSlider::text_input_active,
                     move |cx, text_input_active| {
                         if text_input_active.get(cx) {
                             Self::text_input_view(cx, display_value_lens.clone());
@@ -244,9 +258,11 @@ impl<LSafeMode: Lens<Target = SafeModeClamper>> RestrictedParamSlider<LSafeMode>
     /// style, the parameter's current value, and the parameter's step sizes. The resulting tuple
     /// `(start_t, delta)` corresponds to the start and the signed width of the bar. `start_t` is in
     /// `[0, 1]`, and `delta` is in `[-1, 1]`.
-    fn compute_fill_start_delta<P: Param>(param: &P, current_value: f32) -> (f32, f32) {
-        let default_value = param.default_normalized_value();
-        let step_count = param.step_count();
+    fn compute_fill_start_delta(
+        default_value: f32,
+        step_count: Option<usize>,
+        current_value: f32,
+    ) -> (f32, f32) {
         let draw_fill_from_default = step_count.is_none() && (0.45..=0.55).contains(&default_value);
 
         if draw_fill_from_default {
@@ -264,25 +280,23 @@ impl<LSafeMode: Lens<Target = SafeModeClamper>> RestrictedParamSlider<LSafeMode>
     }
 
     /// The same as `compute_fill_start_delta`, but just showing the modulation offset.
-    fn compute_modulation_fill_start_delta<P: Param>(param: &P) -> (f32, f32) {
-        let modulation_start = param.unmodulated_normalized_value();
-
-        (
-            modulation_start,
-            param.modulated_normalized_value() - modulation_start,
-        )
+    fn compute_modulation_fill_start_delta(
+        modulation_start: f32,
+        current_value: f32,
+    ) -> (f32, f32) {
+        (modulation_start, current_value - modulation_start)
     }
 
-    /// `self.param_base.set_normalized_value()`, but resulting from a mouse drag. When using the
-    /// 'even' stepped slider styles from [`ParamSliderStyle`] this will remap the normalized range
-    /// to match up with the fill value display. This still needs to be wrapped in a parameter
-    /// automation gesture.
+    /// `self.param_base.set_normalized_value()`, but resulting from a mouse drag. This uses the
+    /// restricted range if safe mode is enabled.
     fn set_normalized_value_drag(&self, cx: &mut EventContext, normalized_value: f32) {
-        self.param_base.set_normalized_value(cx, normalized_value);
+        let restricted_normalized_value = (self.renormalize_event)(normalized_value);
+        self.param_base
+            .set_normalized_value(cx, restricted_normalized_value);
     }
 }
 
-impl<LSafeMode: Lens<Target = SafeModeClamper>> View for RestrictedParamSlider<LSafeMode> {
+impl View for RestrictedParamSlider {
     fn element(&self) -> Option<&'static str> {
         // We'll reuse the original ParamSlider's styling
         Some("param-slider")
@@ -394,13 +408,22 @@ impl<LSafeMode: Lens<Target = SafeModeClamper>> View for RestrictedParamSlider<L
                         // consistent
                         let start_x =
                             util::remap_current_entity_x_t(cx, granular_drag_status.starting_value);
-                        let delta_x = ((*x - granular_drag_status.starting_x_coordinate)
-                            * GRANULAR_DRAG_MULTIPLIER)
-                            * cx.style.dpi_factor as f32;
 
-                        self.set_normalized_value_drag(
+                        // When the range is restricted the `delta_x` should also change
+                        // accordingly
+                        let min_x = (self.renormalize_event)(0.0);
+                        let max_x = (self.renormalize_event)(1.0);
+                        let delta_x = (*x - granular_drag_status.starting_x_coordinate)
+                            * GRANULAR_DRAG_MULTIPLIER
+                            * cx.style.dpi_factor as f32
+                            * (max_x - min_x);
+
+                        // We don't use `set_normalized_value_drag` because these values are already
+                        // in the correct 'remapped' domain
+                        self.param_base.set_normalized_value(
                             cx,
-                            util::remap_current_entity_x_coordinate(cx, start_x + delta_x),
+                            util::remap_current_entity_x_coordinate(cx, start_x + delta_x)
+                                .clamp(min_x, max_x),
                         );
                     } else {
                         self.granular_drag_status = None;

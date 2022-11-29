@@ -77,7 +77,7 @@ impl<L: Lens<Target = SafeModeClamper>> View for SafeModeButton<L> {
                         safe_mode_clamper.enable(cx);
                         self.scrolled_lines -= 1.0;
                     } else {
-                        safe_mode_clamper.disable(cx);
+                        safe_mode_clamper.disable();
                         self.scrolled_lines += 1.0;
                     }
                 }

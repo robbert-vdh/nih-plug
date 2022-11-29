@@ -179,7 +179,14 @@ fn other_params(cx: &mut Context) {
                 cx,
                 Data::params,
                 |params| &params.filter_stages,
-                Data::safe_mode_clamper,
+                {
+                    let safe_mode_clamper = Data::safe_mode_clamper.get(cx);
+                    move |t| safe_mode_clamper.filter_stages_renormalize_display(t)
+                },
+                {
+                    let safe_mode_clamper = Data::safe_mode_clamper.get(cx);
+                    move |t| safe_mode_clamper.filter_stages_renormalize_event(t)
+                },
             );
         })
         .bottom(Pixels(10.0));
