@@ -25,13 +25,19 @@ much better performance.
   Hertz or musical notes.
 - Hold down Alt/Option while dragging the filter frequency around to snap to
   whole notes.
-- Because this plugin lets you crank every parameter up to 11, you may want to
-  avoid rapidly sweeping the frequency parameter down all the way to 5 Hertz
-  when you have many filter stages enabled. Because of the way these filters
-  work, this may cause comparatively loud resonances in the 0-15 Hertz range. In
-  that case you may want to use a peak limiter after this plugin until you
-  understand how it reacts to different changes. Or maybe you'll want to check
-  out [Safety Limiter](../safety_limiter), which is made for this exact purpose.
+- The safe mode is enabled by default. This limits the frequency range and the
+  number of filter stages. Simply disable the safe mode if you want to crank
+  everything up to 11. With safe mode disabled you may find that going down to
+  the bottom of the frequency range introduces some loud low frequency
+  resonances, especially when combined with a lot of filter stages. In that case
+  you may want to use a peak limiter after this plugin until you understand how
+  it reacts to different changes. Or maybe you'll want to check out [Safety
+  Limiter](../safety_limiter), which is made for this exact purpose.
+- Turn down the automation precision to reduce the DSP load hit of changing the
+  filter frequency and resonance at the cost of introducing varying amounts of
+  aliasing and zipper noises.
+- The aforementioned artifacts introduced by setting a low automation precision
+  can actually be useful for sound design purposes.
 - Change the number of filter stages to immediately reset the filters and stop
   ringing.
 
