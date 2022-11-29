@@ -137,6 +137,19 @@ impl Plugin for Diopser {
         )
     }
 
+    fn filter_state(state: &mut PluginState) {
+        // Safe-mode is enabled by default, so to avoid changing the behavior we'll keep it disabled
+        // for older presets
+        if semver::Version::parse(&state.version)
+            .map(|version| version < semver::Version::parse("0.4.0").unwrap())
+            .unwrap_or(true)
+        {
+            state
+                .fields
+                .insert(String::from("safe-mode"), String::from("false"));
+        }
+    }
+
     fn accepts_bus_config(&self, config: &BusConfig) -> bool {
         // The SIMD version only supports stereo
         config.num_input_channels == config.num_output_channels && config.num_input_channels == 2
