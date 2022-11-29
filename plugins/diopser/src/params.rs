@@ -200,7 +200,7 @@ impl DiopserParams {
 
             automation_precision: FloatParam::new(
                 "Automation precision",
-                normalize_automation_precision(128),
+                normalize_automation_precision(MIN_AUTOMATION_STEP_SIZE),
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             )
             .with_unit("%")
