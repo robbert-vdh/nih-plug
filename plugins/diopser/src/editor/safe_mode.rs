@@ -146,33 +146,32 @@ impl SafeModeClamper {
     /// CLamp the parameter values to the restricted range when enabling safe mode. This assumes
     /// there's no active automation gesture for these parameters.
     fn restrict_range(&self, cx: &mut EventContext) {
-        cx.emit(ParamEvent::BeginSetParameter(&self.params.filter_stages).upcast());
-        cx.emit(
-            ParamEvent::SetParameter(
-                &self.params.filter_stages,
-                self.params.filter_stages.unmodulated_plain_value().clamp(
-                    params::FILTER_STAGES_RESTRICTED_MIN,
-                    params::FILTER_STAGES_RESTRICTED_MAX,
-                ),
-            )
-            .upcast(),
+        let filter_stages = self.params.filter_stages.unmodulated_plain_value();
+        let clamped_filter_stages = filter_stages.clamp(
+            params::FILTER_STAGES_RESTRICTED_MIN,
+            params::FILTER_STAGES_RESTRICTED_MAX,
         );
-        cx.emit(ParamEvent::EndSetParameter(&self.params.filter_stages).upcast());
+        if clamped_filter_stages != filter_stages {
+            cx.emit(ParamEvent::BeginSetParameter(&self.params.filter_stages).upcast());
+            cx.emit(
+                ParamEvent::SetParameter(&self.params.filter_stages, clamped_filter_stages)
+                    .upcast(),
+            );
+            cx.emit(ParamEvent::EndSetParameter(&self.params.filter_stages).upcast());
+        }
 
-        cx.emit(ParamEvent::BeginSetParameter(&self.params.filter_frequency).upcast());
-        cx.emit(
-            ParamEvent::SetParameter(
-                &self.params.filter_frequency,
-                self.params
-                    .filter_frequency
-                    .unmodulated_plain_value()
-                    .clamp(
-                        params::FILTER_FREQUENCY_RESTRICTED_MIN,
-                        params::FILTER_FREQUENCY_RESTRICTED_MAX,
-                    ),
-            )
-            .upcast(),
+        let filter_frequency = self.params.filter_frequency.unmodulated_plain_value();
+        let clamped_filter_frequency = filter_frequency.clamp(
+            params::FILTER_FREQUENCY_RESTRICTED_MIN,
+            params::FILTER_FREQUENCY_RESTRICTED_MAX,
         );
-        cx.emit(ParamEvent::EndSetParameter(&self.params.filter_frequency).upcast());
+        if clamped_filter_frequency != filter_frequency {
+            cx.emit(ParamEvent::BeginSetParameter(&self.params.filter_frequency).upcast());
+            cx.emit(
+                ParamEvent::SetParameter(&self.params.filter_frequency, clamped_filter_frequency)
+                    .upcast(),
+            );
+            cx.emit(ParamEvent::EndSetParameter(&self.params.filter_frequency).upcast());
+        }
     }
 }
