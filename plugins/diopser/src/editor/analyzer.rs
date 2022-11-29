@@ -31,6 +31,11 @@ pub struct SpectrumAnalyzer {
     spectrum: Arc<Mutex<SpectrumOutput>>,
     sample_rate: Arc<AtomicF32>,
 
+    /// A function that the x-parameter's/frequency parameter's normalized value to a `[0, 1]` value
+    /// that is used to display the parameter. This range may end up zooming in on a part of the
+    /// parameter's original range when safe mode is enabled.
+    x_renormalize_display: Box<dyn Fn(f32) -> f32>,
+
     /// The same range as that used by the filter frequency parameter. We'll use this to make sure
     /// we draw the spectrum analyzer's ticks at locations that match the frequency parameter linked
     /// to the X-Y pad's X-axis.
@@ -43,6 +48,7 @@ impl SpectrumAnalyzer {
         cx: &mut Context,
         spectrum: LSpectrum,
         sample_rate: LRate,
+        x_renormalize_display: impl Fn(f32) -> f32 + Clone + 'static,
     ) -> Handle<Self>
     where
         LSpectrum: Lens<Target = Arc<Mutex<SpectrumOutput>>>,
@@ -53,6 +59,7 @@ impl SpectrumAnalyzer {
             sample_rate: sample_rate.get(cx),
 
             frequency_range: params::filter_frequency_range(),
+            x_renormalize_display: Box::new(x_renormalize_display),
         }
         .build(
             cx,
@@ -86,7 +93,9 @@ impl View for SpectrumAnalyzer {
         for (bin_idx, magnetude) in spectrum.iter().enumerate() {
             // We'll match up the bin's x-coordinate with the filter frequency parameter
             let frequency = (bin_idx as f32 / spectrum.len() as f32) * nyquist;
-            let t = self.frequency_range.normalize(frequency);
+            // NOTE: This takes the safe-mode switch into acocunt. When it is enabled, the range is
+            //       zoomed in to match the X-Y pad.
+            let t = (self.x_renormalize_display)(self.frequency_range.normalize(frequency));
             if t <= 0.0 || t >= 1.0 {
                 continue;
             }

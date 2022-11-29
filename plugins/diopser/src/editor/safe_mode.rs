@@ -25,11 +25,19 @@ pub struct SafeModeClamper {
     /// The maximum value for the filter stages parameter when safe mode is enabled, normalized as a
     /// `[0, 1]` value of the original full range.
     filter_stages_restricted_normalized_max: f32,
+
+    /// The minimum value for the filter frequency parameter when safe mode is enabled, normalized
+    /// as a `[0, 1]` value of the original full range.
+    filter_frequency_restricted_normalized_min: f32,
+    /// The maximum value for the filter frequency parameter when safe mode is enabled, normalized
+    /// as a `[0, 1]` value of the original full range.
+    filter_frequency_restricted_normalized_max: f32,
 }
 
 impl SafeModeClamper {
     pub fn new(params: Arc<DiopserParams>) -> Self {
         let filter_stages_range = params::filter_stages_range();
+        let filter_frequency_range = params::filter_frequency_range();
 
         Self {
             enabled: params.safe_mode.clone(),
@@ -39,6 +47,11 @@ impl SafeModeClamper {
                 .normalize(params::FILTER_STAGES_RESTRICTED_MIN),
             filter_stages_restricted_normalized_max: filter_stages_range
                 .normalize(params::FILTER_STAGES_RESTRICTED_MAX),
+
+            filter_frequency_restricted_normalized_min: filter_frequency_range
+                .normalize(params::FILTER_FREQUENCY_RESTRICTED_MIN),
+            filter_frequency_restricted_normalized_max: filter_frequency_range
+                .normalize(params::FILTER_FREQUENCY_RESTRICTED_MAX),
         }
     }
 
@@ -101,6 +114,35 @@ impl SafeModeClamper {
         }
     }
 
+    /// The same as
+    /// [`filter_stages_renormalize_display()`][Self::filter_stages_renormalize_display()], but for
+    /// filter freqnecy.
+    pub fn filter_frequency_renormalize_display(&self, t: f32) -> f32 {
+        if self.status() {
+            let renormalized = (t - self.filter_frequency_restricted_normalized_min)
+                / (self.filter_frequency_restricted_normalized_max
+                    - self.filter_frequency_restricted_normalized_min);
+
+            // This clamping may be necessary when safe mode is enabled but the effects from
+            // `restrict_range()` have not been processed yet
+            renormalized.clamp(0.0, 1.0)
+        } else {
+            t
+        }
+    }
+
+    /// The same as [`filter_stages_renormalize_event()`][Self::filter_stages_renormalize_event()],
+    /// but for filter freqnecy.
+    pub fn filter_frequency_renormalize_event(&self, t: f32) -> f32 {
+        if self.status() {
+            t * (self.filter_frequency_restricted_normalized_max
+                - self.filter_frequency_restricted_normalized_min)
+                + self.filter_frequency_restricted_normalized_min
+        } else {
+            t
+        }
+    }
+
     /// CLamp the parameter values to the restricted range when enabling safe mode. This assumes
     /// there's no active automation gesture for these parameters.
     fn restrict_range(&self, cx: &mut EventContext) {
@@ -116,5 +158,21 @@ impl SafeModeClamper {
             .upcast(),
         );
         cx.emit(ParamEvent::EndSetParameter(&self.params.filter_stages).upcast());
+
+        cx.emit(ParamEvent::BeginSetParameter(&self.params.filter_frequency).upcast());
+        cx.emit(
+            ParamEvent::SetParameter(
+                &self.params.filter_frequency,
+                self.params
+                    .filter_frequency
+                    .unmodulated_plain_value()
+                    .clamp(
+                        params::FILTER_FREQUENCY_RESTRICTED_MIN,
+                        params::FILTER_FREQUENCY_RESTRICTED_MAX,
+                    ),
+            )
+            .upcast(),
+        );
+        cx.emit(ParamEvent::EndSetParameter(&self.params.filter_frequency).upcast());
     }
 }

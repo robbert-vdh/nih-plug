@@ -32,6 +32,9 @@ const HANDLE_WIDTH_PX: f32 = 20.0;
 /// An X-Y pad that controlers two parameters at the same time by binding them to one of the two
 /// axes. This specific implementation has a tooltip for the X-axis parmaeter and allows
 /// Alt+clicking to enter a specific value.
+///
+/// The x-parameter's range is restricted when safe mode is enabled. See `RestrictedParamSlider` for
+/// more details.
 #[derive(Lens)]
 pub struct XyPad {
     x_param_base: ParamWidgetBase,
@@ -41,6 +44,14 @@ pub struct XyPad {
     /// frequencies when holding Alt while dragging.
     /// NOTE: This is hardcoded to work with the filter frequency parameter.
     frequency_range: FloatRange,
+    /// Renormalizes the x-parameter's normalized value to a `[0, 1]` value that is used to display
+    /// the parameter. This range may end up zooming in on a part of the parameter's original range
+    /// when safe mode is enabled.
+    x_renormalize_display: Box<dyn Fn(f32) -> f32>,
+    /// The inverse of `renormalize_display`. This is used to map a normalized `[0, 1]` screen
+    /// coordinate back to a `[0, 1]` normalized parameter value. These values may be different when
+    /// safe mode is enabled.
+    x_renormalize_event: Box<dyn Fn(f32) -> f32>,
 
     /// Will be set to `true` when the X-Y pad gets Alt+Click'ed. This will replace the handle with
     /// a text input box.
@@ -92,11 +103,16 @@ impl XyPad {
     /// Creates a new [`XyPad`] for the given parameter. See
     /// [`ParamSlider`][nih_plug_vizia::widgets::ParamSlider] for more information on this
     /// function's arguments.
+    ///
+    /// The x-parameter's range is restricted when safe mode is enabled. See `RestrictedParamSlider`
+    /// for more details.
     pub fn new<L, Params, P1, P2, FMap1, FMap2>(
         cx: &mut Context,
         params: L,
         params_to_x_param: FMap1,
         params_to_y_param: FMap2,
+        x_renormalize_display: impl Fn(f32) -> f32 + Clone + 'static,
+        x_renormalize_event: impl Fn(f32) -> f32 + 'static,
     ) -> Handle<Self>
     where
         L: Lens<Target = Params> + Clone,
@@ -111,6 +127,8 @@ impl XyPad {
             y_param_base: ParamWidgetBase::new(cx, params.clone(), params_to_y_param),
 
             frequency_range: params::filter_frequency_range(),
+            x_renormalize_display: Box::new(x_renormalize_display.clone()),
+            x_renormalize_event: Box::new(x_renormalize_event),
 
             text_input_active: false,
             drag_active: false,
@@ -133,9 +151,16 @@ impl XyPad {
                         params,
                         params_to_y_param,
                         move |cx, y_param_data| {
-                            let x_position_lens = x_param_data.make_lens(|param| {
-                                Percentage(param.unmodulated_normalized_value() * 100.0)
-                            });
+                            // The x-parameter's range is clamped when safe mode is enabled
+                            let x_position_lens = {
+                                let x_renormalize_display = x_renormalize_display.clone();
+                                x_param_data.make_lens(move |param| {
+                                    Percentage(
+                                        x_renormalize_display(param.unmodulated_normalized_value())
+                                            * 100.0,
+                                    )
+                                })
+                            };
                             let y_position_lens = y_param_data.make_lens(|param| {
                                 // NOTE: The y-axis increments downards, and we want high values at
                                 //       the top and low values at the bottom
@@ -144,8 +169,11 @@ impl XyPad {
 
                             // Another handle is drawn below the regular handle to show the
                             // modualted value
-                            let modulated_x_position_lens = x_param_data.make_lens(|param| {
-                                Percentage(param.modulated_normalized_value() * 100.0)
+                            let modulated_x_position_lens = x_param_data.make_lens(move |param| {
+                                Percentage(
+                                    x_renormalize_display(param.modulated_normalized_value())
+                                        * 100.0,
+                                )
                             });
                             let modulated_y_position_lens = y_param_data.make_lens(|param| {
                                 Percentage((1.0 - param.modulated_normalized_value()) * 100.0)
@@ -311,8 +339,10 @@ impl XyPad {
         snap_to_whole_notes: bool,
     ) {
         // When snapping to whole notes, we'll transform the normalized value back to unnormalized
-        // (this is hardcoded for the filter frequency parameter)
-        let mut x_value = util::remap_current_entity_x_coordinate(cx, x_pos);
+        // (this is hardcoded for the filter frequency parameter). These coordinate mappings also
+        // need to respect the restricted ranges from the safe mode button.
+        let mut x_value =
+            (self.x_renormalize_event)(util::remap_current_entity_x_coordinate(cx, x_pos));
         if snap_to_whole_notes {
             let x_freq = self.frequency_range.unnormalize(x_value);
 
@@ -523,14 +553,16 @@ impl View for XyPad {
                                 });
 
                         // These positions should be compensated for the DPI scale so it remains
-                        // consistent
+                        // consistent. When the range is restricted the `delta_x` should also change
+                        // accordingly.
                         let start_x = util::remap_current_entity_x_t(
                             cx,
-                            granular_drag_status.x_starting_value,
+                            (self.x_renormalize_display)(granular_drag_status.x_starting_value),
                         );
-                        let delta_x = ((*x - granular_drag_status.starting_x_coordinate)
-                            * GRANULAR_DRAG_MULTIPLIER)
+                        let delta_x = (*x - granular_drag_status.starting_x_coordinate)
+                            * GRANULAR_DRAG_MULTIPLIER
                             * dpi_scale;
+
                         let start_y = util::remap_current_entity_y_t(
                             cx,
                             // NOTE: Just like above, the corodinates go from top to bottom
@@ -576,37 +608,71 @@ impl View for XyPad {
                 *remaining_scroll_x += scroll_x;
                 *remaining_scroll_y += scroll_y;
 
-                for (param_base, scrolled_lines) in [
-                    (&self.x_param_base, remaining_scroll_x),
-                    (&self.y_param_base, remaining_scroll_y),
-                ] {
-                    if scrolled_lines.abs() >= 1.0 {
-                        let use_finer_steps = cx.modifiers.shift();
+                // This is a pretty crude way to avoid scrolling outside of the safe mode range
+                let clamp_x_value =
+                    |value| (self.x_renormalize_event)((self.x_renormalize_display)(value));
 
-                        // Scrolling while dragging needs to be taken into account here
-                        if !self.drag_active {
-                            param_base.begin_set_parameter(cx);
-                        }
+                if remaining_scroll_x.abs() >= 1.0 {
+                    let use_finer_steps = cx.modifiers.shift();
 
-                        let mut current_value = param_base.unmodulated_normalized_value();
+                    // Scrolling while dragging needs to be taken into account here
+                    if !self.drag_active {
+                        self.x_param_base.begin_set_parameter(cx);
+                    }
 
-                        while *scrolled_lines >= 1.0 {
-                            current_value =
-                                param_base.next_normalized_step(current_value, use_finer_steps);
-                            param_base.set_normalized_value(cx, current_value);
-                            *scrolled_lines -= 1.0;
-                        }
+                    let mut current_value = self.x_param_base.unmodulated_normalized_value();
 
-                        while *scrolled_lines <= -1.0 {
-                            current_value =
-                                param_base.previous_normalized_step(current_value, use_finer_steps);
-                            param_base.set_normalized_value(cx, current_value);
-                            *scrolled_lines += 1.0;
-                        }
+                    while *remaining_scroll_x >= 1.0 {
+                        current_value = self
+                            .x_param_base
+                            .next_normalized_step(current_value, use_finer_steps);
+                        self.x_param_base
+                            .set_normalized_value(cx, clamp_x_value(current_value));
+                        *remaining_scroll_x -= 1.0;
+                    }
 
-                        if !self.drag_active {
-                            param_base.end_set_parameter(cx);
-                        }
+                    while *remaining_scroll_x <= -1.0 {
+                        current_value = self
+                            .x_param_base
+                            .previous_normalized_step(current_value, use_finer_steps);
+                        self.x_param_base
+                            .set_normalized_value(cx, clamp_x_value(current_value));
+                        *remaining_scroll_x += 1.0;
+                    }
+
+                    if !self.drag_active {
+                        self.x_param_base.end_set_parameter(cx);
+                    }
+                }
+
+                if remaining_scroll_y.abs() >= 1.0 {
+                    let use_finer_steps = cx.modifiers.shift();
+
+                    // Scrolling while dragging needs to be taken into account here
+                    if !self.drag_active {
+                        self.y_param_base.begin_set_parameter(cx);
+                    }
+
+                    let mut current_value = self.y_param_base.unmodulated_normalized_value();
+
+                    while *remaining_scroll_y >= 1.0 {
+                        current_value = self
+                            .y_param_base
+                            .next_normalized_step(current_value, use_finer_steps);
+                        self.y_param_base.set_normalized_value(cx, current_value);
+                        *remaining_scroll_y -= 1.0;
+                    }
+
+                    while *remaining_scroll_y <= -1.0 {
+                        current_value = self
+                            .y_param_base
+                            .previous_normalized_step(current_value, use_finer_steps);
+                        self.y_param_base.set_normalized_value(cx, current_value);
+                        *remaining_scroll_y += 1.0;
+                    }
+
+                    if !self.drag_active {
+                        self.y_param_base.end_set_parameter(cx);
                     }
                 }
 

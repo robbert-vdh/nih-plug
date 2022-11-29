@@ -40,6 +40,11 @@ pub fn filter_frequency_range() -> FloatRange {
     }
 }
 
+/// The filter frequency parameters minimum value in safe mode.
+pub const FILTER_FREQUENCY_RESTRICTED_MIN: f32 = 20.0;
+/// The filter frequency parameters maximum value in safe mode.
+pub const FILTER_FREQUENCY_RESTRICTED_MAX: f32 = 22_000.0;
+
 pub fn normalize_automation_precision(step_size: u32) -> f32 {
     (MAX_AUTOMATION_STEP_SIZE - step_size) as f32
         / (MAX_AUTOMATION_STEP_SIZE - MIN_AUTOMATION_STEP_SIZE) as f32

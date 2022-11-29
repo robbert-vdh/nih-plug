@@ -142,15 +142,26 @@ fn spectrum_analyzer(cx: &mut Context) {
 
         VStack::new(cx, |cx| {
             ZStack::new(cx, |cx| {
-                analyzer::SpectrumAnalyzer::new(cx, Data::spectrum, Data::sample_rate)
-                    .width(Percentage(100.0))
-                    .height(Percentage(100.0));
+                analyzer::SpectrumAnalyzer::new(cx, Data::spectrum, Data::sample_rate, {
+                    let safe_mode_clamper = Data::safe_mode_clamper.get(cx);
+                    move |t| safe_mode_clamper.filter_frequency_renormalize_display(t)
+                })
+                .width(Percentage(100.0))
+                .height(Percentage(100.0));
 
                 xy_pad::XyPad::new(
                     cx,
                     Data::params,
                     |params| &params.filter_frequency,
                     |params| &params.filter_resonance,
+                    {
+                        let safe_mode_clamper = Data::safe_mode_clamper.get(cx);
+                        move |t| safe_mode_clamper.filter_frequency_renormalize_display(t)
+                    },
+                    {
+                        let safe_mode_clamper = Data::safe_mode_clamper.get(cx);
+                        move |t| safe_mode_clamper.filter_frequency_renormalize_event(t)
+                    },
                 )
                 .width(Percentage(100.0))
                 .height(Percentage(100.0));
