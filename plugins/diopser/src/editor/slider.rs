@@ -445,6 +445,10 @@ impl View for RestrictedParamSlider {
                 // scrolling trackpads being a thing `scroll_y` could be anything.
                 self.scrolled_lines += scroll_y;
 
+                // This is a pretty crude way to avoid scrolling outside of the safe mode range
+                let clamp_value =
+                    |value| (self.renormalize_event)((self.renormalize_display)(value));
+
                 if self.scrolled_lines.abs() >= 1.0 {
                     let use_finer_steps = cx.modifiers.shift();
 
@@ -459,7 +463,8 @@ impl View for RestrictedParamSlider {
                         current_value = self
                             .param_base
                             .next_normalized_step(current_value, use_finer_steps);
-                        self.param_base.set_normalized_value(cx, current_value);
+                        self.param_base
+                            .set_normalized_value(cx, clamp_value(current_value));
                         self.scrolled_lines -= 1.0;
                     }
 
@@ -467,7 +472,8 @@ impl View for RestrictedParamSlider {
                         current_value = self
                             .param_base
                             .previous_normalized_step(current_value, use_finer_steps);
-                        self.param_base.set_normalized_value(cx, current_value);
+                        self.param_base
+                            .set_normalized_value(cx, clamp_value(current_value));
                         self.scrolled_lines += 1.0;
                     }
 
