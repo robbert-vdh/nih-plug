@@ -405,25 +405,19 @@ impl View for RestrictedParamSlider {
                                 });
 
                         // These positions should be compensated for the DPI scale so it remains
-                        // consistent
-                        let start_x =
-                            util::remap_current_entity_x_t(cx, granular_drag_status.starting_value);
-
-                        // When the range is restricted the `delta_x` should also change
-                        // accordingly
-                        let min_x = (self.renormalize_event)(0.0);
-                        let max_x = (self.renormalize_event)(1.0);
+                        // consistent. When the range is restricted the `delta_x` should also change
+                        // accordingly.
+                        let start_x = util::remap_current_entity_x_t(
+                            cx,
+                            (self.renormalize_display)(granular_drag_status.starting_value),
+                        );
                         let delta_x = (*x - granular_drag_status.starting_x_coordinate)
                             * GRANULAR_DRAG_MULTIPLIER
-                            * cx.style.dpi_factor as f32
-                            * (max_x - min_x);
+                            * cx.style.dpi_factor as f32;
 
-                        // We don't use `set_normalized_value_drag` because these values are already
-                        // in the correct 'remapped' domain
-                        self.param_base.set_normalized_value(
+                        self.set_normalized_value_drag(
                             cx,
-                            util::remap_current_entity_x_coordinate(cx, start_x + delta_x)
-                                .clamp(min_x, max_x),
+                            util::remap_current_entity_x_coordinate(cx, start_x + delta_x),
                         );
                     } else {
                         self.granular_drag_status = None;
