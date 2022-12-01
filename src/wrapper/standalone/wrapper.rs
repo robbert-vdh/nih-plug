@@ -121,14 +121,10 @@ impl WindowHandler for WrapperWindowHandler {
         while let Ok(task) = self.gui_task_receiver.try_recv() {
             match task {
                 GuiTask::Resize(new_width, new_height) => {
-                    // Window resizing in baseview has only been implemented on Linux
-                    #[cfg(target_os = "linux")]
-                    {
-                        window.resize(baseview::Size {
-                            width: new_width as f64,
-                            height: new_height as f64,
-                        });
-                    }
+                    window.resize(baseview::Size {
+                        width: new_width as f64,
+                        height: new_height as f64,
+                    });
                 }
                 GuiTask::Close => window.close(),
             }
