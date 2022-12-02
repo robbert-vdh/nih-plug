@@ -57,7 +57,7 @@ nih_plug = { path = ".." }
 nih_plug_assets = { git = "https://github.com/robbert-vdh/nih_plug_assets.git" }
 
 atomic_refcell = "0.1"
-baseview = { git = "https://github.com/robbert-vdh/baseview.git", branch = "feature/mouse-event-modifiers" }
+baseview = { git = "https://github.com/RustAudio/baseview.git" }
 crossbeam = "0.8"
 # Upstream doesn't work with the current iced version, this branch also contains
 # additional features
