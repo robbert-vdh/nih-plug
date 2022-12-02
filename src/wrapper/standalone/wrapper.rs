@@ -63,6 +63,8 @@ pub struct Wrapper<P: Plugin, B: Backend> {
     /// that using a special `MainThreadExecutor` wrapper around `AsyncExecutor`.
     pub(crate) event_loop: OsEventLoop<P::BackgroundTask, TaskExecutorWrapper<P>>,
 
+    /// This is used to grab the DPI scaling config. Not used on macOS.
+    #[allow(unused)]
     config: WrapperConfig,
 
     /// The bus and buffer configurations are static for the standalone target.
