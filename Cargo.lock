@@ -365,7 +365,7 @@ checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
 [[package]]
 name = "baseview"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/baseview.git?branch=feature/resize#a9b50dc3b8077307528879928c1634fa515850ea"
+source = "git+https://github.com/robbert-vdh/baseview.git?branch=feature/resize#d7a8c52d2389c726c8a87107064dc325976e798e"
 dependencies = [
  "cocoa",
  "core-foundation",
