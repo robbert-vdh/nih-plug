@@ -26,9 +26,9 @@ checksum = "330223a1aecc308757b9926e9391c9b47f8ef2dbd8aea9df88312aea18c5e8d6"
 
 [[package]]
 name = "addr2line"
-version = "0.17.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9ecd88a8c8378ca913a680cd98f0f13ac67383d35993f86c90a70e3f137816b"
+checksum = "a76fd60b23679b7d19bd066031410fb7e458ccc5e958eb5c325888ce4baedc97"
 dependencies = [
  "gimli",
 ]
@@ -83,7 +83,7 @@ dependencies = [
  "alsa-sys",
  "bitflags",
  "libc",
- "nix 0.23.1",
+ "nix 0.23.2",
 ]
 
 [[package]]
@@ -337,15 +337,15 @@ checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
 name = "backtrace"
-version = "0.3.66"
+version = "0.3.67"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cab84319d616cfb654d03394f38ab7e6f0919e181b1b57e1fd15e7fb4077d9a7"
+checksum = "233d376d6d185f2a3093e58f283f60f880315b6c60075b01f36b3b85154564ca"
 dependencies = [
  "addr2line",
  "cc",
  "cfg-if 1.0.0",
  "libc",
- "miniz_oxide 0.5.4",
+ "miniz_oxide 0.6.2",
  "object",
  "rustc-demangle",
 ]
@@ -365,7 +365,7 @@ checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
 [[package]]
 name = "baseview"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/baseview.git?branch=feature/resize#d7a8c52d2389c726c8a87107064dc325976e798e"
+source = "git+https://github.com/robbert-vdh/baseview.git?branch=feature/resize#512c3f2393d606f91963773c73cbf3ab8de5eb57"
 dependencies = [
  "cocoa",
  "core-foundation",
@@ -537,9 +537,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.0.77"
+version = "1.0.78"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9f73505338f7d905b19d18738976aae232eb46b8efc15554ffc56deb5d9ebe4"
+checksum = "a20104e2335ce8a659d6dd92a51a767a0c062599c73b343fd152cb401e828c3d"
 dependencies = [
  "jobserver",
 ]
@@ -1632,9 +1632,9 @@ dependencies = [
 
 [[package]]
 name = "gimli"
-version = "0.26.2"
+version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22030e2c5a68ec659fde1e949a745124b48e6fa8b045b7ed5bd1fe4ccc5c4e5d"
+checksum = "dec7af912d60cdbd3677c1af9352ebae6fb8394d165568a2234df0fa00f87793"
 
 [[package]]
 name = "gl_generator"
@@ -2251,9 +2251,9 @@ checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
 
 [[package]]
 name = "libc"
-version = "0.2.137"
+version = "0.2.138"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc7fcc620a3bff7cdd7a365be3376c97191aeaccc2a603e600951e452615bf89"
+checksum = "db6d7e329c562c5dfab7a46a2afabc8b987ab9a4834c9d1ca04dc54c1546cef8"
 
 [[package]]
 name = "libloading"
@@ -2460,15 +2460,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "791daaae1ed6889560f8c4359194f56648355540573244a5448a83ba1ecc7435"
 dependencies = [
  "adler32",
-]
-
-[[package]]
-name = "miniz_oxide"
-version = "0.5.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96590ba8f175222643a85693f33d26e9c8a015f599c216509b1a6894af675d34"
-dependencies = [
- "adler",
 ]
 
 [[package]]
@@ -2721,9 +2712,9 @@ dependencies = [
 
 [[package]]
 name = "nix"
-version = "0.23.1"
+version = "0.23.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f866317acbd3a240710c63f065ffb1e4fd466259045ccb504130b7f668f35c6"
+checksum = "8f3790c00a0150112de0f4cd161e3d7fc4b2d8a5542ffc35f099a2562aecb35c"
 dependencies = [
  "bitflags",
  "cc",
@@ -2913,9 +2904,9 @@ dependencies = [
 
 [[package]]
 name = "object"
-version = "0.29.0"
+version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21158b2c33aa6d4561f1c0a6ea283ca92bc54802a93b263e910746d679a7eb53"
+checksum = "239da7f290cfa979f43f85a8efeee9a8a76d0827c356d37f9d3d7254d6b537fb"
 dependencies = [
  "memchr",
 ]
@@ -3053,7 +3044,7 @@ checksum = "7d17b78036a60663b797adeaee46f5c9dfebb86948d1255007a1d6be0271ff99"
 dependencies = [
  "instant",
  "lock_api",
- "parking_lot_core 0.8.5",
+ "parking_lot_core 0.8.6",
 ]
 
 [[package]]
@@ -3068,9 +3059,9 @@ dependencies = [
 
 [[package]]
 name = "parking_lot_core"
-version = "0.8.5"
+version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d76e8e1493bcac0d2766c42737f34458f1c8c50c0d23bcb24ea953affb273216"
+checksum = "60a2cfe6f0ad2bfc16aefa463b497d5c7a5ecd44a23efa72aa342d90177356dc"
 dependencies = [
  "cfg-if 1.0.0",
  "instant",
@@ -3250,9 +3241,9 @@ dependencies = [
 
 [[package]]
 name = "polling"
-version = "2.5.1"
+version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "166ca89eb77fd403230b9c156612965a81e094ec6ec3aa13663d4c8b113fa748"
+checksum = "22122d5ec4f9fe1b3916419b76be1e80bcb93f618d071d2edf841b137b2a2bd6"
 dependencies = [
  "autocfg",
  "cfg-if 1.0.0",
@@ -3493,11 +3484,10 @@ dependencies = [
 
 [[package]]
 name = "rayon"
-version = "1.6.0"
+version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e060280438193c554f654141c9ea9417886713b7acd75974c85b18a69a88e0b"
+checksum = "6db3a213adf02b3bcfd2d3846bb41cb22857d131789e01df434fb7e7bc0759b7"
 dependencies = [
- "crossbeam-deque",
  "either",
  "rayon-core",
 ]
@@ -3522,9 +3512,9 @@ checksum = "9ae028b272a6e99d9f8260ceefa3caa09300a8d6c8d2b2001316474bc52122e9"
 
 [[package]]
 name = "realfft"
-version = "3.1.0"
+version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3052e66d6ebeff8049607775c41d39a58d1dfa91a2733e89f2b7816bce2ea4cc"
+checksum = "93d6b8e8f0c6d2234aa58048d7290c60bf92cd36fd2888cd8331c66ad4f2e1d2"
 dependencies = [
  "rustfft",
 ]
@@ -3615,9 +3605,9 @@ dependencies = [
 
 [[package]]
 name = "rtrb"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9026ee10cf6d8388598dc10601819be903d14528e05ec3ab97b9ade70e24819c"
+checksum = "99e704dd104faf2326a320140f70f0b736d607c1caa1b1748a6c568a79819109"
 dependencies = [
  "cache-padded",
 ]
@@ -3809,18 +3799,18 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.148"
+version = "1.0.151"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e53f64bb4ba0191d6d0676e1b141ca55047d83b74f5607e6d8eb88126c52c2dc"
+checksum = "97fed41fc1a24994d044e6db6935e69511a1153b52c15eb42493b26fa87feba0"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.148"
+version = "1.0.151"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a55492425aa53521babf6137309e7d34c20bbfbbfcfe2c7f3a047fd1f6b92c0c"
+checksum = "255abe9a125a985c05190d687b320c12f9b1f0b99445e608c21ba0782c719ad8"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4262,20 +4252,21 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.22.0"
+version = "1.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d76ce4a75fb488c605c54bf610f221cea8b0dafb53333c1a67e8ee199dcd2ae3"
+checksum = "eab6d665857cc6ca78d6e80303a02cea7a7851e85dfbd77cbdc09bd129f1ef46"
 dependencies = [
  "autocfg",
  "num_cpus",
  "pin-project-lite",
+ "windows-sys 0.42.0",
 ]
 
 [[package]]
 name = "toml"
-version = "0.5.9"
+version = "0.5.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d82e1a7758622a465f8cee077614c73484dac5b836c02ff6a40d5d1010324d7"
+checksum = "1333c76748e868a4d9d1017b5ab53171dfd095f70c712fdb4653a406547f598f"
 dependencies = [
  "serde",
 ]
