@@ -124,7 +124,7 @@ impl ExactSizeIterator for BlocksIter<'_, '_> {}
 impl ExactSizeIterator for BlockChannelsIter<'_, '_> {}
 
 impl<'slice, 'sample> Block<'slice, 'sample> {
-    /// Get the number of samples (not channels) in the block.
+    /// Get the number of samples per channel in the block.
     #[allow(clippy::len_without_is_empty)]
     #[inline]
     pub fn len(&self) -> usize {

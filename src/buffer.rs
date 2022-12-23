@@ -28,7 +28,7 @@ pub struct Buffer<'a> {
 }
 
 impl<'a> Buffer<'a> {
-    /// Returns the number of samples in this buffer.
+    /// Returns the number of samples per channel in this buffer.
     #[inline]
     pub fn len(&self) -> usize {
         if self.output_slices.is_empty() {
