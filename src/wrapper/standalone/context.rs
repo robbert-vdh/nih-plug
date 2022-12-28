@@ -12,9 +12,7 @@ use crate::midi::NoteEvent;
 use crate::params::internals::ParamPtr;
 use crate::plugin::Plugin;
 
-/// A [`InitContext`] implementation for the standalone wrapper. This is a separate object so it
-/// can hold on to lock guards for event queues. Otherwise reading these events would require
-/// constant unnecessary atomic operations to lock the uncontested RwLocks.
+/// An [`InitContext`] implementation for the standalone wrapper.
 pub(crate) struct WrapperInitContext<'a, P: Plugin, B: Backend> {
     pub(super) wrapper: &'a Wrapper<P, B>,
 }

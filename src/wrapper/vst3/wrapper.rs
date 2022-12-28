@@ -388,28 +388,11 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                     param.update_smoother(buffer_config.sample_rate, true);
                 }
 
-                // HACK: This is needed because if you change the latency during
-                //       `IComponent::setActive(true)` then Ardour will reentrantly call
-                //       `IComponent::setActive(true)` again during the previous call. This use of `static`
-                //       is also fine here because the host may only call this from the main thread, so
-                //       multiple simultaneous calls of this function are not allowed.
-                let mut plugin = match self.inner.plugin.try_lock() {
-                    Some(plugin) => plugin,
-                    None => {
-                        nih_debug_assert_failure!(
-                            "The host tried to call IComponent::setActive(true) while it was \
-                             already calling IComponent::setActive(true), returning kResultOk"
-                        );
-                        return kResultOk;
-                    }
-                };
-
+                // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
+                let mut init_context = self.inner.make_init_context();
                 let bus_config = self.inner.current_bus_config.load();
-                if plugin.initialize(
-                    &bus_config,
-                    &buffer_config,
-                    &mut self.inner.make_init_context(),
-                ) {
+                let mut plugin = self.inner.plugin.lock();
+                if plugin.initialize(&bus_config, &buffer_config, &mut init_context) {
                     // NOTE: We don't call `Plugin::reset()` here. The call is done in `set_process()`
                     //       instead. Otherwise we would call the function twice, and `set_process()` needs
                     //       to be called after this function before the plugin may process audio again.
@@ -532,14 +515,12 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
         // Reinitialize the plugin after loading state so it can respond to the new parameter values
         self.inner.notify_param_values_changed();
 
-        let bus_config = self.inner.current_bus_config.load();
         if let Some(buffer_config) = self.inner.current_buffer_config.load() {
+            // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
+            let mut init_context = self.inner.make_init_context();
+            let bus_config = self.inner.current_bus_config.load();
             let mut plugin = self.inner.plugin.lock();
-            plugin.initialize(
-                &bus_config,
-                &buffer_config,
-                &mut self.inner.make_init_context(),
-            );
+            plugin.initialize(&bus_config, &buffer_config, &mut init_context);
             // TODO: This also goes for the CLAP version, but should we call reset here? Won't the
             //       host always restart playback? Check this with a couple of hosts and remove the
             //       duplicate reset if it's not needed.
@@ -1815,6 +1796,8 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
 
                 self.inner.notify_param_values_changed();
 
+                // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
+                let mut init_context = self.inner.make_init_context();
                 let bus_config = self.inner.current_bus_config.load();
                 let buffer_config = self.inner.current_buffer_config.load().unwrap();
                 let mut plugin = self.inner.plugin.lock();
@@ -1822,13 +1805,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                 //         this could lead to inconsistencies. It's the plugin's responsibility to
                 //         not perform any realtime-unsafe work when the initialize function is
                 //         called a second time if it supports runtime preset loading.
-                permit_alloc(|| {
-                    plugin.initialize(
-                        &bus_config,
-                        &buffer_config,
-                        &mut self.inner.make_init_context(),
-                    )
-                });
+                permit_alloc(|| plugin.initialize(&bus_config, &buffer_config, &mut init_context));
                 plugin.reset();
 
                 // We'll pass the state object back to the GUI thread so deallocation can happen

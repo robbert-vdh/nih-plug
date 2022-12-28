@@ -362,8 +362,15 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         Arc::new(WrapperGuiContext { inner: self })
     }
 
+    /// # Note
+    ///
+    /// The lock on the plugin must be dropped before this object is dropped to avoid deadlocks
+    /// caused by reentrant function calls.
     pub fn make_init_context(&self) -> WrapperInitContext<'_, P> {
-        WrapperInitContext { inner: self }
+        WrapperInitContext {
+            inner: self,
+            pending_requests: Default::default(),
+        }
     }
 
     pub fn make_process_context(&self, transport: Transport) -> WrapperProcessContext<'_, P> {
@@ -521,8 +528,10 @@ impl<P: Vst3Plugin> WrapperInner<P> {
                 self.notify_param_values_changed();
                 let bus_config = self.current_bus_config.load();
                 if let Some(buffer_config) = self.current_buffer_config.load() {
+                    // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
+                    let mut init_context = self.make_init_context();
                     let mut plugin = self.plugin.lock();
-                    plugin.initialize(&bus_config, &buffer_config, &mut self.make_init_context());
+                    plugin.initialize(&bus_config, &buffer_config, &mut init_context);
                     process_wrapper(|| plugin.reset());
                 }
 

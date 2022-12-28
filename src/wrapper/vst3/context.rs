@@ -1,4 +1,5 @@
 use atomic_refcell::AtomicRefMut;
+use std::cell::Cell;
 use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -14,11 +15,26 @@ use crate::params::internals::ParamPtr;
 use crate::plugin::Vst3Plugin;
 use crate::wrapper::state::PluginState;
 
-/// A [`InitContext`] implementation for the wrapper. This is a separate object so it can hold on to
-/// lock guards for event queues. Otherwise reading these events would require constant unnecessary
-/// atomic operations to lock the uncontested locks.
+/// An [`InitContext`] implementation for the wrapper.
+///
+/// # Note
+///
+/// Requests to change the latency are only sent when this object is dropped. Otherwise there's the
+/// risk that the host will immediately deactivate/reactivate the plugin while still in the init
+/// call. Reentrannt function calls are difficult to handle in Rust without forcing everything to
+/// use interior mutability, so this will have to do for now. This does mean that `Plugin` mutex
+/// lock has to be dropped before this object.
 pub(crate) struct WrapperInitContext<'a, P: Vst3Plugin> {
     pub(super) inner: &'a WrapperInner<P>,
+    pub(super) pending_requests: PendingInitContextRequests,
+}
+
+/// Any requests that should be sent out when the [`WrapperInitContext`] is dropped. See that
+/// struct's docstring for mroe information.
+#[derive(Debug, Default)]
+pub(crate) struct PendingInitContextRequests {
+    /// The value of the last `.set_latency_samples()` call.
+    latency_changed: Cell<Option<u32>>,
 }
 
 /// A [`ProcessContext`] implementation for the wrapper. This is a separate object so it can hold on
@@ -38,6 +54,14 @@ pub(crate) struct WrapperGuiContext<P: Vst3Plugin> {
     pub(super) inner: Arc<WrapperInner<P>>,
 }
 
+impl<P: Vst3Plugin> Drop for WrapperInitContext<'_, P> {
+    fn drop(&mut self) {
+        if let Some(samples) = self.pending_requests.latency_changed.take() {
+            self.inner.set_latency_samples(samples)
+        }
+    }
+}
+
 impl<P: Vst3Plugin> InitContext<P> for WrapperInitContext<'_, P> {
     fn plugin_api(&self) -> PluginApi {
         PluginApi::Vst3
@@ -48,7 +72,8 @@ impl<P: Vst3Plugin> InitContext<P> for WrapperInitContext<'_, P> {
     }
 
     fn set_latency_samples(&self, samples: u32) {
-        self.inner.set_latency_samples(samples)
+        // See this struct's docstring
+        self.pending_requests.latency_changed.set(Some(samples));
     }
 
     fn set_current_voice_capacity(&self, _capacity: u32) {
