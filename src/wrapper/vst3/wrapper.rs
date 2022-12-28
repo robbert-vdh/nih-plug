@@ -1251,9 +1251,13 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
             //       processed before note events. Otherwise you'll get out of bounds note events
             //       with block splitting when the note event occurs at one index after the end (or
             //       on the exclusive end index) of the block.
-            process_events.sort_by_key(|event| match event {
-                ProcessEvent::ParameterChange { timing, .. } => *timing,
-                ProcessEvent::NoteEvent { timing, .. } => *timing,
+            // FIXME: Apparently stable sort allcoates if the slice is large enough. This should be
+            //        fixed at some point.
+            permit_alloc(|| {
+                process_events.sort_by_key(|event| match event {
+                    ProcessEvent::ParameterChange { timing, .. } => *timing,
+                    ProcessEvent::NoteEvent { timing, .. } => *timing,
+                })
             });
 
             let mut block_start = 0usize;
