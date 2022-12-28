@@ -1,4 +1,5 @@
 use atomic_refcell::AtomicRefMut;
+use std::cell::Cell;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
@@ -13,8 +14,22 @@ use crate::params::internals::ParamPtr;
 use crate::plugin::ClapPlugin;
 
 /// An [`InitContext`] implementation for the wrapper.
+///
+/// # Note
+///
+/// See the VST3 `WrapperInitContext` for an explanation of why we need this `pending_requests`
+/// field.
 pub(crate) struct WrapperInitContext<'a, P: ClapPlugin> {
     pub(super) wrapper: &'a Wrapper<P>,
+    pub(super) pending_requests: PendingInitContextRequests,
+}
+
+/// Any requests that should be sent out when the [`WrapperInitContext`] is dropped. See that
+/// struct's docstring for mroe information.
+#[derive(Debug, Default)]
+pub(crate) struct PendingInitContextRequests {
+    /// The value of the last `.set_latency_samples()` call.
+    latency_changed: Cell<Option<u32>>,
 }
 
 /// A [`ProcessContext`] implementation for the wrapper. This is a separate object so it can hold on
@@ -34,6 +49,14 @@ pub(crate) struct WrapperGuiContext<P: ClapPlugin> {
     pub(super) wrapper: Arc<Wrapper<P>>,
 }
 
+impl<P: ClapPlugin> Drop for WrapperInitContext<'_, P> {
+    fn drop(&mut self) {
+        if let Some(samples) = self.pending_requests.latency_changed.take() {
+            self.wrapper.set_latency_samples(samples)
+        }
+    }
+}
+
 impl<P: ClapPlugin> InitContext<P> for WrapperInitContext<'_, P> {
     fn plugin_api(&self) -> PluginApi {
         PluginApi::Clap
@@ -44,7 +67,8 @@ impl<P: ClapPlugin> InitContext<P> for WrapperInitContext<'_, P> {
     }
 
     fn set_latency_samples(&self, samples: u32) {
-        self.wrapper.set_latency_samples(samples)
+        // See this struct's docstring
+        self.pending_requests.latency_changed.set(Some(samples));
     }
 
     fn set_current_voice_capacity(&self, capacity: u32) {

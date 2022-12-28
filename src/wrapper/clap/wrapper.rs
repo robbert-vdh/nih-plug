@@ -732,8 +732,15 @@ impl<P: ClapPlugin> Wrapper<P> {
         Arc::new(WrapperGuiContext { wrapper: self })
     }
 
+    /// # Note
+    ///
+    /// The lock on the plugin must be dropped before this object is dropped to avoid deadlocks
+    /// caused by reentrant function calls.
     fn make_init_context(&self) -> WrapperInitContext<'_, P> {
-        WrapperInitContext { wrapper: self }
+        WrapperInitContext {
+            wrapper: self,
+            pending_requests: Default::default(),
+        }
     }
 
     fn make_process_context(&self, transport: Transport) -> WrapperProcessContext<'_, P> {
@@ -1668,8 +1675,10 @@ impl<P: ClapPlugin> Wrapper<P> {
                 self.notify_param_values_changed();
                 let bus_config = self.current_bus_config.load();
                 if let Some(buffer_config) = self.current_buffer_config.load() {
+                    // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
+                    let mut init_context = self.make_init_context();
                     let mut plugin = self.plugin.lock();
-                    plugin.initialize(&bus_config, &buffer_config, &mut self.make_init_context());
+                    plugin.initialize(&bus_config, &buffer_config, &mut init_context);
                     process_wrapper(|| plugin.reset());
                 }
 
@@ -1767,12 +1776,10 @@ impl<P: ClapPlugin> Wrapper<P> {
             param.update_smoother(buffer_config.sample_rate, true);
         }
 
+        // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
+        let mut init_context = wrapper.make_init_context();
         let mut plugin = wrapper.plugin.lock();
-        if plugin.initialize(
-            &bus_config,
-            &buffer_config,
-            &mut wrapper.make_init_context(),
-        ) {
+        if plugin.initialize(&bus_config, &buffer_config, &mut init_context) {
             // NOTE: `Plugin::reset()` is called in `clap_plugin::start_processing()` instead of in
             //       this function
 
@@ -2310,6 +2317,8 @@ impl<P: ClapPlugin> Wrapper<P> {
 
                 wrapper.notify_param_values_changed();
 
+                // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
+                let mut init_context = wrapper.make_init_context();
                 let bus_config = wrapper.current_bus_config.load();
                 let buffer_config = wrapper.current_buffer_config.load().unwrap();
                 let mut plugin = wrapper.plugin.lock();
@@ -2317,13 +2326,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 //         this could lead to inconsistencies. It's the plugin's responsibility to
                 //         not perform any realtime-unsafe work when the initialize function is
                 //         called a second time if it supports runtime preset loading.
-                permit_alloc(|| {
-                    plugin.initialize(
-                        &bus_config,
-                        &buffer_config,
-                        &mut wrapper.make_init_context(),
-                    )
-                });
+                permit_alloc(|| plugin.initialize(&bus_config, &buffer_config, &mut init_context));
                 plugin.reset();
 
                 // We'll pass the state object back to the GUI thread so deallocation can happen
@@ -3218,12 +3221,10 @@ impl<P: ClapPlugin> Wrapper<P> {
 
         let bus_config = wrapper.current_bus_config.load();
         if let Some(buffer_config) = wrapper.current_buffer_config.load() {
+            // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
+            let mut init_context = wrapper.make_init_context();
             let mut plugin = wrapper.plugin.lock();
-            plugin.initialize(
-                &bus_config,
-                &buffer_config,
-                &mut wrapper.make_init_context(),
-            );
+            plugin.initialize(&bus_config, &buffer_config, &mut init_context);
             // TODO: This also goes for the VST3 version, but should we call reset here? Won't the
             //       host always restart playback? Check this with a couple of hosts and remove the
             //       duplicate reset if it's not needed.
