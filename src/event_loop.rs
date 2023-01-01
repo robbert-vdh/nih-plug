@@ -6,9 +6,8 @@ mod background_thread;
 
 #[cfg(all(target_family = "unix", not(target_os = "macos")))]
 mod linux;
-// For now, also use the Linux event loop on macOS so it at least compiles
 #[cfg(target_os = "macos")]
-mod linux;
+mod macos;
 #[cfg(target_os = "windows")]
 mod windows;
 
@@ -16,9 +15,8 @@ pub(crate) use self::background_thread::BackgroundThread;
 
 #[cfg(all(target_family = "unix", not(target_os = "macos")))]
 pub(crate) use self::linux::LinuxEventLoop as OsEventLoop;
-// For now, also use the Linux event loop on macOS so it at least compiles
 #[cfg(target_os = "macos")]
-pub(crate) use self::linux::LinuxEventLoop as OsEventLoop;
+pub(crate) use self::macos::MacOSEventLoop as OsEventLoop;
 #[cfg(target_os = "windows")]
 pub(crate) use self::windows::WindowsEventLoop as OsEventLoop;
 
