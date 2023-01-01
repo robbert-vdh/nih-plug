@@ -1,6 +1,4 @@
-//! An event loop implementation for Linux. APIs on Linux are generally thread safe, so the context
-//! of a main thread does not exist there. Because of that, this mostly just serves as a way to
-//! delegate expensive processing to another thread.
+//! An event loop implementation for macOS.
 
 use core_foundation::base::kCFAllocatorDefault;
 use core_foundation::runloop::{
