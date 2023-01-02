@@ -11,7 +11,7 @@ use objc::{class, msg_send, sel, sel_impl};
 use std::os::raw::c_void;
 use std::sync::Arc;
 
-use super::{BackgroundThread, EventLoop, MainThreadExecutor};
+use super::{BackgroundThread, EventLoop, MainThreadExecutor, TASK_QUEUE_CAPACITY};
 
 /// Wrapping the `CFRunLoopSourceRef` type is required to be able to annotate it as thread-safe.
 struct LoopSourceWrapper(CFRunLoopSourceRef);
@@ -36,8 +36,9 @@ pub(crate) struct MacOSEventLoop<T, E> {
     /// The sender for passing messages to the main thread.
     main_thread_sender: Sender<T>,
 
-    /// Is it necessary to store the information that is sent to the callback function here?
-    _info: Arc<(Arc<E>, Receiver<T>)>,
+    /// The data that is passed to the external run loop source callback function via a raw pointer.
+    /// The data is not accessed from the Rust side after creating it but it's kept here so as not to get dropped.
+    _thread_data: Box<(Arc<E>, Receiver<T>)>,
 }
 
 impl<T, E> EventLoop<T, E> for MacOSEventLoop<T, E>
@@ -46,15 +47,14 @@ where
     E: MainThreadExecutor<T> + 'static,
 {
     fn new_and_spawn(executor: Arc<E>) -> Self {
-        // What's a good size for the queue?
-        let (main_thread_sender, main_thread_receiver) = channel::bounded::<T>(32);
+        let (main_thread_sender, main_thread_receiver) = channel::bounded::<T>(TASK_QUEUE_CAPACITY);
 
-        let info = Arc::new((executor.clone(), main_thread_receiver));
+        let thread_data = Box::new((executor.clone(), main_thread_receiver));
 
         let loop_source;
         unsafe {
-            let mut source_context = CFRunLoopSourceContext {
-                info: Arc::as_ptr(&info) as *mut c_void,
+            let source_context = CFRunLoopSourceContext {
+                info: &*thread_data as *const _ as *mut c_void,
                 cancel: None,
                 copyDescription: None,
                 equal: None,
@@ -69,7 +69,7 @@ where
             loop_source = CFRunLoopSourceCreate(
                 kCFAllocatorDefault,
                 1,
-                &mut source_context as *mut _ as *mut CFRunLoopSourceContext,
+                &source_context as *const _ as *mut CFRunLoopSourceContext,
             );
             CFRunLoopAddSource(CFRunLoopGetMain(), loop_source, kCFRunLoopCommonModes);
         }
@@ -79,7 +79,7 @@ where
             background_thread: BackgroundThread::new_and_spawn(executor),
             loop_source: LoopSourceWrapper(loop_source),
             main_thread_sender,
-            _info: info,
+            _thread_data: thread_data,
         }
     }
 
