@@ -38,7 +38,7 @@ pub(crate) struct MacOSEventLoop<T, E> {
 
     /// The data that is passed to the external run loop source callback function via a raw pointer.
     /// The data is not accessed from the Rust side after creating it but it's kept here so as not to get dropped.
-    _thread_data: Box<(Arc<E>, Receiver<T>)>,
+    _callback_data: Box<(Arc<E>, Receiver<T>)>,
 }
 
 impl<T, E> EventLoop<T, E> for MacOSEventLoop<T, E>
@@ -49,12 +49,12 @@ where
     fn new_and_spawn(executor: Arc<E>) -> Self {
         let (main_thread_sender, main_thread_receiver) = channel::bounded::<T>(TASK_QUEUE_CAPACITY);
 
-        let thread_data = Box::new((executor.clone(), main_thread_receiver));
+        let callback_data = Box::new((executor.clone(), main_thread_receiver));
 
         let loop_source;
         unsafe {
             let source_context = CFRunLoopSourceContext {
-                info: &*thread_data as *const _ as *mut c_void,
+                info: &*callback_data as *const _ as *mut c_void,
                 cancel: None,
                 copyDescription: None,
                 equal: None,
@@ -79,7 +79,7 @@ where
             background_thread: BackgroundThread::new_and_spawn(executor),
             loop_source: LoopSourceWrapper(loop_source),
             main_thread_sender,
-            _thread_data: thread_data,
+            _callback_data: callback_data,
         }
     }
 
