@@ -43,8 +43,9 @@ pub fn gain_to_db(gain: f32) -> f32 {
 }
 
 /// An approximation of [`db_to_gain()`] using `exp()`. Does not treat values below
-/// [`MINUS_INFINITY_DB`] as 0.0 gain to avoid branching. Will run faster on most architectures, but
-/// the result may be slightly different.
+/// [`MINUS_INFINITY_DB`] as 0.0 gain to avoid branching. As a result this function will thus also
+/// never return 0.0 for normal input values. Will run faster on most architectures, but the result
+/// may be slightly different.
 #[inline]
 pub fn db_to_gain_fast(dbs: f32) -> f32 {
     const CONVERSION_FACTOR: f32 = std::f32::consts::LN_10 / 20.0;

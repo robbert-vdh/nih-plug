@@ -187,7 +187,7 @@ impl Plugin for Sine {
             };
 
             for sample in channel_samples {
-                *sample = sine * util::db_to_gain(gain);
+                *sample = sine * util::db_to_gain_fast(gain);
             }
         }
 
