@@ -39,11 +39,7 @@ pub fn db_to_gain(dbs: f32) -> f32 {
 /// [`MINUS_INFINITY_DB`].
 #[inline]
 pub fn gain_to_db(gain: f32) -> f32 {
-    if gain > MINUS_INFINITY_GAIN {
-        gain.log10() * 20.0
-    } else {
-        MINUS_INFINITY_DB
-    }
+    f32::max(gain, MINUS_INFINITY_GAIN).log10() * 20.0
 }
 
 /// Convert a MIDI note ID to a frequency at A4 = 440 Hz equal temperament and middle C = note 60 =
