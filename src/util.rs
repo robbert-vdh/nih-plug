@@ -95,40 +95,93 @@ pub fn freq_to_midi_note(freq: f32) -> f32 {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    mod db_gain_conversion {
+        use super::super::*;
 
-    #[test]
-    fn test_db_to_gain_positive() {
-        assert_eq!(db_to_gain(3.0), 1.4125376);
+        #[test]
+        fn test_db_to_gain_positive() {
+            assert_eq!(db_to_gain(3.0), 1.4125376);
+        }
+
+        #[test]
+        fn test_db_to_gain_negative() {
+            assert_eq!(db_to_gain(-3.0), 1.4125376f32.recip());
+        }
+
+        #[test]
+        fn test_db_to_gain_minus_infinity() {
+            assert_eq!(db_to_gain(-100.0), 0.0);
+        }
+
+        #[test]
+        fn test_gain_to_db_positive() {
+            assert_eq!(gain_to_db(4.0), 12.041201);
+        }
+
+        #[test]
+        fn test_gain_to_db_negative() {
+            assert_eq!(gain_to_db(0.25), -12.041201);
+        }
+
+        #[test]
+        fn test_gain_to_db_minus_infinity_zero() {
+            assert_eq!(gain_to_db(0.0), MINUS_INFINITY_DB);
+        }
+
+        #[test]
+        fn test_gain_to_db_minus_infinity_negative() {
+            assert_eq!(gain_to_db(-2.0), MINUS_INFINITY_DB);
+        }
     }
 
-    #[test]
-    fn test_db_to_gain_negative() {
-        assert_eq!(db_to_gain(-3.0), 1.4125376f32.recip());
-    }
+    mod fast_db_gain_conversion {
+        use super::super::*;
 
-    #[test]
-    fn test_db_to_gain_minus_infinity() {
-        assert_eq!(db_to_gain(-100.0), 0.0);
-    }
+        #[test]
+        fn test_db_to_gain_positive() {
+            approx::assert_relative_eq!(
+                db_to_gain(3.0),
+                db_to_gain_fast_branching(3.0),
+                epsilon = 1e-7
+            );
+        }
 
-    #[test]
-    fn test_gain_to_db_positive() {
-        assert_eq!(gain_to_db(4.0), 12.041201);
-    }
+        #[test]
+        fn test_db_to_gain_negative() {
+            approx::assert_relative_eq!(
+                db_to_gain(-3.0),
+                db_to_gain_fast_branching(-3.0),
+                epsilon = 1e-7
+            );
+        }
 
-    #[test]
-    fn test_gain_to_db_negative() {
-        assert_eq!(gain_to_db(0.25), -12.041201);
-    }
+        #[test]
+        fn test_db_to_gain_minus_infinity() {
+            approx::assert_relative_eq!(
+                db_to_gain(-100.0),
+                db_to_gain_fast_branching(-100.0),
+                epsilon = 1e-7
+            );
+        }
 
-    #[test]
-    fn test_gain_to_db_minus_infinity_zero() {
-        assert_eq!(gain_to_db(0.0), MINUS_INFINITY_DB);
-    }
+        #[test]
+        fn test_gain_to_db_positive() {
+            approx::assert_relative_eq!(gain_to_db(4.0), gain_to_db_fast(4.0), epsilon = 1e-7);
+        }
 
-    #[test]
-    fn test_gain_to_db_minus_infinity_negative() {
-        assert_eq!(gain_to_db(-2.0), MINUS_INFINITY_DB);
+        #[test]
+        fn test_gain_to_db_negative() {
+            approx::assert_relative_eq!(gain_to_db(0.25), gain_to_db_fast(0.25), epsilon = 1e-7);
+        }
+
+        #[test]
+        fn test_gain_to_db_minus_infinity_zero() {
+            approx::assert_relative_eq!(gain_to_db(0.0), gain_to_db_fast(0.0), epsilon = 1e-7);
+        }
+
+        #[test]
+        fn test_gain_to_db_minus_infinity_negative() {
+            approx::assert_relative_eq!(gain_to_db(-2.0), gain_to_db_fast(-2.0), epsilon = 1e-7);
+        }
     }
 }
