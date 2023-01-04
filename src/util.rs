@@ -42,6 +42,34 @@ pub fn gain_to_db(gain: f32) -> f32 {
     f32::max(gain, MINUS_INFINITY_GAIN).log10() * 20.0
 }
 
+/// An approximation of [`db_to_gain()`] using `exp()`. Does not treat values below
+/// [`MINUS_INFINITY_DB`] as 0.0 gain to avoid branching. Will run faster on most architectures, but
+/// the result may be slightly different.
+#[inline]
+pub fn db_to_gain_fast(dbs: f32) -> f32 {
+    const CONVERSION_FACTOR: f32 = std::f32::consts::LN_10 / 20.0;
+    (dbs * CONVERSION_FACTOR).exp()
+}
+
+/// [`db_to_gain_fast()`], but this version does truncate values below [`MINUS_INFINITY_DB`] to 0.0.
+/// Bikeshedding over a better name is welcome.
+#[inline]
+pub fn db_to_gain_fast_branching(dbs: f32) -> f32 {
+    if dbs > MINUS_INFINITY_DB {
+        db_to_gain_fast(dbs)
+    } else {
+        0.0
+    }
+}
+
+/// An approximation of [`gain_to_db()`] using `ln()`. Will run faster on most architectures, but
+/// the result may be slightly different.
+#[inline]
+pub fn gain_to_db_fast(gain: f32) -> f32 {
+    const CONVERSION_FACTOR: f32 = std::f32::consts::LOG10_E * 20.0;
+    f32::max(gain, MINUS_INFINITY_GAIN).ln() * CONVERSION_FACTOR
+}
+
 /// Convert a MIDI note ID to a frequency at A4 = 440 Hz equal temperament and middle C = note 60 =
 /// C4.
 #[inline]
