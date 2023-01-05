@@ -33,7 +33,7 @@ impl Backend for Dummy {
         ];
         let mut buffer = Buffer::default();
         unsafe {
-            buffer.set_slices(|output_slices| {
+            buffer.set_slices(self.config.period_size as usize, |output_slices| {
                 // SAFETY: `channels` is no longer used directly after this
                 *output_slices = channels
                     .iter_mut()

@@ -402,7 +402,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                     self.inner
                         .output_buffer
                         .borrow_mut()
-                        .set_slices(|output_slices| {
+                        .set_slices(0, |output_slices| {
                             output_slices
                                 .resize_with(bus_config.num_output_channels as usize, || &mut [])
                         });
@@ -429,7 +429,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                         Buffer::default,
                     );
                     for buffer in aux_input_buffers.iter_mut() {
-                        buffer.set_slices(|channel_slices| {
+                        buffer.set_slices(0, |channel_slices| {
                             channel_slices.resize_with(
                                 bus_config.aux_input_busses.num_channels as usize,
                                 || &mut [],
@@ -444,7 +444,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                         Buffer::default,
                     );
                     for buffer in aux_output_buffers.iter_mut() {
-                        buffer.set_slices(|channel_slices| {
+                        buffer.set_slices(0, |channel_slices| {
                             channel_slices.resize_with(
                                 bus_config.aux_output_busses.num_channels as usize,
                                 || &mut [],
@@ -1322,9 +1322,10 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                 // channels. In case the does does not provide an output or if they don't provide
                 // all of the channels (this should not happen, but Ableton Live might do it) then
                 // we'll skip the process function.
+                let block_len = block_end - block_start;
                 let mut output_buffer = self.inner.output_buffer.borrow_mut();
                 let mut buffer_is_valid = false;
-                output_buffer.set_slices(|output_slices| {
+                output_buffer.set_slices(block_len, |output_slices| {
                     // Buffers for zero-channel plugins like note effects should always be allowed
                     buffer_is_valid = output_slices.is_empty();
 
@@ -1352,7 +1353,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                 *((*data.outputs).buffers as *mut *mut f32).add(output_channel_idx);
                             *output_channel_slice = std::slice::from_raw_parts_mut(
                                 channel_ptr.add(block_start),
-                                block_end - block_start,
+                                block_len,
                             );
                         }
                     }
@@ -1377,7 +1378,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                             ptr::copy_nonoverlapping(
                                 input_channel_ptr.add(block_start),
                                 output_channel_ptr.add(block_start),
-                                block_end - block_start,
+                                block_len,
                             );
                         }
                     }
@@ -1416,13 +1417,12 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
 
                         // If the host passes weird data then we need to be very sure that there are
                         // no dangling references to previous data
-                        buffer.set_slices(|slices| slices.fill_with(|| &mut []));
+                        buffer.set_slices(0, |slices| slices.fill_with(|| &mut []));
                         continue;
                     }
 
                     // We'll always reuse the start of the buffer even of the current block is
                     // shorter for cache locality reasons
-                    let block_len = block_end - block_start;
                     for (channel_idx, channel_storage) in storage.iter_mut().enumerate() {
                         // The `set_len()` avoids having to unnecessarily fill the buffer with
                         // zeroes when sizing up
@@ -1435,7 +1435,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                         ));
                     }
 
-                    buffer.set_slices(|slices| {
+                    buffer.set_slices(block_len, |slices| {
                         for (channel_slice, channel_storage) in
                             slices.iter_mut().zip(storage.iter_mut())
                         {
@@ -1470,12 +1470,11 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
 
                         // If the host passes weird data then we need to be very sure that there are
                         // no dangling references to previous data
-                        buffer.set_slices(|slices| slices.fill_with(|| &mut []));
+                        buffer.set_slices(0, |slices| slices.fill_with(|| &mut []));
                         continue;
                     }
 
-                    let block_len = block_end - block_start;
-                    buffer.set_slices(|slices| {
+                    buffer.set_slices(block_len, |slices| {
                         for (channel_idx, channel_slice) in slices.iter_mut().enumerate() {
                             *channel_slice = std::slice::from_raw_parts_mut(
                                 (*(*host_output).buffers.add(channel_idx)).add(block_start)

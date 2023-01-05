@@ -1788,7 +1788,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             wrapper
                 .output_buffer
                 .borrow_mut()
-                .set_slices(|output_slices| {
+                .set_slices(0, |output_slices| {
                     output_slices.resize_with(bus_config.num_output_channels as usize, || &mut [])
                 });
 
@@ -1812,7 +1812,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 Buffer::default,
             );
             for buffer in aux_input_buffers.iter_mut() {
-                buffer.set_slices(|channel_slices| {
+                buffer.set_slices(0, |channel_slices| {
                     channel_slices
                         .resize_with(bus_config.aux_input_busses.num_channels as usize, || {
                             &mut []
@@ -1827,7 +1827,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 Buffer::default,
             );
             for buffer in aux_output_buffers.iter_mut() {
-                buffer.set_slices(|channel_slices| {
+                buffer.set_slices(0, |channel_slices| {
                     channel_slices
                         .resize_with(bus_config.aux_output_busses.num_channels as usize, || {
                             &mut []
@@ -1987,9 +1987,10 @@ impl<P: ClapPlugin> Wrapper<P> {
                 // TODO: The audio buffers have a latency field, should we use those?
                 // TODO: Like with VST3, should we expose some way to access or set the silence/constant
                 //       flags?
+                let block_len = block_end - block_start;
                 let mut output_buffer = wrapper.output_buffer.borrow_mut();
                 let mut buffer_is_valid = false;
-                output_buffer.set_slices(|output_slices| {
+                output_buffer.set_slices(block_len, |output_slices| {
                     // Buffers for zero-channel plugins like note effects should always be allowed
                     buffer_is_valid = output_slices.is_empty();
 
@@ -2024,7 +2025,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                                 *(audio_outputs.data32 as *mut *mut f32).add(output_channel_idx);
                             *output_channel_slice = std::slice::from_raw_parts_mut(
                                 channel_ptr.add(block_start),
-                                block_end - block_start,
+                                block_len,
                             );
                         }
                     }
@@ -2056,7 +2057,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                             ptr::copy_nonoverlapping(
                                 input_channel_ptr.add(block_start),
                                 output_channel_ptr.add(block_start),
-                                block_end - block_start,
+                                block_len,
                             );
                         }
                     }
@@ -2095,13 +2096,12 @@ impl<P: ClapPlugin> Wrapper<P> {
 
                         // If the host passes weird data then we need to be very sure that there are
                         // no dangling references to previous data
-                        buffer.set_slices(|slices| slices.fill_with(|| &mut []));
+                        buffer.set_slices(0, |slices| slices.fill_with(|| &mut []));
                         continue;
                     }
 
                     // We'll always reuse the start of the buffer even of the current block is
                     // shorter for cache locality reasons
-                    let block_len = block_end - block_start;
                     for (channel_idx, channel_storage) in storage.iter_mut().enumerate() {
                         // The `set_len()` avoids having to unnecessarily fill the buffer with
                         // zeroes when sizing up
@@ -2113,7 +2113,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                         ));
                     }
 
-                    buffer.set_slices(|slices| {
+                    buffer.set_slices(block_len, |slices| {
                         for (channel_slice, channel_storage) in
                             slices.iter_mut().zip(storage.iter_mut())
                         {
@@ -2148,12 +2148,11 @@ impl<P: ClapPlugin> Wrapper<P> {
 
                         // If the host passes weird data then we need to be very sure that there are
                         // no dangling references to previous data
-                        buffer.set_slices(|slices| slices.fill_with(|| &mut []));
+                        buffer.set_slices(0, |slices| slices.fill_with(|| &mut []));
                         continue;
                     }
 
-                    let block_len = block_end - block_start;
-                    buffer.set_slices(|slices| {
+                    buffer.set_slices(block_len, |slices| {
                         for (channel_idx, channel_slice) in slices.iter_mut().enumerate() {
                             *channel_slice = std::slice::from_raw_parts_mut(
                                 (*(*host_output).data32.add(channel_idx)).add(block_start)

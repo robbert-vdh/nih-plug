@@ -325,7 +325,7 @@ impl Cpal {
         ];
         let mut buffer = Buffer::default();
         unsafe {
-            buffer.set_slices(|output_slices| {
+            buffer.set_slices(0, |output_slices| {
                 // Pre-allocate enough storage, the pointers are set in the data callback because
                 // `channels` will have been moved between now and the next callback
                 output_slices.resize_with(channels.len(), || &mut []);
@@ -339,12 +339,11 @@ impl Cpal {
         // Can't borrow from `self` in the callback
         let config = self.config.clone();
         let mut num_processed_samples = 0;
-
         move |data, _info| {
             // Things may have been moved in between callbacks, so these pointers need to be set up
             // again on each invocation
             unsafe {
-                buffer.set_slices(|output_slices| {
+                buffer.set_slices(config.period_size as usize, |output_slices| {
                     for (output_slice, channel) in output_slices.iter_mut().zip(channels.iter_mut())
                     {
                         // SAFETY: `channels` is no longer used directly after this, and it outlives
