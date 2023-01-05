@@ -64,7 +64,7 @@ impl Backend for Dummy {
                 break;
             }
 
-            num_processed_samples += buffer.len() as i64;
+            num_processed_samples += buffer.samples() as i64;
 
             let period_end = Instant::now();
             std::thread::sleep((period_start + interval).saturating_duration_since(period_end));

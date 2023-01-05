@@ -407,7 +407,7 @@ impl Cpal {
 
             // TODO: Handle MIDI output events
 
-            num_processed_samples += buffer.len() as i64;
+            num_processed_samples += buffer.samples() as i64;
         }
     }
 }

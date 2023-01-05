@@ -84,10 +84,12 @@ impl DryWetMixer {
 
         assert_eq!(buffer.channels(), self.delay_line.len());
         let delay_line_len = self.delay_line[0].len();
-        assert!(buffer.len() <= delay_line_len);
+        assert!(buffer.samples() <= delay_line_len);
 
-        let num_samples_before_wrap = buffer.len().min(delay_line_len - self.next_write_position);
-        let num_samples_after_wrap = buffer.len() - num_samples_before_wrap;
+        let num_samples_before_wrap = buffer
+            .samples()
+            .min(delay_line_len - self.next_write_position);
+        let num_samples_after_wrap = buffer.samples() - num_samples_before_wrap;
 
         for (buffer_channel, delay_line) in buffer
             .as_slice_immutable()
@@ -101,7 +103,7 @@ impl DryWetMixer {
                 .copy_from_slice(&buffer_channel[num_samples_before_wrap..]);
         }
 
-        self.next_write_position = (self.next_write_position + buffer.len()) % delay_line_len;
+        self.next_write_position = (self.next_write_position + buffer.samples()) % delay_line_len;
     }
 
     /// Mix the dry signal into the buffer. The ratio is a `[0, 1]` integer where 0 results in an
@@ -134,12 +136,13 @@ impl DryWetMixer {
 
         assert_eq!(buffer.channels(), self.delay_line.len());
         let delay_line_len = self.delay_line[0].len();
-        assert!(buffer.len() + latency <= delay_line_len);
+        assert!(buffer.samples() + latency <= delay_line_len);
 
         let read_position =
-            (self.next_write_position + delay_line_len - buffer.len() - latency) % delay_line_len;
-        let num_samples_before_wrap = buffer.len().min(delay_line_len - read_position);
-        let num_samples_after_wrap = buffer.len() - num_samples_before_wrap;
+            (self.next_write_position + delay_line_len - buffer.samples() - latency)
+                % delay_line_len;
+        let num_samples_before_wrap = buffer.samples().min(delay_line_len - read_position);
+        let num_samples_after_wrap = buffer.samples() - num_samples_before_wrap;
 
         for (buffer_channel, delay_line) in buffer.as_slice().iter_mut().zip(self.delay_line.iter())
         {

@@ -449,7 +449,7 @@ impl Plugin for SpectralCompressor {
                 .global
                 .dry_wet_ratio
                 .smoothed
-                .next_step(buffer.len() as u32),
+                .next_step(buffer.samples() as u32),
             // The dry and wet signals are in phase, so we can do a linear mix
             dry_wet_mixer::MixingStyle::Linear,
             self.stft.latency_samples() as usize,

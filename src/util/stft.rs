@@ -63,7 +63,7 @@ struct NoSidechain;
 impl StftInput for Buffer<'_> {
     #[inline]
     fn num_samples(&self) -> usize {
-        self.len()
+        self.samples()
     }
 
     #[inline]

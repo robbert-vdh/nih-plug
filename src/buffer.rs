@@ -34,7 +34,7 @@ pub struct Buffer<'a> {
 impl<'a> Buffer<'a> {
     /// Returns the number of samples per channel in this buffer.
     #[inline]
-    pub fn len(&self) -> usize {
+    pub fn samples(&self) -> usize {
         self.num_samples
     }
 
@@ -69,7 +69,7 @@ impl<'a> Buffer<'a> {
         SamplesIter {
             buffers: self.output_slices.as_mut_slice(),
             current_sample: 0,
-            samples_end: self.len(),
+            samples_end: self.samples(),
             _marker: PhantomData,
         }
     }

@@ -311,7 +311,7 @@ impl Crossover {
     fn process_fir(&mut self, buffer: &mut Buffer, aux: &mut AuxiliaryBuffers) {
         // In theory we could do smoothing in between processed blocks, but this hsould be fine
         if self.should_update_filters() {
-            self.update_filters(buffer.len() as u32);
+            self.update_filters(buffer.samples() as u32);
         }
 
         let aux_outputs = &mut aux.outputs;

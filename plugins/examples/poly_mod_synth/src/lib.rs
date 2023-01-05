@@ -183,7 +183,7 @@ impl Plugin for PolyModSynth {
         // num_remaining_samples, next_event_idx - block_start_idx)`. Because blocks also need to be
         // split on note events, it's easier to work with raw audio here and to do the splitting by
         // hand.
-        let num_samples = buffer.len();
+        let num_samples = buffer.samples();
         let sample_rate = context.transport().sample_rate;
         let output = buffer.as_slice();
 

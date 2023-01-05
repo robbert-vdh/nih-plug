@@ -6,6 +6,11 @@ new and what's changed, this document lists all breaking changes in reverse
 chronological order. If a new feature did not require any changes to existing
 code then it will not be listed here.
 
+## [2023-01-05]
+
+- `Buffer::len()` has been renamed to `Buffer::samples()` to make this less
+  ambiguous.
+
 ## [2022-11-17]
 
 - The `Params` derive macro now also properly supports persistent fields in
