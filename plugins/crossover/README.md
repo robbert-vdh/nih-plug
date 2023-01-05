@@ -10,11 +10,14 @@ In Bitwig Studio you'll want to click on the 'Show plug-in multi-out chain
 selector' button and then on 'Add missing chains' to access the chains. The main
 output will not output any audio. To save time, you can save this setup as the
 default preset by right clicking on the device. Any new Crossover instances will
-then already have the additional output chains set up.
+then already have the additional output chains set up. You can also download
+[this
+preset](https://cdn.discordapp.com/attachments/786996796400336947/1060581719293579344/Crossover_setup.bwpreset),
+load it, and then set it as your default preset for Crossover.
 
 <!-- Screenshots and other binary assets aren't in this repo as that would add bloat to NIH-plug checkouts -->
 
-![Screenshot in Bitwig](https://imgur.com/lvwgHQf.png)
+![Screenshot in Bitwig](https://i.imgur.com/hrn9uhR.png)
 
 ## Download
 
