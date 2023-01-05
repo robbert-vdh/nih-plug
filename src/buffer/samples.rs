@@ -61,7 +61,8 @@ impl<'slice, 'sample> Iterator for SamplesIter<'slice, 'sample> {
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let remaining = unsafe { (*self.buffers)[0].len() } - self.current_sample;
+        let remaining = self.samples_end - self.current_sample;
+
         (remaining, Some(remaining))
     }
 }
@@ -107,6 +108,7 @@ impl<'slice, 'sample> Iterator for ChannelSamplesIter<'slice, 'sample> {
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         let remaining = unsafe { (*self.buffers).len() } - self.current_channel;
+
         (remaining, Some(remaining))
     }
 }

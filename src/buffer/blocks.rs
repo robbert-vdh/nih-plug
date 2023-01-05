@@ -45,7 +45,7 @@ impl<'slice, 'sample> Iterator for BlocksIter<'slice, 'sample> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        let buffer_len = unsafe { (*self.buffers)[0].len() };
+        let buffer_len = unsafe { (*self.buffers).first().map(|b| b.len()).unwrap_or(0) };
         if self.current_block_start < buffer_len {
             let current_block_start = self.current_block_start;
             let current_block_end =
@@ -67,9 +67,9 @@ impl<'slice, 'sample> Iterator for BlocksIter<'slice, 'sample> {
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let remaining = ((unsafe { (*self.buffers)[0].len() } - self.current_block_start) as f32
-            / self.max_block_size as f32)
-            .ceil() as usize;
+        let buffer_len = unsafe { (*self.buffers).first().map(|b| b.len()).unwrap_or(0) };
+        let remaining = (buffer_len as f32 / self.max_block_size as f32).ceil() as usize;
+
         (remaining, Some(remaining))
     }
 }
@@ -116,6 +116,7 @@ impl<'slice, 'sample> Iterator for BlockChannelsIter<'slice, 'sample> {
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         let remaining = unsafe { (*self.buffers).len() } - self.current_channel;
+
         (remaining, Some(remaining))
     }
 }
