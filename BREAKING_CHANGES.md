@@ -10,6 +10,7 @@ code then it will not be listed here.
 
 - `Buffer::len()` has been renamed to `Buffer::samples()` to make this less
   ambiguous.
+- `Block::len()` has been renamed to `Block::samples()`.
 
 ## [2022-11-17]
 

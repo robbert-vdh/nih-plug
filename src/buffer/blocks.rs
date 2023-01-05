@@ -126,9 +126,8 @@ impl ExactSizeIterator for BlockChannelsIter<'_, '_> {}
 
 impl<'slice, 'sample> Block<'slice, 'sample> {
     /// Get the number of samples per channel in the block.
-    #[allow(clippy::len_without_is_empty)]
     #[inline]
-    pub fn len(&self) -> usize {
+    pub fn samples(&self) -> usize {
         self.current_block_end - self.current_block_start
     }
 
@@ -231,11 +230,11 @@ impl<'slice, 'sample> Block<'slice, 'sample> {
     where
         LaneCount<LANES>: SupportedLaneCount,
     {
-        if sample_index > self.len() {
+        if sample_index > self.samples() {
             return None;
         }
 
-        let used_lanes = self.len().max(LANES);
+        let used_lanes = self.samples().max(LANES);
         let mut values = [0.0; LANES];
         for (channel_idx, value) in values.iter_mut().enumerate().take(used_lanes) {
             *value = unsafe {
@@ -289,11 +288,11 @@ impl<'slice, 'sample> Block<'slice, 'sample> {
     where
         LaneCount<LANES>: SupportedLaneCount,
     {
-        if sample_index > self.len() {
+        if sample_index > self.samples() {
             return false;
         }
 
-        let used_lanes = self.len().max(LANES);
+        let used_lanes = self.samples().max(LANES);
         let values = vector.to_array();
         for (channel_idx, value) in values.into_iter().enumerate().take(used_lanes) {
             *unsafe {

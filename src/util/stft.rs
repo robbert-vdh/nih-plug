@@ -92,7 +92,7 @@ impl StftInputMut for Buffer<'_> {
 impl StftInput for Block<'_, '_> {
     #[inline]
     fn num_samples(&self) -> usize {
-        self.len()
+        self.samples()
     }
 
     #[inline]
