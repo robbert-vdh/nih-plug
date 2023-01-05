@@ -325,7 +325,7 @@ impl Cpal {
         ];
         let mut buffer = Buffer::default();
         unsafe {
-            buffer.with_raw_vec(|output_slices| {
+            buffer.set_slices(|output_slices| {
                 // Pre-allocate enough storage, the pointers are set in the data callback because
                 // `channels` will have been moved between now and the next callback
                 output_slices.resize_with(channels.len(), || &mut []);
@@ -344,7 +344,7 @@ impl Cpal {
             // Things may have been moved in between callbacks, so these pointers need to be set up
             // again on each invocation
             unsafe {
-                buffer.with_raw_vec(|output_slices| {
+                buffer.set_slices(|output_slices| {
                     for (output_slice, channel) in output_slices.iter_mut().zip(channels.iter_mut())
                     {
                         // SAFETY: `channels` is no longer used directly after this, and it outlives

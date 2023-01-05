@@ -402,7 +402,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                     self.inner
                         .output_buffer
                         .borrow_mut()
-                        .with_raw_vec(|output_slices| {
+                        .set_slices(|output_slices| {
                             output_slices
                                 .resize_with(bus_config.num_output_channels as usize, || &mut [])
                         });
@@ -429,7 +429,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                         Buffer::default,
                     );
                     for buffer in aux_input_buffers.iter_mut() {
-                        buffer.with_raw_vec(|channel_slices| {
+                        buffer.set_slices(|channel_slices| {
                             channel_slices.resize_with(
                                 bus_config.aux_input_busses.num_channels as usize,
                                 || &mut [],
@@ -444,7 +444,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                         Buffer::default,
                     );
                     for buffer in aux_output_buffers.iter_mut() {
-                        buffer.with_raw_vec(|channel_slices| {
+                        buffer.set_slices(|channel_slices| {
                             channel_slices.resize_with(
                                 bus_config.aux_output_busses.num_channels as usize,
                                 || &mut [],
@@ -1324,7 +1324,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                 // we'll skip the process function.
                 let mut output_buffer = self.inner.output_buffer.borrow_mut();
                 let mut buffer_is_valid = false;
-                output_buffer.with_raw_vec(|output_slices| {
+                output_buffer.set_slices(|output_slices| {
                     // Buffers for zero-channel plugins like note effects should always be allowed
                     buffer_is_valid = output_slices.is_empty();
 
@@ -1416,7 +1416,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
 
                         // If the host passes weird data then we need to be very sure that there are
                         // no dangling references to previous data
-                        buffer.with_raw_vec(|slices| slices.fill_with(|| &mut []));
+                        buffer.set_slices(|slices| slices.fill_with(|| &mut []));
                         continue;
                     }
 
@@ -1435,7 +1435,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                         ));
                     }
 
-                    buffer.with_raw_vec(|slices| {
+                    buffer.set_slices(|slices| {
                         for (channel_slice, channel_storage) in
                             slices.iter_mut().zip(storage.iter_mut())
                         {
@@ -1470,12 +1470,12 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
 
                         // If the host passes weird data then we need to be very sure that there are
                         // no dangling references to previous data
-                        buffer.with_raw_vec(|slices| slices.fill_with(|| &mut []));
+                        buffer.set_slices(|slices| slices.fill_with(|| &mut []));
                         continue;
                     }
 
                     let block_len = block_end - block_start;
-                    buffer.with_raw_vec(|slices| {
+                    buffer.set_slices(|slices| {
                         for (channel_idx, channel_slice) in slices.iter_mut().enumerate() {
                             *channel_slice = std::slice::from_raw_parts_mut(
                                 (*(*host_output).buffers.add(channel_idx)).add(block_start)

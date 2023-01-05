@@ -117,7 +117,7 @@ impl<'a> Buffer<'a> {
     /// The stored slices must point to live data when this object is passed to the plugins' process
     /// function. The rest of this object also assumes all channel lengths are equal. Panics will
     /// likely occur if this is not the case.
-    pub unsafe fn with_raw_vec(&mut self, update: impl FnOnce(&mut Vec<&'a mut [f32]>)) {
+    pub unsafe fn set_slices(&mut self, update: impl FnOnce(&mut Vec<&'a mut [f32]>)) {
         update(&mut self.output_slices);
     }
 }
@@ -131,7 +131,7 @@ mod miri {
         let mut real_buffers = vec![vec![0.0; 512]; 2];
         let mut buffer = Buffer::default();
         unsafe {
-            buffer.with_raw_vec(|output_slices| {
+            buffer.set_slices(|output_slices| {
                 let (first_channel, other_channels) = real_buffers.split_at_mut(1);
                 *output_slices = vec![&mut first_channel[0], &mut other_channels[0]];
             })
@@ -159,7 +159,7 @@ mod miri {
         let mut real_buffers = vec![vec![0.0; 512]; 2];
         let mut buffer = Buffer::default();
         unsafe {
-            buffer.with_raw_vec(|output_slices| {
+            buffer.set_slices(|output_slices| {
                 let (first_channel, other_channels) = real_buffers.split_at_mut(1);
                 *output_slices = vec![&mut first_channel[0], &mut other_channels[0]];
             })

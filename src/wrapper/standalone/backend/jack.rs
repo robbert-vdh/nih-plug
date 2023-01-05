@@ -40,7 +40,7 @@ impl Backend for Jack {
 
         let mut buffer = Buffer::default();
         unsafe {
-            buffer.with_raw_vec(|output_slices| {
+            buffer.set_slices(|output_slices| {
                 output_slices.resize_with(self.outputs.lock().len(), || &mut []);
             })
         }
@@ -104,7 +104,7 @@ impl Backend for Jack {
 
             // And the buffer's slices need to point to the JACK output ports
             unsafe {
-                buffer.with_raw_vec(|output_slices| {
+                buffer.set_slices(|output_slices| {
                     for (output_slice, output) in output_slices.iter_mut().zip(outputs.iter_mut()) {
                         // SAFETY: This buffer is only read from after in this callback, and the
                         //         reference passed to `cb` cannot outlive that function call
