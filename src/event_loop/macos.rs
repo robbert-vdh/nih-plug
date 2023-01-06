@@ -28,7 +28,7 @@ pub(crate) struct MacOSEventLoop<T, E> {
 
     /// A background thread for running tasks independently from the host's GUI thread. Useful for
     /// longer, blocking tasks.
-    background_thread: BackgroundThread<T>,
+    background_thread: BackgroundThread<T, E>,
 
     /// The reference to the run-loop source so that it can be torn down when this struct is
     /// dropped.

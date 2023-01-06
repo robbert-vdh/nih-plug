@@ -55,7 +55,7 @@ pub(crate) struct WindowsEventLoop<T, E> {
 
     /// A background thread for running tasks independently from the host's GUI thread. Useful for
     /// longer, blocking tasks.
-    background_thread: BackgroundThread<T>,
+    background_thread: BackgroundThread<T, E>,
 }
 
 impl<T, E> EventLoop<T, E> for WindowsEventLoop<T, E>
