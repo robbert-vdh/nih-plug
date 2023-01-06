@@ -125,6 +125,10 @@ approx = "0.5.1"
 [target.'cfg(all(target_family = "unix", not(target_os = "macos")))'.dependencies]
 libc = "0.2.124"
 
+[target.'cfg(target_os = "macos")'.dependencies]
+objc = "0.2.7"
+core-foundation = "0.9.3"
+
 [target.'cfg(target_os = "windows")'.dependencies]
 # STDIO isn't reliable on Windows, so when hosting plugins in a DAW it may be
 # useful to log using `OutputDebugString()` instead
@@ -139,10 +143,6 @@ features = [
   "Win32_System_LibraryLoader",
   "Win32_System_Performance",
 ]
-
-[target.'cfg(target_os = "macos")'.dependencies]
-objc = "0.2.7"
-core-foundation = "0.9.3"
 
 [profile.release]
 lto = "thin"
