@@ -260,7 +260,11 @@ impl<T: Smoothable> Smoother<T> {
         let current = self.current.load(Ordering::Relaxed);
         let target_f32 = target.to_f32();
         self.step_size.store(
-            self.style.step_size(current, target_f32, steps_left as u32),
+            if steps_left > 0 {
+                self.style.step_size(current, target_f32, steps_left as u32)
+            } else {
+                0.0
+            },
             Ordering::Relaxed,
         );
     }
