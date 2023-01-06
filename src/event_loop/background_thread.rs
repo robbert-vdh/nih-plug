@@ -8,6 +8,7 @@ use std::sync::{Arc, Weak};
 use std::thread::{self, JoinHandle};
 
 use super::MainThreadExecutor;
+use crate::util::permit_alloc;
 
 /// See the module's documentation. This is a slimmed down version of the `LinuxEventLoop` that can
 /// be used with other OS and plugin format specific event loop implementations.
@@ -52,7 +53,9 @@ where
     }
 
     pub fn schedule(&self, task: T) -> bool {
-        self.tasks_sender.try_send(Message::Task(task)).is_ok()
+        // NOTE: This may check the current thread ID, which involves an allocation whenever this
+        //       first happens on a new thread because of the way thread local storage works
+        permit_alloc(|| self.tasks_sender.try_send(Message::Task(task)).is_ok())
     }
 }
 
