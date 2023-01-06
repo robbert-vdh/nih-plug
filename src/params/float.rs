@@ -163,10 +163,10 @@ impl Param for FloatParam {
             }
             (None, Some(step_size), false) => {
                 let num_digits = decimals_from_step_size(*step_size);
-                format!("{:.num_digits$}", value)
+                format!("{value:.num_digits$}")
             }
             (None, None, true) => format!("{}{}", value, self.unit),
-            (None, None, false) => format!("{}", value),
+            (None, None, false) => format!("{value}"),
         }
     }
 

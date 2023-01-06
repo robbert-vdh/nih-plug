@@ -24,7 +24,7 @@ pub fn exported<P: AsRef<Path>>(binary: P, symbol: &str) -> Result<bool> {
             };
 
             // XXX: Why are all exported symbols on macOS prefixed with an underscore?
-            let symbol = format!("_{}", symbol);
+            let symbol = format!("_{symbol}");
 
             Ok(obj.exports()?.into_iter().any(|sym| sym.name == symbol))
         }

@@ -127,8 +127,8 @@ impl CrossoverParams {
                 .with_string_to_value(crossover_string_to_value.clone()),
             crossover_4_freq: FloatParam::new("Crossover 4", 10000.0, crossover_range)
                 .with_smoother(crossover_smoothing_style)
-                .with_value_to_string(crossover_value_to_string.clone())
-                .with_string_to_value(crossover_string_to_value.clone()),
+                .with_value_to_string(crossover_value_to_string)
+                .with_string_to_value(crossover_string_to_value),
 
             crossover_type: EnumParam::new("Type", CrossoverType::LinkwitzRiley24).with_callback(
                 Arc::new(move |_| should_update_filters.store(true, Ordering::Relaxed)),

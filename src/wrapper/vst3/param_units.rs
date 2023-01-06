@@ -55,7 +55,6 @@ impl ParamUnits {
         // don't contain any parameters and thus aren't present in `groups`.
         let unique_group_names: HashSet<String> = groups
             .clone()
-            .into_iter()
             .filter_map(|(_, group_name)| {
                 // The root should not be included here since that's a special case in VST3
                 if !group_name.is_empty() {

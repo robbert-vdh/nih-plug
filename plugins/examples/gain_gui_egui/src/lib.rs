@@ -133,7 +133,7 @@ impl Plugin for Gain {
                     let peak_meter =
                         util::gain_to_db(peak_meter.load(std::sync::atomic::Ordering::Relaxed));
                     let peak_meter_text = if peak_meter > util::MINUS_INFINITY_DB {
-                        format!("{:.1} dBFS", peak_meter)
+                        format!("{peak_meter:.1} dBFS")
                     } else {
                         String::from("-inf dBFS")
                     };

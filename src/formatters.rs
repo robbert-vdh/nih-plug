@@ -15,7 +15,7 @@ use crate::util;
 
 /// Round an `f32` value to always have a specific number of decimal digits.
 pub fn v2s_f32_rounded(digits: usize) -> Arc<dyn Fn(f32) -> String + Send + Sync> {
-    Arc::new(move |value| format!("{:.digits$}", value))
+    Arc::new(move |value| format!("{value:.digits$}"))
 }
 
 /// Format a `[0, 1]` number as a percentage. Does not include the percent sign, you should specify
@@ -41,7 +41,7 @@ pub fn s2v_f32_percentage() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> {
 pub fn v2s_compression_ratio(digits: usize) -> Arc<dyn Fn(f32) -> String + Send + Sync> {
     Arc::new(move |value| {
         if value >= 1.0 {
-            format!("{:.digits$}:1", value)
+            format!("{value:.digits$}:1")
         } else {
             format!("1:{:.digits$}", value.recip())
         }
@@ -79,7 +79,7 @@ pub fn v2s_f32_gain_to_db(digits: usize) -> Arc<dyn Fn(f32) -> String + Send + S
             let value_db = util::gain_to_db(value);
             let value_db = if value_db.abs() < 1e-6 { 0.0 } else { value_db };
 
-            format!("{:.digits$}", value_db)
+            format!("{value_db:.digits$}")
         }
     })
 }
@@ -128,7 +128,7 @@ pub fn s2v_f32_panning() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> {
 pub fn v2s_f32_hz_then_khz(digits: usize) -> Arc<dyn Fn(f32) -> String + Send + Sync> {
     Arc::new(move |value| {
         if value < 1000.0 {
-            format!("{:.digits$} Hz", value)
+            format!("{value:.digits$} Hz")
         } else {
             format!("{:.digits$} kHz", value / 1000.0, digits = digits.max(1))
         }
@@ -156,7 +156,7 @@ pub fn v2s_f32_hz_then_khz_with_note_name(
         };
 
         if value < 1000.0 {
-            format!("{:.digits$} Hz, {}", value, note_str)
+            format!("{value:.digits$} Hz, {note_str}")
         } else {
             format!(
                 "{:.digits$} kHz, {}",

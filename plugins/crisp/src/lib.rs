@@ -144,7 +144,6 @@ impl Default for Crisp {
 }
 
 impl Default for CrispParams {
-    #[allow(clippy::derivable_impls)]
     fn default() -> Self {
         let f32_hz_then_khz = formatters::v2s_f32_hz_then_khz(0);
         let from_f32_hz_then_khz = formatters::s2v_f32_hz_then_khz();
@@ -176,7 +175,7 @@ impl Default for CrispParams {
                 if value >= MAX_FILTER_FREQUENCY {
                     String::from("Disabled")
                 } else {
-                    format!("{:.0} Hz", value)
+                    format!("{value:.0} Hz")
                 }
             }))
             .with_string_to_value(Arc::new(|string| {

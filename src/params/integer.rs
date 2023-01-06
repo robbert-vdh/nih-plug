@@ -150,7 +150,7 @@ impl Param for IntParam {
             (Some(f), true) => format!("{}{}", f(value), self.unit),
             (Some(f), false) => f(value),
             (None, true) => format!("{}{}", value, self.unit),
-            (None, false) => format!("{}", value),
+            (None, false) => format!("{value}"),
         }
     }
 
