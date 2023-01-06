@@ -266,7 +266,7 @@ pub struct Wrapper<P: ClapPlugin> {
     main_thread_id: ThreadId,
     /// A background thread for running tasks independently from the host'main GUI thread. Useful
     /// for longer, blocking tasks. Initialized later as it needs a reference to the wrapper.
-    background_thread: AtomicRefCell<Option<BackgroundThread<Task<P>>>>,
+    background_thread: AtomicRefCell<Option<BackgroundThread<Task<P>, Self>>>,
 }
 
 /// Tasks that can be sent from the plugin to be executed on the main thread in a non-blocking
@@ -723,7 +723,7 @@ impl<P: ClapPlugin> Wrapper<P> {
 
         // Same with the background thread
         *wrapper.background_thread.borrow_mut() =
-            Some(BackgroundThread::new_and_spawn(wrapper.clone()));
+            Some(BackgroundThread::get_or_create(wrapper.clone()));
 
         wrapper
     }

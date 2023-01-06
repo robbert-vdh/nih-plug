@@ -73,6 +73,7 @@ docs = []
 nih_plug_derive = { path = "nih_plug_derive" }
 
 anyhow = "1.0"
+anymap = "0.12.1"
 atomic_float = "0.1"
 atomic_refcell = "0.1"
 backtrace = "0.3.65"

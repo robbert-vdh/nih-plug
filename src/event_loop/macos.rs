@@ -79,7 +79,7 @@ where
 
         Self {
             executor: executor.clone(),
-            background_thread: BackgroundThread::new_and_spawn(executor),
+            background_thread: BackgroundThread::get_or_create(executor),
             loop_source: LoopSourceWrapper(loop_source),
             main_thread_sender,
             _callback_data: callback_data,

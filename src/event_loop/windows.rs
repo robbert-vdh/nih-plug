@@ -131,7 +131,7 @@ where
             message_window: window,
             message_window_class_name: class_name,
             tasks_sender,
-            background_thread: BackgroundThread::new_and_spawn(executor),
+            background_thread: BackgroundThread::get_or_create(executor),
         }
     }
 

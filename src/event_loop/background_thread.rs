@@ -4,82 +4,167 @@
 //! This is essentially a slimmed down version of the `LinuxEventLoop`.
 
 use crossbeam::channel;
+use parking_lot::Mutex;
+use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::{Arc, Weak};
 use std::thread::{self, JoinHandle};
 
 use super::MainThreadExecutor;
 use crate::util::permit_alloc;
 
-/// See the module's documentation. This is a slimmed down version of the `LinuxEventLoop` that can
-/// be used with other OS and plugin format specific event loop implementations.
-pub(crate) struct BackgroundThread<T> {
-    /// A thread that act as our worker thread. When [`schedule_gui()`][Self::schedule_gui()] is
-    /// called, this thread will be woken up to execute the task on the executor. This is wrapped in
-    /// an `Option` so the thread can be taken out of it and joined when this struct gets dropped.
-    worker_thread: Option<JoinHandle<()>>,
-    /// A channel for waking up the worker thread and having it perform one of the tasks from
-    /// [`Message`].
-    tasks_sender: channel::Sender<Message<T>>,
+/// See the module's documentation. This is a background thread that can be used to run tasks on.
+/// The implementation shares a single thread between all of a plugin's instances hosted in the same
+/// process.
+pub(crate) struct BackgroundThread<T, E> {
+    /// The object that actually executes the task `T`. We'll send a weak reference to this to the
+    /// worker thread whenever a task needs to be executed. This allows multiple plugin instances to
+    /// share the same worker thread.
+    executor: Arc<E>,
+    /// A thread that act as our worker thread. When [`schedule()`][Self::schedule()] is called,
+    /// this thread will be woken up to execute the task on the executor. When the last worker
+    /// thread handle gets dropped the thread is shut down.
+    worker_thread: WorkerThreadHandle<T, E>,
+}
+
+/// A handle for the singleton worker thread. This lets multiple instances of the same plugin share
+/// a worker thread, and when the last instance gets dropped the worker thread gets terminated.
+struct WorkerThreadHandle<T, E> {
+    pub(self) tasks_sender: channel::Sender<Message<T, E>>,
+    /// The thread's reference count. Shared between all handles to the same thread. This is
+    /// decrased by one when the struct is dropped.
+    reference_count: Arc<AtomicIsize>,
+    /// The thread's join handle. Joined when the reference count reaches 0.
+    join_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
 }
 
 /// A message for communicating with the worker thread.
-enum Message<T> {
-    /// A new task for the event loop to execute.
-    Task(T),
-    /// Shut down the worker thread.
+enum Message<T, E> {
+    /// A new task for the event loop to execute along with the executor that should execute the
+    /// task. A reference to the executor is sent alongside because multiple plugin instances may
+    /// share the same background thread.
+    Task((T, Weak<E>)),
+    /// Shut down the worker thread. Send when the last reference to the thread is dropped.
     Shutdown,
 }
 
-impl<T> BackgroundThread<T>
+impl<T, E> BackgroundThread<T, E>
 where
     T: Send + 'static,
+    E: MainThreadExecutor<T> + 'static,
 {
-    pub fn new_and_spawn<E>(executor: Arc<E>) -> Self
-    where
-        E: MainThreadExecutor<T> + 'static,
-    {
-        let (tasks_sender, tasks_receiver) = channel::bounded(super::TASK_QUEUE_CAPACITY);
-
+    pub fn get_or_create(executor: Arc<E>) -> Self {
         Self {
-            // With our drop implementation we guarantee that this thread never outlives this struct
-            worker_thread: Some(
-                thread::Builder::new()
-                    .name(String::from("bg-worker"))
-                    .spawn(move || worker_thread(tasks_receiver, Arc::downgrade(&executor)))
-                    .expect("Could not spawn background worker thread"),
-            ),
-            tasks_sender,
+            executor,
+            // The same worker thread can be shared by multiple instances. Lifecycle management
+            // happens through reference counting.
+            worker_thread: get_or_create_worker_thread(),
         }
     }
 
     pub fn schedule(&self, task: T) -> bool {
         // NOTE: This may check the current thread ID, which involves an allocation whenever this
         //       first happens on a new thread because of the way thread local storage works
-        permit_alloc(|| self.tasks_sender.try_send(Message::Task(task)).is_ok())
+        permit_alloc(|| {
+            self.worker_thread
+                .tasks_sender
+                .try_send(Message::Task((task, Arc::downgrade(&self.executor))))
+                .is_ok()
+        })
     }
 }
 
-impl<T> Drop for BackgroundThread<T> {
+// Rust does not allow us to use the `T` and `E` type variable in statics, so this is a
+// workaround to have a singleton that also works if for whatever reason there arem ultiple `T`
+// and `E`s in a single process (won't happen with normal plugin usage, but sho knwos).
+lazy_static::lazy_static! {
+    static ref HANDLE_MAP: Mutex<anymap::Map<dyn anymap::any::Any + Send + 'static>> =
+        Mutex::new(anymap::Map::new());
+}
+
+impl<T, E> Clone for WorkerThreadHandle<T, E> {
+    fn clone(&self) -> Self {
+        Self {
+            tasks_sender: self.tasks_sender.clone(),
+            reference_count: self.reference_count.clone(),
+            join_handle: self.join_handle.clone(),
+        }
+    }
+}
+
+impl<T, E> Drop for WorkerThreadHandle<T, E> {
     fn drop(&mut self) {
-        self.tasks_sender
-            .send(Message::Shutdown)
-            .expect("Failed while sending worker thread shutdown request");
-        if let Some(join_handle) = self.worker_thread.take() {
+        // If the host for whatever reason instantiates and destroys a plugin at the same time from
+        // different threads, we need to make sure this doesn't do anything weird.
+        let _handle_map = HANDLE_MAP.lock();
+
+        // The thread is shut down and joined when the last handle is dropped
+        if self.reference_count.fetch_sub(1, Ordering::SeqCst) == 1 {
+            self.tasks_sender
+                .send(Message::Shutdown)
+                .expect("Failed while sending worker thread shutdown request");
+            let join_handle = self
+                .join_handle
+                .lock()
+                .take()
+                .expect("The thread has already been joined");
             join_handle.join().expect("Worker thread panicked");
         }
     }
 }
 
+/// Either acquire a handle for an existing worker thread or create one if it does not yet exists.
+/// This allows multiple plugin instances to share a worker thread. Reference counting happens
+/// automatically as part of this function and `WorkerThreadHandle`'s lifecycle.
+fn get_or_create_worker_thread<T, E>() -> WorkerThreadHandle<T, E>
+where
+    T: Send + 'static,
+    E: MainThreadExecutor<T> + 'static,
+{
+    // The map entry contains both the thread's reference count
+    // NOTE: This uses `AtomicIsize` for a reason. The `HANDLE_MAP` also holds a reference to this
+    //       thread handle, and its `Drop` implementation will also fire if the
+    //       `Option<WorkerThreadHandle<T, E>>` is ever overwritten. This will cause the reference
+    //       count to become -1 which is fine.
+    let mut handle_map = HANDLE_MAP.lock();
+    let (reference_count, worker_thread_handle) = handle_map
+        .entry::<(Arc<AtomicIsize>, Option<WorkerThreadHandle<T, E>>)>()
+        .or_insert_with(|| (Arc::new(AtomicIsize::new(0)), None));
+
+    // When this is the first reference to the worker thread, the thread is (re)initialized
+    if reference_count.fetch_add(1, Ordering::SeqCst) <= 0 {
+        let (tasks_sender, tasks_receiver) = channel::bounded(super::TASK_QUEUE_CAPACITY);
+        let join_handle = thread::Builder::new()
+            .name(String::from("bg-worker"))
+            .spawn(move || worker_thread(tasks_receiver))
+            .expect("Could not spawn background worker thread");
+
+        // This needs special handling if `worker_thread_handle` was already a `Some` value because
+        // the `Drop` will decrease the reference count when it gets overwritten. There may be a
+        // better alternative to this.
+        if worker_thread_handle.is_some() {
+            reference_count.fetch_add(1, Ordering::SeqCst);
+        }
+
+        *worker_thread_handle = Some(WorkerThreadHandle {
+            tasks_sender,
+            reference_count: reference_count.clone(),
+            join_handle: Arc::new(Mutex::new(Some(join_handle))),
+        });
+    }
+
+    worker_thread_handle.clone().unwrap()
+}
+
 /// The worker thread used in [`EventLoop`] that executes incoming tasks on the event loop's
 /// executor.
-fn worker_thread<T, E>(tasks_receiver: channel::Receiver<Message<T>>, executor: Weak<E>)
+fn worker_thread<T, E>(tasks_receiver: channel::Receiver<Message<T, E>>)
 where
     T: Send,
     E: MainThreadExecutor<T>,
 {
     loop {
         match tasks_receiver.recv() {
-            Ok(Message::Task(task)) => match executor.upgrade() {
+            Ok(Message::Task((task, executor))) => match executor.upgrade() {
                 Some(e) => e.execute(task, true),
                 None => {
                     nih_trace!(
