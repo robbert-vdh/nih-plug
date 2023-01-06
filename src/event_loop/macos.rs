@@ -11,7 +11,7 @@ use objc::{class, msg_send, sel, sel_impl};
 use std::os::raw::c_void;
 use std::sync::Arc;
 
-use super::{BackgroundThread, EventLoop, MainThreadExecutor, TASK_QUEUE_CAPACITY};
+use super::{BackgroundThread, EventLoop, MainThreadExecutor};
 
 /// Wrapping the `CFRunLoopSourceRef` type is required to be able to annotate it as thread-safe.
 struct LoopSourceWrapper(CFRunLoopSourceRef);
@@ -30,14 +30,16 @@ pub(crate) struct MacOSEventLoop<T, E> {
     /// longer, blocking tasks.
     background_thread: BackgroundThread<T>,
 
-    /// The reference to the run-loop source so that it can be torn down when this struct is dropped.
+    /// The reference to the run-loop source so that it can be torn down when this struct is
+    /// dropped.
     loop_source: LoopSourceWrapper,
 
     /// The sender for passing messages to the main thread.
     main_thread_sender: Sender<T>,
 
     /// The data that is passed to the external run loop source callback function via a raw pointer.
-    /// The data is not accessed from the Rust side after creating it but it's kept here so as not to get dropped.
+    /// The data is not accessed from the Rust side after creating it but it's kept here so as not
+    /// to get dropped.
     _callback_data: Box<(Arc<E>, Receiver<T>)>,
 }
 
@@ -47,7 +49,8 @@ where
     E: MainThreadExecutor<T> + 'static,
 {
     fn new_and_spawn(executor: Arc<E>) -> Self {
-        let (main_thread_sender, main_thread_receiver) = channel::bounded::<T>(TASK_QUEUE_CAPACITY);
+        let (main_thread_sender, main_thread_receiver) =
+            channel::bounded::<T>(super::TASK_QUEUE_CAPACITY);
 
         let callback_data = Box::new((executor.clone(), main_thread_receiver));
 
@@ -89,15 +92,15 @@ where
             true
         } else {
             // Only signal the main thread callback to be called if the task was added to the queue.
-            if self.main_thread_sender.try_send(task).is_ok() {
+            let success = self.main_thread_sender.try_send(task).is_ok();
+            if success {
                 unsafe {
                     CFRunLoopSourceSignal(self.loop_source.0);
                     CFRunLoopWakeUp(CFRunLoopGetMain());
                 }
-                true
-            } else {
-                false
             }
+
+            success
         }
     }
 
@@ -128,10 +131,8 @@ where
     T: Send + 'static,
     E: MainThreadExecutor<T> + 'static,
 {
-    unsafe {
-        let (executor, receiver) = &*(info as *mut (Arc<E>, Receiver<T>));
-        while let Ok(task) = receiver.try_recv() {
-            executor.execute(task, true);
-        }
+    let (executor, receiver) = unsafe { &*(info as *mut (Arc<E>, Receiver<T>)) };
+    while let Ok(task) = receiver.try_recv() {
+        executor.execute(task, true);
     }
 }
