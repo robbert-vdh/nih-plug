@@ -6,6 +6,14 @@ new and what's changed, this document lists all breaking changes in reverse
 chronological order. If a new feature did not require any changes to existing
 code then it will not be listed here.
 
+## [2023-01-06]
+
+- The threads used for the `.schedule_gui()` and `.schedule_background()`
+  methods are now shared between all instances of a plugin. This makes
+  `.schedule_gui()` on Linux behave more like it does on Windows and macOS, and
+  there is now only a single background thread instead of each instance spawning
+  their own thread.
+
 ## [2023-01-05]
 
 - `Buffer::len()` has been renamed to `Buffer::samples()` to make this less
