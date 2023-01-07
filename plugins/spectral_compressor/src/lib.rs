@@ -109,12 +109,6 @@ pub struct GlobalParams {
     /// applying the output gain. In other words, the dry signal is not gained in any way.
     #[id = "dry_wet"]
     pub dry_wet_ratio: FloatParam,
-    /// Sets the 0-20 Hz bin to 0 since this won't have a lot of semantic meaning anymore after this
-    /// plugin and it will thus just eat up headroom. If this option is disabled then the DC bins
-    /// will be gained by the reverse of the output gain to prevent them from getting louder as you
-    /// crank the output gain as makeup gain.
-    #[id = "dc_filter"]
-    pub dc_filter: BoolParam,
 
     /// The size of the FFT window as a power of two (to prevent invalid inputs).
     #[id = "stft_window"]
@@ -191,7 +185,6 @@ impl Default for GlobalParams {
                 .with_smoother(SmoothingStyle::Linear(15.0))
                 .with_value_to_string(formatters::v2s_f32_percentage(0))
                 .with_string_to_value(formatters::s2v_f32_percentage()),
-            dc_filter: BoolParam::new("DC Filter", false),
 
             window_size_order: IntParam::new(
                 "Window Size",
@@ -529,20 +522,6 @@ fn process_stft_main(
         overlap_times,
         first_non_dc_bin_idx,
     );
-
-    // The DC and other low frequency bins doesn't contain much semantic meaning anymore after all
-    // of this, so it only ends up consuming headroom. Otherwise they're gained down by the output
-    // gain to prevent makeup gain from making these bins too loud.
-    if params.global.dc_filter.value() {
-        complex_fft_buffer[..first_non_dc_bin_idx].fill(Complex32::default());
-    } else {
-        // The `output_gain` parameter also contains gain compensation for the windowingq, we don't
-        // want to compensate for that
-        let output_gain_recip = params.global.output_gain.value().recip();
-        for bin in complex_fft_buffer[..first_non_dc_bin_idx].iter_mut() {
-            *bin *= output_gain_recip;
-        }
-    }
 
     // Inverse FFT back into the scratch buffer. This will be added to a ring buffer
     // which gets written back to the host at a one block delay.

@@ -97,6 +97,8 @@ pub(crate) fn create(
                     .font_size(11.0)
                     .left(Pixels(15.0))
                     .right(Pixels(5.0))
+                    // The column isn't tall enough without this, for some reason
+                    .bottom(Pixels(20.0))
                     .width(Stretch(1.0));
                 })
                 .width(RIGHT_COLUMN_WIDTH)
