@@ -89,7 +89,8 @@ pub fn v2s_f32_gain_to_db(digits: usize) -> Arc<dyn Fn(f32) -> String + Send + S
 pub fn s2v_f32_gain_to_db() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> {
     Arc::new(|string| {
         let string = string.trim_end_matches(&[' ', 'd', 'D', 'b', 'B', 'f', 'F', 's', 'S']);
-        if string.eq_ignore_ascii_case("-inf") {
+        // NOTE: The above line strips the `f`, so checked for `-inf` here will always return false
+        if string.eq_ignore_ascii_case("-in") {
             Some(0.0)
         } else {
             string.parse().ok().map(util::db_to_gain)
