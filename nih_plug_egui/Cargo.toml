@@ -23,8 +23,8 @@ baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "eae4033e7
 crossbeam = "0.8"
 # The `egui-default-features` feature enables the default features. This makes
 # it possible to opt out of this if needed.
-egui = { version = "0.19", default-features = false }
-egui-baseview = { git = "https://github.com/BillyDM/egui-baseview.git", rev = "46e21cc11c57c705fb83611389399ec3d2670a44" }
+egui = { version = "0.20", default-features = false }
+egui-baseview = { git = "https://github.com/tonogram/egui-baseview.git", rev = "da5ded8f589d1f34a99be5abfc277d66446fcbef" }
 lazy_static = "1.4"
 parking_lot = "0.12"
 # To make the state persistable
