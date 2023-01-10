@@ -143,6 +143,12 @@ pub fn v2s_f32_hz_then_khz_with_note_name(
     include_cents: bool,
 ) -> Arc<dyn Fn(f32) -> String + Send + Sync> {
     Arc::new(move |value| {
+        // With 0.0 this would result in a subtraction below i32's minimum value, and it would look
+        // ridiculous anyways so we'll just not even bother for tiny values
+        if value.abs() < 1.0 {
+            return format!("{value:.digits$} Hz");
+        }
+
         // This is the inverse of the formula in `f32_midi_note_to_freq`
         let fractional_note = util::freq_to_midi_note(value);
         let note = fractional_note.round();
