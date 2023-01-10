@@ -308,3 +308,28 @@ pub fn s2v_bool_bypass() -> Arc<dyn Fn(&str) -> Option<bool> + Send + Sync> {
         }
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // More of these validators could use tests, but this one in particular is tricky and I noticed
+    // an issue where it didn't roundtrip correctly
+    #[test]
+    fn f32_hz_then_khz_with_note_name_roundtrip() {
+        let v2s = v2s_f32_hz_then_khz_with_note_name(1, true);
+        let s2v = s2v_f32_hz_then_khz();
+
+        for freq in [0.0, 69.420, 18181.8, 133333.7] {
+            let string = v2s(freq);
+            // We can't compare `freq` and `roundtrip_freq` because the string is rounded on both
+            // cents and frequency and is thus lossy
+            let roundtrip_freq = s2v(&string).unwrap();
+            let roundtrip_string = v2s(roundtrip_freq);
+            assert_eq!(
+                string, roundtrip_string,
+                "Unexpected: {string} -> {roundtrip_freq} -> {roundtrip_string}"
+            );
+        }
+    }
+}
