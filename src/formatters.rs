@@ -155,10 +155,9 @@ pub fn v2s_f32_hz_then_khz_with_note_name(
         let cents = ((fractional_note - note) * 100.0).round() as i32;
 
         let note_name = util::NOTES[(note as i32).rem_euclid(12) as usize];
-        // NOTE: This is different compared from `(note as i32 / 12) - 1` because of the signed 0 in
-        //       floating point numbers. The signed zero makes sure this works correctly for the
-        //       first negative octave number.
-        let octave = (note / 12.0).round() as i32 - 1;
+        // NOTE: This is different compared from `(note as i32 / 12) - 1` because truncating always
+        //       rounds towards zero
+        let octave = (note / 12.0).floor() as i32 - 1;
         let note_str = if cents == 0 || !include_cents {
             format!("{note_name}{octave}")
         } else {
@@ -329,7 +328,7 @@ mod tests {
         let v2s = v2s_f32_hz_then_khz_with_note_name(1, true);
         let s2v = s2v_f32_hz_then_khz();
 
-        for freq in [0.0, 5.0, 69.420, 18181.8, 133333.7] {
+        for freq in [0.0, 5.0, 7.18, 8.18, 69.420, 18181.8, 133333.7] {
             let string = v2s(freq);
             // We can't compare `freq` and `roundtrip_freq` because the string is rounded on both
             // cents and frequency and is thus lossy
