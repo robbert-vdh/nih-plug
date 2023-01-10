@@ -117,13 +117,16 @@ impl Plugin for Gain {
                     ui.add(
                         egui::widgets::Slider::from_get_set(-30.0..=30.0, |new_value| {
                             match new_value {
-                                Some(new_value) => {
+                                Some(new_value_db) => {
+                                    let new_value = util::gain_to_db(new_value_db as f32);
+
                                     setter.begin_set_parameter(&params.gain);
-                                    setter.set_parameter(&params.gain, new_value as f32);
+                                    setter.set_parameter(&params.gain, new_value);
                                     setter.end_set_parameter(&params.gain);
-                                    new_value
+
+                                    new_value_db
                                 }
-                                None => params.gain.value() as f64,
+                                None => util::gain_to_db(params.gain.value()) as f64,
                             }
                         })
                         .suffix(" dB"),
