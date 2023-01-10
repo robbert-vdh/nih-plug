@@ -146,7 +146,7 @@ pub fn v2s_f32_hz_then_khz_with_note_name(
         // This is the inverse of the formula in `f32_midi_note_to_freq`
         let fractional_note = util::freq_to_midi_note(value);
         let note = fractional_note.round();
-        let cents = ((fractional_note - note) * 100.0) as i32;
+        let cents = ((fractional_note - note) * 100.0).round() as i32;
 
         let note_name = util::NOTES[(note as i32).rem_euclid(12) as usize];
         let octave = (note as i32 / 12) - 1;
