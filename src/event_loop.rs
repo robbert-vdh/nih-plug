@@ -20,7 +20,9 @@ pub(crate) use self::macos::MacOSEventLoop as OsEventLoop;
 #[cfg(target_os = "windows")]
 pub(crate) use self::windows::WindowsEventLoop as OsEventLoop;
 
-pub(crate) const TASK_QUEUE_CAPACITY: usize = 512;
+// This needs to be pretty high to make sure parameter change events don't get dropped when there's
+// lots of automation/modulation going on
+pub(crate) const TASK_QUEUE_CAPACITY: usize = 4096;
 
 /// A trait describing the functionality of a platform-specific event loop that can execute tasks of
 /// type `T` in executor `E` on the operating system's main thread (if applicable). Posting a task
