@@ -101,12 +101,16 @@ impl<E: IcedEditor> Editor for IcedEditorWrapper<E> {
         true
     }
 
+    fn param_value_changed(&self, _id: &str, _normalized_value: f32) {
+        // If there's already a paramter change notification in the channel then we don't need
+        // to do anything else. This avoids queueing up redundant GUI redraws.
+        // NOTE: We could add an event containing the parameter's ID and the normalized value, but
+        //       these events aren't really necessary for Vizia.
+        let _ = self.parameter_updates_sender.try_send(ParameterUpdate);
+    }
+
     fn param_values_changed(&self) {
-        if self.iced_state.is_open() {
-            // If there's already a paramter change notification in the channel then we don't need
-            // to do anything else. This avoids queueing up redundant GUI redraws.
-            let _ = self.parameter_updates_sender.try_send(ParameterUpdate);
-        }
+        let _ = self.parameter_updates_sender.try_send(ParameterUpdate);
     }
 }
 

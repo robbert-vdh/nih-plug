@@ -101,10 +101,14 @@ where
         true
     }
 
-    fn param_values_changed(&self) {
+    fn param_value_changed(&self, _id: &str, _normalized_value: f32) {
         // As mentioned above, for now we'll always force a redraw to allow meter widgets to work
         // correctly. In the future we can use an `Arc<AtomicBool>` and only force a redraw when
         // that boolean is set.
+    }
+
+    fn param_values_changed(&self) {
+        // Same
     }
 }
 

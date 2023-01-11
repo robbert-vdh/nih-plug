@@ -123,8 +123,15 @@ impl Editor for ViziaEditor {
         true
     }
 
-    fn param_values_changed(&self) {
+    fn param_value_changed(&self, _id: &str, _normalized_value: f32) {
         // This will cause a future idle callback to send a parameters changed event.
+        // NOTE: We could add an event containing the parameter's ID and the normalized value, but
+        //       these events aren't really necessary for Vizia.
+        self.emit_parameters_changed_event
+            .store(true, Ordering::Relaxed);
+    }
+
+    fn param_values_changed(&self) {
         self.emit_parameters_changed_event
             .store(true, Ordering::Relaxed);
     }

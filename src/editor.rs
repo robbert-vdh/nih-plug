@@ -53,13 +53,14 @@ pub trait Editor: Send {
     /// there.
     fn set_scale_factor(&self, factor: f32) -> bool;
 
-    /// A callback that will be called whenever the parameter values changed while the editor is
-    /// open. You don't need to do anything with this, but this can be used to force a redraw when
-    /// the host sends a new value for a parameter or when a parameter change sent to the host gets
-    /// processed.
-    ///
-    /// This function will be called from the **audio thread**. It must thus be lock-free and may
-    /// not allocate.
+    /// Called whenever a specific parameter's value has changed while the editor is open. You don't
+    /// need to do anything with this, but this can be used to force a redraw when the host sends a
+    /// new value for a parameter or when a parameter change sent to the host gets processed.
+    fn param_value_changed(&self, id: &str, normalized_value: f32);
+
+    /// Called whenever one or more parameter values changed while the editor is open. This may be
+    /// called in place of [`param_value_changed()`][Self::param_value_changed()] when multiple
+    /// parameter values hcange at the same time. For example, when a preset is loaded.
     fn param_values_changed(&self);
 
     // TODO: Reconsider adding a tick function here for the Linux `IRunLoop`. To keep this platform
