@@ -210,6 +210,7 @@ pub struct Wrapper<P: ClapPlugin> {
     //
     /// The keys from `param_map` in a stable order.
     param_hashes: Vec<u32>,
+    // TODO: Merge the three `*_by_hash` hashmaps at some point
     /// A mapping from parameter ID hashes (obtained from the string parameter IDs) to pointers to
     /// parameters belonging to the plugin. These addresses will remain stable as long as the
     /// `params` object does not get deallocated.
