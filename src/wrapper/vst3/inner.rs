@@ -279,7 +279,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             .map(|(_, hash, ptr, _)| (ptr, hash))
             .collect();
 
-        let wrapper = Self {
+        let wrapper = Arc::new(Self {
             plugin: Mutex::new(plugin),
             task_executor,
             params,
@@ -323,12 +323,11 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             param_units,
             param_id_to_hash,
             param_ptr_to_hash,
-        };
+        });
 
         // FIXME: Right now this is safe, but if we are going to have a singleton main thread queue
         //        serving multiple plugin instances, Arc can't be used because its reference count
         //        is separate from the internal COM-style reference count.
-        let wrapper: Arc<WrapperInner<P>> = wrapper.into();
         *wrapper.event_loop.borrow_mut() = Some(OsEventLoop::new_and_spawn(wrapper.clone()));
 
         // The editor also needs to be initialized later so the Async executor can work.
