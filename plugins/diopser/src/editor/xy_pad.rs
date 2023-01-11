@@ -30,7 +30,7 @@ const GRANULAR_DRAG_MULTIPLIER: f32 = 0.1;
 const HANDLE_WIDTH_PX: f32 = 20.0;
 
 /// An X-Y pad that controlers two parameters at the same time by binding them to one of the two
-/// axes. This specific implementation has a tooltip for the X-axis parmaeter and allows
+/// axes. This specific implementation has a tooltip for the X-axis parameter and allows
 /// Alt+clicking to enter a specific value.
 ///
 /// The x-parameter's range is restricted when safe mode is enabled. See `RestrictedParamSlider` for
@@ -309,7 +309,7 @@ impl XyPad {
 
     /// Should be called at the start of a drag operation.
     fn begin_set_parameters(&self, cx: &mut EventContext) {
-        // NOTE: Since the X-parameter is the main parmaeter, we'll always modify this parameter
+        // NOTE: Since the X-parameter is the main parameter, we'll always modify this parameter
         //       last so the host will keep this parameter highlighted
         self.y_param_base.begin_set_parameter(cx);
         self.x_param_base.begin_set_parameter(cx);

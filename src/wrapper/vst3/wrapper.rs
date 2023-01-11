@@ -18,10 +18,12 @@ use vst3_sys::vst::{
 use vst3_sys::VST3;
 use widestring::U16CStr;
 
-use super::inner::WrapperInner;
+use super::inner::{ProcessEvent, Task, WrapperInner};
+use super::note_expressions::{self, NoteExpressionController};
 use super::util::{
     u16strlcpy, VstPtr, VST3_MIDI_CCS, VST3_MIDI_NUM_PARAMS, VST3_MIDI_PARAMS_START,
 };
+use super::util::{VST3_MIDI_CHANNELS, VST3_MIDI_PARAMS_END};
 use super::view::WrapperView;
 use crate::buffer::Buffer;
 use crate::context::process::Transport;
@@ -34,9 +36,6 @@ use crate::plugin::{
 use crate::util::permit_alloc;
 use crate::wrapper::state;
 use crate::wrapper::util::process_wrapper;
-use crate::wrapper::vst3::inner::ProcessEvent;
-use crate::wrapper::vst3::note_expressions::{self, NoteExpressionController};
-use crate::wrapper::vst3::util::{VST3_MIDI_CHANNELS, VST3_MIDI_PARAMS_END};
 
 // Alias needed for the VST3 attribute macro
 use vst3_sys as vst3_com;
@@ -512,9 +511,6 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
             return kResultFalse;
         }
 
-        // Reinitialize the plugin after loading state so it can respond to the new parameter values
-        self.inner.notify_param_values_changed();
-
         if let Some(buffer_config) = self.inner.current_buffer_config.load() {
             // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
             let mut init_context = self.inner.make_init_context();
@@ -526,6 +522,10 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
             //       duplicate reset if it's not needed.
             process_wrapper(|| plugin.reset());
         }
+
+        // Reinitialize the plugin after loading state so it can respond to the new parameter values
+        let task_posted = self.inner.schedule_gui(Task::ParameterValuesChanged);
+        nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
 
         nih_trace!("Loaded state ({} bytes)", read_buffer.len());
 
@@ -747,12 +747,8 @@ impl<P: Vst3Plugin> IEditController for Wrapper<P> {
             .current_buffer_config
             .load()
             .map(|c| c.sample_rate);
-        let result = self
-            .inner
-            .set_normalized_value_by_hash(id, value as f32, sample_rate);
-        self.inner.notify_param_values_changed();
-
-        result
+        self.inner
+            .set_normalized_value_by_hash(id, value as f32, sample_rate)
     }
 
     unsafe fn set_component_handler(
@@ -1073,7 +1069,6 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
             // messages are sent through parameter changes. This vector gets sorted at the end so we
             // can treat it as a sort of queue.
             let mut process_events = self.inner.process_events.borrow_mut();
-            let mut parameter_values_changed = false;
             process_events.clear();
 
             // First we'll go through the parameter changes. This may also include MIDI CC messages
@@ -1152,7 +1147,6 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                         value,
                                         Some(sample_rate),
                                     );
-                                    parameter_values_changed = true;
                                 }
                             }
                         }
@@ -1297,7 +1291,6 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                     normalized_value,
                                     Some(sample_rate),
                                 );
-                                parameter_values_changed = true;
                             }
                             ProcessEvent::NoteEvent {
                                 timing: _,
@@ -1310,12 +1303,6 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                             }
                         }
                     }
-                }
-
-                // This allows the GUI to react to incoming parameter changes
-                if parameter_values_changed {
-                    self.inner.notify_param_values_changed();
-                    parameter_values_changed = false;
                 }
 
                 // This vector has been preallocated to contain enough slices as there are output
@@ -1797,8 +1784,6 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                     self.inner.current_buffer_config.load().as_ref(),
                 );
 
-                self.inner.notify_param_values_changed();
-
                 // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
                 let mut init_context = self.inner.make_init_context();
                 let bus_config = self.inner.current_bus_config.load();
@@ -1810,6 +1795,9 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                 //         called a second time if it supports runtime preset loading.
                 permit_alloc(|| plugin.initialize(&bus_config, &buffer_config, &mut init_context));
                 plugin.reset();
+
+                let task_posted = self.inner.schedule_gui(Task::ParameterValuesChanged);
+                nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
 
                 // We'll pass the state object back to the GUI thread so deallocation can happen
                 // there without potentially blocking the audio thread

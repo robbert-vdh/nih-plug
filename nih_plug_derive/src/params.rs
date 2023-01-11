@@ -475,7 +475,7 @@ enum NestedParams {
         field: syn::Ident,
         group: Option<syn::LitStr>,
     },
-    /// The nested struct's parameters will get an ID prefix. The original parmaeter with ID `foo`
+    /// The nested struct's parameters will get an ID prefix. The original parameter with ID `foo`
     /// will become `{id_prefix}_foo`.
     Prefixed {
         field: syn::Ident,
@@ -492,7 +492,7 @@ enum NestedParams {
 }
 
 impl NestedParams {
-    /// Constrruct an iterator that iterates over all parmaeters of a nested parameter object. This
+    /// Constrruct an iterator that iterates over all parameters of a nested parameter object. This
     /// takes ID prefixes and suffixes into account, and prefixes the group to the parameter's
     /// existing groups if the `group` attribute on the `#[nested]` macro was specified.
     fn param_map_tokens(&self) -> proc_macro2::TokenStream {

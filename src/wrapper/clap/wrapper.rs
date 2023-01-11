@@ -215,7 +215,7 @@ pub struct Wrapper<P: ClapPlugin> {
     /// parameters belonging to the plugin. These addresses will remain stable as long as the
     /// `params` object does not get deallocated.
     param_by_hash: HashMap<u32, ParamPtr>,
-    /// Mappings from parmaeter hashes to string parameter IDs. Used for notifying the plugin's
+    /// Mappings from parameter hashes to string parameter IDs. Used for notifying the plugin's
     /// editor about parameter changes.
     param_id_by_hash: HashMap<u32, String>,
     /// The group name of a parameter, indexed by the parameter's hash. Nested groups are delimited

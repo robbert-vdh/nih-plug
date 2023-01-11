@@ -139,6 +139,9 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// parameters belonging to the plugin. These addresses will remain stable as long as the
     /// `params` object does not get deallocated.
     pub param_by_hash: HashMap<u32, ParamPtr>,
+    /// Mappings from parameter hashes to string parameter IDs. Used for notifying the plugin's
+    /// editor about parameter changes.
+    pub param_id_by_hash: HashMap<u32, String>,
     pub param_units: ParamUnits,
     /// Mappings from string parameter identifiers to parameter hashes. Useful for debug logging
     /// and when storing and restoring plugin state.
@@ -157,6 +160,11 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
 pub enum Task<P: Plugin> {
     /// Execute one of the plugin's background tasks.
     PluginTask(P::BackgroundTask),
+    /// Inform the plugin that one or more parameter values have changed.
+    ParameterValuesChanged,
+    /// Inform the plugin that one parameter's value has changed. This uses the parameter hashes
+    /// since the task will be created from the audio thread.
+    ParameterValueChanged(u32, f32),
     /// Trigger a restart with the given restart flags. This is a bit set of the flags from
     /// [`vst3_sys::vst::RestartFlags`].
     TriggerRestart(i32),
@@ -264,6 +272,10 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             .iter()
             .map(|(_, hash, ptr, _)| (*hash, *ptr))
             .collect();
+        let param_id_by_hash = param_id_hashes_ptrs_groups
+            .iter()
+            .map(|(id, hash, _, _)| (*hash, id.clone()))
+            .collect();
         let param_units = ParamUnits::from_param_groups(
             param_id_hashes_ptrs_groups
                 .iter()
@@ -320,6 +332,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
 
             param_hashes,
             param_by_hash,
+            param_id_by_hash,
             param_units,
             param_id_to_hash,
             param_ptr_to_hash,
@@ -420,23 +433,6 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         }
     }
 
-    /// If there's an editor open, let it know that parameter values have changed. This should be
-    /// called whenever there's been a call or multiple calls to
-    /// [`set_normalized_value_by_hash()[Self::set_normalized_value_by_hash()`]. In the off-chance
-    /// that the editor instance is currently locked then nothing will happen, and the request can
-    /// safely be ignored.
-    pub fn notify_param_values_changed(&self) {
-        if let Some(editor) = self.editor.borrow().as_ref() {
-            match editor.try_lock() {
-                Some(editor) => editor.param_values_changed(),
-                None => nih_debug_assert_failure!(
-                    "The editor was locked when sending a parameter value change notification, \
-                     ignoring"
-                ),
-            }
-        }
-    }
-
     /// Convenience function for setting a value for a parameter as triggered by a VST3 parameter
     /// update. The same rate is for updating parameter smoothing.
     ///
@@ -460,6 +456,10 @@ impl<P: Vst3Plugin> WrapperInner<P> {
                     },
                     _ => unsafe { param_ptr.set_normalized_value(normalized_value) },
                 }
+
+                let task_posted =
+                    self.schedule_gui(Task::ParameterValueChanged(hash, normalized_value));
+                nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
 
                 kResultOk
             }
@@ -524,7 +524,6 @@ impl<P: Vst3Plugin> WrapperInner<P> {
                     );
                 }
 
-                self.notify_param_values_changed();
                 let bus_config = self.current_bus_config.load();
                 if let Some(buffer_config) = self.current_buffer_config.load() {
                     // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
@@ -533,6 +532,9 @@ impl<P: Vst3Plugin> WrapperInner<P> {
                     plugin.initialize(&bus_config, &buffer_config, &mut init_context);
                     process_wrapper(|| plugin.reset());
                 }
+
+                let task_posted = self.schedule_gui(Task::ParameterValuesChanged);
+                nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
 
                 break;
             }
@@ -566,6 +568,23 @@ impl<P: Vst3Plugin> MainThreadExecutor<Task<P>> for WrapperInner<P> {
         // This function is always called from the main thread
         match task {
             Task::PluginTask(task) => (self.task_executor.lock())(task),
+            Task::ParameterValuesChanged => {
+                if self.plug_view.read().is_some() {
+                    if let Some(editor) = self.editor.borrow().as_ref() {
+                        editor.lock().param_values_changed();
+                    }
+                }
+            }
+            Task::ParameterValueChanged(param_hash, normalized_value) => {
+                if self.plug_view.read().is_some() {
+                    if let Some(editor) = self.editor.borrow().as_ref() {
+                        let param_id = &self.param_id_by_hash[&param_hash];
+                        editor
+                            .lock()
+                            .param_value_changed(param_id, normalized_value);
+                    }
+                }
+            }
             Task::TriggerRestart(flags) => match &*self.component_handler.borrow() {
                 Some(handler) => unsafe {
                     nih_debug_assert!(is_gui_thread);
