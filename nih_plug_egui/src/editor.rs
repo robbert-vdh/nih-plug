@@ -107,6 +107,8 @@ where
         // that boolean is set.
     }
 
+    fn param_modulation_changed(&self, _id: &str, _modulation_offset: f32) {}
+
     fn param_values_changed(&self) {
         // Same
     }

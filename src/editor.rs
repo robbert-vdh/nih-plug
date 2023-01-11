@@ -58,9 +58,14 @@ pub trait Editor: Send {
     /// new value for a parameter or when a parameter change sent to the host gets processed.
     fn param_value_changed(&self, id: &str, normalized_value: f32);
 
-    /// Called whenever one or more parameter values changed while the editor is open. This may be
-    /// called in place of [`param_value_changed()`][Self::param_value_changed()] when multiple
-    /// parameter values hcange at the same time. For example, when a preset is loaded.
+    /// Called whenever a specific parameter's monophonic modulation value has changed while the
+    /// editor is open.
+    fn param_modulation_changed(&self, id: &str, modulation_offset: f32);
+
+    /// Called whenever one or more parameter values or modulations have changed while the editor is
+    /// open. This may be called in place of [`param_value_changed()`][Self::param_value_changed()]
+    /// when multiple parameter values hcange at the same time. For example, when a preset is
+    /// loaded.
     fn param_values_changed(&self);
 
     // TODO: Reconsider adding a tick function here for the Linux `IRunLoop`. To keep this platform

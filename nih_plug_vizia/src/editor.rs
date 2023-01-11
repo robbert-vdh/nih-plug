@@ -131,6 +131,11 @@ impl Editor for ViziaEditor {
             .store(true, Ordering::Relaxed);
     }
 
+    fn param_modulation_changed(&self, _id: &str, _modulation_offset: f32) {
+        self.emit_parameters_changed_event
+            .store(true, Ordering::Relaxed);
+    }
+
     fn param_values_changed(&self) {
         self.emit_parameters_changed_event
             .store(true, Ordering::Relaxed);

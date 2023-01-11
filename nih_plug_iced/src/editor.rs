@@ -109,6 +109,10 @@ impl<E: IcedEditor> Editor for IcedEditorWrapper<E> {
         let _ = self.parameter_updates_sender.try_send(ParameterUpdate);
     }
 
+    fn param_modulation_changed(&self, _id: &str, _modulation_offset: f32) {
+        let _ = self.parameter_updates_sender.try_send(ParameterUpdate);
+    }
+
     fn param_values_changed(&self) {
         let _ = self.parameter_updates_sender.try_send(ParameterUpdate);
     }
