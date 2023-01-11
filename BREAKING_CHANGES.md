@@ -6,6 +6,15 @@ new and what's changed, this document lists all breaking changes in reverse
 chronological order. If a new feature did not require any changes to existing
 code then it will not be listed here.
 
+## [2023-01-11]
+
+- `Editor::param_values_changes()` is no longer called from the audio thread and
+  thus no longer needs to be realtime safe.
+- A new `Editor::param_value_changed(id, normalized_value)` method has been
+  added. This is used to notify the plugin of changes to individual parameters.
+- A similar new `Editor::param_modulation_changed(id, modulation_offset)` is
+  used to inform the plugin of a parameter's new monophonic modulation offset.
+
 ## [2023-01-06]
 
 - The threads used for the `.schedule_gui()` and `.schedule_background()`
