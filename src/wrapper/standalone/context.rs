@@ -2,12 +2,11 @@ use crossbeam::channel;
 use std::sync::Arc;
 
 use super::backend::Backend;
-use super::wrapper::{GuiTask, Wrapper};
+use super::wrapper::{GuiTask, Task, Wrapper};
 use crate::context::gui::GuiContext;
 use crate::context::init::InitContext;
 use crate::context::process::{ProcessContext, Transport};
 use crate::context::PluginApi;
-use crate::event_loop::EventLoop;
 use crate::midi::NoteEvent;
 use crate::params::internals::ParamPtr;
 use crate::plugin::Plugin;
@@ -48,7 +47,7 @@ impl<P: Plugin, B: Backend> InitContext<P> for WrapperInitContext<'_, P, B> {
     }
 
     fn execute(&self, task: P::BackgroundTask) {
-        (self.wrapper.task_executor_wrapper.task_executor.lock())(task);
+        (self.wrapper.task_executor.lock())(task);
     }
 
     fn set_latency_samples(&self, _samples: u32) {
@@ -66,12 +65,12 @@ impl<P: Plugin, B: Backend> ProcessContext<P> for WrapperProcessContext<'_, P, B
     }
 
     fn execute_background(&self, task: P::BackgroundTask) {
-        let task_posted = self.wrapper.event_loop.schedule_background(task);
+        let task_posted = self.wrapper.schedule_background(Task::PluginTask(task));
         nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
     }
 
     fn execute_gui(&self, task: P::BackgroundTask) {
-        let task_posted = self.wrapper.event_loop.schedule_gui(task);
+        let task_posted = self.wrapper.schedule_gui(Task::PluginTask(task));
         nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
     }
 

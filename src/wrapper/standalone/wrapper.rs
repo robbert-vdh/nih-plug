@@ -37,19 +37,13 @@ pub struct Wrapper<P: Plugin, B: Backend> {
 
     /// The wrapped plugin instance.
     plugin: Mutex<P>,
-    /// The plugin's background task executor closure. Wrapped in another struct so it can be used
-    /// as a [`MainContext`] with [`EventLoop`].
-    pub task_executor_wrapper: Arc<TaskExecutorWrapper<P>>,
+    /// The plugin's background task executor closure. Tasks scheduled by the plugin will be
+    /// executed on the GUI or background thread using this function.
+    pub task_executor: Mutex<TaskExecutor<P>>,
     /// The plugin's parameters. These are fetched once during initialization. That way the
     /// `ParamPtr`s are guaranteed to live at least as long as this object and we can interact with
     /// the `Params` object without having to acquire a lock on `plugin`.
     params: Arc<dyn Params>,
-    /// The set of parameter pointers in `params`. This is technically not necessary, but for
-    /// consistency with the plugin wrappers we'll check whether the `ParamPtr` for an incoming
-    /// parameter change actually belongs to a registered parameter.
-    known_parameters: HashSet<ParamPtr>,
-    /// A mapping from parameter string IDs to parameter pointers.
-    param_map: HashMap<String, ParamPtr>,
     /// The plugin's editor, if it has one. This object does not do anything on its own, but we need
     /// to instantiate this in advance so we don't need to lock the entire [`Plugin`] object when
     /// creating an editor. Wrapped in an `AtomicRefCell` because it needs to be initialized late.
@@ -58,14 +52,20 @@ pub struct Wrapper<P: Plugin, B: Backend> {
     /// A realtime-safe task queue so the plugin can schedule tasks that need to be run later on the
     /// GUI thread. See the same field in the VST3 wrapper for more information on why this looks
     /// the way it does.
-    ///
-    /// This is only used for executing [`AsyncExecutor`] tasks, so it's parameterized directly over
-    /// that using a special `MainThreadExecutor` wrapper around `AsyncExecutor`.
-    pub(crate) event_loop: OsEventLoop<P::BackgroundTask, TaskExecutorWrapper<P>>,
+    event_loop: AtomicRefCell<Option<OsEventLoop<Task<P>, Self>>>,
 
     /// This is used to grab the DPI scaling config. Not used on macOS.
     #[allow(unused)]
     config: WrapperConfig,
+
+    /// A mapping from parameter pointers to string parameter IDs. This is used as part of
+    /// `Task::ParamValueChanged` to send a parameter change event to the editor from the GUI
+    /// thread. This is also used to check whether the `ParamPtr` for an incoming parameter change
+    /// actually belongs to a registered parameter.
+    param_ptr_to_id: HashMap<ParamPtr, String>,
+    /// A mapping from parameter string IDs to parameter pointers. Used for serialization and
+    /// deserialization.
+    param_id_to_ptr: HashMap<String, ParamPtr>,
 
     /// The bus and buffer configurations are static for the standalone target.
     bus_config: BusConfig,
@@ -86,6 +86,22 @@ pub struct Wrapper<P: Plugin, B: Backend> {
     updated_state_sender: channel::Sender<PluginState>,
     /// The receiver belonging to [`new_state_sender`][Self::new_state_sender].
     updated_state_receiver: channel::Receiver<PluginState>,
+}
+
+/// Tasks that can be sent from the plugin to be executed on the main thread in a non-blocking
+/// realtime-safe way (either a random thread or `IRunLoop` on Linux, the OS' message loop on
+/// Windows and macOS).
+#[allow(clippy::enum_variant_names)]
+pub enum Task<P: Plugin> {
+    /// Execute one of the plugin's background tasks.
+    PluginTask(P::BackgroundTask),
+    /// Inform the plugin that one or more parameter values have changed.
+    ParameterValuesChanged,
+    /// Inform the plugin that one parameter's value has changed. This uses the parameter hashes
+    /// since the task will be created from the audio thread. We don't have parameter hashes here
+    /// like in the plugin APIs, so we'll just use the `ParamPtr`s directly. These are used to index
+    /// the hashmaps stored on `Wrapper`.
+    ParameterValueChanged(ParamPtr, f32),
 }
 
 /// Errors that may arise while initializing the wrapped plugins.
@@ -138,14 +154,24 @@ impl WindowHandler for WrapperWindowHandler {
     }
 }
 
-/// Adapter to make `TaskExecutor<P>` work as a `MainThreadExecutor`.
-pub struct TaskExecutorWrapper<P: Plugin> {
-    pub task_executor: Mutex<TaskExecutor<P>>,
-}
-
-impl<P: Plugin> MainThreadExecutor<P::BackgroundTask> for TaskExecutorWrapper<P> {
-    fn execute(&self, task: P::BackgroundTask, _is_gui_thread: bool) {
-        (self.task_executor.lock())(task)
+impl<P: Plugin, B: Backend> MainThreadExecutor<Task<P>> for Wrapper<P, B> {
+    fn execute(&self, task: Task<P>, _is_gui_thread: bool) {
+        match task {
+            Task::PluginTask(task) => (self.task_executor.lock())(task),
+            Task::ParameterValuesChanged => {
+                if let Some(editor) = self.editor.borrow().as_ref() {
+                    editor.lock().param_values_changed();
+                }
+            }
+            Task::ParameterValueChanged(param_ptr, normalized_value) => {
+                if let Some(editor) = self.editor.borrow().as_ref() {
+                    let param_id = &self.param_ptr_to_id[&param_ptr];
+                    editor
+                        .lock()
+                        .param_value_changed(param_id, normalized_value);
+                }
+            }
+        }
     }
 }
 
@@ -154,9 +180,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
     /// not accept the IO configuration from the wrapper config.
     pub fn new(backend: B, config: WrapperConfig) -> Result<Arc<Self>, WrapperError> {
         let plugin = P::default();
-        let task_executor_wrapper = Arc::new(TaskExecutorWrapper {
-            task_executor: Mutex::new(plugin.task_executor()),
-        });
+        let task_executor = Mutex::new(plugin.task_executor());
         let params = plugin.params();
 
         // This is used to allow the plugin to restore preset data from its editor, see the comment
@@ -202,17 +226,22 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
             backend: AtomicRefCell::new(backend),
 
             plugin: Mutex::new(plugin),
-            task_executor_wrapper: task_executor_wrapper.clone(),
+            task_executor,
             params,
-            known_parameters: param_map.iter().map(|(_, ptr, _)| *ptr).collect(),
-            param_map: param_map
-                .into_iter()
-                .map(|(param_id, param_ptr, _)| (param_id, param_ptr))
-                .collect(),
             // Initialized later as it needs a reference to the wrapper for the async executor
             editor: AtomicRefCell::new(None),
 
-            event_loop: OsEventLoop::new_and_spawn(task_executor_wrapper),
+            // Also initialized later as it also needs a reference to the wrapper
+            event_loop: AtomicRefCell::new(None),
+
+            param_ptr_to_id: param_map
+                .iter()
+                .map(|(param_id, param_ptr, _)| (*param_ptr, param_id.clone()))
+                .collect(),
+            param_id_to_ptr: param_map
+                .into_iter()
+                .map(|(param_id, param_ptr, _)| (param_id, param_ptr))
+                .collect(),
 
             bus_config: BusConfig {
                 num_input_channels: config.input_channels.unwrap_or(P::DEFAULT_INPUT_CHANNELS),
@@ -235,6 +264,8 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
             updated_state_receiver,
         });
 
+        *wrapper.event_loop.borrow_mut() = Some(OsEventLoop::new_and_spawn(wrapper.clone()));
+
         // The editor needs to be initialized later so the Async executor can work.
         *wrapper.editor.borrow_mut() = wrapper
             .plugin
@@ -244,7 +275,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
                     let wrapper = wrapper.clone();
 
                     move |task| {
-                        let task_posted = wrapper.event_loop.schedule_background(task);
+                        let task_posted = wrapper.schedule_background(Task::PluginTask(task));
                         nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
                     }
                 }),
@@ -252,7 +283,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
                     let wrapper = wrapper.clone();
 
                     move |task| {
-                        let task_posted = wrapper.event_loop.schedule_gui(task);
+                        let task_posted = wrapper.schedule_gui(Task::PluginTask(task));
                         nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
                     }
                 }),
@@ -271,7 +302,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
             }
 
             // Before initializing the plugin, make sure all smoothers are set the the default values
-            for param in wrapper.known_parameters.iter() {
+            for param in wrapper.param_id_to_ptr.values() {
                 unsafe { param.update_smoother(wrapper.buffer_config.sample_rate, true) };
             }
 
@@ -374,7 +405,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
     /// This returns false if the parameter was not set because the `ParamPtr` was either unknown or
     /// the queue is full.
     pub fn set_parameter(&self, param: ParamPtr, normalized: f32) -> bool {
-        if !self.known_parameters.contains(&param) {
+        if !self.param_ptr_to_id.contains_key(&param) {
             return false;
         }
 
@@ -394,7 +425,7 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
         unsafe {
             state::serialize_object::<P>(
                 self.params.clone(),
-                self.param_map
+                self.param_id_to_ptr
                     .iter()
                     .map(|(param_id, param_ptr)| (param_id, *param_ptr)),
             )
@@ -419,6 +450,28 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
                 );
             }
         }
+    }
+
+    /// Posts the task to the background task queue using [`EventLoop::schedule_background()`] so it
+    /// can be run in the background without blocking either the GUI or the audio thread.
+    ///
+    /// If the task queue is full, then this will return false.
+    #[must_use]
+    pub fn schedule_background(&self, task: Task<P>) -> bool {
+        let event_loop = self.event_loop.borrow();
+        let event_loop = event_loop.as_ref().unwrap();
+        event_loop.schedule_background(task)
+    }
+
+    /// Posts the task to the task queue using [`EventLoop::schedule_gui()`] so it can be delegated
+    /// to the main thread. The task is run directly if this is the GUI thread.
+    ///
+    /// If the task queue is full, then this will return false.
+    #[must_use]
+    pub fn schedule_gui(&self, task: Task<P>) -> bool {
+        let event_loop = self.event_loop.borrow();
+        let event_loop = event_loop.as_ref().unwrap();
+        event_loop.schedule_gui(task)
     }
 
     /// The audio thread. This should be called from another thread, and it will run until
@@ -466,19 +519,14 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
 
                     // We'll always write these events to the first sample, so even when we add note
                     // output we shouldn't have to think about interleaving events here
-                    let mut parameter_values_changed = false;
                     while let Some((param_ptr, normalized_value)) =
                         self.unprocessed_param_changes.pop()
                     {
                         unsafe { param_ptr.set_normalized_value(normalized_value) };
                         unsafe { param_ptr.update_smoother(sample_rate, false) };
-                        parameter_values_changed = true;
-                    }
-
-                    // Allow the editor to react to the new parameter values if the editor uses a
-                    // reactive data binding model
-                    if parameter_values_changed {
-                        self.notify_param_values_changed();
+                        let task_posted = self
+                            .schedule_gui(Task::ParameterValueChanged(param_ptr, normalized_value));
+                        nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
                     }
 
                     // After processing audio, we'll check if the editor has sent us updated plugin
@@ -493,12 +541,10 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
                             state::deserialize_object::<P>(
                                 &mut state,
                                 self.params.clone(),
-                                |param_id| self.param_map.get(param_id).copied(),
+                                |param_id| self.param_id_to_ptr.get(param_id).copied(),
                                 Some(&self.buffer_config),
                             );
                         }
-
-                        self.notify_param_values_changed();
 
                         // FIXME: This is obviously not realtime-safe, but loading presets without
                         //         doing this could lead to inconsistencies. It's the plugin's
@@ -514,6 +560,9 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
                         });
                         plugin.reset();
 
+                        let task_posted = self.schedule_gui(Task::ParameterValuesChanged);
+                        nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+
                         // We'll pass the state object back to the GUI thread so deallocation can
                         // happen there without potentially blocking the audio thread
                         if let Err(err) = self.updated_state_sender.send(state) {
@@ -528,21 +577,6 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
                 })
             },
         );
-    }
-
-    /// Tell the editor that the parameter values have changed, if the plugin has an editor. In the
-    /// off-chance that the editor instance is currently locked then nothing will happen, and the
-    /// request can safely be ignored.
-    fn notify_param_values_changed(&self) {
-        if let Some(editor) = self.editor.borrow().as_ref() {
-            match editor.try_lock() {
-                Some(editor) => editor.param_values_changed(),
-                None => nih_debug_assert_failure!(
-                    "The editor was locked when sending a parameter value change notification, \
-                     ignoring"
-                ),
-            }
-        }
     }
 
     fn make_gui_context(
