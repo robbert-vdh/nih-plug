@@ -881,9 +881,9 @@ impl CompressorBank {
 
                 // This threshold must never reach zero as it's used in divisions to get a gain ratio
                 // above the threshold
-                *threshold = util::db_to_gain_fast(threshold_db);
-                *knee_start = util::db_to_gain_fast(knee_start_db);
-                *knee_end = util::db_to_gain_fast(knee_end_db);
+                *threshold = util::db_to_gain_fast(threshold_db).max(f32::EPSILON);
+                *knee_start = util::db_to_gain_fast(knee_start_db).max(f32::EPSILON);
+                *knee_end = util::db_to_gain_fast(knee_end_db).max(f32::EPSILON);
             }
         }
 
