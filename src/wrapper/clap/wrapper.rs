@@ -214,6 +214,9 @@ pub struct Wrapper<P: ClapPlugin> {
     /// parameters belonging to the plugin. These addresses will remain stable as long as the
     /// `params` object does not get deallocated.
     param_by_hash: HashMap<u32, ParamPtr>,
+    /// Mappings from parmaeter hashes to string parameter IDs. Used for notifying the plugin's
+    /// editor about parameter changes.
+    param_id_by_hash: HashMap<u32, String>,
     /// The group name of a parameter, indexed by the parameter's hash. Nested groups are delimited
     /// by slashes, and they're only used to allow the DAW to display parameters in a tree
     /// structure.
@@ -276,6 +279,14 @@ pub struct Wrapper<P: ClapPlugin> {
 pub enum Task<P: Plugin> {
     /// Execute one of the plugin's background tasks.
     PluginTask(P::BackgroundTask),
+    /// Inform the plugin that one or more parameter values have changed.
+    ParameterValuesChanged,
+    /// Inform the plugin that one parameter's value has changed. This uses the parameter hashes
+    /// since the task will be created from the audio thread.
+    ParameterValueChanged(u32, f32),
+    /// Inform the plugin that one parameter's modulation offset has changed. This uses the
+    /// parameter hashes since the task will be created from the audio thread.
+    ParameterModulationChanged(u32, f32),
     /// Inform the host that the latency has changed.
     LatencyChanged,
     /// Inform the host that the voice info has changed.
@@ -365,6 +376,33 @@ impl<P: ClapPlugin> MainThreadExecutor<Task<P>> for Wrapper<P> {
         // This function is always called from the main thread, from [Self::on_main_thread].
         match task {
             Task::PluginTask(task) => (self.task_executor.lock())(task),
+            Task::ParameterValuesChanged => {
+                if self.editor_handle.lock().is_some() {
+                    if let Some(editor) = self.editor.borrow().as_ref() {
+                        editor.lock().param_values_changed();
+                    }
+                }
+            }
+            Task::ParameterValueChanged(param_hash, normalized_value) => {
+                if self.editor_handle.lock().is_some() {
+                    if let Some(editor) = self.editor.borrow().as_ref() {
+                        let param_id = &self.param_id_by_hash[&param_hash];
+                        editor
+                            .lock()
+                            .param_value_changed(param_id, normalized_value);
+                    }
+                }
+            }
+            Task::ParameterModulationChanged(param_hash, modulation_offset) => {
+                if self.editor_handle.lock().is_some() {
+                    if let Some(editor) = self.editor.borrow().as_ref() {
+                        let param_id = &self.param_id_by_hash[&param_hash];
+                        editor
+                            .lock()
+                            .param_modulation_changed(param_id, modulation_offset);
+                    }
+                }
+            }
             Task::LatencyChanged => match &*self.host_latency.borrow() {
                 Some(host_latency) => {
                     nih_debug_assert!(is_gui_thread);
@@ -436,6 +474,10 @@ impl<P: ClapPlugin> Wrapper<P> {
         let param_by_hash = param_id_hashes_ptrs_groups
             .iter()
             .map(|(_, hash, ptr, _)| (*hash, *ptr))
+            .collect();
+        let param_id_by_hash = param_id_hashes_ptrs_groups
+            .iter()
+            .map(|(id, hash, _, _)| (*hash, id.clone()))
             .collect();
         let param_group_by_hash = param_id_hashes_ptrs_groups
             .iter()
@@ -644,6 +686,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             host_params: AtomicRefCell::new(None),
             param_hashes,
             param_by_hash,
+            param_id_by_hash,
             param_group_by_hash,
             param_id_to_hash,
             param_ptr_to_hash,
@@ -773,23 +816,6 @@ impl<P: ClapPlugin> Wrapper<P> {
         result
     }
 
-    /// If there's an editor open, let it know that parameter values have changed. This should be
-    /// called whenever there's been a call or multiple calls to
-    /// [`update_plain_value_by_hash()[Self::update_plain_value_by_hash()`]. In the off-chance that
-    /// the editor instance is currently locked then nothing will happen, and the request can safely
-    /// be ignored.
-    pub fn notify_param_values_changed(&self) {
-        if let Some(editor) = self.editor.borrow().as_ref() {
-            match editor.try_lock() {
-                Some(editor) => editor.param_values_changed(),
-                None => nih_debug_assert_failure!(
-                    "The editor was locked when sending a parameter value change notification, \
-                     ignoring"
-                ),
-            }
-        }
-    }
-
     /// Request a resize based on the editor's current reported size. As of CLAP 0.24 this can
     /// safely be called from any thread. If this returns `false`, then the plugin should reset its
     /// size back to the previous value.
@@ -845,6 +871,12 @@ impl<P: ClapPlugin> Wrapper<P> {
                             unsafe { param_ptr.update_smoother(sample_rate, false) };
                         }
 
+                        // The GUI needs to be informed about the changed parameter value. This
+                        // triggers an `Editor::param_value_changed()` call on the GUI thread.
+                        let task_posted =
+                            self.schedule_gui(Task::ParameterValueChanged(hash, normalized_value));
+                        nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+
                         true
                     }
                     ClapParamUpdate::PlainValueMod(clap_plain_delta) => {
@@ -856,6 +888,10 @@ impl<P: ClapPlugin> Wrapper<P> {
                         if let Some(sample_rate) = sample_rate {
                             unsafe { param_ptr.update_smoother(sample_rate, false) };
                         }
+
+                        let task_posted = self
+                            .schedule_gui(Task::ParameterModulationChanged(hash, normalized_delta));
+                        nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
 
                         true
                     }
@@ -871,16 +907,9 @@ impl<P: ClapPlugin> Wrapper<P> {
         input_events.clear();
 
         let num_events = clap_call! { in_=>size(in_) };
-        let mut parameter_values_changed = false;
         for event_idx in 0..num_events {
             let event = clap_call! { in_=>get(in_, event_idx) };
-            parameter_values_changed |=
-                self.handle_in_event(event, &mut input_events, None, current_sample_idx);
-        }
-
-        // Allow the GUI to react to any parameter values that might have been changed
-        if parameter_values_changed {
-            self.notify_param_values_changed();
+            self.handle_in_event(event, &mut input_events, None, current_sample_idx);
         }
     }
 
@@ -912,9 +941,8 @@ impl<P: ClapPlugin> Wrapper<P> {
 
         let start_idx = resume_from_event_idx as u32;
         let mut event: *const clap_event_header = clap_call! { in_=>get(in_, start_idx) };
-        let mut parameter_values_changed = false;
         for next_event_idx in (start_idx + 1)..num_events {
-            parameter_values_changed |= self.handle_in_event(
+            self.handle_in_event(
                 event,
                 &mut input_events,
                 Some(transport_info),
@@ -932,19 +960,12 @@ impl<P: ClapPlugin> Wrapper<P> {
         }
 
         // Don't forget about the last event
-        parameter_values_changed |= self.handle_in_event(
+        self.handle_in_event(
             event,
             &mut input_events,
             Some(transport_info),
             current_sample_idx,
         );
-
-        // NOTE: We explicitly did not do this on a block split because that seems a bit excessive.
-        //       When we're performing a block split we're guaranteed that there's still at least one more
-        //       parameter event after the split so this function will still be called.
-        if parameter_values_changed {
-            self.notify_param_values_changed();
-        }
 
         None
     }
@@ -957,7 +978,6 @@ impl<P: ClapPlugin> Wrapper<P> {
         // We'll always write these events to the first sample, so even when we add note output we
         // shouldn't have to think about interleaving events here
         let sample_rate = self.current_buffer_config.load().map(|c| c.sample_rate);
-        let mut parameter_values_changed = false;
         while let Some(change) = self.output_parameter_events.pop() {
             let push_successful = match change {
                 OutputParamEvent::BeginGesture { param_hash } => {
@@ -983,7 +1003,6 @@ impl<P: ClapPlugin> Wrapper<P> {
                         ClapParamUpdate::PlainValueSet(clap_plain_value),
                         sample_rate,
                     );
-                    parameter_values_changed = true;
 
                     let event = clap_event_param_value {
                         header: clap_event_header {
@@ -1021,12 +1040,6 @@ impl<P: ClapPlugin> Wrapper<P> {
             };
 
             nih_debug_assert!(push_successful);
-        }
-
-        // Allow the editor to react to the new parameter values if the editor uses a reactive data
-        // binding model
-        if parameter_values_changed {
-            self.notify_param_values_changed();
         }
 
         // Also send all note events generated by the plugin
@@ -1331,18 +1344,13 @@ impl<P: ClapPlugin> Wrapper<P> {
     ///
     /// If the event was a transport event and the `transport_info` argument is not `None`, then the
     /// pointer will be changed to point to the transport information from this event.
-    ///
-    /// The return value indicates whether this was a parameter event. If it is a parameter event,
-    /// then [`notify_param_values_changed()`][Self::notify_param_values_changed()] should be called
-    /// once all of these events have been processed.
-    #[must_use]
     pub unsafe fn handle_in_event(
         &self,
         event: *const clap_event_header,
         input_events: &mut AtomicRefMut<VecDeque<NoteEvent>>,
         transport_info: Option<&mut *const clap_event_transport>,
         current_sample_idx: usize,
-    ) -> bool {
+    ) {
         let raw_event = &*event;
         let timing = raw_event.time - current_sample_idx as u32;
 
@@ -1372,8 +1380,6 @@ impl<P: ClapPlugin> Wrapper<P> {
                         normalized_value,
                     });
                 }
-
-                true
             }
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_MOD) => {
                 let event = &*(event as *const clap_event_param_mod);
@@ -1397,7 +1403,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                                 normalized_offset,
                             });
 
-                            return true;
+                            return;
                         }
                         None => nih_debug_assert_failure!(
                             "Polyphonic modulation sent for a parameter without a poly modulation \
@@ -1411,16 +1417,12 @@ impl<P: ClapPlugin> Wrapper<P> {
                     ClapParamUpdate::PlainValueMod(event.amount),
                     self.current_buffer_config.load().map(|c| c.sample_rate),
                 );
-
-                true
             }
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_TRANSPORT) => {
                 let event = &*(event as *const clap_event_transport);
                 if let Some(transport_info) = transport_info {
                     *transport_info = event;
                 }
-
-                false
             }
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_ON) => {
                 if P::MIDI_INPUT >= MidiConfig::Basic {
@@ -1439,8 +1441,6 @@ impl<P: ClapPlugin> Wrapper<P> {
                         velocity: event.velocity as f32,
                     });
                 }
-
-                false
             }
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_OFF) => {
                 if P::MIDI_INPUT >= MidiConfig::Basic {
@@ -1457,8 +1457,6 @@ impl<P: ClapPlugin> Wrapper<P> {
                         velocity: event.velocity as f32,
                     });
                 }
-
-                false
             }
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_CHOKE) => {
                 if P::MIDI_INPUT >= MidiConfig::Basic {
@@ -1474,8 +1472,6 @@ impl<P: ClapPlugin> Wrapper<P> {
                         note: event.key as u8,
                     });
                 }
-
-                false
             }
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_EXPRESSION) => {
                 if P::MIDI_INPUT >= MidiConfig::Basic {
@@ -1577,8 +1573,6 @@ impl<P: ClapPlugin> Wrapper<P> {
                         n => nih_debug_assert_failure!("Unhandled note expression ID {}", n),
                     }
                 }
-
-                false
             }
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_MIDI) => {
                 // In the Basic note port type, we'll still handle note on, note off, and polyphonic
@@ -1600,8 +1594,6 @@ impl<P: ClapPlugin> Wrapper<P> {
                     Ok(_) => (),
                     Err(n) => nih_debug_assert_failure!("Unhandled MIDI message type {}", n),
                 };
-
-                false
             }
             _ => {
                 nih_trace!(
@@ -1609,8 +1601,6 @@ impl<P: ClapPlugin> Wrapper<P> {
                     raw_event.type_,
                     raw_event.space_id
                 );
-
-                false
             }
         }
     }
@@ -1672,7 +1662,6 @@ impl<P: ClapPlugin> Wrapper<P> {
                     );
                 }
 
-                self.notify_param_values_changed();
                 let bus_config = self.current_bus_config.load();
                 if let Some(buffer_config) = self.current_buffer_config.load() {
                     // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
@@ -1681,6 +1670,9 @@ impl<P: ClapPlugin> Wrapper<P> {
                     plugin.initialize(&bus_config, &buffer_config, &mut init_context);
                     process_wrapper(|| plugin.reset());
                 }
+
+                let task_posted = self.schedule_gui(Task::ParameterValuesChanged);
+                nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
 
                 break;
             }
@@ -2314,8 +2306,6 @@ impl<P: ClapPlugin> Wrapper<P> {
                     wrapper.current_buffer_config.load().as_ref(),
                 );
 
-                wrapper.notify_param_values_changed();
-
                 // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
                 let mut init_context = wrapper.make_init_context();
                 let bus_config = wrapper.current_bus_config.load();
@@ -2327,6 +2317,10 @@ impl<P: ClapPlugin> Wrapper<P> {
                 //         called a second time if it supports runtime preset loading.
                 permit_alloc(|| plugin.initialize(&bus_config, &buffer_config, &mut init_context));
                 plugin.reset();
+
+                // Reinitialize the plugin after loading state so it can respond to the new parameter values
+                let task_posted = wrapper.schedule_gui(Task::ParameterValuesChanged);
+                nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
 
                 // We'll pass the state object back to the GUI thread so deallocation can happen
                 // there without potentially blocking the audio thread
@@ -3215,9 +3209,6 @@ impl<P: ClapPlugin> Wrapper<P> {
             return false;
         }
 
-        // Reinitialize the plugin after loading state so it can respond to the new parameter values
-        wrapper.notify_param_values_changed();
-
         let bus_config = wrapper.current_bus_config.load();
         if let Some(buffer_config) = wrapper.current_buffer_config.load() {
             // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
@@ -3229,6 +3220,10 @@ impl<P: ClapPlugin> Wrapper<P> {
             //       duplicate reset if it's not needed.
             process_wrapper(|| plugin.reset());
         }
+
+        // Reinitialize the plugin after loading state so it can respond to the new parameter values
+        let task_posted = wrapper.schedule_gui(Task::ParameterValuesChanged);
+        nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
 
         nih_trace!("Loaded state ({length} bytes)");
 
