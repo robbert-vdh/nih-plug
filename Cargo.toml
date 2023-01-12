@@ -105,7 +105,7 @@ assert_no_alloc = { git = "https://github.com/robbert-vdh/rust-assert-no-alloc.g
 # Used for the `standalone` feature
 # NOTE: OpenGL support is not needed here, but rust-analyzer gets confused when
 #       some crates do use it and others don't
-baseview = { git = "https://github.com/robbert-vdh/baseview.git", branch = "feature/resize", features = ["opengl"], optional = true }
+baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "7001c2521fa1a439a01967cb881b411cd75d9ee0", features = ["opengl"], optional = true }
 # All the claps!
 clap = { version = "3.2", features = ["derive"], optional = true }
 cpal = { version = "0.14.1", optional = true }

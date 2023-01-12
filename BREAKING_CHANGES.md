@@ -6,6 +6,18 @@ new and what's changed, this document lists all breaking changes in reverse
 chronological order. If a new feature did not require any changes to existing
 code then it will not be listed here.
 
+## [2023-01-12]
+
+- The Vizia dependency has been updated. This updated version uses a new text
+  rendering engine, so there are a couple breaking changes:
+  - The names for some of Vizia's fonts have changed. The constants and font
+    registration functions in `nih_plug_vizia::assets` and
+    `nih_plug_vizia::vizia_assets` still have the same name, but all uses of the
+    `font` CSS property and `.font()` view modifier will have to be changed.
+  - Metrics for rendered text have change slightly. Most notably the height and
+    vertical positioning of text is slightly different, so you may have to
+    adjust your layout slightly accordingly.
+
 ## [2023-01-11]
 
 - `Editor::param_values_changes()` is no longer called from the audio thread and

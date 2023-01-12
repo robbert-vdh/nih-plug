@@ -11,10 +11,11 @@ description = "An adapter to use VIZIA GUIs with NIH-plug"
 nih_plug = { path = ".." }
 nih_plug_assets = { git = "https://github.com/robbert-vdh/nih_plug_assets.git" }
 
-baseview = { git = "https://github.com/robbert-vdh/baseview.git", branch = "feature/resize" }
+baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "7001c2521fa1a439a01967cb881b411cd75d9ee0" }
 crossbeam = "0.8"
 # To make the state persistable
 serde = { version = "1.0", features = ["derive"] }
-# This fork contains changed for better keyboard modifier handling and DPI
-# scaling, window scaling, and a lot more fixes and improvements
+# This fork contains some additional patches on top of Vizia to make it more
+# suitable for use in NIH-plug. The set of patches constantly changes as things
+# are merged into upstream Vizia.
 vizia = { git = "https://github.com/robbert-vdh/vizia.git", branch = "patched", default_features = false, features = ["baseview", "clipboard", "x11"] }

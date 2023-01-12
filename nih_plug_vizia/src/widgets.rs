@@ -102,7 +102,7 @@ impl Model for WindowModel {
     fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
         // This gets fired whenever the inner window gets resized
         event.map(|window_event, _| {
-            if let WindowEvent::WindowResize = window_event {
+            if let WindowEvent::GeometryChanged { .. } = window_event {
                 let logical_size = (cx.window_size().width, cx.window_size().height);
                 let old_logical_size @ (old_logical_width, old_logical_height) =
                     self.vizia_state.size.load();

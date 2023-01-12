@@ -8,38 +8,38 @@ pub use vizia::fonts;
 
 /// The font name for the Roboto (Regular) font, needs to be registered using [`register_roboto()`]
 /// first.
-pub const ROBOTO: &str = "roboto";
+pub const ROBOTO: &str = "Roboto";
 /// The font name for the Roboto Bold font, needs to be registered using [`register_roboto_bold()`]
 /// first.
-pub const ROBOTO_BOLD: &str = "roboto-bold";
+pub const ROBOTO_BOLD: &str = "Roboto Bold";
 /// The font name for the icon font (Entypo), needs to be registered using [`register_icons()`]
 /// first.
-pub const ICONS: &str = "icons";
+pub const ICONS: &str = "Entypo";
 /// The font name for the emoji font (Open Sans Eomji), needs to be registered using
 /// [`register_emoji()`] first.
-pub const EMOJI: &str = "emoji";
+pub const EMOJI: &str = "OpenSansEmoji";
 /// The font name for the arabic font (Amiri Regular), needs to be registered using
 /// [`register_arabic()`] first.
-pub const ARABIC: &str = "arabic";
+pub const ARABIC: &str = "Amiri";
 /// The font name for the material font (Material Icons), needs to be registered using
 /// [`register_material()`] first.
-pub const MATERIAL: &str = "material";
+pub const MATERIAL: &str = "Material Icons";
 
 pub fn register_roboto(cx: &mut Context) {
-    cx.add_font_mem(ROBOTO, fonts::ROBOTO_REGULAR);
+    cx.add_fonts_mem(&[fonts::ROBOTO_REGULAR]);
 }
 pub fn register_roboto_bold(cx: &mut Context) {
-    cx.add_font_mem(ROBOTO_BOLD, fonts::ROBOTO_BOLD);
+    cx.add_fonts_mem(&[fonts::ROBOTO_BOLD]);
 }
 pub fn register_icons(cx: &mut Context) {
-    cx.add_font_mem(ICONS, fonts::ENTYPO);
+    cx.add_fonts_mem(&[fonts::ENTYPO]);
 }
 pub fn register_emoji(cx: &mut Context) {
-    cx.add_font_mem(EMOJI, fonts::OPEN_SANS_EMOJI);
+    cx.add_fonts_mem(&[fonts::OPEN_SANS_EMOJI]);
 }
 pub fn register_arabic(cx: &mut Context) {
-    cx.add_font_mem(ARABIC, fonts::AMIRI_REGULAR);
+    cx.add_fonts_mem(&[fonts::AMIRI_REGULAR]);
 }
 pub fn register_material(cx: &mut Context) {
-    cx.add_font_mem(MATERIAL, fonts::MATERIAL_ICONS_REGULAR);
+    cx.add_fonts_mem(&[fonts::MATERIAL_ICONS_REGULAR]);
 }

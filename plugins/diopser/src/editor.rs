@@ -86,7 +86,9 @@ pub(crate) fn create(editor_data: Data, editor_state: Arc<ViziaState>) -> Option
 fn top_bar(cx: &mut Context) {
     HStack::new(cx, |cx| {
         Label::new(cx, "Diopser")
-            .font(assets::NOTO_SANS_THIN)
+            .font_family(vec![FamilyOwned::Name(String::from(
+                assets::NOTO_SANS_THIN,
+            ))])
             .font_size(37.0)
             .top(Pixels(-2.0))
             .left(Pixels(8.0))
