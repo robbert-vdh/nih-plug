@@ -90,7 +90,7 @@ fn top_bar(cx: &mut Context) {
                 assets::NOTO_SANS_THIN,
             ))])
             .font_size(37.0)
-            .top(Pixels(-2.0))
+            .top(Pixels(2.0))
             .left(Pixels(8.0))
             .on_mouse_down(|_, _| {
                 // Try to open the Diopser plugin's page when clicking on the title. If this fails
@@ -174,6 +174,7 @@ fn spectrum_analyzer(cx: &mut Context) {
 
             Label::new(cx, "Frequency")
                 .font_size(18.0)
+                .top(Pixels(2.0))
                 .width(Stretch(1.0))
                 .height(Pixels(20.0))
                 .child_space(Stretch(1.0));
