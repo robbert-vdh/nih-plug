@@ -49,9 +49,7 @@ pub(crate) fn create(
                 .child_top(Stretch(1.0))
                 .child_bottom(Pixels(0.0));
 
-            // NOTE: VIZIA adds 1 pixel of additional height to these labels, so we'll need to
-            //       compensate for that
-            Label::new(cx, "Gain").bottom(Pixels(-1.0));
+            Label::new(cx, "Gain");
             ParamSlider::new(cx, Data::params, |params| &params.gain);
 
             PeakMeter::new(
