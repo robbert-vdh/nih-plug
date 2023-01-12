@@ -39,7 +39,7 @@ const MAX_FILTER_FREQUENCY: f32 = 22_000.0;
 /// This plugin essentially layers the sound with another copy of the signal ring modulated with
 /// white (or filtered) noise. That other copy of the sound may have a low-pass filter applied to it
 /// since this effect just turns into literal noise at high frequencies.
-struct Crisp {
+pub struct Crisp {
     params: Arc<CrispParams>,
 
     /// Needed for computing the filter coefficients.

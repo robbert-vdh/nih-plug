@@ -57,7 +57,7 @@ pub(crate) fn create(
                 .font_size(30.0)
                 .height(Pixels(50.0))
                 .child_top(Stretch(1.0))
-                .child_bottom(Pixels(0.0))
+                .child_bottom(Pixels(1.0))
                 // Make this more or less align with the parameters column
                 .right(Pixels(67.0));
 
