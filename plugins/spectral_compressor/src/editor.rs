@@ -22,6 +22,10 @@ use std::sync::Arc;
 
 use crate::SpectralCompressorParams;
 
+// I couldn't get `LayoutType::Grid` to work as expected, so we'll fake a 4x4 grid with
+// hardcoded column widths
+const COLUMN_WIDTH: Units = Pixels(330.0);
+
 #[derive(Lens)]
 struct Data {
     params: Arc<SpectralCompressorParams>,
@@ -49,45 +53,22 @@ pub(crate) fn create(
 
         ResizeHandle::new(cx);
 
-        // There's no real 'grid' layout, the 4x4 grid should have even column widths and row
-        // heights
-        const LEFT_COLUMN_WIDTH: Units = Pixels(330.0);
-        const RIGHT_COLUMN_WIDTH: Units = Pixels(330.0);
-
         VStack::new(cx, |cx| {
             Label::new(cx, "Spectral Compressor")
                 .font_family(vec![FamilyOwned::Name(String::from(
                     assets::NOTO_SANS_THIN,
                 ))])
                 .font_size(30.0)
-                .height(Pixels(50.0))
-                .child_top(Stretch(1.0))
-                .child_bottom(Pixels(0.0))
                 .right(Pixels(15.0))
-                .bottom(Pixels(-5.0));
+                .bottom(Pixels(-5.0))
+                .top(Pixels(10.0));
 
             HStack::new(cx, |cx| {
-                VStack::new(cx, |cx| {
-                    Label::new(cx, "Globals")
-                        .font(assets::NOTO_SANS_THIN)
-                        .font_size(23.0)
-                        .left(Stretch(1.0))
-                        .right(Pixels(10.0))
-                        .bottom(Pixels(-10.0));
-
+                make_column(cx, "Globals", |cx| {
                     GenericUi::new(cx, Data::params.map(|p| p.global.clone()));
-                })
-                .width(LEFT_COLUMN_WIDTH)
-                .height(Auto);
+                });
 
-                VStack::new(cx, |cx| {
-                    Label::new(cx, "Threshold")
-                        .font(assets::NOTO_SANS_THIN)
-                        .font_size(23.0)
-                        .left(Stretch(1.0))
-                        .right(Pixels(10.0))
-                        .bottom(Pixels(-10.0));
-
+                make_column(cx, "Threshold", |cx| {
                     GenericUi::new(cx, Data::params.map(|p| p.threshold.clone()));
 
                     Label::new(
@@ -98,26 +79,17 @@ pub(crate) fn create(
                     )
                     .font_size(11.0)
                     .left(Pixels(15.0))
-                    .right(Pixels(5.0))
+                    .right(Pixels(8.0))
                     // The column isn't tall enough without this, for some reason
                     .bottom(Pixels(20.0))
                     .width(Stretch(1.0));
-                })
-                .width(RIGHT_COLUMN_WIDTH)
-                .height(Auto);
+                });
             })
             .height(Auto)
             .width(Stretch(1.0));
 
             HStack::new(cx, |cx| {
-                VStack::new(cx, |cx| {
-                    Label::new(cx, "Upwards")
-                        .font(assets::NOTO_SANS_THIN)
-                        .font_size(23.0)
-                        .left(Stretch(1.0))
-                        .right(Pixels(10.0))
-                        .bottom(Pixels(-10.0));
-
+                make_column(cx, "Upwards", |cx| {
                     // We don't want to show the 'Upwards' prefix here, but it should still be in
                     // the parameter name so the parameter list makes sense
                     let upwards_compressor_params =
@@ -141,18 +113,9 @@ pub(crate) fn create(
                             .class("row");
                         },
                     );
-                })
-                .width(RIGHT_COLUMN_WIDTH)
-                .height(Auto);
+                });
 
-                VStack::new(cx, |cx| {
-                    Label::new(cx, "Downwards")
-                        .font(assets::NOTO_SANS_THIN)
-                        .font_size(23.0)
-                        .left(Stretch(1.0))
-                        .right(Pixels(10.0))
-                        .bottom(Pixels(-10.0));
-
+                make_column(cx, "Downwards", |cx| {
                     let downwards_compressor_params =
                         Data::params.map(|p| p.compressors.downwards.clone());
                     GenericUi::new_custom(
@@ -174,20 +137,31 @@ pub(crate) fn create(
                             .class("row");
                         },
                     );
-                })
-                .width(LEFT_COLUMN_WIDTH)
-                .height(Auto);
+                });
             })
             .height(Auto)
             .width(Stretch(1.0));
         })
-        .row_between(Pixels(10.0))
+        .row_between(Pixels(15.0))
         .child_left(Stretch(1.0))
         .child_right(Stretch(1.0));
     })
 }
 
-// /// A [`ParamSlider`] row very similar to what [`GenericUi`] would produce.
-// fn param_row(cx: &mut Context) {
-//     VStack::new(cx, content)
-// }
+fn make_column(cx: &mut Context, title: &str, contents: impl FnOnce(&mut Context)) {
+    VStack::new(cx, |cx| {
+        Label::new(cx, title)
+            .font_family(vec![FamilyOwned::Name(String::from(
+                assets::NOTO_SANS_THIN,
+            ))])
+            .font_size(23.0)
+            .left(Stretch(1.0))
+            // This should align nicely with the right edge of the slider
+            .right(Pixels(7.0))
+            .bottom(Pixels(-10.0));
+
+        contents(cx);
+    })
+    .width(COLUMN_WIDTH)
+    .height(Auto);
+}
