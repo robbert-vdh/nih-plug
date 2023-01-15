@@ -71,6 +71,14 @@ pub fn gain_to_db_fast(gain: f32) -> f32 {
     f32::max(gain, MINUS_INFINITY_GAIN).ln() * CONVERSION_FACTOR
 }
 
+/// [`db_to_gain_fast()`], but the minimum gain value is set to [`f32::EPSILON`]instead of
+/// [`MINUS_INFINITY_GAIN`]. Useful in conjunction with [`db_to_gain_fast()`].
+#[inline]
+pub fn gain_to_db_fast_epsilon(gain: f32) -> f32 {
+    const CONVERSION_FACTOR: f32 = std::f32::consts::LOG10_E * 20.0;
+    f32::max(gain, MINUS_INFINITY_GAIN).ln() * CONVERSION_FACTOR
+}
+
 /// Convert a MIDI note ID to a frequency at A4 = 440 Hz equal temperament and middle C = note 60 =
 /// C4.
 #[inline]
