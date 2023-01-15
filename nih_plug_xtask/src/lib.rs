@@ -365,6 +365,7 @@ fn bundle_binary(
         compilation_target,
         BundleType::Binary,
     )?;
+    maybe_codesign(&standalone_bundle_home, compilation_target);
 
     eprintln!(
         "Created a standalone bundle at '{}'",
@@ -429,6 +430,7 @@ fn bundle_plugin(
             compilation_target,
             BundleType::Plugin,
         )?;
+        maybe_codesign(&clap_bundle_home, compilation_target);
 
         eprintln!("Created a CLAP bundle at '{}'", clap_bundle_home.display());
     }
@@ -456,6 +458,7 @@ fn bundle_plugin(
             compilation_target,
             BundleType::Plugin,
         )?;
+        maybe_codesign(&vst2_bundle_home, compilation_target);
 
         eprintln!("Created a VST2 bundle at '{}'", vst2_bundle_home.display());
     }
@@ -482,6 +485,7 @@ fn bundle_plugin(
             compilation_target,
             BundleType::Plugin,
         )?;
+        maybe_codesign(vst3_bundle_home, compilation_target);
 
         eprintln!("Created a VST3 bundle at '{}'", vst3_bundle_home.display());
     }
@@ -754,4 +758,32 @@ pub fn maybe_create_macos_bundle_metadata(
     .context("Could not create Info.plist file")?;
 
     Ok(())
+}
+
+/// If compiling for macOS, try to self-sign the bundle at the given path. This shouldn't be
+/// necessary, but AArch64 macOS is stricter about these things and sometimes self built plugins may
+/// not load otherwise. Presumably in combination with hardened runtimes.
+///
+/// If the codesigning command could not be run then this merely prints a warning.
+pub fn maybe_codesign(bundle_home: &Path, target: CompilationTarget) {
+    if !matches!(
+        target,
+        CompilationTarget::MacOS(_) | CompilationTarget::MacOSUniversal
+    ) {
+        return;
+    }
+
+    let success = Command::new("codesign")
+        .arg("-f")
+        .arg("-s")
+        .arg("-")
+        .arg(bundle_home)
+        .status()
+        .is_ok();
+    if !success {
+        eprintln!(
+            "WARNING: Could not self-sign '{}', it may fail to run depending on the environment",
+            bundle_home.display()
+        )
+    }
 }
