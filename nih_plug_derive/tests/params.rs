@@ -48,6 +48,13 @@ impl Default for GroupedParams {
     }
 }
 
+// This should result in the same `.param_map()` as `GroupedParams`
+#[derive(Default, Params)]
+struct PlainNestedParams {
+    #[nested]
+    pub inner: GroupedParams,
+}
+
 #[derive(Default, Params)]
 struct GroupedGroupedParams {
     #[nested(group = "Top-level group")]
@@ -132,6 +139,25 @@ mod param_order {
                 "group2_three",
             ]
         );
+    }
+
+    #[test]
+    fn plain_nested() {
+        let plain_nested = PlainNestedParams::default();
+        let grouped = GroupedParams::default();
+
+        let plain_nested_ids_groups: Vec<(String, String)> = plain_nested
+            .param_map()
+            .into_iter()
+            .map(|(id, _, group)| (id, group))
+            .collect();
+        let grouped_param_ids_groups: Vec<(String, String)> = grouped
+            .param_map()
+            .into_iter()
+            .map(|(id, _, group)| (id, group))
+            .collect();
+
+        assert_eq!(plain_nested_ids_groups, grouped_param_ids_groups);
     }
 
     #[test]

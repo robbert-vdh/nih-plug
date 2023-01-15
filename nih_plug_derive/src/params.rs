@@ -139,6 +139,8 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                 let mut nested_id_prefix: Option<syn::LitStr> = None;
                 let mut nested_group: Option<syn::LitStr> = None;
                 match attr.parse_meta() {
+                    // In this case it's a plain `#[nested]` attribute without parameters
+                    Ok(syn::Meta::Path(..)) => (),
                     Ok(syn::Meta::List(syn::MetaList {
                         nested: nested_attrs,
                         ..
@@ -205,32 +207,6 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                                 }
                             }
                         }
-
-                        params.push(Param::Nested(match (nested_array, nested_id_prefix) {
-                            (true, None) => NestedParams::Array {
-                                field: field_name.clone(),
-                                group: nested_group,
-                            },
-                            (false, Some(id_prefix)) => NestedParams::Prefixed {
-                                field: field_name.clone(),
-                                id_prefix,
-                                group: nested_group,
-                            },
-                            (false, None) => NestedParams::Inline {
-                                field: field_name.clone(),
-                                group: nested_group,
-                            },
-                            (true, Some(_)) => {
-                                return syn::Error::new(
-                                    attr.span(),
-                                    "'array' cannot be used together with 'id_prefix'",
-                                )
-                                .to_compile_error()
-                                .into()
-                            }
-                        }));
-
-                        processed_attribute = true;
                     }
                     _ => {
                         return syn::Error::new(
@@ -242,6 +218,32 @@ pub fn derive_params(input: TokenStream) -> TokenStream {
                         .into()
                     }
                 };
+
+                params.push(Param::Nested(match (nested_array, nested_id_prefix) {
+                    (true, None) => NestedParams::Array {
+                        field: field_name.clone(),
+                        group: nested_group,
+                    },
+                    (false, Some(id_prefix)) => NestedParams::Prefixed {
+                        field: field_name.clone(),
+                        id_prefix,
+                        group: nested_group,
+                    },
+                    (false, None) => NestedParams::Inline {
+                        field: field_name.clone(),
+                        group: nested_group,
+                    },
+                    (true, Some(_)) => {
+                        return syn::Error::new(
+                            attr.span(),
+                            "'array' cannot be used together with 'id_prefix'",
+                        )
+                        .to_compile_error()
+                        .into()
+                    }
+                }));
+
+                processed_attribute = true;
             }
         }
     }
@@ -517,7 +519,7 @@ impl NestedParams {
                 })
             },
             NestedParams::Inline { field, group: None } => quote! {
-                self.#field.param_map();
+                self.#field.param_map()
             },
             NestedParams::Prefixed {
                 field,
