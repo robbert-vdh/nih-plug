@@ -10,6 +10,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Added an option to crossfade the recorded buffer to avoid clicks when looping
+  around.
 - Added an optional velocity sensitive mode.
 
 ### Removed

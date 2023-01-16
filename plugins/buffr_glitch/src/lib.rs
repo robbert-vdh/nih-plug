@@ -50,11 +50,17 @@ struct BuffrGlitchParams {
     /// Makes the effect velocity sensitive. `100/127` corresponds to `1.0` gain.
     #[id = "velocity_sensitive"]
     velocity_sensitive: BoolParam,
-
     /// The number of octaves the input signal should be increased or decreased by. Useful to allow
     /// larger grain sizes.
     #[id = "octave_shift"]
     octave_shift: IntParam,
+
+    /// The length of the loop crossfade to use, in milliseconds. This will cause the start of the
+    /// loop to be faded into the last `(crossfade_ms/2)` ms of the loop region, and the part after
+    /// the end to be faded into the first `(crossfade_ms/2)` ms of the loop after the first
+    /// ieration.
+    #[id = "crossfade_ms"]
+    crossfade_ms: FloatParam,
 }
 
 impl Default for BuffrGlitch {
@@ -89,7 +95,6 @@ impl Default for BuffrGlitchParams {
             .with_value_to_string(formatters::v2s_f32_gain_to_db(1))
             .with_string_to_value(formatters::s2v_f32_gain_to_db()),
             velocity_sensitive: BoolParam::new("Velocity Sensitive", false),
-
             octave_shift: IntParam::new(
                 "Octave Shift",
                 0,
@@ -98,6 +103,18 @@ impl Default for BuffrGlitchParams {
                     max: MAX_OCTAVE_SHIFT as i32,
                 },
             ),
+            crossfade_ms: FloatParam::new(
+                "Crossfade",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 50.0,
+                    factor: FloatRange::skew_factor(-2.5),
+                },
+            )
+            // This doesn't need smoothing because the value is set when the note is held down and cannot be changed afterwards
+            .with_unit(" ms")
+            .with_step_size(0.001),
         }
     }
 }
@@ -180,7 +197,8 @@ impl Plugin for BuffrGlitch {
                         // larger window sizes.
                         let note_frequency = util::midi_note_to_freq(note)
                             * 2.0f32.powi(self.params.octave_shift.value());
-                        self.buffer.prepare_playback(note_frequency);
+                        self.buffer
+                            .prepare_playback(note_frequency, self.params.crossfade_ms.value());
                     }
                     NoteEvent::NoteOff { note, .. } if self.midi_note_id == Some(note) => {
                         // A NoteOff for the currently playing note immediately ends playback
