@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use nih_plug::prelude::*;
+use nih_plug::util::permit_alloc;
 use std::sync::Arc;
 
 /// After reaching the threshold, it will take this many milliseconds under that threshold to start
@@ -206,6 +207,11 @@ impl Plugin for SafetyLimiter {
             return ProcessStatus::Normal;
         }
 
+        // We'll print this once per buffer to make it obvious something very fishy is going on
+        // without tanking performance too much
+        let mut buffer_contains_nan = false;
+        let mut buffer_contains_inf = false;
+
         let &(morse_seq_len, _) = self.morse_seq_edges_samples.last().unwrap();
         for mut channel_samples in buffer.iter_samples() {
             let mut is_peaking = false;
@@ -217,6 +223,14 @@ impl Plugin for SafetyLimiter {
                     // we'll try to mix them back into the signal later
                     *sample = 0.0;
                     is_peaking = true;
+
+                    if sample.is_nan() {
+                        buffer_contains_nan = true;
+                    } else if sample.is_infinite() {
+                        buffer_contains_inf = true;
+                    } else {
+                        unreachable!();
+                    }
                 }
             }
 
@@ -288,6 +302,13 @@ impl Plugin for SafetyLimiter {
                     self.morse_seq_current_step_idx = 0;
                 }
             }
+        }
+
+        if buffer_contains_nan {
+            permit_alloc(|| nih_log!("The buffer contains NaN values"));
+        }
+        if buffer_contains_inf {
+            permit_alloc(|| nih_log!("The buffer contains infinite values"));
         }
 
         ProcessStatus::Normal
