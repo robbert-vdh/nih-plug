@@ -34,6 +34,9 @@ struct BuffrGlitch {
     //
     // TODO: Add polyphony support, this is just a quick proof of concept.
     midi_note_id: Option<u8>,
+    /// The gain scaling. If velocity sensitive mode is enabled, then this is the `[0, 1]` velocity
+    /// devided by `100/127` such that MIDI velocity 100 corresponds to 1.0 gain.
+    midi_note_gain_scaling: f32,
 }
 
 #[derive(Params)]
@@ -46,6 +49,9 @@ struct BuffrGlitchParams {
     /// down to use Buffr Glitch as more of a synth.
     #[id = "dry_mix"]
     dry_level: FloatParam,
+    /// Makes the effect velocity sensitive. `100/127` corresponds to `1.0` gain.
+    #[id = "velocity_sensitive"]
+    velocity_sensitive: BoolParam,
 
     /// The number of octaves the input signal should be increased or decreased by. Useful to allow
     /// larger grain sizes.
@@ -74,6 +80,7 @@ impl Default for BuffrGlitch {
             buffer: buffer::RingBuffer::default(),
 
             midi_note_id: None,
+            midi_note_gain_scaling: 1.0,
         }
     }
 }
@@ -95,6 +102,7 @@ impl Default for BuffrGlitchParams {
             .with_unit(" dB")
             .with_value_to_string(formatters::v2s_f32_gain_to_db(1))
             .with_string_to_value(formatters::s2v_f32_gain_to_db()),
+            velocity_sensitive: BoolParam::new("Velocity Sensitive", false),
 
             octave_shift: IntParam::new(
                 "Octave Shift",
@@ -170,11 +178,16 @@ impl Plugin for BuffrGlitch {
                 }
 
                 match event {
-                    NoteEvent::NoteOn { note, .. } => {
+                    NoteEvent::NoteOn { note, velocity, .. } => {
                         // We don't keep a stack of notes right now. At some point we'll want to
                         // make this polyphonic anyways.
                         // TOOD: Also add an option to use velocity or poly pressure
                         self.midi_note_id = Some(note);
+                        self.midi_note_gain_scaling = if self.params.velocity_sensitive.value() {
+                            velocity / (100.0 / 127.0)
+                        } else {
+                            1.0
+                        };
 
                         // We'll copy audio to the playback buffer to match the pitch of the note
                         // that was just played. The octave shift parameter makes it possible to get
@@ -200,7 +213,7 @@ impl Plugin for BuffrGlitch {
                 for (channel_idx, sample) in channel_samples.into_iter().enumerate() {
                     // This will start recording on the first iteration, and then loop the recorded
                     // buffer afterwards
-                    *sample = self.buffer.next_sample(
+                    let result = self.buffer.next_sample(
                         channel_idx,
                         *sample,
                         // FIXME: This has temporarily been removed, and `NormalizationMode::Auto`
@@ -208,6 +221,8 @@ impl Plugin for BuffrGlitch {
                         // self.params.normalization_mode.value(),
                         NormalizationMode::Auto,
                     );
+
+                    *sample = result * self.midi_note_gain_scaling;
                 }
             } else {
                 for sample in channel_samples.into_iter() {

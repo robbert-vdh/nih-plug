@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Added an optional velocity sensitive mode.
+
 ### Removed
 
 - The normalization option has temporarily been removed since the old method to
