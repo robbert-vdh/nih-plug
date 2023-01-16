@@ -18,27 +18,25 @@ use nih_plug::prelude::*;
 
 use crate::{NormalizationMode, MAX_OCTAVE_SHIFT};
 
-/// A super simple ring buffer abstraction that records audio into a recording ring buffer, and then
-/// copies audio to a playback buffer when a note is pressed so audio can be repeated while still
-/// recording audio for further key presses. This needs to be able to store at least the number of
+/// A super simple ring buffer abstraction that records audio into a buffer until it is full, and
+/// then starts looping the already recorded audio. The recording starts hwne pressing a key so
+/// transients are preserved correctly. This needs to be able to store at least the number of
 /// samples that correspond to the period size of MIDI note 0.
 #[derive(Debug, Default)]
 pub struct RingBuffer {
     sample_rate: f32,
 
-    /// Sample ring buffers indexed by channel and sample index. These are always recorded to.
-    recording_buffers: Vec<Vec<f32>>,
-    /// The positions within the sample buffers the next sample should be written to. Since all
-    /// channels will be written to in lockstep we only need a single value here. It's incremented
-    /// when writing a sample for the last channel.
-    next_write_pos: usize,
-
-    /// When a key is pressed, audio gets copied from `recording_buffers` to these buffers so it can
-    /// be played back without interrupting the recording process. These buffers are resized to
-    /// match the length of the audio being played back.
-    playback_buffers: Vec<Vec<f32>>,
+    /// When a key is pressed, `next_sample_pos` is set to 0 and the incoming audio is recorded into
+    /// this buffer until `next_sample_pos` wraps back around to the start of the ring buffer. At
+    /// that point the incoming audio is replaced by the previously recorded audio. These buffers
+    /// are resized to match the length/frequency of the audio being played back.
+    audio_buffers: Vec<Vec<f32>>,
     /// The current playback position in `playback_buffers`.
-    playback_buffer_pos: usize,
+    next_sample_pos: usize,
+    /// If this is set to `false` then the incoming audio will be recorded to `playback_buffer`
+    /// until it is full. When it wraps around this is set to `true` and the previously recorded
+    /// audio is played back instead.
+    playback_buffer_ready: bool,
 }
 
 impl RingBuffer {
@@ -47,6 +45,9 @@ impl RingBuffer {
     /// MIDI note 0 at the specified sample rate, rounded up to a power of two. Make sure to call
     /// [`reset()`][Self::reset()] after this.
     pub fn resize(&mut self, num_channels: usize, sample_rate: f32) {
+        nih_debug_assert!(num_channels >= 1);
+        nih_debug_assert!(sample_rate > 0.0);
+
         // NOTE: We need to take the octave shift into account
         let lowest_note_frequency =
             util::midi_note_to_freq(0) / 2.0f32.powi(MAX_OCTAVE_SHIFT as i32);
@@ -57,129 +58,89 @@ impl RingBuffer {
         // Used later to compute period sizes in samples based on frequencies
         self.sample_rate = sample_rate;
 
-        self.recording_buffers.resize_with(num_channels, Vec::new);
-        for buffer in self.recording_buffers.iter_mut() {
+        self.audio_buffers.resize_with(num_channels, Vec::new);
+        for buffer in self.audio_buffers.iter_mut() {
             buffer.resize(buffer_len, 0.0);
-        }
-
-        self.playback_buffers.resize_with(num_channels, Vec::new);
-        for buffer in self.playback_buffers.iter_mut() {
-            buffer.resize(buffer_len, 0.0);
-            // We need to reserve capacity for the playback buffers, but they're initially empty
-            buffer.resize(0, 0.0);
         }
     }
 
     /// Zero out the buffers.
     pub fn reset(&mut self) {
-        for buffer in self.recording_buffers.iter_mut() {
-            buffer.fill(0.0);
-        }
-        self.next_write_pos = 0;
-
-        // The playback buffers don't need to be reset since they're always initialized before being
-        // used
+        // The current verion's buffers don't need to be reset since they're always initialized
+        // before being used
     }
 
-    /// Push a sample to the buffer. The write position is advanced whenever the last channel is
-    /// written to.
-    pub fn push(&mut self, channel_idx: usize, sample: f32) {
-        self.recording_buffers[channel_idx][self.next_write_pos] = sample;
+    /// Prepare the playback buffers to play back audio at the specified frequency. This resets the
+    /// buffer to record the next `note_period_samples`, which are then looped until the key is released.
+    pub fn prepare_playback(&mut self, frequency: f32) {
+        let note_period_samples = (frequency.recip() * self.sample_rate).ceil() as usize;
+
+        // This buffer doesn't need to be cleared since the data is not read until the entire buffer
+        // has been recorded to
+        nih_debug_assert!(note_period_samples <= self.audio_buffers[0].capacity());
+        for buffer in self.audio_buffers.iter_mut() {
+            buffer.resize(note_period_samples, 0.0);
+        }
+
+        // The buffer is filled on
+        self.next_sample_pos = 0;
+        self.playback_buffer_ready = false;
+    }
+
+    /// Read or write a sample from or to the ring buffer, and return the output. On the first loop
+    /// this will store the input samples into the bufffer and return the input value as is.
+    /// Afterwards it will read the previously recorded data from the buffer. The read/write
+    /// position is advanced whenever the last channel is written to.
+    pub fn next_sample(
+        &mut self,
+        channel_idx: usize,
+        input_sample: f32,
+        normalization_mode: NormalizationMode,
+    ) -> f32 {
+        if !self.playback_buffer_ready {
+            self.audio_buffers[channel_idx][self.next_sample_pos] = input_sample;
+        }
+        let result = self.audio_buffers[channel_idx][self.next_sample_pos];
 
         // TODO: This can be done more efficiently, but you really won't notice the performance
         //       impact here
-        if channel_idx == self.recording_buffers.len() - 1 {
-            self.next_write_pos += 1;
+        if channel_idx == self.audio_buffers.len() - 1 {
+            self.next_sample_pos += 1;
 
-            if self.next_write_pos == self.recording_buffers[0].len() {
-                self.next_write_pos = 0;
-            }
-        }
-    }
+            if self.next_sample_pos == self.audio_buffers[0].len() {
+                self.next_sample_pos = 0;
 
-    /// Prepare the playback buffers to play back audio at the specified frequency. This copies
-    /// audio from the ring buffers to the playback buffers.
-    pub fn prepare_playback(&mut self, frequency: f32, normalization_mode: NormalizationMode) {
-        let note_period_samples = (frequency.recip() * self.sample_rate).ceil() as usize;
+                // The playback buffer is normalized as necessary. This prevents small grains from being
+                // either way quieter or way louder than the origianl audio.
+                if !self.playback_buffer_ready {
+                    match normalization_mode {
+                        NormalizationMode::None => (),
+                        NormalizationMode::Auto => {
+                            // FIXME: This needs to take the input audio into account, but we don't
+                            //        have access to that anymore. We can just use a simple envelope
+                            //        follower instead
+                            // // Prevent this from causing divisions by zero or making very loud clicks when audio
+                            // // playback has just started
+                            // let playback_rms = calculate_rms(&self.playback_buffers);
+                            // if playback_rms > 0.001 {
+                            //     let recording_rms = calculate_rms(&self.recording_buffers);
+                            //     let normalization_factor = recording_rms / playback_rms;
 
-        // We'll copy the last `note_period_samples` samples from the recording ring buffers to the
-        // playback buffers
-        nih_debug_assert!(note_period_samples <= self.playback_buffers[0].capacity());
-        for (playback_buffer, recording_buffer) in self
-            .playback_buffers
-            .iter_mut()
-            .zip(self.recording_buffers.iter())
-        {
-            playback_buffer.resize(note_period_samples, 0.0);
-
-            // Keep in mind we'll need to go `note_period_samples` samples backwards in the
-            // recording buffer
-            let copy_num_from_start = usize::min(note_period_samples, self.next_write_pos);
-            let copy_num_from_end = note_period_samples - copy_num_from_start;
-            playback_buffer[0..copy_num_from_end]
-                .copy_from_slice(&recording_buffer[recording_buffer.len() - copy_num_from_end..]);
-            playback_buffer[copy_num_from_end..].copy_from_slice(
-                &recording_buffer[self.next_write_pos - copy_num_from_start..self.next_write_pos],
-            );
-        }
-
-        // The playback buffer is normalized as necessary. This prevents small grains from being
-        // either way quieter or way louder than the origianl audio.
-        match normalization_mode {
-            NormalizationMode::None => (),
-            NormalizationMode::Auto => {
-                // Prevent this from causing divisions by zero or making very loud clicks when audio
-                // playback has just started
-                let playback_rms = calculate_rms(&self.playback_buffers);
-                if playback_rms > 0.001 {
-                    let recording_rms = calculate_rms(&self.recording_buffers);
-                    let normalization_factor = recording_rms / playback_rms;
-
-                    for buffer in self.playback_buffers.iter_mut() {
-                        for sample in buffer.iter_mut() {
-                            *sample *= normalization_factor;
+                            //     for buffer in self.playback_buffers.iter_mut() {
+                            //         for sample in buffer.iter_mut() {
+                            //             *sample *= normalization_factor;
+                            //         }
+                            //     }
+                            // }
                         }
                     }
+
+                    // At this point the buffer is ready for playback
+                    self.playback_buffer_ready = true;
                 }
             }
         }
 
-        // Reading from the buffer should always start at the beginning
-        self.playback_buffer_pos = 0;
+        result
     }
-
-    /// Return a sample from the playback buffer. The playback position is advanced whenever the
-    /// last channel is written to. When the playback position reaches the end of the buffer it
-    /// wraps around.
-    pub fn next_playback_sample(&mut self, channel_idx: usize) -> f32 {
-        let sample = self.playback_buffers[channel_idx][self.playback_buffer_pos];
-
-        // TODO: Same as the above
-        if channel_idx == self.playback_buffers.len() - 1 {
-            self.playback_buffer_pos += 1;
-
-            if self.playback_buffer_pos == self.playback_buffers[0].len() {
-                self.playback_buffer_pos = 0;
-            }
-        }
-
-        sample
-    }
-}
-
-/// Get the RMS value of an entire buffer. This is used for (automatic) normalization.
-///
-/// # Panics
-///
-/// This will panic of `buffers` is empty.
-fn calculate_rms(buffers: &[Vec<f32>]) -> f32 {
-    nih_debug_assert_ne!(buffers.len(), 0);
-
-    let sum_of_squares: f32 = buffers
-        .iter()
-        .map(|buffer| buffer.iter().map(|sample| (sample * sample)).sum::<f32>())
-        .sum();
-    let num_samples = buffers.len() * buffers[0].len();
-
-    (sum_of_squares / num_samples as f32).sqrt()
 }

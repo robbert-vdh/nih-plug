@@ -27,8 +27,7 @@ struct BuffrGlitch {
     params: Arc<BuffrGlitchParams>,
 
     sample_rate: f32,
-    /// The ring buffer we'll write samples to. When a key is held down, we'll stop writing samples
-    /// and instead keep reading from this buffer until the key is released.
+    /// The ring buffer samples are recorded to and played back from when a key is held down.
     buffer: buffer::RingBuffer,
 
     /// The MIDI note ID of the last note, if a note pas pressed.
@@ -39,9 +38,10 @@ struct BuffrGlitch {
 
 #[derive(Params)]
 struct BuffrGlitchParams {
-    /// Controls if and how grains are normalization.
-    #[id = "normalization_mode"]
-    normalization_mode: EnumParam<NormalizationMode>,
+    // FIXME: Add normalization back in, it doesn't work anymore so it's been removed to avoid causing confusion
+    // /// Controls whether and how grains are normalization.
+    // #[id = "normalization_mode"]
+    // normalization_mode: EnumParam<NormalizationMode>,
     /// From 0 to 1, how much of the dry signal to mix in. This defaults to 1 but it can be turned
     /// down to use Buffr Glitch as more of a synth.
     #[id = "dry_mix"]
@@ -81,7 +81,7 @@ impl Default for BuffrGlitch {
 impl Default for BuffrGlitchParams {
     fn default() -> Self {
         Self {
-            normalization_mode: EnumParam::new("Normalization", NormalizationMode::Auto),
+            // normalization_mode: EnumParam::new("Normalization", NormalizationMode::Auto),
             dry_level: FloatParam::new(
                 "Dry Level",
                 1.0,
@@ -181,10 +181,7 @@ impl Plugin for BuffrGlitch {
                         // larger window sizes.
                         let note_frequency = util::midi_note_to_freq(note)
                             * 2.0f32.powi(self.params.octave_shift.value());
-                        self.buffer.prepare_playback(
-                            note_frequency,
-                            self.params.normalization_mode.value(),
-                        );
+                        self.buffer.prepare_playback(note_frequency);
                     }
                     NoteEvent::NoteOff { note, .. } if self.midi_note_id == Some(note) => {
                         // A NoteOff for the currently playing note immediately ends playback
@@ -198,19 +195,22 @@ impl Plugin for BuffrGlitch {
 
             // When a note is being held, we'll replace the input audio with the looping contents of
             // the playback buffer
+            // TODO: At some point also handle polyphony here
             if self.midi_note_id.is_some() {
                 for (channel_idx, sample) in channel_samples.into_iter().enumerate() {
-                    // New audio still needs to be recorded when the note is held to prepare for new
-                    // notes
-                    // TODO: At some point also handle polyphony here
-                    self.buffer.push(channel_idx, *sample);
-
-                    *sample = self.buffer.next_playback_sample(channel_idx);
+                    // This will start recording on the first iteration, and then loop the recorded
+                    // buffer afterwards
+                    *sample = self.buffer.next_sample(
+                        channel_idx,
+                        *sample,
+                        // FIXME: This has temporarily been removed, and `NormalizationMode::Auto`
+                        //        doesn't do anything right now
+                        // self.params.normalization_mode.value(),
+                        NormalizationMode::Auto,
+                    );
                 }
             } else {
-                for (channel_idx, sample) in channel_samples.into_iter().enumerate() {
-                    self.buffer.push(channel_idx, *sample);
-
+                for sample in channel_samples.into_iter() {
                     *sample *= dry_amount;
                 }
             }
