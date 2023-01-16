@@ -14,17 +14,18 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use nih_plug::prelude::Editor;
+use nih_plug::prelude::*;
 use nih_plug_vizia::vizia::prelude::*;
 use nih_plug_vizia::widgets::*;
 use nih_plug_vizia::{assets, create_vizia_editor, ViziaState, ViziaTheming};
 use std::sync::Arc;
 
-use crate::SpectralCompressorParams;
+use crate::{SpectralCompressor, SpectralCompressorParams};
 
 // I couldn't get `LayoutType::Grid` to work as expected, so we'll fake a 4x4 grid with
 // hardcoded column widths
 const COLUMN_WIDTH: Units = Pixels(330.0);
+const DARKER_GRAY: Color = Color::rgb(0x69, 0x69, 0x69);
 
 #[derive(Lens)]
 struct Data {
@@ -54,14 +55,22 @@ pub(crate) fn create(
         ResizeHandle::new(cx);
 
         VStack::new(cx, |cx| {
-            Label::new(cx, "Spectral Compressor")
-                .font_family(vec![FamilyOwned::Name(String::from(
-                    assets::NOTO_SANS_THIN,
-                ))])
-                .font_size(30.0)
-                .right(Pixels(15.0))
-                .bottom(Pixels(-5.0))
-                .top(Pixels(10.0));
+            HStack::new(cx, |cx| {
+                Label::new(cx, "Spectral Compressor")
+                    .font_family(vec![FamilyOwned::Name(String::from(
+                        assets::NOTO_SANS_THIN,
+                    ))])
+                    .font_size(30.0);
+                Label::new(cx, SpectralCompressor::VERSION)
+                    .color(DARKER_GRAY)
+                    .top(Stretch(1.0))
+                    .bottom(Pixels(4.0))
+                    .left(Pixels(2.0));
+            })
+            .height(Pixels(30.0))
+            .right(Pixels(-17.0))
+            .bottom(Pixels(-5.0))
+            .top(Pixels(10.0));
 
             HStack::new(cx, |cx| {
                 make_column(cx, "Globals", |cx| {

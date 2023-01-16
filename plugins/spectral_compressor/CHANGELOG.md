@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.3.0] - 2023-01-15
 
+### Added
+
+- Added the version number and a link to the GitHub page to the GUI to make it
+  easier to determine which version you're using.
+
 ### Removed
 
 - The DC filter option is gone. It was used to prevent upwards compression from
