@@ -4104,6 +4104,7 @@ version = "0.3.0"
 dependencies = [
  "nih_plug",
  "nih_plug_vizia",
+ "open",
  "realfft",
 ]
 

@@ -60,7 +60,15 @@ pub(crate) fn create(
                     .font_family(vec![FamilyOwned::Name(String::from(
                         assets::NOTO_SANS_THIN,
                     ))])
-                    .font_size(30.0);
+                    .font_size(30.0)
+                    .on_mouse_down(|_, _| {
+                        // Try to open the plugin's page when clicking on the title. If this fails
+                        // then that's not a problem
+                        let result = open::that(SpectralCompressor::URL);
+                        if cfg!(debug) && result.is_err() {
+                            nih_debug_assert_failure!("Failed to open web browser: {:?}", result);
+                        }
+                    });
                 Label::new(cx, SpectralCompressor::VERSION)
                     .color(DARKER_GRAY)
                     .top(Stretch(1.0))
