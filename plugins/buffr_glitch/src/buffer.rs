@@ -16,7 +16,7 @@
 
 use nih_plug::prelude::*;
 
-use crate::{NormalizationMode, MAX_OCTAVE_SHIFT};
+use crate::MAX_OCTAVE_SHIFT;
 
 /// A super simple ring buffer abstraction that records audio into a buffer until it is full, and
 /// then starts looping the already recorded audio. The recording starts hwne pressing a key so
@@ -91,12 +91,7 @@ impl RingBuffer {
     /// this will store the input samples into the bufffer and return the input value as is.
     /// Afterwards it will read the previously recorded data from the buffer. The read/write
     /// position is advanced whenever the last channel is written to.
-    pub fn next_sample(
-        &mut self,
-        channel_idx: usize,
-        input_sample: f32,
-        normalization_mode: NormalizationMode,
-    ) -> f32 {
+    pub fn next_sample(&mut self, channel_idx: usize, input_sample: f32) -> f32 {
         if !self.playback_buffer_ready {
             self.audio_buffers[channel_idx][self.next_sample_pos] = input_sample;
         }
@@ -110,34 +105,8 @@ impl RingBuffer {
             if self.next_sample_pos == self.audio_buffers[0].len() {
                 self.next_sample_pos = 0;
 
-                // The playback buffer is normalized as necessary. This prevents small grains from being
-                // either way quieter or way louder than the origianl audio.
-                if !self.playback_buffer_ready {
-                    match normalization_mode {
-                        NormalizationMode::None => (),
-                        NormalizationMode::Auto => {
-                            // FIXME: This needs to take the input audio into account, but we don't
-                            //        have access to that anymore. We can just use a simple envelope
-                            //        follower instead
-                            // // Prevent this from causing divisions by zero or making very loud clicks when audio
-                            // // playback has just started
-                            // let playback_rms = calculate_rms(&self.playback_buffers);
-                            // if playback_rms > 0.001 {
-                            //     let recording_rms = calculate_rms(&self.recording_buffers);
-                            //     let normalization_factor = recording_rms / playback_rms;
-
-                            //     for buffer in self.playback_buffers.iter_mut() {
-                            //         for sample in buffer.iter_mut() {
-                            //             *sample *= normalization_factor;
-                            //         }
-                            //     }
-                            // }
-                        }
-                    }
-
-                    // At this point the buffer is ready for playback
-                    self.playback_buffer_ready = true;
-                }
+                // At this point the buffer is ready for playback
+                self.playback_buffer_ready = true;
             }
         }
 

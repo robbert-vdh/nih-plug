@@ -41,10 +41,6 @@ struct BuffrGlitch {
 
 #[derive(Params)]
 struct BuffrGlitchParams {
-    // FIXME: Add normalization back in, it doesn't work anymore so it's been removed to avoid causing confusion
-    // /// Controls whether and how grains are normalization.
-    // #[id = "normalization_mode"]
-    // normalization_mode: EnumParam<NormalizationMode>,
     /// From 0 to 1, how much of the dry signal to mix in. This defaults to 1 but it can be turned
     /// down to use Buffr Glitch as more of a synth.
     #[id = "dry_mix"]
@@ -57,18 +53,6 @@ struct BuffrGlitchParams {
     /// larger grain sizes.
     #[id = "octave_shift"]
     octave_shift: IntParam,
-}
-
-/// Controls how grains are normalized.
-#[derive(Enum, Debug, PartialEq, Eq)]
-pub enum NormalizationMode {
-    /// Don't normalize at all
-    #[id = "none"]
-    None,
-    /// Automatically normalize based on the recording buffer's RMS value.
-    #[id = "auto"]
-    Auto,
-    // TODO: Explicit RMS target
 }
 
 impl Default for BuffrGlitch {
@@ -88,7 +72,6 @@ impl Default for BuffrGlitch {
 impl Default for BuffrGlitchParams {
     fn default() -> Self {
         Self {
-            // normalization_mode: EnumParam::new("Normalization", NormalizationMode::Auto),
             dry_level: FloatParam::new(
                 "Dry Level",
                 1.0,
@@ -166,7 +149,6 @@ impl Plugin for BuffrGlitch {
         context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
         let mut next_event = context.next_event();
-
         for (sample_idx, channel_samples) in buffer.iter_samples().enumerate() {
             let dry_amount = self.params.dry_level.smoothed.next();
 
@@ -213,14 +195,7 @@ impl Plugin for BuffrGlitch {
                 for (channel_idx, sample) in channel_samples.into_iter().enumerate() {
                     // This will start recording on the first iteration, and then loop the recorded
                     // buffer afterwards
-                    let result = self.buffer.next_sample(
-                        channel_idx,
-                        *sample,
-                        // FIXME: This has temporarily been removed, and `NormalizationMode::Auto`
-                        //        doesn't do anything right now
-                        // self.params.normalization_mode.value(),
-                        NormalizationMode::Auto,
-                    );
+                    let result = self.buffer.next_sample(channel_idx, *sample);
 
                     *sample = result * self.midi_note_gain_scaling;
                 }
