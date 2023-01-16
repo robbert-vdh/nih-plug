@@ -7,6 +7,12 @@ and use that as a single waveform cycle. This can end up sounding like an
 in-tune glitch when used sparingly, or like a weird synthesizer when used less
 subtly.
 
+## Tips
+
+- You can control the buffer's gain by enabling the velocity sensitive mode and
+  changing the velocity. In Bitwig Studio and other DAWs that support volume
+  note expressions you can also control the gain that way.
+
 ## Download
 
 You can download the development binaries for Linux, Windows and macOS from the

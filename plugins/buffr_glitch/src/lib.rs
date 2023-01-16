@@ -34,9 +34,11 @@ struct BuffrGlitch {
     //
     // TODO: Add polyphony support, this is just a quick proof of concept.
     midi_note_id: Option<u8>,
-    /// The gain scaling. If velocity sensitive mode is enabled, then this is the `[0, 1]` velocity
+    /// The gain scaling from the velocity. If velocity sensitive mode is enabled, then this is the `[0, 1]` velocity
     /// devided by `100/127` such that MIDI velocity 100 corresponds to 1.0 gain.
-    midi_note_gain_scaling: f32,
+    velocity_gain: f32,
+    /// The gain from the gain note expression.
+    gain_expression_gain: f32,
 }
 
 #[derive(Params)]
@@ -64,7 +66,8 @@ impl Default for BuffrGlitch {
             buffer: buffer::RingBuffer::default(),
 
             midi_note_id: None,
-            midi_note_gain_scaling: 1.0,
+            velocity_gain: 1.0,
+            gain_expression_gain: 1.0,
         }
     }
 }
@@ -165,11 +168,12 @@ impl Plugin for BuffrGlitch {
                         // make this polyphonic anyways.
                         // TOOD: Also add an option to use velocity or poly pressure
                         self.midi_note_id = Some(note);
-                        self.midi_note_gain_scaling = if self.params.velocity_sensitive.value() {
+                        self.velocity_gain = if self.params.velocity_sensitive.value() {
                             velocity / (100.0 / 127.0)
                         } else {
                             1.0
                         };
+                        self.gain_expression_gain = 1.0;
 
                         // We'll copy audio to the playback buffer to match the pitch of the note
                         // that was just played. The octave shift parameter makes it possible to get
@@ -182,6 +186,9 @@ impl Plugin for BuffrGlitch {
                         // A NoteOff for the currently playing note immediately ends playback
                         self.midi_note_id = None;
                     }
+                    NoteEvent::PolyVolume { note, gain, .. } if self.midi_note_id == Some(note) => {
+                        self.gain_expression_gain = gain;
+                    }
                     _ => (),
                 }
 
@@ -192,12 +199,15 @@ impl Plugin for BuffrGlitch {
             // the playback buffer
             // TODO: At some point also handle polyphony here
             if self.midi_note_id.is_some() {
+                // TOOD: This needs to be smoothed, but we this should be part of a proper gain
+                //       envelope
+                let gain = self.velocity_gain * self.gain_expression_gain;
                 for (channel_idx, sample) in channel_samples.into_iter().enumerate() {
                     // This will start recording on the first iteration, and then loop the recorded
                     // buffer afterwards
                     let result = self.buffer.next_sample(channel_idx, *sample);
 
-                    *sample = result * self.midi_note_gain_scaling;
+                    *sample = result * gain;
                 }
             } else {
                 for sample in channel_samples.into_iter() {
