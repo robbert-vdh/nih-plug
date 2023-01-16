@@ -1469,6 +1469,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                         } else {
                             None
                         },
+                        // FIXME: These values are also allowed to be -1, we need to support that
                         channel: event.channel as u8,
                         note: event.key as u8,
                     });
