@@ -31,7 +31,7 @@ pub const NOTO_SANS_LIGHT_ITALIC: &str = "Noto Sans Light Italic";
 pub const NOTO_SANS_BOLD: &str = "Noto Sans";
 /// The font name for Noto Sans Bold Italic, needs to be registered using
 /// [`register_noto_sans_bold_italic()`] first.
-pub const NOTO_SANS_BOLD_ITALIC: &str = "Noto Sans Bold Italic";
+pub const NOTO_SANS_BOLD_ITALIC: &str = "Noto Sans Italic";
 
 pub fn register_noto_sans_regular(cx: &mut Context) {
     cx.add_fonts_mem(&[fonts::NOTO_SANS_REGULAR]);
