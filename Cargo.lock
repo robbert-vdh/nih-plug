@@ -1312,7 +1312,7 @@ dependencies = [
 [[package]]
 name = "femtovg"
 version = "0.4.0"
-source = "git+https://github.com/rhelmot/femtovg?rev=e1f3f05cc050c0ed69ca702b368bb5d4eb2cabff#e1f3f05cc050c0ed69ca702b368bb5d4eb2cabff"
+source = "git+https://github.com/rhelmot/femtovg?branch=cosmic#09f4837fff4d2cd58ddc4674d0d7e1296a4123aa"
 dependencies = [
  "bitflags",
  "fnv",
@@ -3383,9 +3383,9 @@ checksum = "dc375e1527247fe1a97d8b7156678dfe7c1af2fc075c9a4db3690ecd2a148068"
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.49"
+version = "1.0.50"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57a8eca9f9c4ffde41714334dee777596264c7825420f521abc92b5b5deb63a5"
+checksum = "6ef7d57beacfaf2d8aee5937dab7b7f28de3cb8b1828479bb5de2a7106f2bae2"
 dependencies = [
  "unicode-ident",
 ]
@@ -4586,7 +4586,7 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 [[package]]
 name = "vizia"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#02890d98efcafa549079a4191e6684e29a2a60f2"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#84aab675a687361f0c80914013c357f95fd1d18b"
 dependencies = [
  "vizia_baseview",
  "vizia_core",
@@ -4596,7 +4596,7 @@ dependencies = [
 [[package]]
 name = "vizia_baseview"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#02890d98efcafa549079a4191e6684e29a2a60f2"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#84aab675a687361f0c80914013c357f95fd1d18b"
 dependencies = [
  "baseview 0.1.0 (git+https://github.com/RustAudio/baseview.git?rev=7001c2521fa1a439a01967cb881b411cd75d9ee0)",
  "femtovg",
@@ -4610,7 +4610,7 @@ dependencies = [
 [[package]]
 name = "vizia_core"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#02890d98efcafa549079a4191e6684e29a2a60f2"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#84aab675a687361f0c80914013c357f95fd1d18b"
 dependencies = [
  "bitflags",
  "copypasta 0.8.1",
@@ -4642,7 +4642,7 @@ dependencies = [
 [[package]]
 name = "vizia_derive"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#02890d98efcafa549079a4191e6684e29a2a60f2"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#84aab675a687361f0c80914013c357f95fd1d18b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4652,12 +4652,12 @@ dependencies = [
 [[package]]
 name = "vizia_id"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#02890d98efcafa549079a4191e6684e29a2a60f2"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#84aab675a687361f0c80914013c357f95fd1d18b"
 
 [[package]]
 name = "vizia_input"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#02890d98efcafa549079a4191e6684e29a2a60f2"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#84aab675a687361f0c80914013c357f95fd1d18b"
 dependencies = [
  "bitflags",
  "keyboard-types",
@@ -4667,7 +4667,7 @@ dependencies = [
 [[package]]
 name = "vizia_storage"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#02890d98efcafa549079a4191e6684e29a2a60f2"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#84aab675a687361f0c80914013c357f95fd1d18b"
 dependencies = [
  "morphorm",
  "vizia_id",
@@ -4676,7 +4676,7 @@ dependencies = [
 [[package]]
 name = "vizia_window"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#02890d98efcafa549079a4191e6684e29a2a60f2"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#84aab675a687361f0c80914013c357f95fd1d18b"
 dependencies = [
  "morphorm",
  "vizia_input",
@@ -4685,7 +4685,7 @@ dependencies = [
 [[package]]
 name = "vizia_winit"
 version = "0.1.0"
-source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#02890d98efcafa549079a4191e6684e29a2a60f2"
+source = "git+https://github.com/robbert-vdh/vizia.git?branch=patched#84aab675a687361f0c80914013c357f95fd1d18b"
 dependencies = [
  "console_error_panic_hook",
  "copypasta 0.8.1",
