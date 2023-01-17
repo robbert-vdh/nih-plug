@@ -10,6 +10,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Added polyphony support. You can now play up to eight voices at once.
 - Added an option to crossfade the recorded buffer to avoid clicks when looping
   around.
 - Added attack and release time controls to avoid clicks when pressing or
