@@ -14,8 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use nih_plug::nih_debug_assert;
+
 /// The most barebones envelope generator you can imagine using a bog standard first order IIR
-/// filter. We don't need anything fancy right now.
+/// filter. We don't need anything fancy right now. This returns values in the range `[0, 1]`.
 #[derive(Debug, Default)]
 pub struct AREnvelope {
     /// The internal filter state.
@@ -27,8 +29,6 @@ pub struct AREnvelope {
     /// `attack_retain_t`, but for the release portion.
     release_retain_t: f32,
 
-    /// The value the envelope follower should try to achieve when not in the release stage.
-    target_value: f32,
     /// Whether the envelope follower is currently in its release stage.
     releasing: bool,
 }
@@ -48,28 +48,26 @@ impl AREnvelope {
         self.releasing = false;
     }
 
-    /// Only reset the release state, but don't reset the internal filter state.
-    pub fn soft_reset(&mut self) {
-        self.releasing = false;
+    /// Return the current/previously returned value.
+    pub fn current(&self) -> f32 {
+        self.state
     }
 
-    /// Set the maximum value the envelope follower should achieve.
-    pub fn set_target(&mut self, target: f32) {
-        self.target_value = target;
-    }
+    /// Compute the next `block_len` values and store them in `block_values`.
+    pub fn next_block(&mut self, block_values: &mut [f32], block_len: usize) {
+        nih_debug_assert!(block_values.len() >= block_len);
+        for value in block_values.iter_mut().take(block_len) {
+            let (target, t) = if self.releasing {
+                (0.0, self.release_retain_t)
+            } else {
+                (1.0, self.attack_retain_t)
+            };
 
-    /// Get the next value from the envelope follower.
-    pub fn next(&mut self) -> f32 {
-        let (target, t) = if self.releasing {
-            (0.0, self.release_retain_t)
-        } else {
-            (self.target_value, self.attack_retain_t)
-        };
+            let new = (self.state * t) + (target * (1.0 - t));
+            self.state = new;
 
-        let new = (self.state * t) + (target * (1.0 - t));
-        self.state = new;
-
-        new
+            *value = new;
+        }
     }
 
     /// Start the release segment of the envelope generator.

@@ -24,22 +24,33 @@ mod envelope;
 /// recording buffer's size.
 pub const MAX_OCTAVE_SHIFT: u32 = 2;
 
+/// The maximum size of an audio block. We'll split up the audio in blocks and render smoothed
+/// values to buffers since these values may need to be reused for multiple voices.
+const MAX_BLOCK_SIZE: usize = 64;
+
 struct BuffrGlitch {
     params: Arc<BuffrGlitchParams>,
 
     sample_rate: f32,
+    voices: [Voice; 8],
+}
+
+/// A single voice, Buffr Glitch can be used in polypnoic mode. And even if only a single note is
+/// played at a time, this is needed for the amp envelope release to work correctly.
+///
+/// Use the [`Voice::is_active()`] method to determine whether a voice is still playing.
+struct Voice {
     /// The ring buffer samples are recorded to and played back from when a key is held down.
     buffer: buffer::RingBuffer,
 
-    /// The MIDI note ID of the last note, if a note pas pressed.
-    //
-    // TODO: Add polyphony support, this is just a quick proof of concept.
+    /// The MIDI note ID of the last note, if a note is pressed.
     midi_note_id: Option<u8>,
     /// The gain scaling from the velocity. If velocity sensitive mode is enabled, then this is the `[0, 1]` velocity
     /// devided by `100/127` such that MIDI velocity 100 corresponds to 1.0 gain.
     velocity_gain: f32,
-    /// The envelope genrator used during playback. This handles both gain smoothing as well as fade
-    /// ins and outs to prevent clicks.
+    /// The gain from the gain note expression. This is not smoothed right now.
+    gain_expression_gain: f32,
+    /// The envelope genrator used during playback. Produces a `[0, 1]` result.
     amp_envelope: envelope::AREnvelope,
 }
 
@@ -79,10 +90,19 @@ impl Default for BuffrGlitch {
             params: Arc::new(BuffrGlitchParams::default()),
 
             sample_rate: 1.0,
+            voices: Default::default(),
+        }
+    }
+}
+
+impl Default for Voice {
+    fn default() -> Self {
+        Self {
             buffer: buffer::RingBuffer::default(),
 
             midi_note_id: None,
             velocity_gain: 1.0,
+            gain_expression_gain: 1.0,
             amp_envelope: envelope::AREnvelope::default(),
         }
     }
@@ -172,7 +192,8 @@ impl Plugin for BuffrGlitch {
     }
 
     fn accepts_bus_config(&self, config: &BusConfig) -> bool {
-        config.num_input_channels == config.num_output_channels && config.num_input_channels > 0
+        // We'll only do stereo for now
+        config.num_input_channels == config.num_output_channels && config.num_input_channels == 2
     }
 
     fn initialize(
@@ -182,18 +203,22 @@ impl Plugin for BuffrGlitch {
         _context: &mut impl InitContext<Self>,
     ) -> bool {
         self.sample_rate = buffer_config.sample_rate;
-        self.buffer.resize(
-            bus_config.num_input_channels as usize,
-            buffer_config.sample_rate,
-        );
+        for voice in &mut self.voices {
+            voice.buffer.resize(
+                bus_config.num_input_channels as usize,
+                buffer_config.sample_rate,
+            );
+        }
 
         true
     }
 
     fn reset(&mut self) {
-        self.buffer.reset();
-        self.midi_note_id = None;
-        self.amp_envelope.reset();
+        for voice in &mut self.voices {
+            voice.buffer.reset();
+            voice.midi_note_id = None;
+            voice.amp_envelope.reset();
+        }
     }
 
     fn process(
@@ -202,80 +227,154 @@ impl Plugin for BuffrGlitch {
         _aux: &mut AuxiliaryBuffers,
         context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
+        let num_samples = buffer.samples();
+        let output = buffer.as_slice();
+
         let mut next_event = context.next_event();
-        for (sample_idx, channel_samples) in buffer.iter_samples().enumerate() {
-            let dry_amount = self.params.dry_level.smoothed.next();
+        let mut block_start: usize = 0;
+        let mut block_end: usize = MAX_BLOCK_SIZE.min(num_samples);
+        while block_start < num_samples {
+            // Keep procesing events until all events at or before `block_start` have been processed
+            'events: loop {
+                match next_event {
+                    // If the event happens now, then we'll keep processing events
+                    Some(event) if (event.timing() as usize) <= block_start => {
+                        match event {
+                            NoteEvent::NoteOn { note, velocity, .. } => {
+                                let new_voice_id = self.new_voice_id();
+                                self.voices[new_voice_id].note_on(&self.params, note, velocity);
+                            }
+                            NoteEvent::NoteOff { note, .. } => {
+                                for voice in &mut self.voices {
+                                    if voice.midi_note_id == Some(note) {
+                                        // Playback still continues until the release is done.
+                                        voice.note_off();
+                                        break;
+                                    }
+                                }
+                            }
+                            NoteEvent::PolyVolume { note, gain, .. } => {
+                                for voice in &mut self.voices {
+                                    if voice.midi_note_id == Some(note) {
+                                        voice.gain_expression_gain = gain;
+                                        break;
+                                    }
+                                }
+                            }
+                            _ => (),
+                        }
 
-            // TODO: Split blocks based on events when adding polyphony, this is just a simple proof
-            //       of concept
-            while let Some(event) = next_event {
-                if event.timing() > sample_idx as u32 {
-                    break;
+                        next_event = context.next_event();
+                    }
+                    // If the event happens before the end of the block, then the block should be cut
+                    // short so the next block starts at the event
+                    Some(event) if (event.timing() as usize) < block_end => {
+                        block_end = event.timing() as usize;
+                        break 'events;
+                    }
+                    _ => break 'events,
                 }
-
-                match event {
-                    NoteEvent::NoteOn { note, velocity, .. } => {
-                        // We don't keep a stack of notes right now. At some point we'll want to
-                        // make this polyphonic anyways.
-                        // TOOD: Also add an option to use velocity or poly pressure
-                        self.midi_note_id = Some(note);
-                        self.velocity_gain = if self.params.velocity_sensitive.value() {
-                            velocity / (100.0 / 127.0)
-                        } else {
-                            1.0
-                        };
-
-                        self.amp_envelope.soft_reset();
-                        self.amp_envelope.set_target(self.velocity_gain);
-
-                        // We'll copy audio to the playback buffer to match the pitch of the note
-                        // that was just played. The octave shift parameter makes it possible to get
-                        // larger window sizes.
-                        let note_frequency = util::midi_note_to_freq(note)
-                            * 2.0f32.powi(self.params.octave_shift.value());
-                        self.buffer
-                            .prepare_playback(note_frequency, self.params.crossfade_ms.value());
-                    }
-                    NoteEvent::NoteOff { note, .. } if self.midi_note_id == Some(note) => {
-                        // Playback still continues until the release is done.
-                        self.amp_envelope.start_release();
-                        self.midi_note_id = None;
-                    }
-                    NoteEvent::PolyVolume { note, gain, .. } if self.midi_note_id == Some(note) => {
-                        self.amp_envelope.set_target(self.velocity_gain * gain);
-                    }
-                    _ => (),
-                }
-
-                next_event = context.next_event();
             }
 
-            // When a note is being held, we'll replace the input audio with the looping contents of
-            // the playback buffer
-            // TODO: At some point also handle polyphony here
-            if self.midi_note_id.is_some() || self.amp_envelope.is_releasing() {
-                self.amp_envelope
-                    .set_attack_time(self.sample_rate, self.params.attack_ms.value());
-                self.amp_envelope
-                    .set_release_time(self.sample_rate, self.params.release_ms.value());
+            // The output buffer is filled with the active voices, so we need to read the inptu
+            // first
+            let block_len = block_end - block_start;
+            let mut input = [[0.0; MAX_BLOCK_SIZE]; 2];
+            input[0][..block_len].copy_from_slice(&output[0][block_start..block_end]);
+            input[1][..block_len].copy_from_slice(&output[1][block_start..block_end]);
 
-                // FIXME: This should fade in and out from the dry buffer
-                let gain = self.amp_envelope.next();
-                for (channel_idx, sample) in channel_samples.into_iter().enumerate() {
+            // These are buffers for per- per-voice smoothed values
+            let mut voice_amp_envelope = [0.0; MAX_BLOCK_SIZE];
+
+            // We'll empty the buffer, and then add the dry signal back in as needed
+            // TODO: Dry mixing
+            output[0][block_start..block_end].fill(0.0);
+            output[1][block_start..block_end].fill(0.0);
+            for voice in self.voices.iter_mut().filter(|v| v.is_active()) {
+                voice
+                    .amp_envelope
+                    .set_attack_time(self.sample_rate, self.params.attack_ms.value());
+                voice
+                    .amp_envelope
+                    .set_release_time(self.sample_rate, self.params.release_ms.value());
+                voice
+                    .amp_envelope
+                    .next_block(&mut voice_amp_envelope, block_len);
+
+                for (value_idx, sample_idx) in (block_start..block_end).enumerate() {
+                    let amp = voice.velocity_gain
+                        * voice.gain_expression_gain
+                        * voice_amp_envelope[value_idx];
+
                     // This will start recording on the first iteration, and then loop the recorded
                     // buffer afterwards
-                    let result = self.buffer.next_sample(channel_idx, *sample);
-
-                    *sample = result * gain;
-                }
-            } else {
-                for sample in channel_samples.into_iter() {
-                    *sample *= dry_amount;
+                    output[0][sample_idx] += voice.buffer.next_sample(0, input[0][value_idx]) * amp;
+                    output[1][sample_idx] += voice.buffer.next_sample(1, input[1][value_idx]) * amp;
                 }
             }
+
+            // And then just keep processing blocks until we've run out of buffer to fill
+            block_start = block_end;
+            block_end = (block_start + MAX_BLOCK_SIZE).min(num_samples);
         }
 
         ProcessStatus::Normal
+    }
+}
+
+impl BuffrGlitch {
+    /// Find the ID of a voice that is either unused or that is quietest if all voices are in use.
+    /// This does not do anything to the voice to end it.
+    pub fn new_voice_id(&self) -> usize {
+        for (voice_id, voice) in self.voices.iter().enumerate() {
+            if !voice.is_active() {
+                return voice_id;
+            }
+        }
+
+        let mut quietest_voice_id = 0;
+        let mut quiested_voice_amplitude = f32::MAX;
+        for (voice_id, voice) in self.voices.iter().enumerate() {
+            if voice.amp_envelope.current() < quiested_voice_amplitude {
+                quietest_voice_id = voice_id;
+                quiested_voice_amplitude = voice.amp_envelope.current();
+            }
+        }
+
+        quietest_voice_id
+    }
+}
+
+impl Voice {
+    /// Prepare playback on ntoe on.
+    pub fn note_on(&mut self, params: &BuffrGlitchParams, midi_note_id: u8, velocity: f32) {
+        self.midi_note_id = Some(midi_note_id);
+        self.velocity_gain = if params.velocity_sensitive.value() {
+            velocity / (100.0 / 127.0)
+        } else {
+            1.0
+        };
+        self.gain_expression_gain = 1.0;
+        self.amp_envelope.reset();
+
+        // We'll copy audio to the playback buffer to match the pitch of the note
+        // that was just played. The octave shift parameter makes it possible to get
+        // larger window sizes.
+        let note_frequency =
+            util::midi_note_to_freq(midi_note_id) * 2.0f32.powi(params.octave_shift.value());
+        self.buffer
+            .prepare_playback(note_frequency, params.crossfade_ms.value());
+    }
+
+    /// Start releasing the note.
+    pub fn note_off(&mut self) {
+        self.amp_envelope.start_release();
+        self.midi_note_id = None;
+    }
+
+    /// Whether the voice is (still) active.
+    pub fn is_active(&self) -> bool {
+        self.midi_note_id.is_some() || self.amp_envelope.is_releasing()
     }
 }
 
