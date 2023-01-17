@@ -283,14 +283,14 @@ impl Plugin for BuffrGlitch {
             input[0][..block_len].copy_from_slice(&output[0][block_start..block_end]);
             input[1][..block_len].copy_from_slice(&output[1][block_start..block_end]);
 
-            // These are buffers for per- per-voice smoothed values
-            let mut voice_amp_envelope = [0.0; MAX_BLOCK_SIZE];
+            // The dry signal is mixed back in depending on th maximum voice amplitude envelope
+            let mut max_voice_amp_envelope = [0.0f32; MAX_BLOCK_SIZE];
 
             // We'll empty the buffer, and then add the dry signal back in as needed
-            // TODO: Dry mixing
             output[0][block_start..block_end].fill(0.0);
             output[1][block_start..block_end].fill(0.0);
             for voice in self.voices.iter_mut().filter(|v| v.is_active()) {
+                let mut voice_amp_envelope = [0.0; MAX_BLOCK_SIZE];
                 voice
                     .amp_envelope
                     .set_attack_time(self.sample_rate, self.params.attack_ms.value());
@@ -302,6 +302,8 @@ impl Plugin for BuffrGlitch {
                     .next_block(&mut voice_amp_envelope, block_len);
 
                 for (value_idx, sample_idx) in (block_start..block_end).enumerate() {
+                    max_voice_amp_envelope[value_idx] =
+                        max_voice_amp_envelope[value_idx].max(voice_amp_envelope[value_idx]);
                     let amp = voice.velocity_gain
                         * voice.gain_expression_gain
                         * voice_amp_envelope[value_idx];
@@ -311,6 +313,19 @@ impl Plugin for BuffrGlitch {
                     output[0][sample_idx] += voice.buffer.next_sample(0, input[0][value_idx]) * amp;
                     output[1][sample_idx] += voice.buffer.next_sample(1, input[1][value_idx]) * amp;
                 }
+            }
+
+            // The dry signal is mixed back in depending on the amplitude of the currently playing
+            // voices
+            let mut dry_level = [0.0; MAX_BLOCK_SIZE];
+            self.params
+                .dry_level
+                .smoothed
+                .next_block(&mut dry_level, block_len);
+            for (value_idx, sample_idx) in (block_start..block_end).enumerate() {
+                let gain = (1.0 - max_voice_amp_envelope[value_idx]) * dry_level[value_idx];
+                output[0][sample_idx] += input[0][value_idx] * gain;
+                output[1][sample_idx] += input[1][value_idx] * gain;
             }
 
             // And then just keep processing blocks until we've run out of buffer to fill
