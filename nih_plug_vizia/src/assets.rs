@@ -26,7 +26,9 @@ pub const NOTO_SANS_LIGHT: &str = "Noto Sans Light";
 pub const NOTO_SANS_LIGHT_ITALIC: &str = "Noto Sans Light Italic";
 /// The font name for Noto Sans Bold, needs to be registered using [`register_noto_sans_bold()`]
 /// first.
-pub const NOTO_SANS_BOLD: &str = "Noto Sans Bold";
+// NOTE: I'd expect this to be an alias for Noto Sans Regular but this is what cosmic-text thinks
+//       the font is called
+pub const NOTO_SANS_BOLD: &str = "Noto Sans";
 /// The font name for Noto Sans Bold Italic, needs to be registered using
 /// [`register_noto_sans_bold_italic()`] first.
 pub const NOTO_SANS_BOLD_ITALIC: &str = "Noto Sans Bold Italic";
