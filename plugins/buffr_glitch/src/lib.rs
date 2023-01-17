@@ -352,14 +352,33 @@ impl BuffrGlitch {
             }
         }
 
-        let mut quietest_voice_id = 0;
-        let mut quiested_voice_amplitude = f32::MAX;
-        for (voice_id, voice) in self.voices.iter().enumerate() {
-            if voice.amp_envelope.current() < quiested_voice_amplitude {
-                quietest_voice_id = voice_id;
-                quiested_voice_amplitude = voice.amp_envelope.current();
-            }
+        // Prefer stealing releasing voices if possible
+        if let Some((quietest_voice_id, _)) = self
+            .voices
+            .iter()
+            .enumerate()
+            .filter(|(_, voice)| voice.amp_envelope.is_releasing())
+            .min_by(|(_, voice_a), (_, voice_b)| {
+                f32::total_cmp(
+                    &voice_a.amp_envelope.current(),
+                    &voice_b.amp_envelope.current(),
+                )
+            })
+        {
+            return quietest_voice_id;
         }
+
+        let (quietest_voice_id, _) = self
+            .voices
+            .iter()
+            .enumerate()
+            .min_by(|(_, voice_a), (_, voice_b)| {
+                f32::total_cmp(
+                    &voice_a.amp_envelope.current(),
+                    &voice_b.amp_envelope.current(),
+                )
+            })
+            .unwrap();
 
         quietest_voice_id
     }
