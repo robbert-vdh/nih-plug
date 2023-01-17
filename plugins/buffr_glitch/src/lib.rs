@@ -18,6 +18,7 @@ use nih_plug::prelude::*;
 use std::sync::Arc;
 
 mod buffer;
+mod envelope;
 
 /// The maximum number of octaves the sample can be pitched down. This is used in calculating the
 /// recording buffer's size.
@@ -37,8 +38,9 @@ struct BuffrGlitch {
     /// The gain scaling from the velocity. If velocity sensitive mode is enabled, then this is the `[0, 1]` velocity
     /// devided by `100/127` such that MIDI velocity 100 corresponds to 1.0 gain.
     velocity_gain: f32,
-    /// The gain from the gain note expression.
-    gain_expression_gain: f32,
+    /// The envelope genrator used during playback. This handles both gain smoothing as well as fade
+    /// ins and outs to prevent clicks.
+    amp_envelope: envelope::AREnvelope,
 }
 
 #[derive(Params)]
@@ -55,6 +57,14 @@ struct BuffrGlitchParams {
     #[id = "octave_shift"]
     octave_shift: IntParam,
 
+    /// The attack time in milliseconds. Useful to avoid clicks. Or to introduce them if that's
+    /// aesthetically pleasing.
+    #[id = "attack_ms"]
+    attack_ms: FloatParam,
+    /// The attack time in milliseconds. Useful to avoid clicks. Or to introduce them if that's
+    /// aesthetically pleasing.
+    #[id = "release_ms"]
+    release_ms: FloatParam,
     /// The length of the loop crossfade to use, in milliseconds. This will cause the start of the
     /// loop to be faded into the last `(crossfade_ms/2)` ms of the loop region, and the part after
     /// the end to be faded into the first `(crossfade_ms/2)` ms of the loop after the first
@@ -73,7 +83,7 @@ impl Default for BuffrGlitch {
 
             midi_note_id: None,
             velocity_gain: 1.0,
-            gain_expression_gain: 1.0,
+            amp_envelope: envelope::AREnvelope::default(),
         }
     }
 }
@@ -103,9 +113,32 @@ impl Default for BuffrGlitchParams {
                     max: MAX_OCTAVE_SHIFT as i32,
                 },
             ),
+
+            attack_ms: FloatParam::new(
+                "Attack",
+                2.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 50.0,
+                    factor: FloatRange::skew_factor(-2.5),
+                },
+            )
+            .with_unit(" ms")
+            .with_step_size(0.001),
+            release_ms: FloatParam::new(
+                "Release",
+                2.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 50.0,
+                    factor: FloatRange::skew_factor(-2.5),
+                },
+            )
+            .with_unit(" ms")
+            .with_step_size(0.001),
             crossfade_ms: FloatParam::new(
                 "Crossfade",
-                0.0,
+                2.0,
                 FloatRange::Skewed {
                     min: 0.0,
                     max: 50.0,
@@ -160,6 +193,7 @@ impl Plugin for BuffrGlitch {
     fn reset(&mut self) {
         self.buffer.reset();
         self.midi_note_id = None;
+        self.amp_envelope.reset();
     }
 
     fn process(
@@ -190,7 +224,9 @@ impl Plugin for BuffrGlitch {
                         } else {
                             1.0
                         };
-                        self.gain_expression_gain = 1.0;
+
+                        self.amp_envelope.soft_reset();
+                        self.amp_envelope.set_target(self.velocity_gain);
 
                         // We'll copy audio to the playback buffer to match the pitch of the note
                         // that was just played. The octave shift parameter makes it possible to get
@@ -201,11 +237,12 @@ impl Plugin for BuffrGlitch {
                             .prepare_playback(note_frequency, self.params.crossfade_ms.value());
                     }
                     NoteEvent::NoteOff { note, .. } if self.midi_note_id == Some(note) => {
-                        // A NoteOff for the currently playing note immediately ends playback
+                        // Playback still continues until the release is done.
+                        self.amp_envelope.start_release();
                         self.midi_note_id = None;
                     }
                     NoteEvent::PolyVolume { note, gain, .. } if self.midi_note_id == Some(note) => {
-                        self.gain_expression_gain = gain;
+                        self.amp_envelope.set_target(self.velocity_gain * gain);
                     }
                     _ => (),
                 }
@@ -216,10 +253,14 @@ impl Plugin for BuffrGlitch {
             // When a note is being held, we'll replace the input audio with the looping contents of
             // the playback buffer
             // TODO: At some point also handle polyphony here
-            if self.midi_note_id.is_some() {
-                // TOOD: This needs to be smoothed, but we this should be part of a proper gain
-                //       envelope
-                let gain = self.velocity_gain * self.gain_expression_gain;
+            if self.midi_note_id.is_some() || self.amp_envelope.is_releasing() {
+                self.amp_envelope
+                    .set_attack_time(self.sample_rate, self.params.attack_ms.value());
+                self.amp_envelope
+                    .set_release_time(self.sample_rate, self.params.release_ms.value());
+
+                // FIXME: This should fade in and out from the dry buffer
+                let gain = self.amp_envelope.next();
                 for (channel_idx, sample) in channel_samples.into_iter().enumerate() {
                     // This will start recording on the first iteration, and then loop the recorded
                     // buffer afterwards

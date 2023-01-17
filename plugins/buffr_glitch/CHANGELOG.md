@@ -12,6 +12,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Added an option to crossfade the recorded buffer to avoid clicks when looping
   around.
+- Added attack and release time controls to avoid clicks when pressing or
+  releasing a key.
 - Added an optional velocity sensitive mode.
 
 ### Removed
