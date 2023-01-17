@@ -48,8 +48,8 @@ struct Voice {
     /// The gain scaling from the velocity. If velocity sensitive mode is enabled, then this is the `[0, 1]` velocity
     /// devided by `100/127` such that MIDI velocity 100 corresponds to 1.0 gain.
     velocity_gain: f32,
-    /// The gain from the gain note expression. This is not smoothed right now.
-    gain_expression_gain: f32,
+    /// The gain from the gain note expression.
+    gain_expression_gain: Smoother<f32>,
     /// The envelope genrator used during playback. Produces a `[0, 1]` result.
     amp_envelope: envelope::AREnvelope,
 }
@@ -102,7 +102,8 @@ impl Default for Voice {
 
             midi_note_id: None,
             velocity_gain: 1.0,
-            gain_expression_gain: 1.0,
+            // This is initialized in `initialize()` since this relies on the sample rate
+            gain_expression_gain: Smoother::new(SmoothingStyle::Linear(5.0)),
             amp_envelope: envelope::AREnvelope::default(),
         }
     }
@@ -215,9 +216,7 @@ impl Plugin for BuffrGlitch {
 
     fn reset(&mut self) {
         for voice in &mut self.voices {
-            voice.buffer.reset();
-            voice.midi_note_id = None;
-            voice.amp_envelope.reset();
+            voice.reset();
         }
     }
 
@@ -256,7 +255,9 @@ impl Plugin for BuffrGlitch {
                             NoteEvent::PolyVolume { note, gain, .. } => {
                                 for voice in &mut self.voices {
                                     if voice.midi_note_id == Some(note) {
-                                        voice.gain_expression_gain = gain;
+                                        voice
+                                            .gain_expression_gain
+                                            .set_target(self.sample_rate, gain);
                                         break;
                                     }
                                 }
@@ -300,12 +301,16 @@ impl Plugin for BuffrGlitch {
                 voice
                     .amp_envelope
                     .next_block(&mut voice_amp_envelope, block_len);
+                let mut voice_gain_expression_gain = [0.0; MAX_BLOCK_SIZE];
+                voice
+                    .gain_expression_gain
+                    .next_block(&mut voice_gain_expression_gain, block_len);
 
                 for (value_idx, sample_idx) in (block_start..block_end).enumerate() {
                     max_voice_amp_envelope[value_idx] =
                         max_voice_amp_envelope[value_idx].max(voice_amp_envelope[value_idx]);
                     let amp = voice.velocity_gain
-                        * voice.gain_expression_gain
+                        * voice_gain_expression_gain[value_idx]
                         * voice_amp_envelope[value_idx];
 
                     // This will start recording on the first iteration, and then loop the recorded
@@ -361,6 +366,12 @@ impl BuffrGlitch {
 }
 
 impl Voice {
+    pub fn reset(&mut self) {
+        self.buffer.reset();
+        self.midi_note_id = None;
+        self.amp_envelope.reset();
+    }
+
     /// Prepare playback on ntoe on.
     pub fn note_on(&mut self, params: &BuffrGlitchParams, midi_note_id: u8, velocity: f32) {
         self.midi_note_id = Some(midi_note_id);
@@ -369,7 +380,7 @@ impl Voice {
         } else {
             1.0
         };
-        self.gain_expression_gain = 1.0;
+        self.gain_expression_gain.reset(1.0);
         self.amp_envelope.reset();
 
         // We'll copy audio to the playback buffer to match the pitch of the note
