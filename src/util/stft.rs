@@ -452,7 +452,7 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
                     // longer than the block size, then this will cause everything else to be
                     // shifted to the left so it can be added in the iteration after this.
                     if self.padding > 0 {
-                        let padding_to_copy = cmp::min(self.padding, block_size);
+                        let padding_to_copy = cmp::max(self.padding, block_size);
                         for (scratch_sample, padding_sample) in self.scratch_buffer
                             [..padding_to_copy]
                             .iter_mut()
@@ -463,7 +463,7 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
 
                         let remaining_padding = padding_to_copy - self.padding;
                         if remaining_padding > 0 {
-                            padding_buffer.copy_within(..padding_to_copy, 0);
+                            padding_buffer.copy_within(..self.padding, 0);
                         }
 
                         // And we obviously don't want this to feedback
