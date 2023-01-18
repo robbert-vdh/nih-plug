@@ -58,6 +58,7 @@ pub struct StftHelper<const NUM_SIDECHAIN_INPUTS: usize = 0> {
 }
 
 /// Marker struct for the version without sidechaining.
+#[derive(Clone, Copy)]
 struct NoSidechain;
 
 impl StftInput for Buffer<'_> {
