@@ -447,10 +447,10 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
                 // start with copying the wrapped ranges from our ring buffers to the scratch
                 // buffer. Then we apply the windowing function and this it along to
                 for (sidechain_idx, sidechain_ring_buffers) in
-                    self.sidechain_ring_buffers.iter().enumerate()
+                self.sidechain_ring_buffers.iter().enumerate()
                 {
                     for (channel_idx, sidechain_ring_buffer) in
-                        sidechain_ring_buffers.iter().enumerate()
+                    sidechain_ring_buffers.iter().enumerate()
                     {
                         copy_ring_to_scratch_buffer(
                             &mut self.scratch_buffer,
@@ -580,7 +580,7 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
 
             if samples_to_process == samples_until_next_window {
                 for (channel_idx, input_ring_buffer) in
-                    self.main_input_ring_buffers.iter().enumerate()
+                self.main_input_ring_buffers.iter().enumerate()
                 {
                     copy_ring_to_scratch_buffer(
                         &mut self.scratch_buffer,
