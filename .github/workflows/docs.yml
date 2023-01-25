@@ -48,15 +48,12 @@ jobs:
         # Nightly is needed to document the SIMD feature and for the
         # `doc_auto_cfg` feature
         uses: dtolnay/rust-toolchain@nightly
-      - name: Build all targets
-        uses: actions-rs/cargo@v1
-        with:
-          command: doc
-          # Don't use --all-features here as that will enable a whole bunch of
-          # conflicting iced features. We also don't want to use `--workspace`
-          # here because that would also document our plugins and binary crates.
-          args: >-
-            --features docs,simd,standalone,zstd --no-deps
+      - name: Generate documentation for all targets
+        # Don't use --all-features here as that will enable a whole bunch of
+        # conflicting iced features. We also don't want to use `--workspace`
+        # here because that would also document our plugins and binary crates.
+        run: >-
+          cargo doc --features docs,simd,standalone,zstd --no-deps
             -p nih_plug
             -p nih_plug_derive
             -p nih_plug_egui

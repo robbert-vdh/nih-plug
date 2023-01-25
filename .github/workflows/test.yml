@@ -52,15 +52,7 @@ jobs:
       - name: Set up Rust toolchain
         # Needed for SIMD
         uses: dtolnay/rust-toolchain@nightly
-      - name: Build all targets
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          # Don't use --all-features as that will enable a whole bunch of
-          # conflicting iced features
-          args: --workspace --features "simd,standalone,zstd"
       - name: Run the tests
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --workspace
+        # Don't use --all-features as that will enable a whole bunch of
+        # conflicting iced features
+        run: cargo test --workspace --features "simd,standalone,zstd"
