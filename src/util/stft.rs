@@ -182,15 +182,16 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
     /// Initialize the [`StftHelper`] for [`Buffer`]s with the specified number of channels and the
     /// given maximum block size. When the option is set, then every yielded sample buffer will have
     /// this many zero samples appended at the end of the block. Call
-    /// [`set_block_size()`][`Self::set_block_size()`] afterwards if you do not need the full
-    /// capacity upfront. If the padding option is non zero, then all yielded blocks will have that
-    /// many zeroes added to the end of it and the results stored in the padding area will be added
-    /// to the outputs in the next iteration(s).
+    /// [`set_block_size()`][Self::set_block_size()] afterwards if you do not need the full capacity
+    /// upfront. If the padding option is non zero, then all yielded blocks will have that many
+    /// zeroes added to the end of it and the results stored in the padding area will be added to
+    /// the outputs in the next iteration(s). You may also change how much padding is added with
+    /// [`set_padding()`][Self::set_padding()].
     ///
     /// # Panics
     ///
     /// Panics if `num_channels == 0 || max_block_size == 0`.
-    pub fn new(num_channels: usize, max_block_size: usize, padding: usize) -> Self {
+    pub fn new(num_channels: usize, max_block_size: usize, max_padding: usize) -> Self {
         assert_ne!(num_channels, 0);
         assert_ne!(max_block_size, 0);
 
@@ -203,11 +204,11 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
 
             // When padding is used this scratch buffer will have a bunch of zeroes added to it
             // after copying a block of audio to it
-            scratch_buffer: vec![0.0; max_block_size + padding],
-            padding_buffers: vec![vec![0.0; padding]; num_channels],
+            scratch_buffer: vec![0.0; max_block_size + max_padding],
+            padding_buffers: vec![vec![0.0; max_padding]; num_channels],
 
             current_pos: 0,
-            padding,
+            padding: max_padding,
         }
     }
 
@@ -216,33 +217,23 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
     ///
     /// # Panics
     ///
-    /// WIll panic if `block_size > max_block_size`.
+    /// Will panic if `block_size > max_block_size`.
     pub fn set_block_size(&mut self, block_size: usize) {
         assert!(block_size <= self.main_input_ring_buffers[0].capacity());
 
-        for main_ring_buffer in &mut self.main_input_ring_buffers {
-            main_ring_buffer.resize(block_size, 0.0);
-            main_ring_buffer.fill(0.0);
-        }
-        for main_ring_buffer in &mut self.main_output_ring_buffers {
-            main_ring_buffer.resize(block_size, 0.0);
-            main_ring_buffer.fill(0.0);
-        }
-        for sidechain_ring_buffers in &mut self.sidechain_ring_buffers {
-            for sidechain_ring_buffer in sidechain_ring_buffers {
-                sidechain_ring_buffer.resize(block_size, 0.0);
-                sidechain_ring_buffer.fill(0.0);
-            }
-        }
-        self.scratch_buffer.resize(block_size + self.padding, 0.0);
-        self.scratch_buffer.fill(0.0);
+        self.update_buffers(block_size, self.padding);
+    }
 
-        // For consistency's sake we'll also clear this here
-        for padding_buffer in &mut self.padding_buffers {
-            padding_buffer.fill(0.0);
-        }
+    /// Change the current padding amount. This will clear the buffers, causing the next block to
+    /// output silence.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if `padding > max_padding`.
+    pub fn set_padding(&mut self, padding: usize) {
+        assert!(padding <= self.padding_buffers[0].capacity());
 
-        self.current_pos = 0;
+        self.update_buffers(self.main_input_ring_buffers[0].len(), padding);
     }
 
     /// The number of channels this `StftHelper` was configured for
@@ -558,6 +549,32 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
                 }
             }
         }
+    }
+
+    fn update_buffers(&mut self, block_size: usize, padding: usize) {
+        for main_ring_buffer in &mut self.main_input_ring_buffers {
+            main_ring_buffer.resize(block_size, 0.0);
+            main_ring_buffer.fill(0.0);
+        }
+        for main_ring_buffer in &mut self.main_output_ring_buffers {
+            main_ring_buffer.resize(block_size, 0.0);
+            main_ring_buffer.fill(0.0);
+        }
+        for sidechain_ring_buffers in &mut self.sidechain_ring_buffers {
+            for sidechain_ring_buffer in sidechain_ring_buffers {
+                sidechain_ring_buffer.resize(block_size, 0.0);
+                sidechain_ring_buffer.fill(0.0);
+            }
+        }
+        self.scratch_buffer.resize(block_size + self.padding, 0.0);
+        self.scratch_buffer.fill(0.0);
+
+        for padding_buffer in &mut self.padding_buffers {
+            padding_buffer.resize(padding, 0.0);
+            padding_buffer.fill(0.0);
+        }
+
+        self.current_pos = 0;
     }
 }
 
