@@ -12,7 +12,7 @@ defaults:
 
 jobs:
   docs:
-    name: Build and test all components
+    name: Generate and upload docs
     runs-on: ubuntu-18.04
     steps:
       - uses: actions/checkout@v3
@@ -54,12 +54,12 @@ jobs:
         # here because that would also document our plugins and binary crates.
         run: >-
           cargo doc --features docs,simd,standalone,zstd --no-deps
-            -p nih_plug
-            -p nih_plug_derive
-            -p nih_plug_egui
-            -p nih_plug_iced
-            -p nih_plug_vizia
-            -p nih_plug_xtask
+          -p nih_plug
+          -p nih_plug_derive
+          -p nih_plug_egui
+          -p nih_plug_iced
+          -p nih_plug_vizia
+          -p nih_plug_xtask
 
       - name: Add a redirect index page
         run: |
