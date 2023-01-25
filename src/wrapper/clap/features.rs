@@ -7,6 +7,7 @@
 pub enum ClapFeature {
     Instrument,
     AudioEffect,
+    NoteDetector,
     NoteEffect,
     Analyzer,
     Synthesizer,
@@ -51,6 +52,7 @@ impl ClapFeature {
         match self {
             ClapFeature::Instrument => "instrument",
             ClapFeature::AudioEffect => "audio-effect",
+            ClapFeature::NoteDetector => "note-detector",
             ClapFeature::NoteEffect => "note-effect",
             ClapFeature::Analyzer => "analyzer",
             ClapFeature::Synthesizer => "synthesizer",
