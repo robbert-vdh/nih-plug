@@ -461,13 +461,12 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
                             *scratch_sample += *padding_sample;
                         }
 
-                        let remaining_padding = padding_to_copy - self.padding;
-                        if remaining_padding > 0 {
-                            padding_buffer.copy_within(..padding_to_copy, 0);
-                        }
+                        // Any remaining padding tail should be moved towards the start of the
+                        // buffer
+                        padding_buffer.copy_within(padding_to_copy.., 0);
 
                         // And we obviously don't want this to feedback
-                        padding_buffer[remaining_padding..].fill(0.0);
+                        padding_buffer[self.padding - padding_to_copy..].fill(0.0);
                     }
 
                     // The actual overlap-add part of the equation
