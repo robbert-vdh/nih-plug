@@ -2,12 +2,6 @@ name: Tests
 
 on:
   push:
-    branches:
-      - '**'
-    tags:
-      # Run when pushing version tags, since otherwise it's impossible to
-      # restart a successful build after pushing a tag
-      - '*.*.*'
   pull_request:
     branches:
       - master
