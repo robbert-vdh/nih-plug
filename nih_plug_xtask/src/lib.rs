@@ -14,7 +14,7 @@ mod util;
 /// Re-export for the main function.
 pub use anyhow::Result;
 
-/// The base birectory for the bundler's output.
+/// The base directory for the bundler's output.
 const BUNDLE_HOME: &str = "target/bundled";
 
 fn build_usage_string(command_name: &str) -> String {
@@ -87,7 +87,7 @@ pub fn main_with_args(command_name: &str, args: impl IntoIterator<Item = String>
     match command.as_str() {
         "bundle" => {
             // For convenience's sake we'll allow building multiple packages with `-p` just like
-            // carg obuild, but you can also build a single package without specifying `-p`. Since
+            // cargo build, but you can also build a single package without specifying `-p`. Since
             // multiple packages can be built in parallel if we pass all of these flags to a single
             // `cargo build` we'll first build all of these packages and only then bundle them.
             let (packages, other_args) = split_bundle_args(args, &usage_string)?;
@@ -180,8 +180,8 @@ pub fn chdir_workspace_root() -> Result<()> {
         .context("Could not change to workspace root directory")
 }
 
-/// Build one or more packages using the provided `cargo build` arguments. This should be caleld
-/// before callingq [`bundle()`]. This requires the current working directory to have been set to
+/// Build one or more packages using the provided `cargo build` arguments. This should be called
+/// before calling [`bundle()`]. This requires the current working directory to have been set to
 /// the workspace's root using [`chdir_workspace_root()`].
 pub fn build(packages: &[String], args: &[String]) -> Result<()> {
     let package_args = packages.iter().flat_map(|package| ["-p", package]);
@@ -314,7 +314,7 @@ pub fn bundle(package: &str, args: &[String], universal: bool) -> Result<()> {
 }
 
 /// Bundle a standalone target. If `bin_path` contains more than one path, then the binaries will be
-/// combined into a single binary using a method that depends on the compiilation target. For
+/// combined into a single binary using a method that depends on the compilation target. For
 /// universal macOS builds this uses lipo.
 fn bundle_binary(
     package: &str,
@@ -377,7 +377,7 @@ fn bundle_binary(
 
 /// Bundle all plugin targets for a plugin library. If `lib_path` contains more than one path, then
 /// the libraries will be combined into a single library using a method that depends on the
-/// compiilation target. For universal macOS builds this uses lipo.
+/// compilation target. For universal macOS builds this uses lipo.
 fn bundle_plugin(
     package: &str,
     lib_paths: &[&Path],
@@ -388,15 +388,15 @@ fn bundle_plugin(
         _ => package.to_string(),
     };
 
-    // We'll detect the pugin formats supported by the plugin binary and create bundled accordingly.
-    // If `lib_path` contains paths to multiple plugins that need to be comined into a macOS
+    // We'll detect the plugin formats supported by the plugin binary and create bundled accordingly.
+    // If `lib_path` contains paths to multiple plugins that need to be combined into a macOS
     // universal binary, then we'll assume all of them export the same symbols and only check the
     // first one.
     let first_lib_path = lib_paths.first().context("Empty library paths slice")?;
 
     let bundle_clap = symbols::exported(first_lib_path, "clap_entry")
         .with_context(|| format!("Could not parse '{}'", first_lib_path.display()))?;
-    // We'll ignore the platofrm-specific entry points for VST2 plugins since there's no reason to
+    // We'll ignore the platform-specific entry points for VST2 plugins since there's no reason to
     // create a new Rust VST2 plugin that doesn't work in modern DAWs
     // NOTE: NIH-plug does not support VST2, but we'll support bundling VST2 plugins anyways because
     //       this bundler can also be used standalone.
