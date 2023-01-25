@@ -19,7 +19,7 @@ jobs:
     name: Build and test all components
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       # Needed for git-describe to do anything useful
       - name: Fetch all git history
         run: git fetch --force --prune --tags --unshallow
@@ -30,7 +30,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libasound2-dev libgl-dev libjack-dev libxcb1-dev libxcb-icccm4-dev libxcursor-dev libxkbcommon-dev libxcb-shape0-dev libxcb-xfixes0-dev
 
-      - uses: actions/cache@v2
+      - uses: actions/cache@v3
         # FIXME: Caching `target/` causes the Windows runner to blow up after some time
         if: startsWith(matrix.os, 'windows')
         with:
@@ -39,7 +39,7 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
           key: ${{ matrix.name }}-${{ matrix.cross-target }}
-      - uses: actions/cache@v2
+      - uses: actions/cache@v3
         if: "!startsWith(matrix.os, 'windows')"
         with:
           path: |
@@ -50,23 +50,9 @@ jobs:
           key: ${{ matrix.name }}-${{ matrix.cross-target }}
 
       - name: Set up Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          # FIXME: Needed for SIMD. Diopser can be compiled without SIMD support
-          #        though, we'd actually need to test whether both versions
-          #        compile
-          toolchain: nightly
-          profile: minimal
-          default: true
-      - name: Build all targets
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          # Don't use --all-features as that will enable a whole bunch of
-          # conflicting iced features
-          args: --workspace --features "simd,standalone,zstd"
+        # Needed for SIMD
+        uses: dtolnay/rust-toolchain@nightly
       - name: Run the tests
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --workspace
+        # Don't use --all-features as that will enable a whole bunch of
+        # conflicting iced features
+        run: cargo test --workspace --features "simd,standalone,zstd"

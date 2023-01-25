@@ -15,7 +15,7 @@ jobs:
     name: Build and test all components
     runs-on: ubuntu-18.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       # Needed for git-describe to do anything useful
       - name: Fetch all git history
         run: git fetch --force --prune --tags --unshallow
@@ -25,7 +25,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libasound2-dev libgl-dev libjack-dev libxcb1-dev libxcb-icccm4-dev libxcursor-dev libxkbcommon-dev libxcb-shape0-dev libxcb-xfixes0-dev
 
-      - uses: actions/cache@v2
+      - uses: actions/cache@v3
         # FIXME: Caching `target/` causes the Windows runner to blow up after some time
         if: startsWith(matrix.os, 'windows')
         with:
@@ -34,7 +34,7 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
           key: ${{ matrix.name }}-${{ matrix.cross-target }}
-      - uses: actions/cache@v2
+      - uses: actions/cache@v3
         if: "!startsWith(matrix.os, 'windows')"
         with:
           path: |
@@ -45,22 +45,15 @@ jobs:
           key: ${{ matrix.name }}-${{ matrix.cross-target }}
 
       - name: Set up Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          # Nightly is needed to document the SIMD feature and for the
-          # `doc_auto_cfg` feature
-          toolchain: nightly
-          profile: minimal
-          default: true
-      - name: Build all targets
-        uses: actions-rs/cargo@v1
-        with:
-          command: doc
-          # Don't use --all-features here as that will enable a whole bunch of
-          # conflicting iced features. We also don't want to use `--workspace`
-          # here because that would also document our plugins and binary crates.
-          args: >-
-            --features docs,simd,standalone,zstd --no-deps
+        # Nightly is needed to document the SIMD feature and for the
+        # `doc_auto_cfg` feature
+        uses: dtolnay/rust-toolchain@nightly
+      - name: Generate documentation for all targets
+        # Don't use --all-features here as that will enable a whole bunch of
+        # conflicting iced features. We also don't want to use `--workspace`
+        # here because that would also document our plugins and binary crates.
+        run: >-
+          cargo doc --features docs,simd,standalone,zstd --no-deps
             -p nih_plug
             -p nih_plug_derive
             -p nih_plug_egui
