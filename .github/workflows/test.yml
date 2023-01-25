@@ -50,14 +50,8 @@ jobs:
           key: ${{ matrix.name }}-${{ matrix.cross-target }}
 
       - name: Set up Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          # FIXME: Needed for SIMD. Diopser can be compiled without SIMD support
-          #        though, we'd actually need to test whether both versions
-          #        compile
-          toolchain: nightly
-          profile: minimal
-          default: true
+        # Needed for SIMD
+        uses: dtolnay/rust-toolchain@nightly
       - name: Build all targets
         uses: actions-rs/cargo@v1
         with:

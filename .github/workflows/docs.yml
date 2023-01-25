@@ -45,13 +45,9 @@ jobs:
           key: ${{ matrix.name }}-${{ matrix.cross-target }}
 
       - name: Set up Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          # Nightly is needed to document the SIMD feature and for the
-          # `doc_auto_cfg` feature
-          toolchain: nightly
-          profile: minimal
-          default: true
+        # Nightly is needed to document the SIMD feature and for the
+        # `doc_auto_cfg` feature
+        uses: dtolnay/rust-toolchain@nightly
       - name: Build all targets
         uses: actions-rs/cargo@v1
         with:

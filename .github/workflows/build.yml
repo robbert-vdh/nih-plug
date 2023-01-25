@@ -57,17 +57,12 @@ jobs:
           key: ${{ matrix.name }}-${{ matrix.cross-target }}
 
       - name: Set up Rust toolchain
-        uses: actions-rs/toolchain@v1
+        # Needed for SIMD
+        uses: dtolnay/rust-toolchain@nightly
         with:
-          # FIXME: Needed for SIMD. Diopser can be compiled without SIMD support
-          #        though, we'd actually need to test whether both versions
-          #        compile
-          toolchain: nightly
-          profile: minimal
-          default: true
-          # The macOS AArch64/universal build is done from an x86_64 macOS CI
-          # runner, so it needs to be cross compiled
-          target: ${{ matrix.cross-target }}
+          # The macOS AArch64 build is done from an x86_64 macOS CI runner, so
+          # it needs to be cross compiled
+          targets: ${{ matrix.cross-target }}
       - name: Package all targets from bundler.toml
         # Instead of hardcoding which targets to build and package, we'll
         # package everything that's got en entry in the `bundler.toml` file
