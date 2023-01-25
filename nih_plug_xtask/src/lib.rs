@@ -334,7 +334,7 @@ fn bundle_binary(
     fs::create_dir_all(standalone_binary_path.parent().unwrap())
         .context("Could not create standalone bundle directory")?;
     util::reflink_or_combine(bin_paths, &standalone_binary_path, compilation_target)
-        .context("Could not create standaloen bundle")?;
+        .context("Could not create standalone bundle")?;
 
     // FIXME: The reflink crate seems to sometime strip away the executable bit, so we need to help
     //        it a little here
