@@ -242,9 +242,14 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
         self.main_input_ring_buffers.len()
     }
 
-    /// The maximum block size supported by this `StftHelper`.
+    /// The maximum block size supported by this instance.
     pub fn max_block_size(&self) -> usize {
         self.main_input_ring_buffers.capacity()
+    }
+
+    /// The maximum amount of padding supported by this instance.
+    pub fn max_padding(&self) -> usize {
+        self.padding_buffers[0].capacity()
     }
 
     /// The amount of latency introduced when processing audio through this [`StftHelper`].
