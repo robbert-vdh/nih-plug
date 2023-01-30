@@ -221,7 +221,7 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
     pub fn set_block_size(&mut self, block_size: usize) {
         assert!(block_size <= self.main_input_ring_buffers[0].capacity());
 
-        self.update_buffers(block_size, self.padding);
+        self.update_buffers(block_size);
     }
 
     /// Change the current padding amount. This will clear the buffers, causing the next block to
@@ -233,7 +233,8 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
     pub fn set_padding(&mut self, padding: usize) {
         assert!(padding <= self.padding_buffers[0].capacity());
 
-        self.update_buffers(self.main_input_ring_buffers[0].len(), padding);
+        self.padding = padding;
+        self.update_buffers(self.main_input_ring_buffers[0].len());
     }
 
     /// The number of channels this `StftHelper` was configured for
@@ -551,7 +552,7 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
         }
     }
 
-    fn update_buffers(&mut self, block_size: usize, padding: usize) {
+    fn update_buffers(&mut self, block_size: usize) {
         for main_ring_buffer in &mut self.main_input_ring_buffers {
             main_ring_buffer.resize(block_size, 0.0);
             main_ring_buffer.fill(0.0);
@@ -570,7 +571,8 @@ impl<const NUM_SIDECHAIN_INPUTS: usize> StftHelper<NUM_SIDECHAIN_INPUTS> {
         self.scratch_buffer.fill(0.0);
 
         for padding_buffer in &mut self.padding_buffers {
-            padding_buffer.resize(padding, 0.0);
+            // In case this changed since the last call, like in `set_padding()`
+            padding_buffer.resize(self.padding, 0.0);
             padding_buffer.fill(0.0);
         }
 
