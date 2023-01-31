@@ -1650,8 +1650,9 @@ impl<P: ClapPlugin> Wrapper<P> {
                     Ok(note_event) => {
                         input_events.push_back(note_event);
                     }
-                    // `NoteEvent::from_midi` contains more detailed tracing
-                    Err(_) => nih_debug_assert_failure!("Could not parse SysEx message"),
+                    // `NoteEvent::from_midi` prints some tracing if parsing fails, which is not
+                    // necessarily an error
+                    Err(_) => (),
                 };
             }
             _ => {
