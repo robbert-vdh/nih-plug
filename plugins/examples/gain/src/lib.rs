@@ -134,6 +134,10 @@ impl Plugin for Gain {
     // splits.
     const SAMPLE_ACCURATE_AUTOMATION: bool = true;
 
+    // If the plugin can send or receive SysEx messages, it can define a type to wrap around those
+    // messages here. The type implements the `SysExMessage` trait, which allows conversion to and
+    // from plain byte buffers.
+    type SysExMessage = ();
     // More advanced plugins can use this to run expensive background tasks. See the field's
     // documentation for more information. `()` means that the plugin does not have any background
     // tasks.

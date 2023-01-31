@@ -6,6 +6,18 @@ new and what's changed, this document lists all breaking changes in reverse
 chronological order. If a new feature did not require any changes to existing
 code then it will not be listed here.
 
+## [2023-01-31]
+
+- NIH-plug has gained support MIDI SysEx in a simple, type-safe, and
+  realtime-safe way. This sadly does mean that every `Plugin` instance now needs
+  to define a `SysExMessage` type definition and constructor function as Rust
+  does not yet support defaults for associated types (Rust issue
+  [#29661](https://github.com/rust-lang/rust/issues/29661)):
+
+  ```rust
+  type SysExMessage = ();
+  ```
+
 ## [2023-01-12]
 
 - The Vizia dependency has been updated. This updated version uses a new text

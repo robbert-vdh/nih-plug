@@ -95,6 +95,7 @@ impl Plugin for Stft {
 
     const SAMPLE_ACCURATE_AUTOMATION: bool = true;
 
+    type SysExMessage = ();
     type BackgroundTask = ();
 
     fn params(&self) -> Arc<dyn Params> {

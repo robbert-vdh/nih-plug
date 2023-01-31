@@ -3,12 +3,13 @@
 use std::sync::Arc;
 
 use crate::buffer::Buffer;
+use crate::context::gui::AsyncExecutor;
 use crate::context::init::InitContext;
 use crate::context::process::ProcessContext;
 use crate::editor::Editor;
+use crate::midi::sysex::SysExMessage;
 use crate::midi::MidiConfig;
 use crate::params::Params;
-use crate::prelude::AsyncExecutor;
 use crate::wrapper::clap::features::ClapFeature;
 use crate::wrapper::state::PluginState;
 
@@ -26,7 +27,7 @@ pub type TaskExecutor<P> = Box<dyn Fn(<P as Plugin>::BackgroundTask) + Send>;
 ///
 /// Some notable not yet implemented features include:
 ///
-/// - MIDI SysEx and MIDI2 for CLAP, note expressions, polyphonic modulation and MIDI1 are already
+/// - MIDI2 for CLAP, note expressions, polyphonic modulation and MIDI1, and MIDI SysEx are already
 ///   supported
 /// - Audio thread thread pools (with host integration in CLAP)
 #[allow(unused_variables)]
@@ -95,6 +96,12 @@ pub trait Plugin: Default + Send + 'static {
     /// processing requirement when the host asks for it. Supported hosts will never ask the plugin
     /// to do offline processing.
     const HARD_REALTIME_ONLY: bool = false;
+
+    /// The plugin's SysEx message type if it supports sending or receiving MIDI SysEx messages, or
+    /// `()` if it does not. This type can be a struct or enum wrapping around one or more message
+    /// types, and the [`SysExMessage`] trait is then used to convert between this type and basic
+    /// byte buffers.
+    type SysExMessage: SysExMessage;
 
     /// A type encoding the different background tasks this plugin wants to run, or `()` if it
     /// doesn't have any background tasks. This is usually set to an enum type. The task type should

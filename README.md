@@ -141,6 +141,9 @@ Scroll down for more information on the underlying plugin framework.
 - Full support for receiving and outputting both modern polyphonic note
   expression events as well as MIDI CCs, channel pressure, and pitch bend for
   CLAP and VST3.
+  - MIDI SysEx is also supported. Plugins can define their own structs or sum
+    types to wrap around those messages so they don't need to interact with raw
+    byte buffers in the process function.
 - Support for flexible dynamic buffer configurations, including multiple input
   and output busses.
 - A plugin bundler accessible through the

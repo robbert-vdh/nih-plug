@@ -186,6 +186,7 @@ impl Plugin for BuffrGlitch {
 
     const MIDI_INPUT: MidiConfig = MidiConfig::Basic;
 
+    type SysExMessage = ();
     type BackgroundTask = ();
 
     fn params(&self) -> Arc<dyn Params> {

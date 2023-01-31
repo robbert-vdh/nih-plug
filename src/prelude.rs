@@ -16,6 +16,7 @@ pub use crate::context::init::InitContext;
 pub use crate::context::process::ProcessContext;
 // This also includes the derive macro
 pub use crate::editor::{Editor, ParentWindowHandle};
+pub use crate::midi::sysex::SysExMessage;
 pub use crate::midi::{control_change, MidiConfig, NoteEvent};
 pub use crate::params::enums::{Enum, EnumParam};
 pub use crate::params::internals::ParamPtr;
