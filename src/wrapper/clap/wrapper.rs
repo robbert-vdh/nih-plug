@@ -2975,11 +2975,9 @@ impl<P: ClapPlugin> Wrapper<P> {
 
                 let info = &mut *info;
                 info.id = 0;
+                // NOTE: REAPER won't send us SysEx if we don't support the MIDI dialect
                 // TODO: Implement MPE (would just be a toggle for the plugin to expose it) and MIDI2
-                info.supported_dialects = CLAP_NOTE_DIALECT_CLAP;
-                if P::MIDI_INPUT >= MidiConfig::MidiCCs {
-                    info.supported_dialects |= CLAP_NOTE_DIALECT_MIDI;
-                }
+                info.supported_dialects = CLAP_NOTE_DIALECT_CLAP | CLAP_NOTE_DIALECT_MIDI;
                 info.preferred_dialect = CLAP_NOTE_DIALECT_CLAP;
                 strlcpy(&mut info.name, "Note Input");
 
