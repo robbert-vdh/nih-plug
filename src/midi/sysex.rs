@@ -1,7 +1,9 @@
 //! Traits for working with MIDI SysEx data.
 
+use std::fmt::Debug;
+
 /// A type that can be converted to and from byte buffers containing MIDI SysEx messages.
-pub trait SysExMessage {
+pub trait SysExMessage: Debug + Clone + PartialEq + Send + Sync {
     /// The maximum SysEx message size, in bytes.
     const MAX_BUFFER_SIZE: usize;
 
