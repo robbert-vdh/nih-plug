@@ -2,6 +2,8 @@
 
 use midi_consts::channel_event as midi;
 
+pub mod sysex;
+
 pub use midi_consts::channel_event::control_change;
 
 /// Determines which note events a plugin receives.
