@@ -1,10 +1,11 @@
+use std::borrow::Borrow;
 use std::cmp;
 use std::ffi::c_void;
 use std::mem::{self, MaybeUninit};
 use std::ptr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use vst3_com::vst::{IProcessContextRequirementsFlags, ProcessModes};
+use vst3_com::vst::{DataEvent, IProcessContextRequirementsFlags, ProcessModes};
 use vst3_sys::base::{kInvalidArgument, kNoInterface, kResultFalse, kResultOk, tresult, TBool};
 use vst3_sys::base::{IBStream, IPluginBase};
 use vst3_sys::utils::SharedVstPtr;
@@ -27,6 +28,7 @@ use super::util::{VST3_MIDI_CHANNELS, VST3_MIDI_PARAMS_END};
 use super::view::WrapperView;
 use crate::buffer::Buffer;
 use crate::context::process::Transport;
+use crate::midi::sysex::SysExMessage;
 use crate::midi::{MidiConfig, NoteEvent};
 use crate::params::ParamFlags;
 use crate::plugin::{
@@ -1235,6 +1237,27 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                     event.type_id
                                 ),
                             }
+                        } else if event.type_ == EventTypes::kDataEvent as u16
+                            && event.event.data.type_ == 0
+                        {
+                            // 0 = kMidiSysEx
+                            let event = event.event.data;
+
+                            assert!(!event.bytes.is_null());
+                            let sysex_buffer =
+                                std::slice::from_raw_parts(event.bytes, event.size as usize);
+                            match NoteEvent::from_midi(timing, sysex_buffer) {
+                                Ok(note_event) => {
+                                    process_events.push(ProcessEvent::NoteEvent {
+                                        timing,
+                                        event: note_event,
+                                    });
+                                }
+                                Err(_) => {
+                                    // `NoteEvent::from_midi` contains more detailed tracing
+                                    nih_debug_assert_failure!("Could not parse SysEx message");
+                                }
+                            };
                         }
                     }
                 }
@@ -1731,6 +1754,29 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                     value: program as i8,
                                     value2: 0,
                                 };
+                            }
+                            NoteEvent::MidiSysEx { timing: _, message }
+                                if P::MIDI_OUTPUT >= MidiConfig::Basic =>
+                            {
+                                let mut sysex_buffer = Default::default();
+
+                                let length = message.to_buffer(&mut sysex_buffer);
+                                let sysex_buffer = sysex_buffer.borrow();
+                                nih_debug_assert!(sysex_buffer.len() >= length);
+                                let sysex_buffer = &sysex_buffer[..length];
+
+                                vst3_event.type_ = EventTypes::kDataEvent as u16;
+                                vst3_event.event.data = DataEvent {
+                                    size: sysex_buffer.len() as u32,
+                                    type_: 0, // kMidiSysEx
+                                    bytes: sysex_buffer.as_ptr(),
+                                };
+
+                                // NOTE: We need to have this call here while `sysex_buffer` is
+                                //       still in scope since the event contains pointers to it
+                                let result = events.add_event(&mut vst3_event);
+                                nih_debug_assert_eq!(result, kResultOk);
+                                continue;
                             }
                             _ => {
                                 nih_debug_assert_failure!(
