@@ -318,6 +318,18 @@ pub enum NoteEvent<S: SysExMessage> {
     MidiSysEx { timing: u32, message: S },
 }
 
+/// The result of converting a `NoteEvent<S>` to MIDI. This is a bit weirder than it would have to
+/// be because it's not possible to use associated constants in type definitions.
+#[derive(Debug, Clone)]
+pub enum MidiResult {
+    /// A basic three byte MIDI event.
+    Basic([u8; 3]),
+    /// A SysEx event. The message was written to the buffer provided to [`NoteEvent::as_midi()`].
+    /// The `usize` value indicates the message's actual length, including headers and end of SysEx
+    /// byte.
+    SysEx(usize),
+}
+
 impl<S: SysExMessage> NoteEvent<S> {
     /// Returns the sample within the current buffer this event belongs to.
     pub fn timing(&self) -> u32 {
@@ -367,78 +379,109 @@ impl<S: SysExMessage> NoteEvent<S> {
         }
     }
 
-    // TODO: `[u8; 3]` doesn't work anymore with SysEx. We can wrap this in an
-    //       `enum MidiBuffer<P> { simple: [u8; 3], sysex: P::SysExMessage::Buffer }`.
+    /// Parse MIDI into a [`NoteEvent`]. Supports both basic three bytes messages as well as SysEx.
+    /// Will return `Err(event_type)` if the parsing failed.
+    pub fn from_midi(timing: u32, midi_data: &[u8]) -> Result<Self, u8> {
+        let status_byte = midi_data.first().copied().unwrap_or_default();
+        let event_type = status_byte & midi::EVENT_TYPE_MASK;
 
-    /// Parse MIDI into a [`NoteEvent`]. Will return `Err(event_type)` if the parsing failed.
-    pub fn from_midi(timing: u32, midi_data: [u8; 3]) -> Result<Self, u8> {
-        // TODO: Maybe add special handling for 14-bit CCs and RPN messages at some
-        //       point, right now the plugin has to figure it out for itself
-        let event_type = midi_data[0] & midi::EVENT_TYPE_MASK;
-        let channel = midi_data[0] & midi::MIDI_CHANNEL_MASK;
-        match event_type {
-            // You thought this was a note on? Think again! This is a cleverly disguised note off
-            // event straight from the 80s when Baud rate was still a limiting factor!
-            midi::NOTE_ON if midi_data[2] == 0 => Ok(NoteEvent::NoteOff {
-                timing,
-                voice_id: None,
-                channel,
-                note: midi_data[1],
-                // Few things use release velocity. Just having this be zero here is fine, right?
-                velocity: 0.0,
-            }),
-            midi::NOTE_ON => Ok(NoteEvent::NoteOn {
-                timing,
-                voice_id: None,
-                channel,
-                note: midi_data[1],
-                velocity: midi_data[2] as f32 / 127.0,
-            }),
-            midi::NOTE_OFF => Ok(NoteEvent::NoteOff {
-                timing,
-                voice_id: None,
-                channel,
-                note: midi_data[1],
-                velocity: midi_data[2] as f32 / 127.0,
-            }),
-            midi::POLYPHONIC_KEY_PRESSURE => Ok(NoteEvent::PolyPressure {
-                timing,
-                voice_id: None,
-                channel,
-                note: midi_data[1],
-                pressure: midi_data[2] as f32 / 127.0,
-            }),
-            midi::CHANNEL_KEY_PRESSURE => Ok(NoteEvent::MidiChannelPressure {
-                timing,
-                channel,
-                pressure: midi_data[1] as f32 / 127.0,
-            }),
-            midi::PITCH_BEND_CHANGE => Ok(NoteEvent::MidiPitchBend {
-                timing,
-                channel,
-                value: (midi_data[1] as u16 + ((midi_data[2] as u16) << 7)) as f32
-                    / ((1 << 14) - 1) as f32,
-            }),
-            midi::CONTROL_CHANGE => Ok(NoteEvent::MidiCC {
-                timing,
-                channel,
-                cc: midi_data[1],
-                value: midi_data[2] as f32 / 127.0,
-            }),
-            midi::PROGRAM_CHANGE => Ok(NoteEvent::MidiProgramChange {
-                timing,
-                channel,
-                program: midi_data[1],
-            }),
-            // TODO: SysEx
-            n => Err(n),
+        if midi_data.len() >= 3 {
+            // TODO: Maybe add special handling for 14-bit CCs and RPN messages at some
+            //       point, right now the plugin has to figure it out for itself
+            let channel = status_byte & midi::MIDI_CHANNEL_MASK;
+            match event_type {
+                // You thought this was a note on? Think again! This is a cleverly disguised note off
+                // event straight from the 80s when Baud rate was still a limiting factor!
+                midi::NOTE_ON if midi_data[2] == 0 => {
+                    return Ok(NoteEvent::NoteOff {
+                        timing,
+                        voice_id: None,
+                        channel,
+                        note: midi_data[1],
+                        // Few things use release velocity. Just having this be zero here is fine, right?
+                        velocity: 0.0,
+                    });
+                }
+                midi::NOTE_ON => {
+                    return Ok(NoteEvent::NoteOn {
+                        timing,
+                        voice_id: None,
+                        channel,
+                        note: midi_data[1],
+                        velocity: midi_data[2] as f32 / 127.0,
+                    });
+                }
+                midi::NOTE_OFF => {
+                    return Ok(NoteEvent::NoteOff {
+                        timing,
+                        voice_id: None,
+                        channel,
+                        note: midi_data[1],
+                        velocity: midi_data[2] as f32 / 127.0,
+                    });
+                }
+                midi::POLYPHONIC_KEY_PRESSURE => {
+                    return Ok(NoteEvent::PolyPressure {
+                        timing,
+                        voice_id: None,
+                        channel,
+                        note: midi_data[1],
+                        pressure: midi_data[2] as f32 / 127.0,
+                    });
+                }
+                midi::CHANNEL_KEY_PRESSURE => {
+                    return Ok(NoteEvent::MidiChannelPressure {
+                        timing,
+                        channel,
+                        pressure: midi_data[1] as f32 / 127.0,
+                    });
+                }
+                midi::PITCH_BEND_CHANGE => {
+                    return Ok(NoteEvent::MidiPitchBend {
+                        timing,
+                        channel,
+                        value: (midi_data[1] as u16 + ((midi_data[2] as u16) << 7)) as f32
+                            / ((1 << 14) - 1) as f32,
+                    });
+                }
+                midi::CONTROL_CHANGE => {
+                    return Ok(NoteEvent::MidiCC {
+                        timing,
+                        channel,
+                        cc: midi_data[1],
+                        value: midi_data[2] as f32 / 127.0,
+                    });
+                }
+                midi::PROGRAM_CHANGE => {
+                    return Ok(NoteEvent::MidiProgramChange {
+                        timing,
+                        channel,
+                        program: midi_data[1],
+                    });
+                }
+                _ => (),
+            }
+        }
+
+        // Every other message is parsed as SysEx, even if they don't have the `0xf0` status byte.
+        // This allows the `SysExMessage` trait to have a bit more flexibility if needed. Regular
+        // note event parsing however still has higher priority.
+        match S::from_buffer(midi_data) {
+            Some(message) => Ok(NoteEvent::MidiSysEx { timing, message }),
+            None => Err(event_type),
         }
     }
 
-    /// Create a MIDI message from this note event. Return `None` if this even does not have a
+    /// Create a MIDI message from this note event. Returns `None` if this even does not have a
     /// direct MIDI equivalent. `PolyPressure` will be converted to polyphonic key pressure, but the
     /// other polyphonic note expression types will not be converted to MIDI CC messages.
-    pub fn as_midi(self) -> Option<[u8; 3]> {
+    ///
+    /// The `sysex_buffer` is an `[u8; N]` buffer with a length depending on SysEx message type `S`.
+    /// If this event contained SysEx data, then the result is written to the buffer and the
+    /// message's length in bytes is returned. This weird approach is needed because it's not
+    /// possible to use associated constants in types. Otherwise the buffer could be stored in
+    /// `MidiResult`.
+    pub fn as_midi(self, sysex_buffer: &mut S::Buffer) -> Option<MidiResult> {
         match self {
             NoteEvent::NoteOn {
                 timing: _,
@@ -446,42 +489,42 @@ impl<S: SysExMessage> NoteEvent<S> {
                 channel,
                 note,
                 velocity,
-            } => Some([
+            } => Some(MidiResult::Basic([
                 midi::NOTE_ON | channel,
                 note,
                 (velocity * 127.0).round().clamp(0.0, 127.0) as u8,
-            ]),
+            ])),
             NoteEvent::NoteOff {
                 timing: _,
                 voice_id: _,
                 channel,
                 note,
                 velocity,
-            } => Some([
+            } => Some(MidiResult::Basic([
                 midi::NOTE_OFF | channel,
                 note,
                 (velocity * 127.0).round().clamp(0.0, 127.0) as u8,
-            ]),
+            ])),
             NoteEvent::PolyPressure {
                 timing: _,
                 voice_id: _,
                 channel,
                 note,
                 pressure,
-            } => Some([
+            } => Some(MidiResult::Basic([
                 midi::POLYPHONIC_KEY_PRESSURE | channel,
                 note,
                 (pressure * 127.0).round().clamp(0.0, 127.0) as u8,
-            ]),
+            ])),
             NoteEvent::MidiChannelPressure {
                 timing: _,
                 channel,
                 pressure,
-            } => Some([
+            } => Some(MidiResult::Basic([
                 midi::CHANNEL_KEY_PRESSURE | channel,
                 (pressure * 127.0).round().clamp(0.0, 127.0) as u8,
                 0,
-            ]),
+            ])),
             NoteEvent::MidiPitchBend {
                 timing: _,
                 channel,
@@ -492,27 +535,36 @@ impl<S: SysExMessage> NoteEvent<S> {
                     .round()
                     .clamp(0.0, PITCH_BEND_RANGE) as u16;
 
-                Some([
+                Some(MidiResult::Basic([
                     midi::PITCH_BEND_CHANGE | channel,
                     (midi_value & ((1 << 7) - 1)) as u8,
                     (midi_value >> 7) as u8,
-                ])
+                ]))
             }
             NoteEvent::MidiCC {
                 timing: _,
                 channel,
                 cc,
                 value,
-            } => Some([
+            } => Some(MidiResult::Basic([
                 midi::CONTROL_CHANGE | channel,
                 cc,
                 (value * 127.0).round().clamp(0.0, 127.0) as u8,
-            ]),
+            ])),
             NoteEvent::MidiProgramChange {
                 timing: _,
                 channel,
                 program,
-            } => Some([midi::PROGRAM_CHANGE | channel, program, 0]),
+            } => Some(MidiResult::Basic([
+                midi::PROGRAM_CHANGE | channel,
+                program,
+                0,
+            ])),
+            // `message` is serialized and written to `sysex_buffer`, and the result contains the
+            // message's actual length
+            NoteEvent::MidiSysEx { timing: _, message } => {
+                Some(MidiResult::SysEx(message.to_buffer(sysex_buffer)))
+            }
             NoteEvent::Choke { .. }
             | NoteEvent::VoiceTerminated { .. }
             | NoteEvent::PolyModulation { .. }
@@ -523,8 +575,6 @@ impl<S: SysExMessage> NoteEvent<S> {
             | NoteEvent::PolyVibrato { .. }
             | NoteEvent::PolyExpression { .. }
             | NoteEvent::PolyBrightness { .. } => None,
-            // TODO: These functions need to handle both simple and longer messages as documented above
-            NoteEvent::MidiSysEx { .. } => None,
         }
     }
 
@@ -560,6 +610,16 @@ mod tests {
 
     const TIMING: u32 = 5;
 
+    /// Converts an event to and from MIDI. Panics if any part of the conversion fails.
+    fn roundtrip_basic_event(event: NoteEvent<()>) -> NoteEvent<()> {
+        let midi_data = match event.as_midi(&mut Default::default()).unwrap() {
+            MidiResult::Basic(midi_data) => midi_data,
+            MidiResult::SysEx(_) => panic!("Unexpected SysEx result"),
+        };
+
+        NoteEvent::from_midi(TIMING, &midi_data).unwrap()
+    }
+
     #[test]
     fn test_note_on_midi_conversion() {
         let event = NoteEvent::<()>::NoteOn {
@@ -571,10 +631,7 @@ mod tests {
             velocity: 0.6929134,
         };
 
-        assert_eq!(
-            NoteEvent::from_midi(TIMING, event.as_midi().unwrap()).unwrap(),
-            event
-        );
+        assert_eq!(roundtrip_basic_event(event), event);
     }
 
     #[test]
@@ -587,10 +644,7 @@ mod tests {
             velocity: 0.6929134,
         };
 
-        assert_eq!(
-            NoteEvent::from_midi(TIMING, event.as_midi().unwrap()).unwrap(),
-            event
-        );
+        assert_eq!(roundtrip_basic_event(event), event);
     }
 
     #[test]
@@ -603,10 +657,7 @@ mod tests {
             pressure: 0.6929134,
         };
 
-        assert_eq!(
-            NoteEvent::from_midi(TIMING, event.as_midi().unwrap()).unwrap(),
-            event
-        );
+        assert_eq!(roundtrip_basic_event(event), event);
     }
 
     #[test]
@@ -617,10 +668,7 @@ mod tests {
             pressure: 0.6929134,
         };
 
-        assert_eq!(
-            NoteEvent::from_midi(TIMING, event.as_midi().unwrap()).unwrap(),
-            event
-        );
+        assert_eq!(roundtrip_basic_event(event), event);
     }
 
     #[test]
@@ -631,10 +679,7 @@ mod tests {
             value: 0.6929134,
         };
 
-        assert_eq!(
-            NoteEvent::from_midi(TIMING, event.as_midi().unwrap()).unwrap(),
-            event
-        );
+        assert_eq!(roundtrip_basic_event(event), event);
     }
 
     #[test]
@@ -646,10 +691,7 @@ mod tests {
             value: 0.6929134,
         };
 
-        assert_eq!(
-            NoteEvent::from_midi(TIMING, event.as_midi().unwrap()).unwrap(),
-            event
-        );
+        assert_eq!(roundtrip_basic_event(event), event);
     }
 
     #[test]
@@ -660,11 +702,8 @@ mod tests {
             program: 42,
         };
 
-        assert_eq!(
-            NoteEvent::from_midi(TIMING, event.as_midi().unwrap()).unwrap(),
-            event
-        );
+        assert_eq!(roundtrip_basic_event(event), event);
     }
 
-    // TODO: SysEx conversion
+    // TODO: Test SysEx conversion
 }

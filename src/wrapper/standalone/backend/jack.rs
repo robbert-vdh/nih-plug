@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -12,7 +13,7 @@ use super::super::config::WrapperConfig;
 use super::Backend;
 use crate::buffer::Buffer;
 use crate::context::process::Transport;
-use crate::midi::{MidiConfig, NoteEvent, PluginNoteEvent};
+use crate::midi::{MidiConfig, MidiResult, NoteEvent, PluginNoteEvent};
 use crate::plugin::Plugin;
 
 /// Uses JACK audio and MIDI.
@@ -129,14 +130,13 @@ impl<P: Plugin> Backend<P> for Jack {
                         let mut midi_data = [0u8; 3];
                         midi_data[..midi.bytes.len()].copy_from_slice(midi.bytes);
 
-                        NoteEvent::from_midi(midi.time, midi_data).ok()
+                        NoteEvent::from_midi(midi.time, &midi_data).ok()
                     } else {
                         None
                     }
                 }));
             }
 
-            // TODO: Support SysEx
             output_events.clear();
             if cb(&mut buffer, transport, &input_events, &mut output_events) {
                 if let Some(midi_output) = &midi_output {
@@ -144,12 +144,31 @@ impl<P: Plugin> Backend<P> for Jack {
                     let mut midi_writer = midi_output.writer(ps);
                     for event in output_events.drain(..) {
                         let timing = event.timing();
-                        if let Some(midi_data) = event.as_midi() {
-                            let write_result = midi_writer.write(&jack::RawMidi {
-                                time: timing,
-                                bytes: &midi_data,
-                            });
-                            nih_debug_assert!(write_result.is_ok(), "The MIDI buffer is full");
+
+                        let mut sysex_buffer = Default::default();
+                        match event.as_midi(&mut sysex_buffer) {
+                            Some(MidiResult::Basic(midi_data)) => {
+                                let write_result = midi_writer.write(&jack::RawMidi {
+                                    time: timing,
+                                    bytes: &midi_data,
+                                });
+
+                                nih_debug_assert!(write_result.is_ok(), "The MIDI buffer is full");
+                            }
+                            Some(MidiResult::SysEx(length)) => {
+                                // This feels a bit like gymnastics, but if the event was a SysEx
+                                // event then `sysex_buffer` now contains the full message plus
+                                // possibly some padding at the end
+                                let sysex_buffer = sysex_buffer.borrow();
+                                nih_debug_assert!(length <= sysex_buffer.len());
+                                let write_result = midi_writer.write(&jack::RawMidi {
+                                    time: timing,
+                                    bytes: &sysex_buffer[..length],
+                                });
+
+                                nih_debug_assert!(write_result.is_ok(), "The MIDI buffer is full");
+                            }
+                            None => (),
                         }
                     }
                 }
