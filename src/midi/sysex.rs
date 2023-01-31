@@ -7,3 +7,8 @@ pub trait SysExMessage {
 
     // TODO: Conversion functions
 }
+
+/// A default implementation plugins that don't need SysEx support can use.
+impl SysExMessage for () {
+    const MAX_BUFFER_SIZE: usize = 0;
+}
