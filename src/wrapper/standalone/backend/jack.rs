@@ -136,8 +136,7 @@ impl<P: Plugin> Backend<P> for Jack {
                     for event in output_events.drain(..) {
                         let timing = event.timing();
 
-                        let mut sysex_buffer = Default::default();
-                        match event.as_midi(&mut sysex_buffer) {
+                        match event.as_midi() {
                             Some(MidiResult::Basic(midi_data)) => {
                                 let write_result = midi_writer.write(&jack::RawMidi {
                                     time: timing,
@@ -146,15 +145,13 @@ impl<P: Plugin> Backend<P> for Jack {
 
                                 nih_debug_assert!(write_result.is_ok(), "The MIDI buffer is full");
                             }
-                            Some(MidiResult::SysEx(length)) => {
-                                // This feels a bit like gymnastics, but if the event was a SysEx
-                                // event then `sysex_buffer` now contains the full message plus
-                                // possibly some padding at the end
-                                let sysex_buffer = sysex_buffer.borrow();
-                                nih_debug_assert!(length <= sysex_buffer.len());
+                            Some(MidiResult::SysEx(padded_sysex_buffer, length)) => {
+                                // `sysex_buffer` may contain padding
+                                let padded_sysex_buffer = padded_sysex_buffer.borrow();
+                                nih_debug_assert!(length <= padded_sysex_buffer.len());
                                 let write_result = midi_writer.write(&jack::RawMidi {
                                     time: timing,
-                                    bytes: &sysex_buffer[..length],
+                                    bytes: &padded_sysex_buffer[..length],
                                 });
 
                                 nih_debug_assert!(write_result.is_ok(), "The MIDI buffer is full");

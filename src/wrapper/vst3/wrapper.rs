@@ -1740,12 +1740,10 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                             NoteEvent::MidiSysEx { timing: _, message }
                                 if P::MIDI_OUTPUT >= MidiConfig::Basic =>
                             {
-                                let mut sysex_buffer = Default::default();
-
-                                let length = message.to_buffer(&mut sysex_buffer);
-                                let sysex_buffer = sysex_buffer.borrow();
-                                nih_debug_assert!(sysex_buffer.len() >= length);
-                                let sysex_buffer = &sysex_buffer[..length];
+                                let (padded_sysex_buffer, length) = message.to_buffer();
+                                let padded_sysex_buffer = padded_sysex_buffer.borrow();
+                                nih_debug_assert!(padded_sysex_buffer.len() >= length);
+                                let sysex_buffer = &padded_sysex_buffer[..length];
 
                                 vst3_event.type_ = EventTypes::kDataEvent as u16;
                                 vst3_event.event.data = DataEvent {

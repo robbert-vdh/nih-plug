@@ -321,13 +321,13 @@ pub enum NoteEvent<S: SysExMessage> {
 /// The result of converting a `NoteEvent<S>` to MIDI. This is a bit weirder than it would have to
 /// be because it's not possible to use associated constants in type definitions.
 #[derive(Debug, Clone)]
-pub enum MidiResult {
+pub enum MidiResult<S: SysExMessage> {
     /// A basic three byte MIDI event.
     Basic([u8; 3]),
-    /// A SysEx event. The message was written to the buffer provided to [`NoteEvent::as_midi()`].
-    /// The `usize` value indicates the message's actual length, including headers and end of SysEx
-    /// byte.
-    SysEx(usize),
+    /// A SysEx event. The message was written to the `S::Buffer` and may include padding at the
+    /// end. The `usize` value indicates the message's actual length, including headers and end of
+    /// SysEx byte.
+    SysEx(S::Buffer, usize),
 }
 
 impl<S: SysExMessage> NoteEvent<S> {
@@ -487,13 +487,7 @@ impl<S: SysExMessage> NoteEvent<S> {
     /// Create a MIDI message from this note event. Returns `None` if this even does not have a
     /// direct MIDI equivalent. `PolyPressure` will be converted to polyphonic key pressure, but the
     /// other polyphonic note expression types will not be converted to MIDI CC messages.
-    ///
-    /// The `sysex_buffer` is an `[u8; N]` buffer with a length depending on SysEx message type `S`.
-    /// If this event contained SysEx data, then the result is written to the buffer and the
-    /// message's length in bytes is returned. This weird approach is needed because it's not
-    /// possible to use associated constants in types. Otherwise the buffer could be stored in
-    /// `MidiResult`.
-    pub fn as_midi(self, sysex_buffer: &mut S::Buffer) -> Option<MidiResult> {
+    pub fn as_midi(self) -> Option<MidiResult<S>> {
         match self {
             NoteEvent::NoteOn {
                 timing: _,
@@ -575,7 +569,8 @@ impl<S: SysExMessage> NoteEvent<S> {
             // `message` is serialized and written to `sysex_buffer`, and the result contains the
             // message's actual length
             NoteEvent::MidiSysEx { timing: _, message } => {
-                Some(MidiResult::SysEx(message.to_buffer(sysex_buffer)))
+                let (padded_sysex_buffer, length) = message.to_buffer();
+                Some(MidiResult::SysEx(padded_sysex_buffer, length))
             }
             NoteEvent::Choke { .. }
             | NoteEvent::VoiceTerminated { .. }
@@ -624,9 +619,9 @@ mod tests {
 
     /// Converts an event to and from MIDI. Panics if any part of the conversion fails.
     fn roundtrip_basic_event(event: NoteEvent<()>) -> NoteEvent<()> {
-        let midi_data = match event.as_midi(&mut Default::default()).unwrap() {
+        let midi_data = match event.as_midi().unwrap() {
             MidiResult::Basic(midi_data) => midi_data,
-            MidiResult::SysEx(_) => panic!("Unexpected SysEx result"),
+            MidiResult::SysEx(_, _) => panic!("Unexpected SysEx result"),
         };
 
         NoteEvent::from_midi(TIMING, &midi_data).unwrap()
@@ -735,12 +730,9 @@ mod tests {
                 }
             }
 
-            fn to_buffer(self, buffer: &mut Self::Buffer) -> usize {
+            fn to_buffer(self) -> (Self::Buffer, usize) {
                 match self {
-                    MessageType::Foo(x) => {
-                        *buffer = [0xf0, 0x69, (x * 127.0).round() as u8, 0xf7];
-                        4
-                    }
+                    MessageType::Foo(x) => ([0xf0, 0x69, (x * 127.0).round() as u8, 0xf7], 4),
                 }
             }
         }
@@ -767,10 +759,9 @@ mod tests {
                 message,
             };
 
-            let mut sysex_buffer = [0; 4];
-            match event.as_midi(&mut sysex_buffer) {
-                Some(MidiResult::SysEx(length)) => {
-                    assert_eq!(sysex_buffer[..length], [0xf0, 0x69, 127, 0xf7])
+            match event.as_midi() {
+                Some(MidiResult::SysEx(padded_sysex_buffer, length)) => {
+                    assert_eq!(padded_sysex_buffer[..length], [0xf0, 0x69, 127, 0xf7])
                 }
                 result => panic!("Unexpected result: {result:?}"),
             }

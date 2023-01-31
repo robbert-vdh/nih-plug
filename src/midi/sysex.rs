@@ -30,10 +30,11 @@ pub trait SysExMessage: Debug + Clone + PartialEq + Send + Sync {
     /// matches the received message. It is not padded to match [`Buffer`][Self::Buffer].
     fn from_buffer(buffer: &[u8]) -> Option<Self>;
 
-    /// Serialize this message object as a SysEx message in `buffer`, returning the message's length
-    /// in bytes. This should contain the full message including headers and the EOX byte, see the
-    /// trait's docstring for more information.
-    fn to_buffer(self, buffer: &mut Self::Buffer) -> usize;
+    /// Serialize this message object as a SysEx message in a byte buffer. This returns a buffer
+    /// alongside the message's length in bytes. The buffer may contain padding at the end. This
+    /// should contain the full message including headers and the EOX byte, see the trait's
+    /// docstring for more information.
+    fn to_buffer(self) -> (Self::Buffer, usize);
 }
 
 /// A default implementation plugins that don't need SysEx support can use.
@@ -44,7 +45,7 @@ impl SysExMessage for () {
         None
     }
 
-    fn to_buffer(self, _buffer: &mut [u8; 0]) -> usize {
-        0
+    fn to_buffer(self) -> (Self::Buffer, usize) {
+        ([], 0)
     }
 }

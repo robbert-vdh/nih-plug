@@ -1317,9 +1317,9 @@ impl<P: ClapPlugin> Wrapper<P> {
                 {
                     // NIH-plug already includes MIDI conversion functions, so we'll reuse those for
                     // the MIDI events
-                    let midi_data = match midi_event.as_midi(&mut Default::default()) {
+                    let midi_data = match midi_event.as_midi() {
                         Some(MidiResult::Basic(midi_data)) => midi_data,
-                        Some(MidiResult::SysEx(_)) => unreachable!(
+                        Some(MidiResult::SysEx(_, _)) => unreachable!(
                             "Basic MIDI event read as SysEx, something's gone horribly wrong"
                         ),
                         None => unreachable!("Missing MIDI conversion for MIDI event"),
@@ -1343,12 +1343,10 @@ impl<P: ClapPlugin> Wrapper<P> {
                     if P::MIDI_OUTPUT >= MidiConfig::Basic =>
                 {
                     // SysEx is supported on the basic MIDI config so this is separate
-                    let mut sysex_buffer = Default::default();
-
-                    let length = message.to_buffer(&mut sysex_buffer);
-                    let sysex_buffer = sysex_buffer.borrow();
-                    nih_debug_assert!(sysex_buffer.len() >= length);
-                    let sysex_buffer = &sysex_buffer[..length];
+                    let (padded_sysex_buffer, length) = message.to_buffer();
+                    let padded_sysex_buffer = padded_sysex_buffer.borrow();
+                    nih_debug_assert!(padded_sysex_buffer.len() >= length);
+                    let sysex_buffer = &padded_sysex_buffer[..length];
 
                     let event = clap_event_midi_sysex {
                         header: clap_event_header {
