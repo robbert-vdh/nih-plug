@@ -618,9 +618,9 @@ impl<S: SysExMessage> NoteEvent<S> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    pub use super::*;
 
-    const TIMING: u32 = 5;
+    pub const TIMING: u32 = 5;
 
     /// Converts an event to and from MIDI. Panics if any part of the conversion fails.
     fn roundtrip_basic_event(event: NoteEvent<()>) -> NoteEvent<()> {
@@ -717,5 +717,71 @@ mod tests {
         assert_eq!(roundtrip_basic_event(event), event);
     }
 
-    // TODO: Test SysEx conversion
+    mod sysex {
+        use super::*;
+
+        #[derive(Clone, Debug, PartialEq)]
+        enum MessageType {
+            Foo(f32),
+        }
+
+        impl SysExMessage for MessageType {
+            type Buffer = [u8; 4];
+
+            fn from_buffer(buffer: &[u8]) -> Option<Self> {
+                match buffer {
+                    [0xf0, 0x69, n, 0xf7] => Some(MessageType::Foo(*n as f32 / 127.0)),
+                    _ => None,
+                }
+            }
+
+            fn to_buffer(self, buffer: &mut Self::Buffer) -> usize {
+                match self {
+                    MessageType::Foo(x) => {
+                        *buffer = [0xf0, 0x69, (x * 127.0).round() as u8, 0xf7];
+                        4
+                    }
+                }
+            }
+        }
+
+        #[test]
+        fn test_parse_from_buffer() {
+            let midi_data = [0xf0, 0x69, 127, 0xf7];
+            let parsed = NoteEvent::from_midi(TIMING, &midi_data).unwrap();
+
+            assert_eq!(
+                parsed,
+                NoteEvent::MidiSysEx {
+                    timing: TIMING,
+                    message: MessageType::Foo(1.0)
+                }
+            );
+        }
+
+        #[test]
+        fn test_convert_to_buffer() {
+            let message = MessageType::Foo(1.0);
+            let event = NoteEvent::MidiSysEx {
+                timing: TIMING,
+                message,
+            };
+
+            let mut sysex_buffer = [0; 4];
+            match event.as_midi(&mut sysex_buffer) {
+                Some(MidiResult::SysEx(length)) => {
+                    assert_eq!(sysex_buffer[..length], [0xf0, 0x69, 127, 0xf7])
+                }
+                result => panic!("Unexpected result: {result:?}"),
+            }
+        }
+
+        #[test]
+        fn test_invalid_parse() {
+            let midi_data = [0xf0, 0x0, 127, 0xf7];
+            let parsed = NoteEvent::<MessageType>::from_midi(TIMING, &midi_data);
+
+            assert!(parsed.is_err());
+        }
+    }
 }
