@@ -294,15 +294,15 @@ impl Param for EnumParamInner {
 }
 
 impl<T: Enum + PartialEq> ParamMut for EnumParam<T> {
-    fn set_plain_value(&self, plain: Self::Plain) {
+    fn set_plain_value(&self, plain: Self::Plain) -> bool {
         self.inner.set_plain_value(T::to_index(plain) as i32)
     }
 
-    fn set_normalized_value(&self, normalized: f32) {
+    fn set_normalized_value(&self, normalized: f32) -> bool {
         self.inner.set_normalized_value(normalized)
     }
 
-    fn modulate_value(&self, modulation_offset: f32) {
+    fn modulate_value(&self, modulation_offset: f32) -> bool {
         self.inner.modulate_value(modulation_offset)
     }
 
@@ -312,15 +312,15 @@ impl<T: Enum + PartialEq> ParamMut for EnumParam<T> {
 }
 
 impl ParamMut for EnumParamInner {
-    fn set_plain_value(&self, plain: Self::Plain) {
+    fn set_plain_value(&self, plain: Self::Plain) -> bool {
         self.inner.set_plain_value(plain)
     }
 
-    fn set_normalized_value(&self, normalized: f32) {
+    fn set_normalized_value(&self, normalized: f32) -> bool {
         self.inner.set_normalized_value(normalized)
     }
 
-    fn modulate_value(&self, modulation_offset: f32) {
+    fn modulate_value(&self, modulation_offset: f32) -> bool {
         self.inner.modulate_value(modulation_offset)
     }
 

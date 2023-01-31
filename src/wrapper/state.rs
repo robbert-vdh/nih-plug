@@ -182,14 +182,20 @@ pub(crate) unsafe fn deserialize_object<P: Plugin>(
         };
 
         match (param_ptr, param_value) {
-            (ParamPtr::FloatParam(p), ParamValue::F32(v)) => (*p).set_plain_value(*v),
-            (ParamPtr::IntParam(p), ParamValue::I32(v)) => (*p).set_plain_value(*v),
-            (ParamPtr::BoolParam(p), ParamValue::Bool(v)) => (*p).set_plain_value(*v),
+            (ParamPtr::FloatParam(p), ParamValue::F32(v)) => {
+                (*p).set_plain_value(*v);
+            }
+            (ParamPtr::IntParam(p), ParamValue::I32(v)) => {
+                (*p).set_plain_value(*v);
+            }
+            (ParamPtr::BoolParam(p), ParamValue::Bool(v)) => {
+                (*p).set_plain_value(*v);
+            }
             // Enums are either serialized based on the active variant's index (which may not be the
             // same as the discriminator), or a custom set stable string ID. The latter allows the
             // variants to be reordered.
             (ParamPtr::EnumParam(p), ParamValue::I32(variant_idx)) => {
-                (*p).set_plain_value(*variant_idx)
+                (*p).set_plain_value(*variant_idx);
             }
             (ParamPtr::EnumParam(p), ParamValue::String(id)) => {
                 let deserialized_enum = (*p).set_from_id(id);

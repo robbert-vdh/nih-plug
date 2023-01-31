@@ -168,7 +168,7 @@ impl Param for BoolParam {
 }
 
 impl ParamMut for BoolParam {
-    fn set_plain_value(&self, plain: Self::Plain) {
+    fn set_plain_value(&self, plain: Self::Plain) -> bool {
         let unmodulated_value = plain;
         let unmodulated_normalized_value = self.preview_normalized(plain);
 
@@ -182,20 +182,28 @@ impl ParamMut for BoolParam {
             (self.preview_plain(normalized_value), normalized_value)
         };
 
-        self.value.store(value, Ordering::Relaxed);
-        self.normalized_value
-            .store(normalized_value, Ordering::Relaxed);
-        self.unmodulated_value
-            .store(unmodulated_value, Ordering::Relaxed);
-        self.unmodulated_normalized_value
-            .store(unmodulated_normalized_value, Ordering::Relaxed);
+        // REAPER spams automation events with the same value. This prevents callbacks from firing
+        // multiple times. This can be problematic when they're used to trigger expensive
+        // computations when a parameter changes.
+        let old_value = self.value.swap(value, Ordering::Relaxed);
+        if value != old_value {
+            self.normalized_value
+                .store(normalized_value, Ordering::Relaxed);
+            self.unmodulated_value
+                .store(unmodulated_value, Ordering::Relaxed);
+            self.unmodulated_normalized_value
+                .store(unmodulated_normalized_value, Ordering::Relaxed);
+            if let Some(f) = &self.value_changed {
+                f(value);
+            }
 
-        if let Some(f) = &self.value_changed {
-            f(value);
+            true
+        } else {
+            false
         }
     }
 
-    fn set_normalized_value(&self, normalized: f32) {
+    fn set_normalized_value(&self, normalized: f32) -> bool {
         // NOTE: The double conversion here is to make sure the state is reproducible. State is
         //       saved and restored using plain values, and the new normalized value will be
         //       different from `normalized`. This is not necessary for the modulation as these
@@ -203,12 +211,12 @@ impl ParamMut for BoolParam {
         self.set_plain_value(self.preview_plain(normalized))
     }
 
-    fn modulate_value(&self, modulation_offset: f32) {
+    fn modulate_value(&self, modulation_offset: f32) -> bool {
         self.modulation_offset
             .store(modulation_offset, Ordering::Relaxed);
 
         // TODO: This renormalizes this value, which is not necessary
-        self.set_plain_value(self.unmodulated_plain_value());
+        self.set_plain_value(self.unmodulated_plain_value())
     }
 
     fn update_smoother(&self, _sample_rate: f32, _init: bool) {

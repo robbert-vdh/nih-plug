@@ -448,18 +448,15 @@ impl<P: Vst3Plugin> WrapperInner<P> {
     ) -> tresult {
         match self.param_by_hash.get(&hash) {
             Some(param_ptr) => {
-                // Also update the parameter's smoothing if applicable
-                match (param_ptr, sample_rate) {
-                    (_, Some(sample_rate)) => unsafe {
-                        param_ptr.set_normalized_value(normalized_value);
-                        param_ptr.update_smoother(sample_rate, false);
-                    },
-                    _ => unsafe { param_ptr.set_normalized_value(normalized_value) },
-                }
+                if unsafe { param_ptr.set_normalized_value(normalized_value) } {
+                    if let Some(sample_rate) = sample_rate {
+                        unsafe { param_ptr.update_smoother(sample_rate, false) };
+                    }
 
-                let task_posted =
-                    self.schedule_gui(Task::ParameterValueChanged(hash, normalized_value));
-                nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+                    let task_posted =
+                        self.schedule_gui(Task::ParameterValueChanged(hash, normalized_value));
+                    nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+                }
 
                 kResultOk
             }

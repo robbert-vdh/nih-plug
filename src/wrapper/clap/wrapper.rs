@@ -866,17 +866,20 @@ impl<P: ClapPlugin> Wrapper<P> {
                         let normalized_value = clap_plain_value as f32
                             / unsafe { param_ptr.step_count() }.unwrap_or(1) as f32;
 
-                        // Also update the parameter's smoothing if applicable
-                        unsafe { param_ptr.set_normalized_value(normalized_value) };
-                        if let Some(sample_rate) = sample_rate {
-                            unsafe { param_ptr.update_smoother(sample_rate, false) };
-                        }
+                        if unsafe { param_ptr.set_normalized_value(normalized_value) } {
+                            if let Some(sample_rate) = sample_rate {
+                                unsafe { param_ptr.update_smoother(sample_rate, false) };
+                            }
 
-                        // The GUI needs to be informed about the changed parameter value. This
-                        // triggers an `Editor::param_value_changed()` call on the GUI thread.
-                        let task_posted =
-                            self.schedule_gui(Task::ParameterValueChanged(hash, normalized_value));
-                        nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+                            // The GUI needs to be informed about the changed parameter value. This
+                            // triggers an `Editor::param_value_changed()` call on the GUI thread.
+                            let task_posted = self
+                                .schedule_gui(Task::ParameterValueChanged(hash, normalized_value));
+                            nih_debug_assert!(
+                                task_posted,
+                                "The task queue is full, dropping task..."
+                            );
+                        }
 
                         true
                     }
@@ -884,15 +887,20 @@ impl<P: ClapPlugin> Wrapper<P> {
                         let normalized_delta = clap_plain_delta as f32
                             / unsafe { param_ptr.step_count() }.unwrap_or(1) as f32;
 
-                        // Also update the parameter's smoothing if applicable
-                        unsafe { param_ptr.modulate_value(normalized_delta) };
-                        if let Some(sample_rate) = sample_rate {
-                            unsafe { param_ptr.update_smoother(sample_rate, false) };
-                        }
+                        if unsafe { param_ptr.modulate_value(normalized_delta) } {
+                            if let Some(sample_rate) = sample_rate {
+                                unsafe { param_ptr.update_smoother(sample_rate, false) };
+                            }
 
-                        let task_posted = self
-                            .schedule_gui(Task::ParameterModulationChanged(hash, normalized_delta));
-                        nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+                            let task_posted = self.schedule_gui(Task::ParameterModulationChanged(
+                                hash,
+                                normalized_delta,
+                            ));
+                            nih_debug_assert!(
+                                task_posted,
+                                "The task queue is full, dropping task..."
+                            );
+                        }
 
                         true
                     }

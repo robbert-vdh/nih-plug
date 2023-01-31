@@ -522,11 +522,17 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
                     while let Some((param_ptr, normalized_value)) =
                         self.unprocessed_param_changes.pop()
                     {
-                        unsafe { param_ptr.set_normalized_value(normalized_value) };
-                        unsafe { param_ptr.update_smoother(sample_rate, false) };
-                        let task_posted = self
-                            .schedule_gui(Task::ParameterValueChanged(param_ptr, normalized_value));
-                        nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+                        if unsafe { param_ptr.set_normalized_value(normalized_value) } {
+                            unsafe { param_ptr.update_smoother(sample_rate, false) };
+                            let task_posted = self.schedule_gui(Task::ParameterValueChanged(
+                                param_ptr,
+                                normalized_value,
+                            ));
+                            nih_debug_assert!(
+                                task_posted,
+                                "The task queue is full, dropping task..."
+                            );
+                        }
                     }
 
                     // After processing audio, we'll check if the editor has sent us updated plugin

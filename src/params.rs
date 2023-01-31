@@ -198,24 +198,33 @@ pub(crate) trait ParamMut: Param {
     /// [`modulate_value()`][Self::modulate_value()] has previously been called with a non zero
     /// value then this offset is taken into account to form the effective value.
     ///
+    /// Returns whether or not the value has changed. Any parameter callbacks are only run the value
+    /// has actually changed.
+    ///
     /// This does **not** update the smoother.
-    fn set_plain_value(&self, plain: Self::Plain);
+    fn set_plain_value(&self, plain: Self::Plain) -> bool;
 
     /// Set this parameter based on a normalized value. The normalized value will be snapped to the
     /// step size for continuous parameters (i.e. [`FloatParam`]). If
     /// [`modulate_value()`][Self::modulate_value()] has previously been called with a non zero
     /// value then this offset is taken into account to form the effective value.
     ///
+    /// Returns whether or not the value has changed. Any parameter callbacks are only run the value
+    /// has actually changed.
+    ///
     /// This does **not** update the smoother.
-    fn set_normalized_value(&self, normalized: f32);
+    fn set_normalized_value(&self, normalized: f32) -> bool;
 
     /// Add a modulation offset to the value's unmodulated value. This value sticks until this
     /// function is called again with a 0.0 value. Out of bound values will be clamped to the
     /// parameter's range. The normalized value will be snapped to the step size for continuous
     /// parameters (i.e. [`FloatParam`]).
     ///
+    /// Returns whether or not the value has changed. Any parameter callbacks are only run the value
+    /// has actually changed.
+    ///
     /// This does **not** update the smoother.
-    fn modulate_value(&self, modulation_offset: f32);
+    fn modulate_value(&self, modulation_offset: f32) -> bool;
 
     /// Update the smoother state to point to the current value. Also used when initializing and
     /// restoring a plugin so everything is in sync. In that case the smoother should completely
