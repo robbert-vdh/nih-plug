@@ -468,7 +468,19 @@ impl<S: SysExMessage> NoteEvent<S> {
         // note event parsing however still has higher priority.
         match S::from_buffer(midi_data) {
             Some(message) => Ok(NoteEvent::MidiSysEx { timing, message }),
-            None => Err(event_type),
+            None => {
+                if event_type == 0xf0 {
+                    if midi_data.len() <= 32 {
+                        nih_trace!("Unhandled MIDI system message: {midi_data:?}");
+                    } else {
+                        nih_trace!("Unhandled MIDI system message of {} bytes", midi_data.len());
+                    }
+                } else {
+                    nih_trace!("Unhandled MIDI status byte {status_byte:x}");
+                }
+
+                Err(event_type)
+            }
         }
     }
 
