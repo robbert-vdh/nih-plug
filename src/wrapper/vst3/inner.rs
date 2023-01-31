@@ -192,14 +192,11 @@ pub enum ProcessEvent<P: Plugin> {
     /// An incoming parameter change sent by the host. This will only be used when sample accurate
     /// automation has been enabled, and the parameters are only updated when we process this
     /// spooled event at the start of a block.
-    NoteEvent {
-        /// The event's sample offset within the buffer. Used for sorting. The timing stored within
-        /// the note event needs to have the block start index subtraced from it.
-        timing: u32,
-        /// The actual note event, make sure to subtract the block start index with
-        /// [`NoteEvent::subtract_timing()`] before putting this into the input event queue.
-        event: PluginNoteEvent<P>,
-    },
+    ///
+    /// The timing stored within the note event needs to have the block start index subtraced from
+    /// it. make sure to subtract the block start index with [`NoteEvent::subtract_timing()`] before
+    /// putting this into the input event queue.
+    NoteEvent(PluginNoteEvent<P>),
 }
 
 impl<P: Vst3Plugin> WrapperInner<P> {

@@ -1114,29 +1114,26 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                     let midi_cc = (midi_param_relative_idx % VST3_MIDI_CCS) as u8;
                                     let midi_channel =
                                         (midi_param_relative_idx / VST3_MIDI_CCS) as u8;
-                                    process_events.push(ProcessEvent::NoteEvent {
-                                        timing,
-                                        event: match midi_cc {
-                                            // kAfterTouch
-                                            128 => NoteEvent::MidiChannelPressure {
-                                                timing,
-                                                channel: midi_channel,
-                                                pressure: value,
-                                            },
-                                            // kPitchBend
-                                            129 => NoteEvent::MidiPitchBend {
-                                                timing,
-                                                channel: midi_channel,
-                                                value,
-                                            },
-                                            n => NoteEvent::MidiCC {
-                                                timing,
-                                                channel: midi_channel,
-                                                cc: n,
-                                                value,
-                                            },
+                                    process_events.push(ProcessEvent::NoteEvent(match midi_cc {
+                                        // kAfterTouch
+                                        128 => NoteEvent::MidiChannelPressure {
+                                            timing,
+                                            channel: midi_channel,
+                                            pressure: value,
                                         },
-                                    });
+                                        // kPitchBend
+                                        129 => NoteEvent::MidiPitchBend {
+                                            timing,
+                                            channel: midi_channel,
+                                            value,
+                                        },
+                                        n => NoteEvent::MidiCC {
+                                            timing,
+                                            channel: midi_channel,
+                                            cc: n,
+                                            value,
+                                        },
+                                    }));
                                 } else if P::SAMPLE_ACCURATE_AUTOMATION {
                                     process_events.push(ProcessEvent::ParameterChange {
                                         timing,
@@ -1177,60 +1174,48 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                             // expression value events
                             note_expression_controller.register_note(&event);
 
-                            process_events.push(ProcessEvent::NoteEvent {
+                            process_events.push(ProcessEvent::NoteEvent(NoteEvent::NoteOn {
                                 timing,
-                                event: NoteEvent::NoteOn {
-                                    timing,
-                                    voice_id: if event.note_id != -1 {
-                                        Some(event.note_id)
-                                    } else {
-                                        None
-                                    },
-                                    channel: event.channel as u8,
-                                    note: event.pitch as u8,
-                                    velocity: event.velocity,
+                                voice_id: if event.note_id != -1 {
+                                    Some(event.note_id)
+                                } else {
+                                    None
                                 },
-                            });
+                                channel: event.channel as u8,
+                                note: event.pitch as u8,
+                                velocity: event.velocity,
+                            }));
                         } else if event.type_ == EventTypes::kNoteOffEvent as u16 {
                             let event = event.event.note_off;
-                            process_events.push(ProcessEvent::NoteEvent {
+                            process_events.push(ProcessEvent::NoteEvent(NoteEvent::NoteOff {
                                 timing,
-                                event: NoteEvent::NoteOff {
-                                    timing,
-                                    voice_id: if event.note_id != -1 {
-                                        Some(event.note_id)
-                                    } else {
-                                        None
-                                    },
-                                    channel: event.channel as u8,
-                                    note: event.pitch as u8,
-                                    velocity: event.velocity,
+                                voice_id: if event.note_id != -1 {
+                                    Some(event.note_id)
+                                } else {
+                                    None
                                 },
-                            });
+                                channel: event.channel as u8,
+                                note: event.pitch as u8,
+                                velocity: event.velocity,
+                            }));
                         } else if event.type_ == EventTypes::kPolyPressureEvent as u16 {
                             let event = event.event.poly_pressure;
-                            process_events.push(ProcessEvent::NoteEvent {
+                            process_events.push(ProcessEvent::NoteEvent(NoteEvent::PolyPressure {
                                 timing,
-                                event: NoteEvent::PolyPressure {
-                                    timing,
-                                    voice_id: if event.note_id != -1 {
-                                        Some(event.note_id)
-                                    } else {
-                                        None
-                                    },
-                                    channel: event.channel as u8,
-                                    note: event.pitch as u8,
-                                    pressure: event.pressure,
+                                voice_id: if event.note_id != -1 {
+                                    Some(event.note_id)
+                                } else {
+                                    None
                                 },
-                            });
+                                channel: event.channel as u8,
+                                note: event.pitch as u8,
+                                pressure: event.pressure,
+                            }));
                         } else if event.type_ == EventTypes::kNoteExpressionValueEvent as u16 {
                             let event = event.event.note_expression_value;
                             match note_expression_controller.translate_event(timing, &event) {
                                 Some(translated_event) => {
-                                    process_events.push(ProcessEvent::NoteEvent {
-                                        timing,
-                                        event: translated_event,
-                                    })
+                                    process_events.push(ProcessEvent::NoteEvent(translated_event))
                                 }
                                 None => nih_debug_assert_failure!(
                                     "Unhandled note expression type: {}",
@@ -1248,10 +1233,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                 std::slice::from_raw_parts(event.bytes, event.size as usize);
                             match NoteEvent::from_midi(timing, sysex_buffer) {
                                 Ok(note_event) => {
-                                    process_events.push(ProcessEvent::NoteEvent {
-                                        timing,
-                                        event: note_event,
-                                    });
+                                    process_events.push(ProcessEvent::NoteEvent(note_event));
                                 }
                                 Err(_) => {
                                     // `NoteEvent::from_midi` contains more detailed tracing
@@ -1273,7 +1255,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
             permit_alloc(|| {
                 process_events.sort_by_key(|event| match event {
                     ProcessEvent::ParameterChange { timing, .. } => *timing,
-                    ProcessEvent::NoteEvent { timing, .. } => *timing,
+                    ProcessEvent::NoteEvent(event) => event.timing(),
                 })
             });
 
@@ -1315,7 +1297,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                     Some(sample_rate),
                                 );
                             }
-                            ProcessEvent::NoteEvent { timing: _, event } => {
+                            ProcessEvent::NoteEvent(event) => {
                                 // We need to make sure to compensate the event for any block splitting,
                                 // since we had to create the event object beforehand
                                 let mut event = event.clone();
