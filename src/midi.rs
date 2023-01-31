@@ -311,9 +311,10 @@ pub enum NoteEvent<S: SysExMessage> {
         /// The program number, in `0..128`.
         program: u8,
     },
-    /// A MIDI SysEx message supported by the plugin's `SysExMessage` type. If the conversion from
-    /// the raw byte array fails (e.g. the plugin doesn't support this kind of message), then this
-    /// will be logged during debug builds of the plugin, and no event is emitted.
+    /// A MIDI SysEx message supported by the plugin's `SysExMessage` type, available on
+    /// [`MidiConfig::Basic`] and up. If the conversion from the raw byte array fails (e.g. the
+    /// plugin doesn't support this kind of message), then this will be logged during debug builds
+    /// of the plugin, and no event is emitted.
     MidiSysEx { timing: u32, message: S },
 }
 

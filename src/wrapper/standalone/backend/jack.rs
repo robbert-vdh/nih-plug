@@ -136,6 +136,7 @@ impl<P: Plugin> Backend<P> for Jack {
                 }));
             }
 
+            // TODO: Support SysEx
             output_events.clear();
             if cb(&mut buffer, transport, &input_events, &mut output_events) {
                 if let Some(midi_output) = &midi_output {
