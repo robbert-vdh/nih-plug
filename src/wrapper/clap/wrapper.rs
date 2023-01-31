@@ -83,6 +83,7 @@ use crate::context::gui::AsyncExecutor;
 use crate::context::process::Transport;
 use crate::editor::{Editor, ParentWindowHandle};
 use crate::event_loop::{BackgroundThread, EventLoop, MainThreadExecutor, TASK_QUEUE_CAPACITY};
+use crate::midi::sysex::SysExMessage;
 use crate::midi::{MidiConfig, MidiResult, NoteEvent, PluginNoteEvent};
 use crate::params::internals::ParamPtr;
 use crate::params::{ParamFlags, Params};
@@ -1338,24 +1339,16 @@ impl<P: ClapPlugin> Wrapper<P> {
 
                     clap_call! { out=>try_push(out, &event.header) }
                 }
-                midi_event @ NoteEvent::MidiSysEx { .. } if P::MIDI_OUTPUT >= MidiConfig::Basic => {
+                NoteEvent::MidiSysEx { timing: _, message }
+                    if P::MIDI_OUTPUT >= MidiConfig::Basic =>
+                {
                     // SysEx is supported on the basic MIDI config so this is separate
                     let mut sysex_buffer = Default::default();
-                    let midi_data: &[u8] = match midi_event.as_midi(&mut sysex_buffer) {
-                        Some(MidiResult::Basic(_)) => unreachable!(
-                            "SysEx event read as basic MIDI, something's gone horribly wrong"
-                        ),
-                        Some(MidiResult::SysEx(length)) => {
-                            // If this is a SysEx event then the `SysExMessage` implementation will
-                            // have serialized the event to `midi_data` and returned the correct
-                            // size in bytes
-                            let sysex_buffer = sysex_buffer.borrow();
-                            nih_debug_assert!(sysex_buffer.len() >= length);
 
-                            &sysex_buffer[..length]
-                        }
-                        None => unreachable!("Missing MIDI conversion for MIDI event"),
-                    };
+                    let length = message.to_buffer(&mut sysex_buffer);
+                    let sysex_buffer = sysex_buffer.borrow();
+                    nih_debug_assert!(sysex_buffer.len() >= length);
+                    let sysex_buffer = &sysex_buffer[..length];
 
                     let event = clap_event_midi_sysex {
                         header: clap_event_header {
@@ -1367,8 +1360,8 @@ impl<P: ClapPlugin> Wrapper<P> {
                         },
                         port_index: 0,
                         // The host _should_ be making a copy of the data if it accepts the event. Should...
-                        buffer: midi_data.as_ptr(),
-                        size: midi_data.len() as u32,
+                        buffer: sysex_buffer.as_ptr(),
+                        size: sysex_buffer.len() as u32,
                     };
 
                     clap_call! { out=>try_push(out, &event.header) }
@@ -1659,7 +1652,8 @@ impl<P: ClapPlugin> Wrapper<P> {
                     Ok(note_event) => {
                         input_events.push_back(note_event);
                     }
-                    Err(n) => nih_debug_assert_failure!("Unhandled MIDI message type {}", n),
+                    // `NoteEvent::from_midi` contains more detailed tracing
+                    Err(_) => nih_debug_assert_failure!("Could not parse SysEx message"),
                 };
             }
             _ => {
