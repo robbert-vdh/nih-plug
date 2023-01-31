@@ -10,7 +10,7 @@ use super::super::config::WrapperConfig;
 use super::Backend;
 use crate::buffer::Buffer;
 use crate::context::process::Transport;
-use crate::midi::{MidiConfig, NoteEvent};
+use crate::midi::{MidiConfig, PluginNoteEvent};
 use crate::plugin::{AuxiliaryIOConfig, BusConfig, Plugin};
 
 /// Uses CPAL for audio and midir for MIDI.
@@ -26,10 +26,15 @@ pub struct Cpal {
     // TODO: MIDI
 }
 
-impl Backend for Cpal {
+impl<P: Plugin> Backend<P> for Cpal {
     fn run(
         &mut self,
-        cb: impl FnMut(&mut Buffer, Transport, &[NoteEvent], &mut Vec<NoteEvent>) -> bool
+        cb: impl FnMut(
+                &mut Buffer,
+                Transport,
+                &[PluginNoteEvent<P>],
+                &mut Vec<PluginNoteEvent<P>>,
+            ) -> bool
             + 'static
             + Send,
     ) {
@@ -100,17 +105,17 @@ impl Backend for Cpal {
         let output_stream = match self.output_sample_format {
             SampleFormat::I16 => self.output_device.build_output_stream(
                 &self.output_config,
-                self.build_output_data_callback::<i16>(unparker, input_rb_consumer, cb),
+                self.build_output_data_callback::<P, i16>(unparker, input_rb_consumer, cb),
                 error_cb,
             ),
             SampleFormat::U16 => self.output_device.build_output_stream(
                 &self.output_config,
-                self.build_output_data_callback::<u16>(unparker, input_rb_consumer, cb),
+                self.build_output_data_callback::<P, u16>(unparker, input_rb_consumer, cb),
                 error_cb,
             ),
             SampleFormat::F32 => self.output_device.build_output_stream(
                 &self.output_config,
-                self.build_output_data_callback::<f32>(unparker, input_rb_consumer, cb),
+                self.build_output_data_callback::<P, f32>(unparker, input_rb_consumer, cb),
                 error_cb,
             ),
         }
@@ -306,11 +311,16 @@ impl Cpal {
         }
     }
 
-    fn build_output_data_callback<T: Sample>(
+    fn build_output_data_callback<P: Plugin, T: Sample>(
         &self,
         unparker: Unparker,
         mut input_rb_consumer: Option<rtrb::Consumer<f32>>,
-        mut cb: impl FnMut(&mut Buffer, Transport, &[NoteEvent], &mut Vec<NoteEvent>) -> bool
+        mut cb: impl FnMut(
+                &mut Buffer,
+                Transport,
+                &[PluginNoteEvent<P>],
+                &mut Vec<PluginNoteEvent<P>>,
+            ) -> bool
             + 'static
             + Send,
     ) -> impl FnMut(&mut [T], &OutputCallbackInfo) + Send + 'static {

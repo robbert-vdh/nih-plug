@@ -18,6 +18,10 @@ code then it will not be listed here.
   type SysExMessage = ();
   ```
 
+- As the result of the above change, `NoteEvent` is now parameterized by a
+  `SysExMessage` type. There is a new `PluginNoteEvent<P>` type synonym that can
+  be parameterized by a `Plugin` to make using this slightly less verbose.
+
 ## [2023-01-12]
 
 - The Vizia dependency has been updated. This updated version uses a new text

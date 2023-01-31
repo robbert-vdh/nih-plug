@@ -17,7 +17,7 @@ use crate::context::gui::AsyncExecutor;
 use crate::context::process::Transport;
 use crate::editor::{Editor, ParentWindowHandle};
 use crate::event_loop::{EventLoop, MainThreadExecutor, OsEventLoop};
-use crate::midi::NoteEvent;
+use crate::midi::PluginNoteEvent;
 use crate::params::internals::ParamPtr;
 use crate::params::{ParamFlags, Params};
 use crate::plugin::{
@@ -32,7 +32,7 @@ use crate::wrapper::util::process_wrapper;
 /// than this many parameters at a time will cause changes to get lost.
 const EVENT_QUEUE_CAPACITY: usize = 2048;
 
-pub struct Wrapper<P: Plugin, B: Backend> {
+pub struct Wrapper<P: Plugin, B: Backend<P>> {
     backend: AtomicRefCell<B>,
 
     /// The wrapped plugin instance.
@@ -154,7 +154,7 @@ impl WindowHandler for WrapperWindowHandler {
     }
 }
 
-impl<P: Plugin, B: Backend> MainThreadExecutor<Task<P>> for Wrapper<P, B> {
+impl<P: Plugin, B: Backend<P>> MainThreadExecutor<Task<P>> for Wrapper<P, B> {
     fn execute(&self, task: Task<P>, _is_gui_thread: bool) {
         match task {
             Task::PluginTask(task) => (self.task_executor.lock())(task),
@@ -175,7 +175,7 @@ impl<P: Plugin, B: Backend> MainThreadExecutor<Task<P>> for Wrapper<P, B> {
     }
 }
 
-impl<P: Plugin, B: Backend> Wrapper<P, B> {
+impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
     /// Instantiate a new instance of the standalone wrapper. Returns an error if the plugin does
     /// not accept the IO configuration from the wrapper config.
     pub fn new(backend: B, config: WrapperConfig) -> Result<Arc<Self>, WrapperError> {
@@ -602,8 +602,8 @@ impl<P: Plugin, B: Backend> Wrapper<P, B> {
     fn make_process_context<'a>(
         &'a self,
         transport: Transport,
-        input_events: &'a [NoteEvent],
-        output_events: &'a mut Vec<NoteEvent>,
+        input_events: &'a [PluginNoteEvent<P>],
+        output_events: &'a mut Vec<PluginNoteEvent<P>>,
     ) -> WrapperProcessContext<'a, P, B> {
         WrapperProcessContext {
             wrapper: self,

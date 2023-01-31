@@ -2,9 +2,21 @@
 
 use midi_consts::channel_event as midi;
 
+use self::sysex::SysExMessage;
+use crate::plugin::Plugin;
+
 pub mod sysex;
 
 pub use midi_consts::channel_event::control_change;
+
+/// A plugin-specific note event type.
+///
+/// The reason why this is defined like this instead of parameterizing `NoteEvent` with `P`` is
+/// because deriving trait bounds requires all of the plugin's generic parameters to implement those
+/// traits. And we can't require `P` to implement things like `Clone`.
+///
+/// <https://github.com/rust-lang/rust/issues/26925>
+pub type PluginNoteEvent<P> = NoteEvent<<P as Plugin>::SysExMessage>;
 
 /// Determines which note events a plugin receives.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -31,7 +43,7 @@ pub enum MidiConfig {
 /// numbers are zero-indexed.
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[non_exhaustive]
-pub enum NoteEvent {
+pub enum NoteEvent<S: SysExMessage> {
     /// A note on event, available on [`MidiConfig::Basic`] and up.
     NoteOn {
         timing: u32,
@@ -299,9 +311,13 @@ pub enum NoteEvent {
         /// The program number, in `0..128`.
         program: u8,
     },
+    /// A MIDI SysEx message supported by the plugin's `SysExMessage` type. If the conversion from
+    /// the raw byte array fails (e.g. the plugin doesn't support this kind of message), then this
+    /// will be logged during debug builds of the plugin, and no event is emitted.
+    MidiSysEx { timing: u32, message: S },
 }
 
-impl NoteEvent {
+impl<S: SysExMessage> NoteEvent<S> {
     /// Returns the sample within the current buffer this event belongs to.
     pub fn timing(&self) -> u32 {
         match self {
@@ -322,6 +338,7 @@ impl NoteEvent {
             NoteEvent::MidiPitchBend { timing, .. } => *timing,
             NoteEvent::MidiCC { timing, .. } => *timing,
             NoteEvent::MidiProgramChange { timing, .. } => *timing,
+            NoteEvent::MidiSysEx { timing, .. } => *timing,
         }
     }
 
@@ -345,8 +362,12 @@ impl NoteEvent {
             NoteEvent::MidiPitchBend { .. } => None,
             NoteEvent::MidiCC { .. } => None,
             NoteEvent::MidiProgramChange { .. } => None,
+            NoteEvent::MidiSysEx { .. } => None,
         }
     }
+
+    // TODO: `[u8; 3]` doesn't work anymore with SysEx. We can wrap this in an
+    //       `enum MidiBuffer<P> { simple: [u8; 3], sysex: P::SysExMessage::Buffer }`.
 
     /// Parse MIDI into a [`NoteEvent`]. Will return `Err(event_type)` if the parsing failed.
     pub fn from_midi(timing: u32, midi_data: [u8; 3]) -> Result<Self, u8> {
@@ -408,6 +429,7 @@ impl NoteEvent {
                 channel,
                 program: midi_data[1],
             }),
+            // TODO: SysEx
             n => Err(n),
         }
     }
@@ -500,6 +522,8 @@ impl NoteEvent {
             | NoteEvent::PolyVibrato { .. }
             | NoteEvent::PolyExpression { .. }
             | NoteEvent::PolyBrightness { .. } => None,
+            // TODO: These functions need to handle both simple and longer messages as documented above
+            NoteEvent::MidiSysEx { .. } => None,
         }
     }
 
@@ -524,6 +548,7 @@ impl NoteEvent {
             NoteEvent::MidiPitchBend { timing, .. } => *timing -= samples,
             NoteEvent::MidiCC { timing, .. } => *timing -= samples,
             NoteEvent::MidiProgramChange { timing, .. } => *timing -= samples,
+            NoteEvent::MidiSysEx { timing, .. } => *timing -= samples,
         }
     }
 }
@@ -536,7 +561,7 @@ mod tests {
 
     #[test]
     fn test_note_on_midi_conversion() {
-        let event = NoteEvent::NoteOn {
+        let event = NoteEvent::<()>::NoteOn {
             timing: TIMING,
             voice_id: None,
             channel: 1,
@@ -553,7 +578,7 @@ mod tests {
 
     #[test]
     fn test_note_off_midi_conversion() {
-        let event = NoteEvent::NoteOff {
+        let event = NoteEvent::<()>::NoteOff {
             timing: TIMING,
             voice_id: None,
             channel: 1,
@@ -569,7 +594,7 @@ mod tests {
 
     #[test]
     fn test_poly_pressure_midi_conversion() {
-        let event = NoteEvent::PolyPressure {
+        let event = NoteEvent::<()>::PolyPressure {
             timing: TIMING,
             voice_id: None,
             channel: 1,
@@ -585,7 +610,7 @@ mod tests {
 
     #[test]
     fn test_channel_pressure_midi_conversion() {
-        let event = NoteEvent::MidiChannelPressure {
+        let event = NoteEvent::<()>::MidiChannelPressure {
             timing: TIMING,
             channel: 1,
             pressure: 0.6929134,
@@ -599,7 +624,7 @@ mod tests {
 
     #[test]
     fn test_pitch_bend_midi_conversion() {
-        let event = NoteEvent::MidiPitchBend {
+        let event = NoteEvent::<()>::MidiPitchBend {
             timing: TIMING,
             channel: 1,
             value: 0.6929134,
@@ -613,7 +638,7 @@ mod tests {
 
     #[test]
     fn test_cc_midi_conversion() {
-        let event = NoteEvent::MidiCC {
+        let event = NoteEvent::<()>::MidiCC {
             timing: TIMING,
             channel: 1,
             cc: 2,
@@ -628,7 +653,7 @@ mod tests {
 
     #[test]
     fn test_program_change_midi_conversion() {
-        let event = NoteEvent::MidiProgramChange {
+        let event = NoteEvent::<()>::MidiProgramChange {
             timing: TIMING,
             channel: 1,
             program: 42,
@@ -639,4 +664,6 @@ mod tests {
             event
         );
     }
+
+    // TODO: SysEx conversion
 }

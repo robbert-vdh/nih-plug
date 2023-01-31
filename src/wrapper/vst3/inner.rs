@@ -19,7 +19,7 @@ use crate::context::gui::AsyncExecutor;
 use crate::context::process::Transport;
 use crate::editor::Editor;
 use crate::event_loop::{EventLoop, MainThreadExecutor, OsEventLoop};
-use crate::midi::{MidiConfig, NoteEvent};
+use crate::midi::{MidiConfig, PluginNoteEvent};
 use crate::params::internals::ParamPtr;
 use crate::params::{ParamFlags, Params};
 use crate::plugin::{
@@ -102,10 +102,10 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// NOTE: Because with VST3 MIDI CC messages are sent as parameter changes and VST3 does not
     ///       interleave parameter changes and note events, this queue has to be sorted when
     ///       creating the process context
-    pub input_events: AtomicRefCell<VecDeque<NoteEvent>>,
+    pub input_events: AtomicRefCell<VecDeque<PluginNoteEvent<P>>>,
     /// Stores any events the plugin has output during the current processing cycle, analogous to
     /// `input_events`.
-    pub output_events: AtomicRefCell<VecDeque<NoteEvent>>,
+    pub output_events: AtomicRefCell<VecDeque<PluginNoteEvent<P>>>,
     /// VST3 has several useful predefined note expressions, but for some reason they are the only
     /// note event type that don't have MIDI note ID and channel fields. So we need to keep track of
     /// the most recent VST3 note IDs we've seen, and then map those back to MIDI note IDs and
@@ -120,7 +120,7 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// parameter changes and events into a vector at the start of the process call, sort it, and
     /// then do the block splitting based on that. Note events need to have their timing adjusted to
     /// match the block start, since they're all read upfront.
-    pub process_events: AtomicRefCell<Vec<ProcessEvent>>,
+    pub process_events: AtomicRefCell<Vec<ProcessEvent<P>>>,
     /// The plugin is able to restore state through a method on the `GuiContext`. To avoid changing
     /// parameters mid-processing and running into garbled data if the host also tries to load state
     /// at the same time the restoring happens at the end of each processing call. If this zero
@@ -177,7 +177,7 @@ pub enum Task<P: Plugin> {
 /// sample accurate automation and MIDI CC handling through parameters we need to put all parameter
 /// changes and (translated) note events into a sorted array first.
 #[derive(Debug, PartialEq)]
-pub enum ProcessEvent {
+pub enum ProcessEvent<P: Plugin> {
     /// An incoming parameter change sent by the host. This will only be used when sample accurate
     /// automation has been enabled, and the parameters are only updated when we process this
     /// spooled event at the start of a block.
@@ -198,7 +198,7 @@ pub enum ProcessEvent {
         timing: u32,
         /// The actual note event, make sure to subtract the block start index with
         /// [`NoteEvent::subtract_timing()`] before putting this into the input event queue.
-        event: NoteEvent,
+        event: PluginNoteEvent<P>,
     },
 }
 

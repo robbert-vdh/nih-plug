@@ -1271,7 +1271,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
 
                     block_end = data.num_samples as usize;
                     for event_idx in event_start_idx..process_events.len() {
-                        match process_events[event_idx] {
+                        match &process_events[event_idx] {
                             ProcessEvent::ParameterChange {
                                 timing,
                                 hash,
@@ -1280,24 +1280,22 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                 // If this parameter change happens after the start of this block, then
                                 // we'll split the block here and handle this parameter change after
                                 // we've processed this block
-                                if timing != block_start as u32 {
+                                if *timing != block_start as u32 {
                                     event_start_idx = event_idx;
-                                    block_end = timing as usize;
+                                    block_end = *timing as usize;
                                     break;
                                 }
 
                                 self.inner.set_normalized_value_by_hash(
-                                    hash,
-                                    normalized_value,
+                                    *hash,
+                                    *normalized_value,
                                     Some(sample_rate),
                                 );
                             }
-                            ProcessEvent::NoteEvent {
-                                timing: _,
-                                mut event,
-                            } => {
+                            ProcessEvent::NoteEvent { timing: _, event } => {
                                 // We need to make sure to compensate the event for any block splitting,
                                 // since we had to create the event object beforehand
+                                let mut event = event.clone();
                                 event.subtract_timing(block_start as u32);
                                 input_events.push_back(event);
                             }
@@ -1626,7 +1624,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                     pressure,
                                 };
                             }
-                            event @ (NoteEvent::PolyVolume {
+                            ref event @ (NoteEvent::PolyVolume {
                                 voice_id,
                                 channel,
                                 note,
@@ -1665,7 +1663,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                 match NoteExpressionController::translate_event_reverse(
                                     voice_id
                                         .unwrap_or_else(|| ((channel as i32) << 8) | note as i32),
-                                    &event,
+                                    event,
                                 ) {
                                     Some(translated_event) => {
                                         vst3_event.type_ =

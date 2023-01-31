@@ -9,7 +9,7 @@ use crate::context::init::InitContext;
 use crate::context::process::{ProcessContext, Transport};
 use crate::context::PluginApi;
 use crate::event_loop::EventLoop;
-use crate::midi::NoteEvent;
+use crate::midi::PluginNoteEvent;
 use crate::params::internals::ParamPtr;
 use crate::plugin::ClapPlugin;
 
@@ -37,8 +37,8 @@ pub(crate) struct PendingInitContextRequests {
 /// unnecessary atomic operations to lock the uncontested RwLocks.
 pub(crate) struct WrapperProcessContext<'a, P: ClapPlugin> {
     pub(super) wrapper: &'a Wrapper<P>,
-    pub(super) input_events_guard: AtomicRefMut<'a, VecDeque<NoteEvent>>,
-    pub(super) output_events_guard: AtomicRefMut<'a, VecDeque<NoteEvent>>,
+    pub(super) input_events_guard: AtomicRefMut<'a, VecDeque<PluginNoteEvent<P>>>,
+    pub(super) output_events_guard: AtomicRefMut<'a, VecDeque<PluginNoteEvent<P>>>,
     pub(super) transport: Transport,
 }
 
@@ -96,11 +96,11 @@ impl<P: ClapPlugin> ProcessContext<P> for WrapperProcessContext<'_, P> {
         &self.transport
     }
 
-    fn next_event(&mut self) -> Option<NoteEvent> {
+    fn next_event(&mut self) -> Option<PluginNoteEvent<P>> {
         self.input_events_guard.pop_front()
     }
 
-    fn send_event(&mut self, event: NoteEvent) {
+    fn send_event(&mut self, event: PluginNoteEvent<P>) {
         self.output_events_guard.push_back(event);
     }
 

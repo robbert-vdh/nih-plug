@@ -3,6 +3,7 @@
 
 use vst3_sys::vst::{NoteExpressionValueEvent, NoteOnEvent};
 
+use crate::midi::sysex::SysExMessage;
 use crate::midi::NoteEvent;
 
 type MidiNote = u8;
@@ -100,11 +101,11 @@ impl NoteExpressionController {
     /// Translate the note expression value event into an internal NIH-plug event, if we handle the
     /// expression type from the note expression value event. The timing is provided here because we
     /// may be splitting buffers on inter-buffer parameter changes.
-    pub fn translate_event(
+    pub fn translate_event<S: SysExMessage>(
         &self,
         timing: u32,
         event: &NoteExpressionValueEvent,
-    ) -> Option<NoteEvent> {
+    ) -> Option<NoteEvent<S>> {
         // We're calling it a voice ID, VST3 (and CLAP) calls it a note ID
         let (note_id, note, channel) = *self
             .note_ids
@@ -168,7 +169,7 @@ impl NoteExpressionController {
     /// `translate_event()`.
     pub fn translate_event_reverse(
         note_id: i32,
-        event: &NoteEvent,
+        event: &NoteEvent<impl SysExMessage>,
     ) -> Option<NoteExpressionValueEvent> {
         match &event {
             NoteEvent::PolyVolume { gain, .. } => Some(NoteExpressionValueEvent {

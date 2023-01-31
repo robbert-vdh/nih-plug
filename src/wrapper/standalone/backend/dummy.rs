@@ -4,7 +4,7 @@ use super::super::config::WrapperConfig;
 use super::Backend;
 use crate::buffer::Buffer;
 use crate::context::process::Transport;
-use crate::midi::NoteEvent;
+use crate::midi::PluginNoteEvent;
 use crate::plugin::{AuxiliaryIOConfig, BusConfig, Plugin};
 
 /// This backend doesn't input or output any audio or MIDI. It only exists so the standalone
@@ -15,10 +15,15 @@ pub struct Dummy {
     bus_config: BusConfig,
 }
 
-impl Backend for Dummy {
+impl<P: Plugin> Backend<P> for Dummy {
     fn run(
         &mut self,
-        mut cb: impl FnMut(&mut Buffer, Transport, &[NoteEvent], &mut Vec<NoteEvent>) -> bool
+        mut cb: impl FnMut(
+                &mut Buffer,
+                Transport,
+                &[PluginNoteEvent<P>],
+                &mut Vec<PluginNoteEvent<P>>,
+            ) -> bool
             + 'static
             + Send,
     ) {

@@ -7,33 +7,33 @@ use crate::context::gui::GuiContext;
 use crate::context::init::InitContext;
 use crate::context::process::{ProcessContext, Transport};
 use crate::context::PluginApi;
-use crate::midi::NoteEvent;
+use crate::midi::PluginNoteEvent;
 use crate::params::internals::ParamPtr;
 use crate::plugin::Plugin;
 
 /// An [`InitContext`] implementation for the standalone wrapper.
-pub(crate) struct WrapperInitContext<'a, P: Plugin, B: Backend> {
+pub(crate) struct WrapperInitContext<'a, P: Plugin, B: Backend<P>> {
     pub(super) wrapper: &'a Wrapper<P, B>,
 }
 
 /// A [`ProcessContext`] implementation for the standalone wrapper. This is a separate object so it
 /// can hold on to lock guards for event queues. Otherwise reading these events would require
 /// constant unnecessary atomic operations to lock the uncontested RwLocks.
-pub(crate) struct WrapperProcessContext<'a, P: Plugin, B: Backend> {
+pub(crate) struct WrapperProcessContext<'a, P: Plugin, B: Backend<P>> {
     #[allow(dead_code)]
     pub(super) wrapper: &'a Wrapper<P, B>,
-    pub(super) input_events: &'a [NoteEvent],
+    pub(super) input_events: &'a [PluginNoteEvent<P>],
     // The current index in `input_events`, since we're not actually popping anything from a queue
     // here to keep the standalone backend implementation a bit more flexible
     pub(super) input_events_idx: usize,
-    pub(super) output_events: &'a mut Vec<NoteEvent>,
+    pub(super) output_events: &'a mut Vec<PluginNoteEvent<P>>,
     pub(super) transport: Transport,
 }
 
 /// A [`GuiContext`] implementation for the wrapper. This is passed to the plugin in
 /// [`Editor::spawn()`][crate::prelude::Editor::spawn()] so it can interact with the rest of the plugin and
 /// with the host for things like setting parameters.
-pub(crate) struct WrapperGuiContext<P: Plugin, B: Backend> {
+pub(crate) struct WrapperGuiContext<P: Plugin, B: Backend<P>> {
     pub(super) wrapper: Arc<Wrapper<P, B>>,
 
     /// This allows us to send tasks to the parent view that will be handled at the start of its
@@ -41,7 +41,7 @@ pub(crate) struct WrapperGuiContext<P: Plugin, B: Backend> {
     pub(super) gui_task_sender: channel::Sender<GuiTask>,
 }
 
-impl<P: Plugin, B: Backend> InitContext<P> for WrapperInitContext<'_, P, B> {
+impl<P: Plugin, B: Backend<P>> InitContext<P> for WrapperInitContext<'_, P, B> {
     fn plugin_api(&self) -> PluginApi {
         PluginApi::Standalone
     }
@@ -59,7 +59,7 @@ impl<P: Plugin, B: Backend> InitContext<P> for WrapperInitContext<'_, P, B> {
     }
 }
 
-impl<P: Plugin, B: Backend> ProcessContext<P> for WrapperProcessContext<'_, P, B> {
+impl<P: Plugin, B: Backend<P>> ProcessContext<P> for WrapperProcessContext<'_, P, B> {
     fn plugin_api(&self) -> PluginApi {
         PluginApi::Standalone
     }
@@ -79,10 +79,10 @@ impl<P: Plugin, B: Backend> ProcessContext<P> for WrapperProcessContext<'_, P, B
         &self.transport
     }
 
-    fn next_event(&mut self) -> Option<NoteEvent> {
+    fn next_event(&mut self) -> Option<PluginNoteEvent<P>> {
         // We'll pretend we're a queue, choo choo
         if self.input_events_idx < self.input_events.len() {
-            let event = self.input_events[self.input_events_idx];
+            let event = self.input_events[self.input_events_idx].clone();
             self.input_events_idx += 1;
 
             Some(event)
@@ -91,7 +91,7 @@ impl<P: Plugin, B: Backend> ProcessContext<P> for WrapperProcessContext<'_, P, B
         }
     }
 
-    fn send_event(&mut self, event: NoteEvent) {
+    fn send_event(&mut self, event: PluginNoteEvent<P>) {
         self.output_events.push(event);
     }
 
@@ -104,7 +104,7 @@ impl<P: Plugin, B: Backend> ProcessContext<P> for WrapperProcessContext<'_, P, B
     }
 }
 
-impl<P: Plugin, B: Backend> GuiContext for WrapperGuiContext<P, B> {
+impl<P: Plugin, B: Backend<P>> GuiContext for WrapperGuiContext<P, B> {
     fn plugin_api(&self) -> PluginApi {
         PluginApi::Standalone
     }

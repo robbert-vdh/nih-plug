@@ -12,7 +12,7 @@ use super::super::config::WrapperConfig;
 use super::Backend;
 use crate::buffer::Buffer;
 use crate::context::process::Transport;
-use crate::midi::{MidiConfig, NoteEvent};
+use crate::midi::{MidiConfig, NoteEvent, PluginNoteEvent};
 use crate::plugin::Plugin;
 
 /// Uses JACK audio and MIDI.
@@ -28,10 +28,15 @@ pub struct Jack {
     midi_output: Option<Arc<Mutex<Port<MidiOut>>>>,
 }
 
-impl Backend for Jack {
+impl<P: Plugin> Backend<P> for Jack {
     fn run(
         &mut self,
-        mut cb: impl FnMut(&mut Buffer, Transport, &[NoteEvent], &mut Vec<NoteEvent>) -> bool
+        mut cb: impl FnMut(
+                &mut Buffer,
+                Transport,
+                &[PluginNoteEvent<P>],
+                &mut Vec<PluginNoteEvent<P>>,
+            ) -> bool
             + 'static
             + Send,
     ) {
@@ -45,8 +50,8 @@ impl Backend for Jack {
             })
         }
 
-        let mut input_events = Vec::with_capacity(2048);
-        let mut output_events = Vec::with_capacity(2048);
+        let mut input_events: Vec<PluginNoteEvent<P>> = Vec::with_capacity(2048);
+        let mut output_events: Vec<PluginNoteEvent<P>> = Vec::with_capacity(2048);
 
         // This thread needs to be blocked until processing is finished
         let parker = Parker::new();

@@ -1,7 +1,7 @@
 //! A context passed during the process function.
 
 use super::PluginApi;
-use crate::midi::NoteEvent;
+use crate::midi::PluginNoteEvent;
 use crate::plugin::Plugin;
 
 /// Contains both context data and callbacks the plugin can use during processing. Most notably this
@@ -73,12 +73,12 @@ pub trait ProcessContext<P: Plugin> {
     ///
     /// ProcessStatus::Normal
     /// ```
-    fn next_event(&mut self) -> Option<NoteEvent>;
+    fn next_event(&mut self) -> Option<PluginNoteEvent<P>>;
 
     /// Send an event to the host. Only available when
     /// [`Plugin::MIDI_OUTPUT`][crate::prelude::Plugin::MIDI_INPUT] is set. Will not do anything
     /// otherwise.
-    fn send_event(&mut self, event: NoteEvent);
+    fn send_event(&mut self, event: PluginNoteEvent<P>);
 
     /// Update the current latency of the plugin. If the plugin is currently processing audio, then
     /// this may cause audio playback to be restarted.

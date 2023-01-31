@@ -81,7 +81,7 @@ use crate::context::gui::AsyncExecutor;
 use crate::context::process::Transport;
 use crate::editor::{Editor, ParentWindowHandle};
 use crate::event_loop::{BackgroundThread, EventLoop, MainThreadExecutor, TASK_QUEUE_CAPACITY};
-use crate::midi::{MidiConfig, NoteEvent};
+use crate::midi::{MidiConfig, NoteEvent, PluginNoteEvent};
 use crate::params::internals::ParamPtr;
 use crate::params::{ParamFlags, Params};
 use crate::plugin::{
@@ -136,10 +136,10 @@ pub struct Wrapper<P: ClapPlugin> {
     ///
     /// TODO: Maybe load these lazily at some point instead of needing to spool them all to this
     ///       queue first
-    input_events: AtomicRefCell<VecDeque<NoteEvent>>,
+    input_events: AtomicRefCell<VecDeque<PluginNoteEvent<P>>>,
     /// Stores any events the plugin has output during the current processing cycle, analogous to
     /// `input_events`.
-    output_events: AtomicRefCell<VecDeque<NoteEvent>>,
+    output_events: AtomicRefCell<VecDeque<PluginNoteEvent<P>>>,
     /// The last process status returned by the plugin. This is used for tail handling.
     last_process_status: AtomicCell<ProcessStatus>,
     /// The current latency in samples, as set by the plugin through the [`ProcessContext`]. uses
@@ -1356,7 +1356,7 @@ impl<P: ClapPlugin> Wrapper<P> {
     pub unsafe fn handle_in_event(
         &self,
         event: *const clap_event_header,
-        input_events: &mut AtomicRefMut<VecDeque<NoteEvent>>,
+        input_events: &mut AtomicRefMut<VecDeque<PluginNoteEvent<P>>>,
         transport_info: Option<&mut *const clap_event_transport>,
         current_sample_idx: usize,
     ) {

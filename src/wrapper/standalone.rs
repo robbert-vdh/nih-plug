@@ -173,7 +173,7 @@ pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = Stri
     }
 }
 
-fn run_wrapper<P: Plugin, B: Backend>(backend: B, config: WrapperConfig) -> bool {
+fn run_wrapper<P: Plugin, B: Backend<P>>(backend: B, config: WrapperConfig) -> bool {
     let wrapper = match Wrapper::<P, _>::new(backend, config) {
         Ok(wrapper) => wrapper,
         Err(err) => {
