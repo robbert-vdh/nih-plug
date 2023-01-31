@@ -1,15 +1,16 @@
 use atomic_float::AtomicF32;
 use atomic_refcell::{AtomicRefCell, AtomicRefMut};
 use clap_sys::events::{
-    clap_event_header, clap_event_midi, clap_event_note, clap_event_note_expression,
-    clap_event_param_gesture, clap_event_param_mod, clap_event_param_value, clap_event_transport,
-    clap_input_events, clap_output_events, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_IS_LIVE,
-    CLAP_EVENT_MIDI, CLAP_EVENT_NOTE_CHOKE, CLAP_EVENT_NOTE_END, CLAP_EVENT_NOTE_EXPRESSION,
-    CLAP_EVENT_NOTE_OFF, CLAP_EVENT_NOTE_ON, CLAP_EVENT_PARAM_GESTURE_BEGIN,
-    CLAP_EVENT_PARAM_GESTURE_END, CLAP_EVENT_PARAM_MOD, CLAP_EVENT_PARAM_VALUE,
-    CLAP_EVENT_TRANSPORT, CLAP_NOTE_EXPRESSION_BRIGHTNESS, CLAP_NOTE_EXPRESSION_EXPRESSION,
-    CLAP_NOTE_EXPRESSION_PAN, CLAP_NOTE_EXPRESSION_PRESSURE, CLAP_NOTE_EXPRESSION_TUNING,
-    CLAP_NOTE_EXPRESSION_VIBRATO, CLAP_NOTE_EXPRESSION_VOLUME, CLAP_TRANSPORT_HAS_BEATS_TIMELINE,
+    clap_event_header, clap_event_midi, clap_event_midi_sysex, clap_event_note,
+    clap_event_note_expression, clap_event_param_gesture, clap_event_param_mod,
+    clap_event_param_value, clap_event_transport, clap_input_events, clap_output_events,
+    CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_IS_LIVE, CLAP_EVENT_MIDI, CLAP_EVENT_MIDI_SYSEX,
+    CLAP_EVENT_NOTE_CHOKE, CLAP_EVENT_NOTE_END, CLAP_EVENT_NOTE_EXPRESSION, CLAP_EVENT_NOTE_OFF,
+    CLAP_EVENT_NOTE_ON, CLAP_EVENT_PARAM_GESTURE_BEGIN, CLAP_EVENT_PARAM_GESTURE_END,
+    CLAP_EVENT_PARAM_MOD, CLAP_EVENT_PARAM_VALUE, CLAP_EVENT_TRANSPORT,
+    CLAP_NOTE_EXPRESSION_BRIGHTNESS, CLAP_NOTE_EXPRESSION_EXPRESSION, CLAP_NOTE_EXPRESSION_PAN,
+    CLAP_NOTE_EXPRESSION_PRESSURE, CLAP_NOTE_EXPRESSION_TUNING, CLAP_NOTE_EXPRESSION_VIBRATO,
+    CLAP_NOTE_EXPRESSION_VOLUME, CLAP_TRANSPORT_HAS_BEATS_TIMELINE,
     CLAP_TRANSPORT_HAS_SECONDS_TIMELINE, CLAP_TRANSPORT_HAS_TEMPO,
     CLAP_TRANSPORT_HAS_TIME_SIGNATURE, CLAP_TRANSPORT_IS_LOOP_ACTIVE, CLAP_TRANSPORT_IS_PLAYING,
     CLAP_TRANSPORT_IS_RECORDING, CLAP_TRANSPORT_IS_WITHIN_PRE_ROLL,
@@ -62,6 +63,7 @@ use crossbeam::queue::ArrayQueue;
 use parking_lot::Mutex;
 use raw_window_handle::RawWindowHandle;
 use std::any::Any;
+use std::borrow::Borrow;
 use std::cmp;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::ffi::{c_void, CStr};
@@ -81,7 +83,7 @@ use crate::context::gui::AsyncExecutor;
 use crate::context::process::Transport;
 use crate::editor::{Editor, ParentWindowHandle};
 use crate::event_loop::{BackgroundThread, EventLoop, MainThreadExecutor, TASK_QUEUE_CAPACITY};
-use crate::midi::{MidiConfig, NoteEvent, PluginNoteEvent};
+use crate::midi::{MidiConfig, MidiResult, NoteEvent, PluginNoteEvent};
 use crate::params::internals::ParamPtr;
 use crate::params::{ParamFlags, Params};
 use crate::plugin::{
@@ -1314,9 +1316,13 @@ impl<P: ClapPlugin> Wrapper<P> {
                 {
                     // NIH-plug already includes MIDI conversion functions, so we'll reuse those for
                     // the MIDI events
-                    let midi = midi_event
-                        .as_midi()
-                        .expect("Missing MIDI conversion for MIDI event");
+                    let midi_data = match midi_event.as_midi(&mut Default::default()) {
+                        Some(MidiResult::Basic(midi_data)) => midi_data,
+                        Some(MidiResult::SysEx(_)) => unreachable!(
+                            "Basic MIDI event read as SysEx, something's gone horribly wrong"
+                        ),
+                        None => unreachable!("Missing MIDI conversion for MIDI event"),
+                    };
 
                     let event = clap_event_midi {
                         header: clap_event_header {
@@ -1327,7 +1333,42 @@ impl<P: ClapPlugin> Wrapper<P> {
                             flags: 0,
                         },
                         port_index: 0,
-                        data: midi,
+                        data: midi_data,
+                    };
+
+                    clap_call! { out=>try_push(out, &event.header) }
+                }
+                midi_event @ NoteEvent::MidiSysEx { .. } if P::MIDI_OUTPUT >= MidiConfig::Basic => {
+                    // SysEx is supported on the basic MIDI config so this is separate
+                    let mut sysex_buffer = Default::default();
+                    let midi_data: &[u8] = match midi_event.as_midi(&mut sysex_buffer) {
+                        Some(MidiResult::Basic(_)) => unreachable!(
+                            "SysEx event read as basic MIDI, something's gone horribly wrong"
+                        ),
+                        Some(MidiResult::SysEx(length)) => {
+                            // If this is a SysEx event then the `SysExMessage` implementation will
+                            // have serialized the event to `midi_data` and returned the correct
+                            // size in bytes
+                            let sysex_buffer = sysex_buffer.borrow();
+                            nih_debug_assert!(sysex_buffer.len() >= length);
+
+                            &sysex_buffer[..length]
+                        }
+                        None => unreachable!("Missing MIDI conversion for MIDI event"),
+                    };
+
+                    let event = clap_event_midi_sysex {
+                        header: clap_event_header {
+                            size: mem::size_of::<clap_event_midi_sysex>() as u32,
+                            time,
+                            space_id: CLAP_CORE_EVENT_SPACE_ID,
+                            type_: CLAP_EVENT_MIDI_SYSEX,
+                            flags: 0,
+                        },
+                        port_index: 0,
+                        // The host _should_ be making a copy of the data if it accepts the event. Should...
+                        buffer: midi_data.as_ptr(),
+                        size: midi_data.len() as u32,
                     };
 
                     clap_call! { out=>try_push(out, &event.header) }
@@ -1590,7 +1631,8 @@ impl<P: ClapPlugin> Wrapper<P> {
                 // messages to stay consistent with the VST3 wrapper.
                 let event = &*(event as *const clap_event_midi);
 
-                match NoteEvent::from_midi(raw_event.time - current_sample_idx as u32, event.data) {
+                match NoteEvent::from_midi(raw_event.time - current_sample_idx as u32, &event.data)
+                {
                     Ok(
                         note_event @ (NoteEvent::NoteOn { .. }
                         | NoteEvent::NoteOff { .. }
@@ -1602,6 +1644,21 @@ impl<P: ClapPlugin> Wrapper<P> {
                         input_events.push_back(note_event);
                     }
                     Ok(_) => (),
+                    Err(n) => nih_debug_assert_failure!("Unhandled MIDI message type {}", n),
+                };
+            }
+            (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_MIDI_SYSEX)
+                if P::MIDI_INPUT >= MidiConfig::Basic =>
+            {
+                let event = &*(event as *const clap_event_midi_sysex);
+
+                assert!(!event.buffer.is_null());
+                let sysex_buffer = std::slice::from_raw_parts(event.buffer, event.size as usize);
+                match NoteEvent::from_midi(raw_event.time - current_sample_idx as u32, sysex_buffer)
+                {
+                    Ok(note_event) => {
+                        input_events.push_back(note_event);
+                    }
                     Err(n) => nih_debug_assert_failure!("Unhandled MIDI message type {}", n),
                 };
             }
