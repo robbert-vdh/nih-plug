@@ -507,7 +507,11 @@ impl ClapPlugin for Crisp {
 
 impl Vst3Plugin for Crisp {
     const VST3_CLASS_ID: [u8; 16] = *b"CrispPluginRvdH.";
-    const VST3_CATEGORIES: &'static str = "Fx|Filter|Distortion";
+    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] = &[
+        Vst3SubCategory::Fx,
+        Vst3SubCategory::Filter,
+        Vst3SubCategory::Distortion,
+    ];
 }
 
 nih_export_clap!(Crisp);

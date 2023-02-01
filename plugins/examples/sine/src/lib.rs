@@ -213,7 +213,11 @@ impl ClapPlugin for Sine {
 
 impl Vst3Plugin for Sine {
     const VST3_CLASS_ID: [u8; 16] = *b"SineMoistestPlug";
-    const VST3_CATEGORIES: &'static str = "Instrument|Synth|Tools";
+    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] = &[
+        Vst3SubCategory::Instrument,
+        Vst3SubCategory::Synth,
+        Vst3SubCategory::Tools,
+    ];
 }
 
 nih_export_clap!(Sine);

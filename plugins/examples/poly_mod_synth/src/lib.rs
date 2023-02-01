@@ -612,7 +612,8 @@ impl ClapPlugin for PolyModSynth {
 // modulation
 impl Vst3Plugin for PolyModSynth {
     const VST3_CLASS_ID: [u8; 16] = *b"PolyM0dSynth1337";
-    const VST3_CATEGORIES: &'static str = "Instrument|Synth";
+    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] =
+        &[Vst3SubCategory::Instrument, Vst3SubCategory::Synth];
 }
 
 nih_export_clap!(PolyModSynth);

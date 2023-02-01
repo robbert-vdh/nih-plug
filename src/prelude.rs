@@ -30,3 +30,4 @@ pub use crate::plugin::{
 };
 pub use crate::wrapper::clap::features::ClapFeature;
 pub use crate::wrapper::state::PluginState;
+pub use crate::wrapper::vst3::subcategories::Vst3SubCategory;

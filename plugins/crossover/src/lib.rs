@@ -401,7 +401,8 @@ impl ClapPlugin for Crossover {
 
 impl Vst3Plugin for Crossover {
     const VST3_CLASS_ID: [u8; 16] = *b"CrossoverRvdH...";
-    const VST3_CATEGORIES: &'static str = "Fx|Tools";
+    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] =
+        &[Vst3SubCategory::Fx, Vst3SubCategory::Tools];
 }
 
 nih_export_clap!(Crossover);

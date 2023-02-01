@@ -431,7 +431,8 @@ impl ClapPlugin for PubertySimulator {
 
 impl Vst3Plugin for PubertySimulator {
     const VST3_CLASS_ID: [u8; 16] = *b"PubertySim..RvdH";
-    const VST3_CATEGORIES: &'static str = "Fx|Pitch Shift";
+    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] =
+        &[Vst3SubCategory::Fx, Vst3SubCategory::PitchShift];
 }
 
 nih_export_clap!(PubertySimulator);

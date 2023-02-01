@@ -4,6 +4,7 @@
 /// A keyword for a CLAP plugin. See
 /// <https://github.com/free-audio/clap/blob/main/include/clap/plugin-features.h> for more
 /// information.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClapFeature {
     // These are the main categories, every plugin should have at least one of these
     Instrument,

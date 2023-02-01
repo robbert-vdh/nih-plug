@@ -581,7 +581,11 @@ impl ClapPlugin for SpectralCompressor {
 
 impl Vst3Plugin for SpectralCompressor {
     const VST3_CLASS_ID: [u8; 16] = *b"SpectrlComprRvdH";
-    const VST3_CATEGORIES: &'static str = "Fx|Dynamics|Spectral";
+    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] = &[
+        Vst3SubCategory::Fx,
+        Vst3SubCategory::Dynamics,
+        Vst3SubCategory::Custom("Spectral"),
+    ];
 }
 
 nih_export_clap!(SpectralCompressor);

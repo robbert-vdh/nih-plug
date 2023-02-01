@@ -261,7 +261,12 @@ impl ClapPlugin for LoudnessWarWinner {
 
 impl Vst3Plugin for LoudnessWarWinner {
     const VST3_CLASS_ID: [u8; 16] = *b"LoudnessWar.RvdH";
-    const VST3_CATEGORIES: &'static str = "Fx|Dynamics|Distortion";
+    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] = &[
+        Vst3SubCategory::Fx,
+        Vst3SubCategory::Dynamics,
+        Vst3SubCategory::Distortion,
+        Vst3SubCategory::Custom("Pain"),
+    ];
 }
 
 nih_export_clap!(LoudnessWarWinner);

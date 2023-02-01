@@ -8,6 +8,7 @@ use vst3_sys::VST3;
 // Alias needed for the VST3 attribute macro
 use vst3_sys as vst3_com;
 
+use super::subcategories::Vst3SubCategory;
 use super::util::u16strlcpy;
 use super::wrapper::Wrapper;
 use crate::plugin::Vst3Plugin;
@@ -102,20 +103,7 @@ impl<P: Vst3Plugin> IPluginFactory2 for Factory<P> {
         strlcpy(&mut info.category, "Audio Module Class");
         strlcpy(&mut info.name, P::NAME);
         info.class_flags = 1 << 1; // kSimpleModeSupported
-
-        // No idea if any hosts do something with this, but it's part of VST3's example categories
-        // list
-        if P::HARD_REALTIME_ONLY {
-            nih_debug_assert!(!P::VST3_CATEGORIES.ends_with('|'));
-            nih_debug_assert!(!P::VST3_CATEGORIES.contains("OnlyRT"));
-            strlcpy(
-                &mut info.subcategories,
-                &format!("{}|OnlyRT", P::VST3_CATEGORIES),
-            );
-        } else {
-            strlcpy(&mut info.subcategories, P::VST3_CATEGORIES);
-        };
-
+        strlcpy(&mut info.subcategories, &make_subcategories_string::<P>());
         strlcpy(&mut info.vendor, P::VENDOR);
         strlcpy(&mut info.version, P::VERSION);
         strlcpy(&mut info.sdk_version, VST3_SDK_VERSION);
@@ -142,7 +130,7 @@ impl<P: Vst3Plugin> IPluginFactory3 for Factory<P> {
         strlcpy(&mut info.category, "Audio Module Class");
         u16strlcpy(&mut info.name, P::NAME);
         info.class_flags = 1 << 1; // kSimpleModeSupported
-        strlcpy(&mut info.subcategories, P::VST3_CATEGORIES);
+        strlcpy(&mut info.subcategories, &make_subcategories_string::<P>());
         u16strlcpy(&mut info.vendor, P::VENDOR);
         u16strlcpy(&mut info.version, P::VERSION);
         u16strlcpy(&mut info.sdk_version, VST3_SDK_VERSION);
@@ -153,5 +141,22 @@ impl<P: Vst3Plugin> IPluginFactory3 for Factory<P> {
     unsafe fn set_host_context(&self, _context: *mut c_void) -> tresult {
         // We don't need to do anything with this
         kResultOk
+    }
+}
+
+fn make_subcategories_string<P: Vst3Plugin>() -> String {
+    // No idea if any hosts do something with OnlyRT, but it's part of VST3's example categories
+    // list. Plugins should not be adding this feature manually
+    nih_debug_assert!(!P::VST3_SUBCATEGORIES.contains(&Vst3SubCategory::Custom("OnlyRT")));
+    let category_string = P::VST3_SUBCATEGORIES
+        .iter()
+        .map(Vst3SubCategory::as_str)
+        .collect::<Vec<&str>>()
+        .join("|");
+
+    if P::HARD_REALTIME_ONLY {
+        format!("{category_string}|OnlyRT")
+    } else {
+        category_string
     }
 }

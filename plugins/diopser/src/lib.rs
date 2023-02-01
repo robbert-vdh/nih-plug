@@ -355,7 +355,8 @@ impl ClapPlugin for Diopser {
 
 impl Vst3Plugin for Diopser {
     const VST3_CLASS_ID: [u8; 16] = *b"DiopserPlugRvdH.";
-    const VST3_CATEGORIES: &'static str = "Fx|Filter";
+    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] =
+        &[Vst3SubCategory::Fx, Vst3SubCategory::Filter];
 }
 
 nih_export_clap!(Diopser);

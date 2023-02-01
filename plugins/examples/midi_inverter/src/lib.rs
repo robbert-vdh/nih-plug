@@ -227,7 +227,8 @@ impl ClapPlugin for MidiInverter {
 
 impl Vst3Plugin for MidiInverter {
     const VST3_CLASS_ID: [u8; 16] = *b"M1d1Inv3r70rzAaA";
-    const VST3_CATEGORIES: &'static str = "Instrument|Tools";
+    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] =
+        &[Vst3SubCategory::Instrument, Vst3SubCategory::Tools];
 }
 
 nih_export_clap!(MidiInverter);

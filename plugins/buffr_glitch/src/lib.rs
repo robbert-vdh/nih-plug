@@ -431,6 +431,7 @@ impl ClapPlugin for BuffrGlitch {
     const CLAP_SUPPORT_URL: Option<&'static str> = None;
     const CLAP_FEATURES: &'static [ClapFeature] = &[
         ClapFeature::AudioEffect,
+        ClapFeature::Synthesizer,
         ClapFeature::Stereo,
         ClapFeature::Glitch,
     ];
@@ -438,7 +439,11 @@ impl ClapPlugin for BuffrGlitch {
 
 impl Vst3Plugin for BuffrGlitch {
     const VST3_CLASS_ID: [u8; 16] = *b"BuffrGlitch.RvdH";
-    const VST3_CATEGORIES: &'static str = "Fx";
+    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] = &[
+        Vst3SubCategory::Fx,
+        Vst3SubCategory::Synth,
+        Vst3SubCategory::Custom("Glitch"),
+    ];
 }
 
 nih_export_clap!(BuffrGlitch);

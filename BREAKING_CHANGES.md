@@ -6,6 +6,14 @@ new and what's changed, this document lists all breaking changes in reverse
 chronological order. If a new feature did not require any changes to existing
 code then it will not be listed here.
 
+## [2023-02-01]
+
+- The `Vst3Plugin::VST3_CATEGORIES` string constant has been replaced by a
+  `Vst3Plugin::VST3_SUBCATEGORIES` constant of type `&[Vst3SubCategory]`.
+  `Vst3SubCategory` is an enum containing all of VST3's predefined categories,
+  and it behaves similarly to the `ClapFeature` enum used for CLAP plugins. This
+  makes defining subcategories for VST3 plugins easier and less error prone.
+
 ## [2023-01-31]
 
 - NIH-plug has gained support MIDI SysEx in a simple, type-safe, and

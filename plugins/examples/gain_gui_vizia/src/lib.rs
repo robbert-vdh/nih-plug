@@ -166,7 +166,8 @@ impl ClapPlugin for Gain {
 
 impl Vst3Plugin for Gain {
     const VST3_CLASS_ID: [u8; 16] = *b"GainGuiVIIIZIAAA";
-    const VST3_CATEGORIES: &'static str = "Fx|Dynamics";
+    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] =
+        &[Vst3SubCategory::Fx, Vst3SubCategory::Tools];
 }
 
 nih_export_clap!(Gain);

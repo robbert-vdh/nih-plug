@@ -12,6 +12,7 @@ use crate::midi::MidiConfig;
 use crate::params::Params;
 use crate::wrapper::clap::features::ClapFeature;
 use crate::wrapper::state::PluginState;
+pub use crate::wrapper::vst3::subcategories::Vst3SubCategory;
 
 /// A function that can execute a plugin's [`BackgroundTask`][Plugin::BackgroundTask]s. A plugin can
 /// dispatch these tasks from the `initialize()` function, the `process()` function, or the GUI, so
@@ -249,12 +250,11 @@ pub trait Vst3Plugin: Plugin {
     ///
     /// This will be shuffled into a different byte order on Windows for project-compatibility.
     const VST3_CLASS_ID: [u8; 16];
-    /// One or more categories, separated by pipe characters (`|`), up to 127 characters. Anything
-    /// longer than that will be truncated. See the VST3 SDK for examples of common categories:
-    /// <https://github.com/steinbergmedia/vst3_pluginterfaces/blob/2ad397ade5b51007860bedb3b01b8afd2c5f6fba/vst/ivstaudioprocessor.h#L49-L90>
-    //
-    // TODO: Create a category enum similar to ClapFeature
-    const VST3_CATEGORIES: &'static str;
+    /// One or more subcategories. The host may use these to categorize the plugin. Internally this
+    /// slice will be converted to a string where each character is separated by a pipe character
+    /// (`|`). This string has a limit of 127 characters, and anything longer than that will be
+    /// truncated.
+    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory];
 
     /// [`VST3_CLASS_ID`][Self::VST3_CLASS_ID`] in the correct order for the current platform so
     /// projects and presets can be shared between platforms. This should not be overridden.

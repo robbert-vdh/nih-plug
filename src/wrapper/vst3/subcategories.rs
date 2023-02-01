@@ -5,6 +5,7 @@
 /// <https://github.com/steinbergmedia/vst3_pluginterfaces/blob/bc5ff0f87aaa3cd28c114810f4f03c384421ad2c/vst/ivstaudioprocessor.h#L49-L90>
 /// for a list of all predefined subcategories. Multiple subcategories are concatenated to a string
 /// separated by pipe characters, and the total length of this string may not exceed 127 characters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Vst3SubCategory {
     // These are the main categories, every plugin should have at least one of these, I think
     Fx,
