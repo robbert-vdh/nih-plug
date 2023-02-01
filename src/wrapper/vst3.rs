@@ -6,6 +6,7 @@ mod factory;
 mod inner;
 mod note_expressions;
 mod param_units;
+pub mod subcategories;
 mod view;
 mod wrapper;
 
