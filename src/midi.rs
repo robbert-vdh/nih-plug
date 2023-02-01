@@ -498,7 +498,8 @@ impl<S: SysExMessage> NoteEvent<S> {
             } => Some(MidiResult::Basic([
                 midi::NOTE_ON | channel,
                 note,
-                (velocity * 127.0).round().clamp(0.0, 127.0) as u8,
+                // MIDI treats note ons with zero velocity as note offs, because reasons
+                (velocity * 127.0).round().clamp(1.0, 127.0) as u8,
             ])),
             NoteEvent::NoteOff {
                 timing: _,
