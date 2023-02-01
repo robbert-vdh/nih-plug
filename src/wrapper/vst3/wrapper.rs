@@ -1228,16 +1228,13 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                             // 0 = kMidiSysEx
                             let event = event.event.data;
 
+                            // `NoteEvent::from_midi` prints some tracing if parsing fails, which is
+                            // not necessarily an error
                             assert!(!event.bytes.is_null());
                             let sysex_buffer =
                                 std::slice::from_raw_parts(event.bytes, event.size as usize);
-                            match NoteEvent::from_midi(timing, sysex_buffer) {
-                                Ok(note_event) => {
-                                    process_events.push(ProcessEvent::NoteEvent(note_event));
-                                }
-                                // `NoteEvent::from_midi` prints some tracing if parsing fails,
-                                // which is not necessarily an error
-                                Err(_) => (),
+                            if let Ok(note_event) = NoteEvent::from_midi(timing, sysex_buffer) {
+                                process_events.push(ProcessEvent::NoteEvent(note_event));
                             };
                         }
                     }

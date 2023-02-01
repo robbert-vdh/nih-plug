@@ -1643,16 +1643,14 @@ impl<P: ClapPlugin> Wrapper<P> {
             {
                 let event = &*(event as *const clap_event_midi_sysex);
 
+                // `NoteEvent::from_midi` prints some tracing if parsing fails, which is not
+                // necessarily an error
                 assert!(!event.buffer.is_null());
                 let sysex_buffer = std::slice::from_raw_parts(event.buffer, event.size as usize);
-                match NoteEvent::from_midi(raw_event.time - current_sample_idx as u32, sysex_buffer)
+                if let Ok(note_event) =
+                    NoteEvent::from_midi(raw_event.time - current_sample_idx as u32, sysex_buffer)
                 {
-                    Ok(note_event) => {
-                        input_events.push_back(note_event);
-                    }
-                    // `NoteEvent::from_midi` prints some tracing if parsing fails, which is not
-                    // necessarily an error
-                    Err(_) => (),
+                    input_events.push_back(note_event);
                 };
             }
             _ => {
