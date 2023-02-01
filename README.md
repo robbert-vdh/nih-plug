@@ -207,6 +207,8 @@ examples.
   higher level helper features, such as an adapter to process audio with a
   short-term Fourier transform using the overlap-add method, all using the
   compositional `Buffer` interfaces.
+- [**sysex**](plugins/examples/sysex) is a simple example of how to send and
+  receive SysEx messages by defining custom message types.
 
 ## Licensing
 

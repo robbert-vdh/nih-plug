@@ -29,6 +29,7 @@ members = [
   "plugins/examples/poly_mod_synth",
   "plugins/examples/sine",
   "plugins/examples/stft",
+  "plugins/examples/sysex",
 
   "plugins/buffr_glitch",
   "plugins/crisp",

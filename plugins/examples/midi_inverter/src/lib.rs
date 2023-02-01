@@ -40,12 +40,6 @@ impl Plugin for MidiInverter {
         self.params.clone()
     }
 
-    fn accepts_bus_config(&self, _config: &BusConfig) -> bool {
-        // This is a zero channel plugin, but the host can configure it to pass through audio as
-        // needed. Ableton Live for instance doesn't support note effects.
-        true
-    }
-
     fn process(
         &mut self,
         _buffer: &mut Buffer,
