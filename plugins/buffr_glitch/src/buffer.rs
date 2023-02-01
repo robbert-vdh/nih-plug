@@ -19,7 +19,7 @@ use nih_plug::prelude::*;
 use crate::MAX_OCTAVE_SHIFT;
 
 /// A super simple ring buffer abstraction that records audio into a buffer until it is full, and
-/// then starts looping the already recorded audio. The recording starts hwne pressing a key so
+/// then starts looping the already recorded audio. The recording starts when pressing a key so
 /// transients are preserved correctly. This needs to be able to store at least the number of
 /// samples that correspond to the period size of MIDI note 0.
 #[derive(Debug, Default)]

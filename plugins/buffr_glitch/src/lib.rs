@@ -234,7 +234,8 @@ impl Plugin for BuffrGlitch {
         let mut block_start: usize = 0;
         let mut block_end: usize = MAX_BLOCK_SIZE.min(num_samples);
         while block_start < num_samples {
-            // Keep procesing events until all events at or before `block_start` have been processed
+            // Keep processing events until all events at or before `block_start` have been
+            // processed
             'events: loop {
                 match next_event {
                     // If the event happens now, then we'll keep processing events
@@ -392,7 +393,7 @@ impl Voice {
         self.amp_envelope.reset();
     }
 
-    /// Prepare playback on ntoe on.
+    /// Prepare playback on note on.
     pub fn note_on(&mut self, params: &BuffrGlitchParams, midi_note_id: u8, velocity: f32) {
         self.midi_note_id = Some(midi_note_id);
         self.velocity_gain = if params.velocity_sensitive.value() {
