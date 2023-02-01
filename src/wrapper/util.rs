@@ -69,7 +69,7 @@ pub fn clamp_input_event_timing(timing: u32, total_buffer_len: u32) -> u32 {
     let last_valid_index = total_buffer_len.saturating_sub(1);
 
     nih_debug_assert!(
-        timing < last_valid_index,
+        timing <= last_valid_index,
         "Input event is out of bounds, will be clamped to the buffer's size"
     );
 
@@ -83,7 +83,7 @@ pub fn clamp_output_event_timing(timing: u32, total_buffer_len: u32) -> u32 {
     let last_valid_index = total_buffer_len.saturating_sub(1);
 
     nih_debug_assert!(
-        timing < last_valid_index,
+        timing <= last_valid_index,
         "Output event is out of bounds, will be clamped to the buffer's size"
     );
 
