@@ -39,7 +39,7 @@ pub enum MidiConfig {
 /// [`Plugin::MIDI_INPUT`][crate::prelude::Plugin::MIDI_INPUT]. Also check out the
 /// [`util`][crate::util] module for convenient conversion functions.
 ///
-/// All of the timings are sample offsets withing the current buffer. All sample, channel and note
+/// All of the timings are sample offsets within the current buffer. All sample, channel and note
 /// numbers are zero-indexed.
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[non_exhaustive]
