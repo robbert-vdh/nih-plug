@@ -65,6 +65,7 @@ pub fn strlcpy(dest: &mut [c_char], src: &str) {
 /// out of bounds.
 #[inline]
 pub fn clamp_input_event_timing(timing: u32, total_buffer_len: u32) -> u32 {
+    // If `total_buffer_len == 0`, then 0 is a valid timing
     let last_valid_index = total_buffer_len.saturating_sub(1);
 
     nih_debug_assert!(
