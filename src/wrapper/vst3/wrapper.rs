@@ -1042,6 +1042,8 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
             );
             nih_debug_assert!(data.num_samples >= 0);
 
+            let total_buffer_len = data.num_samples as usize;
+
             // Before doing anything, clear out any auxiliary outputs since they may contain
             // uninitialized data when the host assumes that we'll always write something there
             let current_bus_config = self.inner.current_bus_config.load();
@@ -1057,7 +1059,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                             ptr::write_bytes(
                                 *((*host_output).buffers.offset(channel_idx)) as *mut f32,
                                 0,
-                                data.num_samples as usize,
+                                total_buffer_len,
                             );
                         }
                     }
@@ -1098,8 +1100,15 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                             {
                                 // Later this timing will be compensated for block splits by calling
                                 // `event.subtract_timing(block_start)` before it is passed to the
-                                // plugin
+                                // plugin. Out of bounds events are clamped to the buffer>
                                 let timing = sample_offset as u32;
+                                nih_debug_assert!(
+                                    timing < total_buffer_len as u32,
+                                    "Input event is out of bounds, will be clamped to the \
+                                     buffer's size"
+                                );
+                                let timing = timing.min(total_buffer_len as u32 - 1);
+
                                 let value = value as f32;
 
                                 // MIDI CC messages, channel pressure, and pitch bend are also sent
@@ -1167,6 +1176,12 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
 
                         let event = event.assume_init();
                         let timing = event.sample_offset as u32;
+                        nih_debug_assert!(
+                            timing < total_buffer_len as u32,
+                            "Input event is out of bounds, will be clamped to the buffer's size"
+                        );
+                        let timing = timing.min(total_buffer_len as u32 - 1);
+
                         if event.type_ == EventTypes::kNoteOnEvent as u16 {
                             let event = event.event.note_on;
 
@@ -1270,7 +1285,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                     let mut input_events = self.inner.input_events.borrow_mut();
                     input_events.clear();
 
-                    block_end = data.num_samples as usize;
+                    block_end = total_buffer_len;
                     for event_idx in event_start_idx..process_events.len() {
                         match &process_events[event_idx] {
                             ProcessEvent::ParameterChange {
@@ -1560,6 +1575,14 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                         // There's also a ppqPos field, but uh how about no
                         vst3_event.sample_offset = event.timing() as i32 + block_start as i32;
 
+                        // Out of bounds events are clamped to the buffer
+                        nih_debug_assert!(
+                            vst3_event.sample_offset < total_buffer_len as i32,
+                            "Output event is out of bounds, will be clamped to the buffer's size"
+                        );
+                        vst3_event.sample_offset =
+                            vst3_event.sample_offset.min(total_buffer_len as i32 - 1);
+
                         // `voice_id.unwrap_or(|| ...)` triggers
                         // https://github.com/rust-lang/rust-clippy/issues/8522
                         #[allow(clippy::unnecessary_lazy_evaluations)]
@@ -1779,7 +1802,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                 // If our block ends at the end of the buffer then that means there are no more
                 // unprocessed (parameter) events. If there are more events, we'll just keep going
                 // through this process until we've processed the entire buffer.
-                if block_end as i32 == data.num_samples {
+                if block_end == total_buffer_len {
                     break result;
                 } else {
                     block_start = block_end;
