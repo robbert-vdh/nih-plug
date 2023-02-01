@@ -121,11 +121,15 @@ impl<P: Plugin> Backend<P> for Jack {
 
             input_events.clear();
             if let Some(midi_input) = &midi_input {
-                input_events.extend(
-                    midi_input
-                        .iter(ps)
-                        .filter_map(|midi| NoteEvent::from_midi(midi.time, midi.bytes).ok()),
-                );
+                input_events.extend(midi_input.iter(ps).filter_map(|midi| {
+                    nih_debug_assert!(
+                        midi.time < num_frames,
+                        "Input event is out of bounds, will be clamped to the buffer's size"
+                    );
+                    let timing = midi.time.min(num_frames - 1);
+
+                    NoteEvent::from_midi(timing, midi.bytes).ok()
+                }));
             }
 
             output_events.clear();
@@ -134,7 +138,12 @@ impl<P: Plugin> Backend<P> for Jack {
                     let mut midi_output = midi_output.lock();
                     let mut midi_writer = midi_output.writer(ps);
                     for event in output_events.drain(..) {
-                        let timing = event.timing();
+                        // Out of bounds events are clamped to the buffer's size
+                        nih_debug_assert!(
+                            event.timing() < num_frames,
+                            "Output event is out of bounds, will be clamped to the buffer's size"
+                        );
+                        let timing = event.timing().min(num_frames - 1);
 
                         match event.as_midi() {
                             Some(MidiResult::Basic(midi_data)) => {
