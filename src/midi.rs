@@ -39,11 +39,15 @@ pub enum MidiConfig {
 /// [`Plugin::MIDI_INPUT`][crate::prelude::Plugin::MIDI_INPUT]. Also check out the
 /// [`util`][crate::util] module for convenient conversion functions.
 ///
+/// `S` is a MIDI SysEx message type that needs to implement [`SysExMessage`] to allow converting
+/// this `NoteEvent` to and from raw MIDI data. `()` is provided as a default implementing for
+/// plugins that don't use SysEx.
+///
 /// All of the timings are sample offsets within the current buffer. Out of bound timings are
 /// clamped to the current buffer's length. All sample, channel and note numbers are zero-indexed.
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[non_exhaustive]
-pub enum NoteEvent<S: SysExMessage> {
+pub enum NoteEvent<S> {
     /// A note on event, available on [`MidiConfig::Basic`] and up.
     NoteOn {
         timing: u32,
@@ -330,7 +334,7 @@ pub enum MidiResult<S: SysExMessage> {
     SysEx(S::Buffer, usize),
 }
 
-impl<S: SysExMessage> NoteEvent<S> {
+impl<S> NoteEvent<S> {
     /// Returns the sample within the current buffer this event belongs to.
     pub fn timing(&self) -> u32 {
         match self {
@@ -378,7 +382,9 @@ impl<S: SysExMessage> NoteEvent<S> {
             NoteEvent::MidiSysEx { .. } => None,
         }
     }
+}
 
+impl<S: SysExMessage> NoteEvent<S> {
     /// Parse MIDI into a [`NoteEvent`]. Supports both basic three bytes messages as well as SysEx.
     /// Will return `Err(event_type)` if the parsing failed.
     pub fn from_midi(timing: u32, midi_data: &[u8]) -> Result<Self, u8> {
