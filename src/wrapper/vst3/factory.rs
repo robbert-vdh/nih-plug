@@ -148,15 +148,18 @@ fn make_subcategories_string<P: Vst3Plugin>() -> String {
     // No idea if any hosts do something with OnlyRT, but it's part of VST3's example categories
     // list. Plugins should not be adding this feature manually
     nih_debug_assert!(!P::VST3_SUBCATEGORIES.contains(&Vst3SubCategory::Custom("OnlyRT")));
-    let category_string = P::VST3_SUBCATEGORIES
+    let subcategory_string = P::VST3_SUBCATEGORIES
         .iter()
         .map(Vst3SubCategory::as_str)
         .collect::<Vec<&str>>()
         .join("|");
 
-    if P::HARD_REALTIME_ONLY {
-        format!("{category_string}|OnlyRT")
+    let subcategory_string = if P::HARD_REALTIME_ONLY {
+        format!("{subcategory_string}|OnlyRT")
     } else {
-        category_string
-    }
+        subcategory_string
+    };
+    nih_debug_assert!(subcategory_string.len() <= 127);
+
+    subcategory_string
 }
