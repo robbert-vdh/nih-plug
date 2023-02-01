@@ -37,7 +37,7 @@ use crate::plugin::{
 };
 use crate::util::permit_alloc;
 use crate::wrapper::state;
-use crate::wrapper::util::process_wrapper;
+use crate::wrapper::util::{clamp_input_event_timing, clamp_output_event_timing, process_wrapper};
 
 // Alias needed for the VST3 attribute macro
 use vst3_sys as vst3_com;
@@ -1101,14 +1101,10 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                 // Later this timing will be compensated for block splits by calling
                                 // `event.subtract_timing(block_start)` before it is passed to the
                                 // plugin. Out of bounds events are clamped to the buffer>
-                                let timing = sample_offset as u32;
-                                nih_debug_assert!(
-                                    timing < total_buffer_len as u32,
-                                    "Input event is out of bounds, will be clamped to the \
-                                     buffer's size"
+                                let timing = clamp_input_event_timing(
+                                    sample_offset as u32,
+                                    total_buffer_len as u32,
                                 );
-                                let timing = timing.min(total_buffer_len as u32 - 1);
-
                                 let value = value as f32;
 
                                 // MIDI CC messages, channel pressure, and pitch bend are also sent
@@ -1175,12 +1171,10 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                         nih_debug_assert_eq!(result, kResultOk);
 
                         let event = event.assume_init();
-                        let timing = event.sample_offset as u32;
-                        nih_debug_assert!(
-                            timing < total_buffer_len as u32,
-                            "Input event is out of bounds, will be clamped to the buffer's size"
+                        let timing = clamp_input_event_timing(
+                            event.sample_offset as u32,
+                            total_buffer_len as u32,
                         );
-                        let timing = timing.min(total_buffer_len as u32 - 1);
 
                         if event.type_ == EventTypes::kNoteOnEvent as u16 {
                             let event = event.event.note_on;
@@ -1573,15 +1567,10 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                         let mut vst3_event: Event = mem::zeroed();
                         vst3_event.bus_index = 0;
                         // There's also a ppqPos field, but uh how about no
-                        vst3_event.sample_offset = event.timing() as i32 + block_start as i32;
-
-                        // Out of bounds events are clamped to the buffer
-                        nih_debug_assert!(
-                            vst3_event.sample_offset < total_buffer_len as i32,
-                            "Output event is out of bounds, will be clamped to the buffer's size"
-                        );
-                        vst3_event.sample_offset =
-                            vst3_event.sample_offset.min(total_buffer_len as i32 - 1);
+                        vst3_event.sample_offset = clamp_output_event_timing(
+                            event.timing() + block_start as u32,
+                            total_buffer_len as u32,
+                        ) as i32;
 
                         // `voice_id.unwrap_or(|| ...)` triggers
                         // https://github.com/rust-lang/rust-clippy/issues/8522

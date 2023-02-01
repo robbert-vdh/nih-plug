@@ -61,6 +61,34 @@ pub fn strlcpy(dest: &mut [c_char], src: &str) {
     dest[copy_len] = 0;
 }
 
+/// Clamp an input event's timing to the buffer length. Emits a debug assertion failure if it was
+/// out of bounds.
+#[inline]
+pub fn clamp_input_event_timing(timing: u32, total_buffer_len: u32) -> u32 {
+    let last_valid_index = total_buffer_len.saturating_sub(1);
+
+    nih_debug_assert!(
+        timing < last_valid_index,
+        "Input event is out of bounds, will be clamped to the buffer's size"
+    );
+
+    timing.min(last_valid_index)
+}
+
+/// Clamp an output event's timing to the buffer length. Emits a debug assertion failure if it was
+/// out of bounds.
+#[inline]
+pub fn clamp_output_event_timing(timing: u32, total_buffer_len: u32) -> u32 {
+    let last_valid_index = total_buffer_len.saturating_sub(1);
+
+    nih_debug_assert!(
+        timing < last_valid_index,
+        "Output event is out of bounds, will be clamped to the buffer's size"
+    );
+
+    timing.min(last_valid_index)
+}
+
 /// Set up the logger so that the `nih_*!()` logging and assertion macros log output to a
 /// centralized location and panics also get written there. By default this logs to STDERR unless
 /// the user is running Windows and a debugger has been attached, in which case

@@ -15,6 +15,7 @@ use crate::buffer::Buffer;
 use crate::context::process::Transport;
 use crate::midi::{MidiConfig, MidiResult, NoteEvent, PluginNoteEvent};
 use crate::plugin::Plugin;
+use crate::wrapper::util::{clamp_input_event_timing, clamp_output_event_timing};
 
 /// Uses JACK audio and MIDI.
 pub struct Jack {
@@ -122,11 +123,7 @@ impl<P: Plugin> Backend<P> for Jack {
             input_events.clear();
             if let Some(midi_input) = &midi_input {
                 input_events.extend(midi_input.iter(ps).filter_map(|midi| {
-                    nih_debug_assert!(
-                        midi.time < num_frames,
-                        "Input event is out of bounds, will be clamped to the buffer's size"
-                    );
-                    let timing = midi.time.min(num_frames - 1);
+                    let timing = clamp_input_event_timing(midi.time, num_frames);
 
                     NoteEvent::from_midi(timing, midi.bytes).ok()
                 }));
@@ -139,11 +136,7 @@ impl<P: Plugin> Backend<P> for Jack {
                     let mut midi_writer = midi_output.writer(ps);
                     for event in output_events.drain(..) {
                         // Out of bounds events are clamped to the buffer's size
-                        nih_debug_assert!(
-                            event.timing() < num_frames,
-                            "Output event is out of bounds, will be clamped to the buffer's size"
-                        );
-                        let timing = event.timing().min(num_frames - 1);
+                        let timing = clamp_output_event_timing(event.timing(), num_frames as u32);
 
                         match event.as_midi() {
                             Some(MidiResult::Basic(midi_data)) => {

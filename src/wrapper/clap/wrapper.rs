@@ -94,7 +94,9 @@ use crate::plugin::{
 use crate::util::permit_alloc;
 use crate::wrapper::clap::util::{read_stream, write_stream};
 use crate::wrapper::state::{self, PluginState};
-use crate::wrapper::util::{hash_param_id, process_wrapper, strlcpy};
+use crate::wrapper::util::{
+    clamp_input_event_timing, clamp_output_event_timing, hash_param_id, process_wrapper, strlcpy,
+};
 
 /// How many output parameter changes we can store in our output parameter change queue. Storing
 /// more than this many parameters at a time will cause changes to get lost.
@@ -1079,12 +1081,10 @@ impl<P: ClapPlugin> Wrapper<P> {
         let mut output_events = self.output_events.borrow_mut();
         while let Some(event) = output_events.pop_front() {
             // Out of bounds events are clamped to the buffer's size
-            let time = event.timing() + current_sample_idx as u32;
-            nih_debug_assert!(
-                time < total_buffer_len as u32,
-                "Output event is out of bounds, will be clamped to the buffer's size"
+            let time = clamp_output_event_timing(
+                event.timing() + current_sample_idx as u32,
+                total_buffer_len as u32,
             );
-            let time = time.min(total_buffer_len as u32 - 1);
 
             let push_successful = match event {
                 NoteEvent::NoteOn {
@@ -1423,12 +1423,10 @@ impl<P: ClapPlugin> Wrapper<P> {
         let raw_event = &*event;
 
         // Out of bounds events are clamped to the buffer's size
-        let timing = raw_event.time - current_sample_idx as u32;
-        nih_debug_assert!(
-            timing < total_buffer_len as u32,
-            "Input event is out of bounds, will be clamped to the buffer's size"
+        let timing = clamp_input_event_timing(
+            raw_event.time - current_sample_idx as u32,
+            total_buffer_len as u32,
         );
-        let timing = timing.min(total_buffer_len as u32 - 1);
 
         match (raw_event.space_id, raw_event.type_) {
             (CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_VALUE) => {
