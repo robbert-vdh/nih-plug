@@ -136,7 +136,7 @@ impl<P: Plugin> Backend<P> for Jack {
                     let mut midi_writer = midi_output.writer(ps);
                     for event in output_events.drain(..) {
                         // Out of bounds events are clamped to the buffer's size
-                        let timing = clamp_output_event_timing(event.timing(), num_frames as u32);
+                        let timing = clamp_output_event_timing(event.timing(), num_frames);
 
                         match event.as_midi() {
                             Some(MidiResult::Basic(midi_data)) => {
