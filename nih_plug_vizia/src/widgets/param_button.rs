@@ -16,6 +16,9 @@ pub struct ParamButton {
     // These fields are set through modifiers:
     /// Whether or not to listen to scroll events for changing the parameter's value in steps.
     use_scroll_wheel: bool,
+    /// A specific label to use instead of displaying the parameter's value.
+    label_override: Option<String>,
+
     /// The number of (fractional) scrolled lines that have not yet been turned into parameter
     /// change events. This is needed to support trackpads with smooth scrolling.
     scrolled_lines: f32,
@@ -39,12 +42,19 @@ impl ParamButton {
             param_base: ParamWidgetBase::new(cx, params.clone(), params_to_param),
 
             use_scroll_wheel: true,
+            label_override: None,
+
             scrolled_lines: 0.0,
         }
         .build(
             cx,
             ParamWidgetBase::build_view(params.clone(), params_to_param, move |cx, param_data| {
-                Label::new(cx, param_data.param().name());
+                Binding::new(cx, Self::label_override, move |cx, label_override| {
+                    match label_override.get(cx) {
+                        Some(label_override) => Label::new(cx, &label_override),
+                        None => Label::new(cx, param_data.param().name()),
+                    };
+                })
             }),
         )
         // We'll add the `:checked` pseudoclass when the button is pressed
@@ -116,6 +126,10 @@ pub trait ParamButtonExt {
 
     /// Change the colors scheme for a bypass button. This simply adds the `bypass` class.
     fn for_bypass(self) -> Self;
+
+    /// Change the label used for the button. If this is not set, then the parameter's name will be
+    /// used.
+    fn with_label(self, value: impl Into<String>) -> Self;
 }
 
 impl ParamButtonExt for Handle<'_, ParamButton> {
@@ -125,5 +139,11 @@ impl ParamButtonExt for Handle<'_, ParamButton> {
 
     fn for_bypass(self) -> Self {
         self.class("bypass")
+    }
+
+    fn with_label(self, value: impl Into<String>) -> Self {
+        self.modify(|param_button: &mut ParamButton| {
+            param_button.label_override = Some(value.into())
+        })
     }
 }
