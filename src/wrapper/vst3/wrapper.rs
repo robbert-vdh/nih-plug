@@ -405,7 +405,11 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                         .borrow_mut()
                         .set_slices(0, |output_slices| {
                             output_slices
-                                .resize_with(bus_config.num_output_channels as usize, || &mut [])
+                                .resize_with(bus_config.num_output_channels as usize, || &mut []);
+                            // All slices must have the same length, so if the number of output
+                            // channels has changed since the last call then we should make sure to
+                            // clear any old (dangling) slices to be consistent
+                            output_slices.fill_with(|| &mut []);
                         });
 
                     // Also allocate both the buffers and the slices pointing to those buffers for
@@ -434,7 +438,8 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                             channel_slices.resize_with(
                                 bus_config.aux_input_busses.num_channels as usize,
                                 || &mut [],
-                            )
+                            );
+                            channel_slices.fill_with(|| &mut []);
                         });
                     }
 
@@ -449,7 +454,8 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                             channel_slices.resize_with(
                                 bus_config.aux_output_busses.num_channels as usize,
                                 || &mut [],
-                            )
+                            );
+                            channel_slices.fill_with(|| &mut []);
                         });
                     }
 
