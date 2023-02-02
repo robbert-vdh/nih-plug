@@ -121,8 +121,10 @@ impl RingBuffer {
             }
             BufferStatus::Crossfading if self.next_sample_pos < self.crossfade_length => {
                 // This is an equal power fade between the part of the input after the first loop
-                // and the buffer's existing contents.
-                let crossfade_t = self.next_sample_pos as f32 / (self.crossfade_length - 1) as f32;
+                // and the buffer's existing contents. The `.max(1)` is needed to avoid NaNs with
+                // crossfade lengths of 1 sample.
+                let crossfade_t =
+                    self.next_sample_pos as f32 / (self.crossfade_length - 1).max(1) as f32;
                 let new_t = (1.0 - crossfade_t).sqrt();
                 let existing_t = crossfade_t.sqrt();
 
