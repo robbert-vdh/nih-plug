@@ -14,11 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use easyfft::prelude::{DynRealDft, DynRealFft};
 use nih_plug::debug::*;
-use realfft::num_complex::Complex32;
-use realfft::{ComplexToReal, RealFftPlanner, RealToComplex};
 use std::f32;
-use std::sync::Arc;
 
 use self::filter::{FftFirFilter, FirCoefficients, FFT_INPUT_SIZE, FFT_SIZE};
 use crate::crossover::fir::filter::FILTER_SIZE;
@@ -58,16 +56,11 @@ pub struct FirCrossover {
     /// of course stay in sync, this makes it much simpler to process both channels in sequence.
     io_buffers_next_indices: [usize; NUM_CHANNELS as usize],
 
-    /// The algorithm for the FFT operation.
-    r2c_plan: Arc<dyn RealToComplex<f32>>,
-    /// The algorithm for the IFFT operation.
-    c2r_plan: Arc<dyn ComplexToReal<f32>>,
-
     /// A real buffer that may be written to in place during the FFT and IFFT operations.
     real_scratch_buffer: Box<[f32; FFT_SIZE]>,
     /// A complex buffer corresponding to `real_scratch_buffer` that may be written to in place
     /// during the FFT and IFFT operations.
-    complex_scratch_buffer: Box<[Complex32; FFT_SIZE / 2 + 1]>,
+    complex_scratch_buffer: DynRealDft<f32>,
 }
 
 /// The type of FIR crossover to use.
@@ -87,8 +80,6 @@ impl FirCrossover {
     /// Make sure to add the latency reported by [`latency()`][Self::latency()] to the plugin's
     /// reported latency.
     pub fn new(mode: FirCrossoverType) -> Self {
-        let mut fft_planner = RealFftPlanner::new();
-
         Self {
             mode,
             band_filters: Default::default(),
@@ -98,10 +89,8 @@ impl FirCrossover {
                 [[[0.0; FFT_INPUT_SIZE]; NUM_CHANNELS as usize]; NUM_BANDS],
             ),
             io_buffers_next_indices: [0; NUM_CHANNELS as usize],
-            r2c_plan: fft_planner.plan_fft_forward(FFT_SIZE),
-            c2r_plan: fft_planner.plan_fft_inverse(FFT_SIZE),
             real_scratch_buffer: Box::new([0.0; FFT_SIZE]),
-            complex_scratch_buffer: Box::new([Complex32::default(); FFT_SIZE / 2 + 1]),
+            complex_scratch_buffer: DynRealDft::default(FFT_SIZE),
         }
     }
 
@@ -173,17 +162,12 @@ impl FirCrossover {
                     .copy_from_slice(&self.input_buffers[channel_idx]);
                 self.real_scratch_buffer[FFT_INPUT_SIZE..].fill(0.0);
 
-                self.r2c_plan
-                    .process_with_scratch(
-                        &mut *self.real_scratch_buffer,
-                        &mut *self.complex_scratch_buffer,
-                        &mut [],
-                    )
-                    .unwrap();
+                self.real_scratch_buffer
+                    .real_fft_using(&mut self.complex_scratch_buffer);
 
                 // The input can then be used to produce each band's output. Since realfft expects
                 // to be able to modify the input, we need to make a copy of this first:
-                let input_fft = *self.complex_scratch_buffer;
+                let input_fft = self.complex_scratch_buffer.clone();
 
                 for (band_output_buffers, band_filter) in self
                     .band_output_buffers
@@ -195,7 +179,6 @@ impl FirCrossover {
                         &input_fft,
                         &mut band_output_buffers[channel_idx],
                         channel_idx,
-                        &*self.c2r_plan,
                         &mut self.real_scratch_buffer,
                         &mut self.complex_scratch_buffer,
                     )
@@ -243,7 +226,6 @@ impl FirCrossover {
                     );
                 self.band_filters[0].recompute_coefficients(
                     lp_fir_coefs.clone(),
-                    &*self.r2c_plan,
                     &mut self.real_scratch_buffer,
                     &mut self.complex_scratch_buffer,
                 );
@@ -289,7 +271,6 @@ impl FirCrossover {
 
                     band_filter.recompute_coefficients(
                         fir_bp_coefs,
-                        &*self.r2c_plan,
                         &mut self.real_scratch_buffer,
                         &mut self.complex_scratch_buffer,
                     );
@@ -305,7 +286,6 @@ impl FirCrossover {
 
                 self.band_filters[num_bands - 1].recompute_coefficients(
                     fir_hp_coefs,
-                    &*self.r2c_plan,
                     &mut self.real_scratch_buffer,
                     &mut self.complex_scratch_buffer,
                 );

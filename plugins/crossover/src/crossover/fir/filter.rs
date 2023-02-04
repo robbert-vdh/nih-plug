@@ -14,8 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use realfft::num_complex::Complex32;
-use realfft::{ComplexToReal, RealToComplex};
+use easyfft::prelude::*;
 use std::f32;
 
 use crate::crossover::iir::biquad::{Biquad, BiquadCoefficients};
@@ -49,7 +48,7 @@ pub const FILTER_SIZE: usize = FFT_SIZE - FFT_INPUT_SIZE + 1;
 pub struct FftFirFilter {
     /// An `N_INPUT + 1` sized IIR. Padded, ran through the DFT, and then normalized by dividing by
     /// `FFT_SIZE`.
-    padded_ir_fft: [Complex32; FFT_SIZE / 2 + 1],
+    padded_ir_fft: DynRealDft<f32>,
 
     /// The padding from the previous IDFT operation that needs to be added to the next output
     /// buffer. After the IDFT process there will be an `FFT_SIZE` real scratch buffer containing
@@ -73,7 +72,7 @@ impl Default for FftFirFilter {
             // Would be nicer to initialize this to an impulse response that actually had the
             // correct position wrt the usual linear-phase latency, but this is fine since it should
             // never be used anyways
-            padded_ir_fft: [Complex32::new(1.0 / FFT_SIZE as f32, 0.0); FFT_SIZE / 2 + 1],
+            padded_ir_fft: DynRealDft::default(FFT_SIZE),
             unapplied_padding_buffers: [[0.0; FFT_INPUT_SIZE]; NUM_CHANNELS as usize],
         }
     }
@@ -98,12 +97,11 @@ impl FftFirFilter {
     /// function is thus called inside of the overlap-add loop to avoid duplicate work.
     pub fn process(
         &mut self,
-        input_fft: &[Complex32; FFT_SIZE / 2 + 1],
+        input_fft: &DynRealDft<f32>,
         output_samples: &mut [f32; FFT_INPUT_SIZE],
         output_channel_idx: usize,
-        c2r_plan: &dyn ComplexToReal<f32>,
         real_scratch_buffer: &mut [f32; FFT_SIZE],
-        complex_scratch_buffer: &mut [Complex32; FFT_SIZE / 2 + 1],
+        complex_scratch_buffer: &mut DynRealDft<f32>,
     ) {
         // The padded input FFT has already been taken, so we only need to copy it to the scratch
         // buffer (the input cannot change as the next band might need it as well).
@@ -111,15 +109,9 @@ impl FftFirFilter {
 
         // The FFT of the impulse response has already been normalized, so we just need to
         // multiply the two buffers
-        for (output_bin, ir_bin) in complex_scratch_buffer
-            .iter_mut()
-            .zip(self.padded_ir_fft.iter())
-        {
-            *output_bin *= ir_bin;
-        }
-        c2r_plan
-            .process_with_scratch(complex_scratch_buffer, real_scratch_buffer, &mut [])
-            .unwrap();
+        *complex_scratch_buffer *= &self.padded_ir_fft;
+
+        complex_scratch_buffer.real_ifft_using(real_scratch_buffer);
 
         // At this point the first `FFT_INPUT_SIZE` elements in `real_scratch_buffer`
         // contain the output for the next period, while the last `FFT_INPUT_SIZE` elements
@@ -142,28 +134,21 @@ impl FftFirFilter {
     pub fn recompute_coefficients(
         &mut self,
         coefficients: FirCoefficients<FILTER_SIZE>,
-        r2c_plan: &dyn RealToComplex<f32>,
         real_scratch_buffer: &mut [f32; FFT_SIZE],
-        complex_scratch_buffer: &mut [Complex32; FFT_SIZE / 2 + 1],
+        complex_scratch_buffer: &mut DynRealDft<f32>,
     ) {
         // This needs to be padded with zeroes
         real_scratch_buffer[..FILTER_SIZE].copy_from_slice(&coefficients.0);
         real_scratch_buffer[FILTER_SIZE..].fill(0.0);
 
-        r2c_plan
-            .process_with_scratch(real_scratch_buffer, complex_scratch_buffer, &mut [])
-            .unwrap();
+        real_scratch_buffer.real_fft_using(complex_scratch_buffer);
 
         // The resulting buffer needs to be normalized and written to `self.padded_ir_fft`. That way
         // we don't need to do anything but multiplying and writing the results back when
         // processing.
+        self.padded_ir_fft.clone_from(complex_scratch_buffer);
         let normalization_factor = 1.0 / FFT_SIZE as f32;
-        for (filter_bin, target_bin) in complex_scratch_buffer
-            .iter()
-            .zip(self.padded_ir_fft.iter_mut())
-        {
-            *target_bin = *filter_bin * normalization_factor;
-        }
+        self.padded_ir_fft *= normalization_factor;
     }
 
     /// Reset the internal filter state.
