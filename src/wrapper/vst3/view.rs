@@ -120,6 +120,7 @@ impl<P: Vst3Plugin> WrapperView<P> {
     /// # Safety
     ///
     /// May cause memory corruption in Linux REAPER when called from outside of the `IRunLoop`.
+    #[must_use]
     pub unsafe fn request_resize(&self) -> bool {
         // Don't do anything if the editor is not open, because that would be strange
         if self

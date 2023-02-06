@@ -582,14 +582,21 @@ impl<P: Vst3Plugin> MainThreadExecutor<Task<P>> for WrapperInner<P> {
             Task::TriggerRestart(flags) => match &*self.component_handler.borrow() {
                 Some(handler) => unsafe {
                     nih_debug_assert!(is_gui_thread);
-                    handler.restart_component(flags);
+                    let result = handler.restart_component(flags);
+                    nih_debug_assert_eq!(
+                        result,
+                        kResultOk,
+                        "Failed the restart request call with flags '{:?}'",
+                        flags
+                    );
                 },
                 None => nih_debug_assert_failure!("Component handler not yet set"),
             },
             Task::RequestResize => match &*self.plug_view.read() {
                 Some(plug_view) => unsafe {
                     nih_debug_assert!(is_gui_thread);
-                    plug_view.request_resize();
+                    let success = plug_view.request_resize();
+                    nih_debug_assert!(success, "Failed requesting a window resize");
                 },
                 None => nih_debug_assert_failure!("Can't resize a closed editor"),
             },
