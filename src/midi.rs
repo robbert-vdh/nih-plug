@@ -35,6 +35,10 @@ pub enum MidiConfig {
     MidiCCs,
 }
 
+// FIXME: Like the voice ID, channel and note number can also be omitted in CLAP. And instead of an
+//        Option, maybe this should use a dedicated type to more clearly indicate that missing
+//        values should be treated as wildcards.
+
 /// Event for (incoming) notes. The set of supported note events depends on the value of
 /// [`Plugin::MIDI_INPUT`][crate::prelude::Plugin::MIDI_INPUT]. Also check out the
 /// [`util`][crate::util] module for convenient conversion functions.
