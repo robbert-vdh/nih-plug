@@ -26,15 +26,15 @@ use super::util::{
 };
 use super::util::{VST3_MIDI_CHANNELS, VST3_MIDI_PARAMS_END};
 use super::view::WrapperView;
+use crate::audio_setup::{
+    AuxiliaryBuffers, AuxiliaryIOConfig, BufferConfig, BusConfig, ProcessMode,
+};
 use crate::buffer::Buffer;
 use crate::context::process::Transport;
 use crate::midi::sysex::SysExMessage;
 use crate::midi::{MidiConfig, NoteEvent};
 use crate::params::ParamFlags;
-use crate::plugin::{
-    AuxiliaryBuffers, AuxiliaryIOConfig, BufferConfig, BusConfig, ProcessMode, ProcessStatus,
-    Vst3Plugin,
-};
+use crate::plugin::{ProcessStatus, Vst3Plugin};
 use crate::util::permit_alloc;
 use crate::wrapper::state;
 use crate::wrapper::util::{clamp_input_event_timing, clamp_output_event_timing, process_wrapper};

@@ -14,6 +14,7 @@ use super::note_expressions::NoteExpressionController;
 use super::param_units::ParamUnits;
 use super::util::{ObjectPtr, VstPtr, VST3_MIDI_PARAMS_END, VST3_MIDI_PARAMS_START};
 use super::view::WrapperView;
+use crate::audio_setup::{BufferConfig, BusConfig, ProcessMode};
 use crate::buffer::Buffer;
 use crate::context::gui::AsyncExecutor;
 use crate::context::process::Transport;
@@ -22,9 +23,7 @@ use crate::event_loop::{EventLoop, MainThreadExecutor, OsEventLoop};
 use crate::midi::{MidiConfig, PluginNoteEvent};
 use crate::params::internals::ParamPtr;
 use crate::params::{ParamFlags, Params};
-use crate::plugin::{
-    BufferConfig, BusConfig, Plugin, ProcessMode, ProcessStatus, TaskExecutor, Vst3Plugin,
-};
+use crate::plugin::{Plugin, ProcessStatus, TaskExecutor, Vst3Plugin};
 use crate::wrapper::state::{self, PluginState};
 use crate::wrapper::util::{hash_param_id, process_wrapper};
 

@@ -10,6 +10,9 @@ pub use crate::wrapper::standalone::{nih_export_standalone, nih_export_standalon
 pub use crate::formatters;
 pub use crate::util;
 
+pub use crate::audio_setup::{
+    AuxiliaryBuffers, AuxiliaryIOConfig, BufferConfig, BusConfig, PortNames, ProcessMode,
+};
 pub use crate::buffer::Buffer;
 pub use crate::context::gui::{AsyncExecutor, GuiContext, ParamSetter};
 pub use crate::context::init::InitContext;
@@ -26,10 +29,7 @@ pub use crate::params::Params;
 pub use crate::params::{BoolParam, FloatParam, IntParam, Param, ParamFlags};
 #[cfg(feature = "vst3")]
 pub use crate::plugin::Vst3Plugin;
-pub use crate::plugin::{
-    AuxiliaryBuffers, AuxiliaryIOConfig, BufferConfig, BusConfig, ClapPlugin, Plugin,
-    PolyModulationConfig, PortNames, ProcessMode, ProcessStatus, TaskExecutor,
-};
+pub use crate::plugin::{ClapPlugin, Plugin, PolyModulationConfig, ProcessStatus, TaskExecutor};
 pub use crate::wrapper::clap::features::ClapFeature;
 pub use crate::wrapper::state::PluginState;
 #[cfg(feature = "vst3")]

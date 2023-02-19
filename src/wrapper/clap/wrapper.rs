@@ -78,6 +78,7 @@ use std::time::Duration;
 use super::context::{WrapperGuiContext, WrapperInitContext, WrapperProcessContext};
 use super::descriptor::PluginDescriptor;
 use super::util::ClapPtr;
+use crate::audio_setup::{AuxiliaryBuffers, BufferConfig, BusConfig, ProcessMode};
 use crate::buffer::Buffer;
 use crate::context::gui::AsyncExecutor;
 use crate::context::process::Transport;
@@ -87,10 +88,7 @@ use crate::midi::sysex::SysExMessage;
 use crate::midi::{MidiConfig, MidiResult, NoteEvent, PluginNoteEvent};
 use crate::params::internals::ParamPtr;
 use crate::params::{ParamFlags, Params};
-use crate::plugin::{
-    AuxiliaryBuffers, BufferConfig, BusConfig, ClapPlugin, Plugin, ProcessMode, ProcessStatus,
-    TaskExecutor,
-};
+use crate::plugin::{ClapPlugin, Plugin, ProcessStatus, TaskExecutor};
 use crate::util::permit_alloc;
 use crate::wrapper::clap::util::{read_stream, write_stream};
 use crate::wrapper::state::{self, PluginState};

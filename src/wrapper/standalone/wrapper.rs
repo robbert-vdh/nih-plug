@@ -13,6 +13,8 @@ use std::thread;
 use super::backend::Backend;
 use super::config::WrapperConfig;
 use super::context::{WrapperGuiContext, WrapperInitContext, WrapperProcessContext};
+use crate::audio_setup::AuxiliaryBuffers;
+use crate::audio_setup::{AuxiliaryIOConfig, BufferConfig, BusConfig, ProcessMode};
 use crate::context::gui::AsyncExecutor;
 use crate::context::process::Transport;
 use crate::editor::{Editor, ParentWindowHandle};
@@ -20,10 +22,7 @@ use crate::event_loop::{EventLoop, MainThreadExecutor, OsEventLoop};
 use crate::midi::PluginNoteEvent;
 use crate::params::internals::ParamPtr;
 use crate::params::{ParamFlags, Params};
-use crate::plugin::{
-    AuxiliaryBuffers, AuxiliaryIOConfig, BufferConfig, BusConfig, Plugin, ProcessMode,
-    ProcessStatus, TaskExecutor,
-};
+use crate::plugin::{Plugin, ProcessStatus, TaskExecutor};
 use crate::util::permit_alloc;
 use crate::wrapper::state::{self, PluginState};
 use crate::wrapper::util::process_wrapper;

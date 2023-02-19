@@ -97,10 +97,11 @@ pub use log;
 /// Everything you'll need to use NIH-plug. Import this with `use nih_plug::prelude::*;`.
 pub mod prelude;
 
-// These modules have also been re-exported in the prelude.
+// These modules are also re-exported in the prelude
 pub mod formatters;
 pub mod util;
 
+pub mod audio_setup;
 pub mod buffer;
 pub mod context;
 pub mod editor;

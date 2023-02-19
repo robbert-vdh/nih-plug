@@ -8,10 +8,11 @@ use rtrb::RingBuffer;
 
 use super::super::config::WrapperConfig;
 use super::Backend;
+use crate::audio_setup::{AuxiliaryIOConfig, BusConfig};
 use crate::buffer::Buffer;
 use crate::context::process::Transport;
 use crate::midi::{MidiConfig, PluginNoteEvent};
-use crate::plugin::{AuxiliaryIOConfig, BusConfig, Plugin};
+use crate::plugin::Plugin;
 
 /// Uses CPAL for audio and midir for MIDI.
 pub struct Cpal {

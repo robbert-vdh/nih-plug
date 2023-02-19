@@ -2,10 +2,11 @@ use std::time::{Duration, Instant};
 
 use super::super::config::WrapperConfig;
 use super::Backend;
+use crate::audio_setup::{AuxiliaryIOConfig, BusConfig};
 use crate::buffer::Buffer;
 use crate::context::process::Transport;
 use crate::midi::PluginNoteEvent;
-use crate::plugin::{AuxiliaryIOConfig, BusConfig, Plugin};
+use crate::plugin::Plugin;
 
 /// This backend doesn't input or output any audio or MIDI. It only exists so the standalone
 /// application can continue to run even when there is no audio backend available. This can be
