@@ -48,6 +48,8 @@ mod wrapper;
 /// If the wrapped plugin fails to initialize or throws an error during audio processing, then this
 /// function will return `false`.
 pub fn nih_export_standalone<P: Plugin>() -> bool {
+    // TODO: If the backend fails to initialize then the standalones will exit normally instead of
+    //       with an error code. This should probably be changed.
     nih_export_standalone_with_args::<P, _>(std::env::args())
 }
 
