@@ -598,6 +598,7 @@ impl<S: SysExMessage> NoteEvent<S> {
 
     /// Subtract a sample offset from this event's timing, needed to compensate for the block
     /// splitting in the VST3 wrapper implementation because all events have to be read upfront.
+    #[cfg_attr(not(feature = "vst3"), allow(dead_code))]
     pub(crate) fn subtract_timing(&mut self, samples: u32) {
         match self {
             NoteEvent::NoteOn { timing, .. } => *timing -= samples,

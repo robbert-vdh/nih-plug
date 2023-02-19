@@ -263,12 +263,12 @@ pub trait Vst3Plugin: Plugin {
     const PLATFORM_VST3_CLASS_ID: [u8; 16] = swap_vst3_uid_byte_order(Self::VST3_CLASS_ID);
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(all(feature = "vst3", not(target_os = "windows")))]
 const fn swap_vst3_uid_byte_order(uid: [u8; 16]) -> [u8; 16] {
     uid
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(feature = "vst3", target_os = "windows"))]
 const fn swap_vst3_uid_byte_order(mut uid: [u8; 16]) -> [u8; 16] {
     // No mutable references in const functions, so we can't use `uid.swap()`
     let original_uid = uid;

@@ -13,13 +13,13 @@ mod windows;
 
 pub(crate) use self::background_thread::BackgroundThread;
 
-#[allow(unused_imports)]
+#[cfg_attr(not(feature = "vst3"), allow(unused_imports))]
 #[cfg(all(target_family = "unix", not(target_os = "macos")))]
 pub(crate) use self::linux::LinuxEventLoop as OsEventLoop;
-#[allow(unused_imports)]
+#[cfg_attr(not(feature = "vst3"), allow(unused_imports))]
 #[cfg(target_os = "macos")]
 pub(crate) use self::macos::MacOSEventLoop as OsEventLoop;
-#[allow(unused_imports)]
+#[cfg_attr(not(feature = "vst3"), allow(unused_imports))]
 #[cfg(target_os = "windows")]
 pub(crate) use self::windows::WindowsEventLoop as OsEventLoop;
 
