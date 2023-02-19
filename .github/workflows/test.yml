@@ -56,3 +56,32 @@ jobs:
         # Don't use --all-features as that will enable a whole bunch of
         # conflicting iced features
         run: cargo test --workspace --features "simd,standalone,zstd"
+
+  # This makes sure that NIH-plug can be compiled without VST3 support
+  build-without-vst3:
+    name: Build NIH-plug without VST3 support
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Fetch all git history
+        run: git fetch --force --prune --tags --unshallow
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libgl-dev libjack-dev libxcb1-dev libxcb-icccm4-dev libxcursor-dev libxkbcommon-dev libxcb-shape0-dev libxcb-xfixes0-dev
+
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: build-without-vst3-ubuntu
+
+      - name: Set up Rust toolchain
+        # Needed for SIMD
+        uses: dtolnay/rust-toolchain@nightly
+      - name: Run the tests
+        run: cargo build --no-default-features
