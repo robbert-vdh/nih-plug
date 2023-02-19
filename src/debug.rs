@@ -29,7 +29,17 @@ macro_rules! nih_log {
 #[doc(inline)]
 pub use nih_log;
 
-/// Similar to `nih_log!()`, more scream-y. Used for printing fatal errors.
+/// Similar to `nih_log!()`, but less subtle. Used for printing warnings.
+#[macro_export]
+macro_rules! nih_warn {
+    ($($args:tt)*) => (
+        $crate::log::warn!($($args)*)
+    );
+}
+#[doc(inline)]
+pub use nih_warn;
+
+/// Similar to `nih_log!()`, but more scream-y. Used for printing fatal errors.
 #[macro_export]
 macro_rules! nih_error {
     ($($args:tt)*) => (
