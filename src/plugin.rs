@@ -12,6 +12,7 @@ use crate::midi::MidiConfig;
 use crate::params::Params;
 use crate::wrapper::clap::features::ClapFeature;
 use crate::wrapper::state::PluginState;
+#[cfg(feature = "vst3")]
 pub use crate::wrapper::vst3::subcategories::Vst3SubCategory;
 
 /// A function that can execute a plugin's [`BackgroundTask`][Plugin::BackgroundTask]s. A plugin can
@@ -244,6 +245,7 @@ pub trait ClapPlugin: Plugin {
 }
 
 /// Provides auxiliary metadata needed for a VST3 plugin.
+#[cfg(feature = "vst3")]
 pub trait Vst3Plugin: Plugin {
     /// The unique class ID that identifies this particular plugin. You can use the
     /// `*b"fooofooofooofooo"` syntax for this.
