@@ -216,8 +216,12 @@ impl Jack {
             .main_input_channels
             .map(NonZeroU32::get)
             .unwrap_or_default() as usize;
+        let main_input_name = audio_io_layout
+            .main_input_name()
+            .to_lowercase()
+            .replace(' ', "_");
         for port_no in 1..num_input_channels + 1 {
-            inputs.push(client.register_port(&format!("input_{port_no}"), AudioIn)?);
+            inputs.push(client.register_port(&format!("{main_input_name}_{port_no}"), AudioIn)?);
         }
 
         // We can't immediately connect the outputs. Or well we can with PipeWire, but JACK2 says
@@ -228,8 +232,12 @@ impl Jack {
             .main_output_channels
             .map(NonZeroU32::get)
             .unwrap_or_default() as usize;
+        let main_output_name = audio_io_layout
+            .main_output_name()
+            .to_lowercase()
+            .replace(' ', "_");
         for port_no in 1..num_output_channels + 1 {
-            outputs.push(client.register_port(&format!("output_{port_no}"), AudioOut)?);
+            outputs.push(client.register_port(&format!("{main_output_name}_{port_no}"), AudioOut)?);
         }
 
         let midi_input = if P::MIDI_INPUT >= MidiConfig::Basic {
