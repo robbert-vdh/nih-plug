@@ -14,7 +14,7 @@ use super::backend::Backend;
 use super::config::WrapperConfig;
 use super::context::{WrapperGuiContext, WrapperInitContext, WrapperProcessContext};
 use crate::audio_setup::AuxiliaryBuffers;
-use crate::audio_setup::{AuxiliaryIOConfig, BufferConfig, BusConfig, ProcessMode};
+use crate::audio_setup::{AudioIOLayout, BufferConfig, ProcessMode};
 use crate::context::gui::AsyncExecutor;
 use crate::context::process::Transport;
 use crate::editor::{Editor, ParentWindowHandle};
@@ -67,7 +67,7 @@ pub struct Wrapper<P: Plugin, B: Backend<P>> {
     param_id_to_ptr: HashMap<String, ParamPtr>,
 
     /// The bus and buffer configurations are static for the standalone target.
-    bus_config: BusConfig,
+    audio_io_layout: AudioIOLayout,
     buffer_config: BufferConfig,
 
     /// Parameter changes that have been output by the GUI that have not yet been set in the plugin.
@@ -106,11 +106,6 @@ pub enum Task<P: Plugin> {
 /// Errors that may arise while initializing the wrapped plugins.
 #[derive(Debug, Clone, Copy)]
 pub enum WrapperError {
-    /// The plugin does not accept the IO configuration from the config.
-    IncompatibleConfig {
-        input_channels: u32,
-        output_channels: u32,
-    },
     /// The plugin returned `false` during initialization.
     InitializationFailed,
 }
@@ -178,6 +173,11 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
     /// Instantiate a new instance of the standalone wrapper. Returns an error if the plugin does
     /// not accept the IO configuration from the wrapper config.
     pub fn new(backend: B, config: WrapperConfig) -> Result<Arc<Self>, WrapperError> {
+        // The backend has already queried this, so this will never cause the program to exit
+        // TODO: Do the validation and parsing in the argument parser so this value can be stored on
+        //       the config itself. Right now clap doesn't support this.
+        let audio_io_layout = config.audio_io_layout_or_exit::<P>();
+
         let plugin = P::default();
         let task_executor = Mutex::new(plugin.task_executor());
         let params = plugin.params();
@@ -214,11 +214,11 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
         }
 
         // TODO: Sidechain inputs and auxiliary outputs
-        if P::DEFAULT_AUX_INPUTS.is_some() {
-            nih_log!("Sidechain inputs are not yet supported in this standalone version");
+        if !audio_io_layout.aux_input_ports.is_empty() {
+            nih_warn!("Sidechain inputs are not yet supported in this standalone version");
         }
-        if P::DEFAULT_AUX_OUTPUTS.is_some() {
-            nih_log!("Auxiliary outputs are not yet supported in this standalone version");
+        if !audio_io_layout.aux_output_ports.is_empty() {
+            nih_warn!("Auxiliary outputs are not yet supported in this standalone version");
         }
 
         let wrapper = Arc::new(Wrapper {
@@ -242,13 +242,7 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
                 .map(|(param_id, param_ptr, _)| (param_id, param_ptr))
                 .collect(),
 
-            bus_config: BusConfig {
-                num_input_channels: config.input_channels.unwrap_or(P::DEFAULT_INPUT_CHANNELS),
-                num_output_channels: config.output_channels.unwrap_or(P::DEFAULT_OUTPUT_CHANNELS),
-                // TODO: Expose additional sidechain IO in the JACK backend
-                aux_input_busses: AuxiliaryIOConfig::default(),
-                aux_output_busses: AuxiliaryIOConfig::default(),
-            },
+            audio_io_layout,
             buffer_config: BufferConfig {
                 sample_rate: config.sample_rate,
                 min_buffer_size: None,
@@ -289,24 +283,15 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
             })
             .map(|editor| Arc::new(Mutex::new(editor)));
 
-        // Right now the IO configuration is fixed in the standalone target, so if the plugin cannot
-        // work with this then we cannot initialize the plugin at all.
+        // Before initializing the plugin, make sure all smoothers are set the the default values
+        for param in wrapper.param_id_to_ptr.values() {
+            unsafe { param.update_smoother(wrapper.buffer_config.sample_rate, true) };
+        }
+
         {
             let mut plugin = wrapper.plugin.lock();
-            if !plugin.accepts_bus_config(&wrapper.bus_config) {
-                return Err(WrapperError::IncompatibleConfig {
-                    input_channels: wrapper.bus_config.num_input_channels,
-                    output_channels: wrapper.bus_config.num_output_channels,
-                });
-            }
-
-            // Before initializing the plugin, make sure all smoothers are set the the default values
-            for param in wrapper.param_id_to_ptr.values() {
-                unsafe { param.update_smoother(wrapper.buffer_config.sample_rate, true) };
-            }
-
             if !plugin.initialize(
-                &wrapper.bus_config,
+                &wrapper.audio_io_layout,
                 &wrapper.buffer_config,
                 &mut wrapper.make_init_context(),
             ) {
@@ -558,7 +543,7 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
                         //         runtime preset loading.
                         permit_alloc(|| {
                             plugin.initialize(
-                                &self.bus_config,
+                                &self.audio_io_layout,
                                 &self.buffer_config,
                                 &mut self.make_init_context(),
                             )

@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use crate::audio_setup::{AuxiliaryBuffers, AuxiliaryIOConfig, BufferConfig, BusConfig, PortNames};
+use crate::audio_setup::{AudioIOLayout, AuxiliaryBuffers, BufferConfig};
 use crate::buffer::Buffer;
 use crate::context::gui::AsyncExecutor;
 use crate::context::init::InitContext;
@@ -48,38 +48,33 @@ pub trait Plugin: Default + Send + 'static {
     /// but just in case they do this should only contain decimals values and dots.
     const VERSION: &'static str;
 
-    /// The default number of input channels. This merely serves as a default. The host will probe
-    /// the plugin's supported configuration using
-    /// [`accepts_bus_config()`][Self::accepts_bus_config()], and the selected configuration is
-    /// passed to [`initialize()`][Self::initialize()]. Some hosts like, like Bitwig and Ardour, use
-    /// the defaults instead of setting up the busses properly.
+    /// The plugin's supported audio IO layouts. The first config will be used as the default config
+    /// if the host doesn't or can't select an alternative configuration. Because of that it's
+    /// recommended to begin this slice with a stereo layout. For maximum compatibility with the
+    /// different plugin formats this default layout should also include all of the plugin's
+    /// auxiliary input and output ports, if the plugin has any. If the slice is empty, then the
+    /// plugin will not have any audio IO.
     ///
-    /// Setting this to zero causes the plugin to have no main input bus.
-    const DEFAULT_INPUT_CHANNELS: u32 = 2;
-    /// The default number of output channels. All of the same caveats mentioned for
-    /// `DEFAULT_INPUT_CHANNELS` apply here.
+    /// Both [`AudioIOLayout`] and [`PortNames`][crate::prelude::PortNames] have `.const_default()`
+    /// functions for compile-time equivalents to `Default::default()`:
     ///
-    /// Setting this to zero causes the plugin to have no main output bus.
-    const DEFAULT_OUTPUT_CHANNELS: u32 = 2;
-
-    /// If set, then the plugin will have this many sidechain input busses with a default number of
-    /// channels. Not all hosts support more than one sidechain input bus. Negotiating the actual
-    /// configuration works the same was as with `DEFAULT_INPUT_CHANNELS`.
-    const DEFAULT_AUX_INPUTS: Option<AuxiliaryIOConfig> = None;
-    /// If set, then the plugin will have this many auxiliary output busses with a default number of
-    /// channels. Negotiating the actual configuration works the same was as with
-    /// `DEFAULT_INPUT_CHANNELS`.
-    const DEFAULT_AUX_OUTPUTS: Option<AuxiliaryIOConfig> = None;
-
-    /// Optional names for the main and auxiliary input and output ports. Will be generated if not
-    /// set. This is mostly useful to give descriptive names to the outputs for multi-output
-    /// plugins.
-    const PORT_NAMES: PortNames = PortNames {
-        main_input: None,
-        main_output: None,
-        aux_inputs: None,
-        aux_outputs: None,
-    };
+    /// ```
+    /// # use nih_plug::prelude::*;
+    /// const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[AudioIOLayout {
+    ///     main_input_channels: NonZeroU32::new(2),
+    ///     main_output_channels: NonZeroU32::new(2),
+    ///
+    ///     aux_input_ports: &[new_nonzero_u32(2)],
+    ///
+    ///     ..AudioIOLayout::const_default()
+    /// }];
+    /// ```
+    ///
+    /// # Note
+    ///
+    /// Some plugin hosts, like Ableton Live, don't support MIDI-only plugins and may refuse to load
+    /// plugins with no main output or with zero main output channels.
+    const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout];
 
     /// Whether the plugin accepts note events, and what which events it wants to receive. If this
     /// is set to [`MidiConfig::None`], then the plugin won't receive any note events.
@@ -152,30 +147,28 @@ pub trait Plugin: Default + Send + 'static {
     // The following functions follow the lifetime of the plugin.
     //
 
-    /// Whether the plugin supports a bus config. This only acts as a check, and the plugin
-    /// shouldn't do anything beyond returning true or false.
-    fn accepts_bus_config(&self, config: &BusConfig) -> bool {
-        config.num_input_channels == Self::DEFAULT_INPUT_CHANNELS
-            && config.num_output_channels == Self::DEFAULT_OUTPUT_CHANNELS
-    }
-
-    /// Initialize the plugin for the given bus and buffer configurations. These configurations will
-    /// not change until this function is called again, so feel free to copy these objects to your
-    /// plugin's object. If the plugin is being restored from an old state, then that state will
-    /// have already been restored at this point. If based on those parameters (or for any reason
-    /// whatsoever) the plugin needs to introduce latency, then you can do so here using the process
-    /// context. Depending on how the host restores plugin state, this function may also be called
-    /// twice in rapid succession. If the plugin fails to initialize for whatever reason, then this
-    /// should return `false`.
+    /// Initialize the plugin for the given audio IO configuration. From this point onwards the
+    /// audio IO layouts and the buffer sizes are fixed until this function is called again.
     ///
     /// Before this point, the plugin should not have done any expensive initialization. Please
     /// don't be that plugin that takes twenty seconds to scan.
     ///
     /// After this function [`reset()`][Self::reset()] will always be called. If you need to clear
     /// state, such as filters or envelopes, then you should do so in that function instead.
+    ///
+    /// - If you need to access this information in your process function, then you can copy the
+    ///   values to your plugin instance's object.
+    /// - If the plugin is being restored from an old state,
+    ///   then that state will have already been restored at this point.
+    /// - If based on those parameters (or for any reason whatsoever) the plugin needs to introduce
+    ///   latency, then you can do so here using the process context.
+    /// - Depending on how the host restores plugin state, this function may be called multiple
+    ///   times in rapid succession. It may thus be useful to check if the initialization work for
+    ///   the current bufffer and audio IO configurations has already been performed first.
+    /// - If the plugin fails to initialize for whatever reason, then this should return `false`.
     fn initialize(
         &mut self,
-        bus_config: &BusConfig,
+        audio_io_layout: &AudioIOLayout,
         buffer_config: &BufferConfig,
         context: &mut impl InitContext<Self>,
     ) -> bool {

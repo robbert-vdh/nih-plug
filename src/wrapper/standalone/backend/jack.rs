@@ -1,4 +1,5 @@
 use std::borrow::Borrow;
+use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -18,6 +19,9 @@ use crate::plugin::Plugin;
 use crate::wrapper::util::{clamp_input_event_timing, clamp_output_event_timing};
 
 /// Uses JACK audio and MIDI.
+//
+// TODO: Use the bus names
+// TODO: Support auxiliary inputs and outputs
 pub struct Jack {
     config: WrapperConfig,
     /// The JACK client, wrapped in an option since it needs to be transformed into an `AsyncClient`
@@ -193,13 +197,14 @@ impl Jack {
     /// generic argument is to get the name for the client, and to know whether or not the
     /// standalone should expose JACK MIDI ports.
     pub fn new<P: Plugin>(config: WrapperConfig) -> Result<Self> {
+        let audio_io_layout = config.audio_io_layout_or_exit::<P>();
         let (client, status) = Client::new(P::NAME, ClientOptions::NO_START_SERVER)
             .context("Error while initializing the JACK client")?;
         if !status.is_empty() {
             anyhow::bail!("The JACK server returned an error: {status:?}");
         }
 
-        if config.connect_jack_inputs.is_none() && P::DEFAULT_INPUT_CHANNELS > 0 {
+        if config.connect_jack_inputs.is_none() && audio_io_layout.main_input_channels.is_some() {
             nih_log!(
                 "Audio inputs are not connected automatically to prevent feedback. Use the \
                  '--connect-jack-inputs' option to connect the input ports."
@@ -207,7 +212,10 @@ impl Jack {
         }
 
         let mut inputs = Vec::new();
-        let num_input_channels = config.input_channels.unwrap_or(P::DEFAULT_INPUT_CHANNELS);
+        let num_input_channels = audio_io_layout
+            .main_input_channels
+            .map(NonZeroU32::get)
+            .unwrap_or_default() as usize;
         for port_no in 1..num_input_channels + 1 {
             inputs.push(client.register_port(&format!("input_{port_no}"), AudioIn)?);
         }
@@ -216,7 +224,10 @@ impl Jack {
         // no. So the connections are made just after activating the client in the `run()` function
         // above.
         let mut outputs = Vec::new();
-        let num_output_channels = config.output_channels.unwrap_or(P::DEFAULT_OUTPUT_CHANNELS);
+        let num_output_channels = audio_io_layout
+            .main_output_channels
+            .map(NonZeroU32::get)
+            .unwrap_or_default() as usize;
         for port_no in 1..num_output_channels + 1 {
             outputs.push(client.register_port(&format!("output_{port_no}"), AudioOut)?);
         }

@@ -24,6 +24,8 @@ mod envelope;
 /// recording buffer's size.
 pub const MAX_OCTAVE_SHIFT: u32 = 2;
 
+/// The number of channels supported by the plugin. We'll only do stereo for now.
+const NUM_CHANNELS: u32 = 2;
 /// The maximum size of an audio block. We'll split up the audio in blocks and render smoothed
 /// values to buffers since these values may need to be reused for multiple voices.
 const MAX_BLOCK_SIZE: usize = 64;
@@ -181,8 +183,12 @@ impl Plugin for BuffrGlitch {
 
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
-    const DEFAULT_INPUT_CHANNELS: u32 = 2;
-    const DEFAULT_OUTPUT_CHANNELS: u32 = 2;
+    // We'll only do stereo for now
+    const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[AudioIOLayout {
+        main_input_channels: NonZeroU32::new(NUM_CHANNELS),
+        main_output_channels: NonZeroU32::new(NUM_CHANNELS),
+        ..AudioIOLayout::const_default()
+    }];
 
     const MIDI_INPUT: MidiConfig = MidiConfig::Basic;
 
@@ -193,23 +199,21 @@ impl Plugin for BuffrGlitch {
         self.params.clone()
     }
 
-    fn accepts_bus_config(&self, config: &BusConfig) -> bool {
-        // We'll only do stereo for now
-        config.num_input_channels == config.num_output_channels && config.num_input_channels == 2
-    }
-
     fn initialize(
         &mut self,
-        bus_config: &BusConfig,
+        audio_io_layout: &AudioIOLayout,
         buffer_config: &BufferConfig,
         _context: &mut impl InitContext<Self>,
     ) -> bool {
+        let num_output_channels = audio_io_layout
+            .main_output_channels
+            .expect("Plugin does not have a main output")
+            .get() as usize;
         self.sample_rate = buffer_config.sample_rate;
         for voice in &mut self.voices {
-            voice.buffer.resize(
-                bus_config.num_input_channels as usize,
-                buffer_config.sample_rate,
-            );
+            voice
+                .buffer
+                .resize(num_output_channels, buffer_config.sample_rate);
         }
 
         true
@@ -443,6 +447,7 @@ impl Vst3Plugin for BuffrGlitch {
     const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] = &[
         Vst3SubCategory::Fx,
         Vst3SubCategory::Synth,
+        Vst3SubCategory::Stereo,
         Vst3SubCategory::Custom("Glitch"),
     ];
 }

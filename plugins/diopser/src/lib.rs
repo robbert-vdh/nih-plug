@@ -34,6 +34,8 @@ mod filter;
 mod params;
 mod spectrum;
 
+/// The number of channels we support. Hardcoded to simplify the SIMD version.
+const NUM_CHANNELS: u32 = 2;
 /// The maximum number of samples to iterate over at a time.
 const MAX_BLOCK_SIZE: usize = 64;
 
@@ -81,8 +83,7 @@ impl Default for Diopser {
         let bypass_smoother = Arc::new(Smoother::new(SmoothingStyle::Linear(10.0)));
 
         // We only do stereo right now so this is simple
-        let (spectrum_input, spectrum_output) =
-            SpectrumInput::new(Self::DEFAULT_OUTPUT_CHANNELS as usize);
+        let (spectrum_input, spectrum_output) = SpectrumInput::new(NUM_CHANNELS as usize);
 
         Self {
             params: Arc::new(DiopserParams::new(
@@ -113,8 +114,12 @@ impl Plugin for Diopser {
 
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
-    const DEFAULT_INPUT_CHANNELS: u32 = 2;
-    const DEFAULT_OUTPUT_CHANNELS: u32 = 2;
+    // The SIMD version only supports stereo
+    const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[AudioIOLayout {
+        main_input_channels: NonZeroU32::new(NUM_CHANNELS),
+        main_output_channels: NonZeroU32::new(NUM_CHANNELS),
+        ..AudioIOLayout::const_default()
+    }];
 
     const SAMPLE_ACCURATE_AUTOMATION: bool = true;
 
@@ -151,14 +156,9 @@ impl Plugin for Diopser {
         }
     }
 
-    fn accepts_bus_config(&self, config: &BusConfig) -> bool {
-        // The SIMD version only supports stereo
-        config.num_input_channels == config.num_output_channels && config.num_input_channels == 2
-    }
-
     fn initialize(
         &mut self,
-        _bus_config: &BusConfig,
+        _audio_io_layout: &AudioIOLayout,
         buffer_config: &BufferConfig,
         _context: &mut impl InitContext<Self>,
     ) -> bool {
@@ -355,8 +355,11 @@ impl ClapPlugin for Diopser {
 
 impl Vst3Plugin for Diopser {
     const VST3_CLASS_ID: [u8; 16] = *b"DiopserPlugRvdH.";
-    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] =
-        &[Vst3SubCategory::Fx, Vst3SubCategory::Filter];
+    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] = &[
+        Vst3SubCategory::Fx,
+        Vst3SubCategory::Filter,
+        Vst3SubCategory::Stereo,
+    ];
 }
 
 nih_export_clap!(Diopser);

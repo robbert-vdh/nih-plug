@@ -301,8 +301,12 @@ impl Plugin for Crisp {
 
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
-    const DEFAULT_INPUT_CHANNELS: u32 = NUM_CHANNELS;
-    const DEFAULT_OUTPUT_CHANNELS: u32 = NUM_CHANNELS;
+    // We'll add a SIMD version in a bit which only supports stereo
+    const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[AudioIOLayout {
+        main_input_channels: NonZeroU32::new(NUM_CHANNELS),
+        main_output_channels: NonZeroU32::new(NUM_CHANNELS),
+        ..AudioIOLayout::const_default()
+    }];
 
     const SAMPLE_ACCURATE_AUTOMATION: bool = true;
 
@@ -317,20 +321,12 @@ impl Plugin for Crisp {
         editor::create(self.params.clone(), self.params.editor_state.clone())
     }
 
-    fn accepts_bus_config(&self, config: &BusConfig) -> bool {
-        // We'll add a SIMD version in a bit which only supports stereo
-        config.num_input_channels == config.num_output_channels
-            && config.num_input_channels == NUM_CHANNELS
-    }
-
     fn initialize(
         &mut self,
-        bus_config: &BusConfig,
+        _audio_io_layout: &AudioIOLayout,
         buffer_config: &BufferConfig,
         _context: &mut impl InitContext<Self>,
     ) -> bool {
-        nih_debug_assert_eq!(bus_config.num_input_channels, NUM_CHANNELS);
-        nih_debug_assert_eq!(bus_config.num_output_channels, NUM_CHANNELS);
         self.sample_rate = buffer_config.sample_rate;
 
         // The filter coefficients need to be reinitialized when loading a patch
@@ -500,7 +496,6 @@ impl ClapPlugin for Crisp {
     const CLAP_FEATURES: &'static [ClapFeature] = &[
         ClapFeature::AudioEffect,
         ClapFeature::Stereo,
-        ClapFeature::Mono,
         ClapFeature::Distortion,
     ];
 }
@@ -511,6 +506,7 @@ impl Vst3Plugin for Crisp {
         Vst3SubCategory::Fx,
         Vst3SubCategory::Filter,
         Vst3SubCategory::Distortion,
+        Vst3SubCategory::Stereo,
     ];
 }
 

@@ -1,3 +1,5 @@
+use std::num::NonZeroU32;
+
 use anyhow::{Context, Result};
 use cpal::{
     traits::*, Device, InputCallbackInfo, OutputCallbackInfo, Sample, SampleFormat, Stream,
@@ -8,7 +10,7 @@ use rtrb::RingBuffer;
 
 use super::super::config::WrapperConfig;
 use super::Backend;
-use crate::audio_setup::{AuxiliaryIOConfig, BusConfig};
+use crate::audio_setup::AudioIOLayout;
 use crate::buffer::Buffer;
 use crate::context::process::Transport;
 use crate::midi::{MidiConfig, PluginNoteEvent};
@@ -17,7 +19,7 @@ use crate::plugin::Plugin;
 /// Uses CPAL for audio and midir for MIDI.
 pub struct Cpal {
     config: WrapperConfig,
-    bus_config: BusConfig,
+    audio_io_layout: AudioIOLayout,
 
     input: Option<(Device, StreamConfig, SampleFormat)>,
 
@@ -136,9 +138,10 @@ impl Cpal {
     /// Initialize the backend with the specified host. Returns an error if this failed for whatever
     /// reason.
     pub fn new<P: Plugin>(config: WrapperConfig, cpal_host_id: cpal::HostId) -> Result<Self> {
+        let audio_io_layout = config.audio_io_layout_or_exit::<P>();
         let host = cpal::host_from_id(cpal_host_id).context("The Audio API is unavailable")?;
 
-        if config.input_device.is_none() && P::DEFAULT_INPUT_CHANNELS > 0 {
+        if config.input_device.is_none() && audio_io_layout.main_input_channels.is_some() {
             nih_log!(
                 "Audio inputs are not connected automatically to prevent feedback. Use the \
                  '--input-device' option to choose an input device."
@@ -192,16 +195,12 @@ impl Cpal {
                 .context("No default audio output device available")?,
         };
 
-        let bus_config = BusConfig {
-            num_input_channels: config.input_channels.unwrap_or(P::DEFAULT_INPUT_CHANNELS),
-            num_output_channels: config.output_channels.unwrap_or(P::DEFAULT_OUTPUT_CHANNELS),
-            // TODO: Support these in the standalone
-            aux_input_busses: AuxiliaryIOConfig::default(),
-            aux_output_busses: AuxiliaryIOConfig::default(),
-        };
         let requested_sample_rate = cpal::SampleRate(config.sample_rate as u32);
         let requested_buffer_size = cpal::BufferSize::Fixed(config.period_size);
-
+        let num_input_channels = audio_io_layout
+            .main_input_channels
+            .map(NonZeroU32::get)
+            .unwrap_or_default() as usize;
         let input = input_device
             .map(|device| -> Result<(Device, StreamConfig, SampleFormat)> {
                 let input_configs: Vec<_> = device
@@ -209,7 +208,7 @@ impl Cpal {
                     .context("Could not get supported audio input configurations")?
                     .filter(|c| match c.buffer_size() {
                         cpal::SupportedBufferSize::Range { min, max } => {
-                            c.channels() as u32 == bus_config.num_input_channels
+                            c.channels() as usize == num_input_channels
                                 && (c.min_sample_rate()..=c.max_sample_rate())
                                     .contains(&requested_sample_rate)
                                 && (min..=max).contains(&&config.period_size)
@@ -227,7 +226,7 @@ impl Cpal {
                         format!(
                             "The audio input device does not support {} audio channels at a \
                              sample rate of {} Hz and a period size of {} samples",
-                            bus_config.num_input_channels, config.sample_rate, config.period_size,
+                            num_input_channels, config.sample_rate, config.period_size,
                         )
                     })?;
 
@@ -243,12 +242,16 @@ impl Cpal {
             })
             .transpose()?;
 
+        let num_output_channels = audio_io_layout
+            .main_output_channels
+            .map(NonZeroU32::get)
+            .unwrap_or_default() as usize;
         let output_configs: Vec<_> = output_device
             .supported_output_configs()
             .context("Could not get supported audio output configurations")?
             .filter(|c| match c.buffer_size() {
                 cpal::SupportedBufferSize::Range { min, max } => {
-                    c.channels() as u32 == bus_config.num_output_channels
+                    c.channels() as usize == num_output_channels
                         && (c.min_sample_rate()..=c.max_sample_rate())
                             .contains(&requested_sample_rate)
                         && (min..=max).contains(&&config.period_size)
@@ -265,7 +268,7 @@ impl Cpal {
                 format!(
                     "The audio output device does not support {} audio channels at a sample rate \
                      of {} Hz and a period size of {} samples",
-                    bus_config.num_output_channels, config.sample_rate, config.period_size,
+                    num_output_channels, config.sample_rate, config.period_size,
                 )
             })?;
         let output_config = StreamConfig {
@@ -282,7 +285,7 @@ impl Cpal {
 
         Ok(Cpal {
             config,
-            bus_config,
+            audio_io_layout,
 
             input,
 
@@ -328,12 +331,15 @@ impl Cpal {
         // We'll receive interlaced input samples from CPAL. These need to converted to deinterlaced
         // channels, processed, and then copied those back to an interlaced buffer for the output.
         // This needs to be wrapped in a struct like this and boxed because the `channels` vectors
-        // need to live just as long as `buffer` when they get moved into the closure. FIXME: This
-        // is pretty nasty, come up with a cleaner alternative
-        let mut channels = vec![
-            vec![0.0f32; self.config.period_size as usize];
-            self.bus_config.num_output_channels as usize
-        ];
+        // need to live just as long as `buffer` when they get moved into the closure.
+        // FIXME: This is pretty nasty, come up with a cleaner alternative
+        let num_output_channels = self
+            .audio_io_layout
+            .main_output_channels
+            .map(NonZeroU32::get)
+            .unwrap_or_default() as usize;
+        let mut channels =
+            vec![vec![0.0f32; self.config.period_size as usize]; num_output_channels];
         let mut buffer = Buffer::default();
         unsafe {
             buffer.set_slices(0, |output_slices| {

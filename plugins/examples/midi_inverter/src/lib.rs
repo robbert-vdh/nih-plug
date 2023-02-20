@@ -26,8 +26,8 @@ impl Plugin for MidiInverter {
 
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
-    const DEFAULT_INPUT_CHANNELS: u32 = 0;
-    const DEFAULT_OUTPUT_CHANNELS: u32 = 0;
+    // This plugin doesn't have any audio IO
+    const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[];
 
     const MIDI_INPUT: MidiConfig = MidiConfig::MidiCCs;
     const MIDI_OUTPUT: MidiConfig = MidiConfig::MidiCCs;

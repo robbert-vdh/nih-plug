@@ -51,8 +51,8 @@ impl Plugin for SysEx {
 
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
-    const DEFAULT_INPUT_CHANNELS: u32 = 0;
-    const DEFAULT_OUTPUT_CHANNELS: u32 = 0;
+    // This plugin doesn't have any audio IO
+    const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[];
 
     const SAMPLE_ACCURATE_AUTOMATION: bool = true;
 

@@ -1,3 +1,6 @@
+// Used in [`AudioIOLayout`]
+pub use std::num::NonZeroU32;
+
 // Re-export the macros, derive macros are already re-exported from their respective modules
 pub use crate::debug::*;
 
@@ -11,7 +14,7 @@ pub use crate::formatters;
 pub use crate::util;
 
 pub use crate::audio_setup::{
-    AuxiliaryBuffers, AuxiliaryIOConfig, BufferConfig, BusConfig, PortNames, ProcessMode,
+    new_nonzero_u32, AudioIOLayout, AuxiliaryBuffers, BufferConfig, PortNames, ProcessMode,
 };
 pub use crate::buffer::Buffer;
 pub use crate::context::gui::{AsyncExecutor, GuiContext, ParamSetter};

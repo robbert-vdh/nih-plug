@@ -148,8 +148,11 @@ impl Plugin for PolyModSynth {
 
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
-    const DEFAULT_INPUT_CHANNELS: u32 = 2;
-    const DEFAULT_OUTPUT_CHANNELS: u32 = 2;
+    const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[AudioIOLayout {
+        main_input_channels: NonZeroU32::new(2),
+        main_output_channels: NonZeroU32::new(2),
+        ..AudioIOLayout::const_default()
+    }];
 
     // We won't need any MIDI CCs here, we just want notes and polyphonic modulation
     const MIDI_INPUT: MidiConfig = MidiConfig::Basic;
@@ -612,8 +615,11 @@ impl ClapPlugin for PolyModSynth {
 // modulation
 impl Vst3Plugin for PolyModSynth {
     const VST3_CLASS_ID: [u8; 16] = *b"PolyM0dSynth1337";
-    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] =
-        &[Vst3SubCategory::Instrument, Vst3SubCategory::Synth];
+    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] = &[
+        Vst3SubCategory::Instrument,
+        Vst3SubCategory::Synth,
+        Vst3SubCategory::Stereo,
+    ];
 }
 
 nih_export_clap!(PolyModSynth);

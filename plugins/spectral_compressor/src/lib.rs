@@ -132,10 +132,7 @@ impl Default for SpectralCompressor {
     fn default() -> Self {
         // Changing any of the compressor threshold or ratio parameters will set an atomic flag in
         // this object that causes the compressor thresholds and ratios to be recalcualted
-        let compressor_bank = compressor_bank::CompressorBank::new(
-            Self::DEFAULT_OUTPUT_CHANNELS as usize,
-            MAX_WINDOW_SIZE,
-        );
+        let compressor_bank = compressor_bank::CompressorBank::new(2, MAX_WINDOW_SIZE);
 
         SpectralCompressor {
             params: Arc::new(SpectralCompressorParams::new(&compressor_bank)),
@@ -149,7 +146,7 @@ impl Default for SpectralCompressor {
             },
 
             // These three will be set to the correct values in the initialize function
-            stft: util::StftHelper::new(Self::DEFAULT_OUTPUT_CHANNELS as usize, MAX_WINDOW_SIZE, 0),
+            stft: util::StftHelper::new(2, MAX_WINDOW_SIZE, 0),
             window_function: Vec::with_capacity(MAX_WINDOW_SIZE),
             dry_wet_mixer: dry_wet_mixer::DryWetMixer::new(0, 0, 0),
             compressor_bank,
@@ -256,12 +253,24 @@ impl Plugin for SpectralCompressor {
 
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
-    const DEFAULT_INPUT_CHANNELS: u32 = 2;
-    const DEFAULT_OUTPUT_CHANNELS: u32 = 2;
-    const DEFAULT_AUX_INPUTS: Option<AuxiliaryIOConfig> = Some(AuxiliaryIOConfig {
-        num_busses: 1,
-        num_channels: 2,
-    });
+    const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
+        AudioIOLayout {
+            main_input_channels: NonZeroU32::new(2),
+            main_output_channels: NonZeroU32::new(2),
+
+            aux_input_ports: &[new_nonzero_u32(2)],
+
+            ..AudioIOLayout::const_default()
+        },
+        AudioIOLayout {
+            main_input_channels: NonZeroU32::new(1),
+            main_output_channels: NonZeroU32::new(1),
+
+            aux_input_ports: &[new_nonzero_u32(1)],
+
+            ..AudioIOLayout::const_default()
+        },
+    ];
 
     const SAMPLE_ACCURATE_AUTOMATION: bool = true;
 
@@ -276,35 +285,31 @@ impl Plugin for SpectralCompressor {
         editor::create(self.params.clone(), self.editor_state.clone())
     }
 
-    fn accepts_bus_config(&self, config: &BusConfig) -> bool {
-        // We can support any channel layout as long as the number of channels is consistent
-        config.num_input_channels == config.num_output_channels
-            && config.num_input_channels > 0
-            && config.aux_input_busses.num_busses == 1
-            && config.aux_input_busses.num_channels == config.num_input_channels
-    }
-
     fn initialize(
         &mut self,
-        bus_config: &BusConfig,
+        audio_io_layout: &AudioIOLayout,
         buffer_config: &BufferConfig,
         context: &mut impl InitContext<Self>,
     ) -> bool {
         // Needed to update the compressors later
         self.buffer_config = *buffer_config;
 
-        // This plugin can accept any number of channels, so we need to resize channel-dependent
-        // data structures accordinly
-        if self.stft.num_channels() != bus_config.num_output_channels as usize {
+        // This plugin can accept a variable number of audio channels, so we need to resize
+        // channel-dependent data structures accordingly
+        let num_output_channels = audio_io_layout
+            .main_output_channels
+            .expect("Plugin does not have a main output")
+            .get() as usize;
+        if self.stft.num_channels() != num_output_channels {
             self.stft = util::StftHelper::new(self.stft.num_channels(), MAX_WINDOW_SIZE, 0);
         }
         self.dry_wet_mixer.resize(
-            bus_config.num_output_channels as usize,
+            num_output_channels,
             buffer_config.max_buffer_size as usize,
             MAX_WINDOW_SIZE,
         );
         self.compressor_bank
-            .update_capacity(bus_config.num_output_channels as usize, MAX_WINDOW_SIZE);
+            .update_capacity(num_output_channels, MAX_WINDOW_SIZE);
 
         // Planning with RustFFT is very fast, but it will still allocate we we'll plan all of the
         // FFTs we might need in advance
@@ -572,6 +577,7 @@ impl ClapPlugin for SpectralCompressor {
     const CLAP_FEATURES: &'static [ClapFeature] = &[
         ClapFeature::AudioEffect,
         ClapFeature::Stereo,
+        ClapFeature::Mono,
         ClapFeature::PhaseVocoder,
         ClapFeature::Compressor,
         ClapFeature::Custom("nih:spectral"),

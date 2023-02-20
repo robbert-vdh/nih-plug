@@ -14,7 +14,7 @@ use super::note_expressions::NoteExpressionController;
 use super::param_units::ParamUnits;
 use super::util::{ObjectPtr, VstPtr, VST3_MIDI_PARAMS_END, VST3_MIDI_PARAMS_START};
 use super::view::WrapperView;
-use crate::audio_setup::{BufferConfig, BusConfig, ProcessMode};
+use crate::audio_setup::{AudioIOLayout, BufferConfig, ProcessMode};
 use crate::buffer::Buffer;
 use crate::context::gui::AsyncExecutor;
 use crate::context::process::Transport;
@@ -66,8 +66,11 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// Whether the plugin is currently processing audio. In other words, the last state
     /// `IAudioProcessor::setActive()` has been called with.
     pub is_processing: AtomicBool,
-    /// The current bus configuration, modified through `IAudioProcessor::setBusArrangements()`.
-    pub current_bus_config: AtomicCell<BusConfig>,
+    /// The current audio IO layout. Modified through `IAudioProcessor::setBusArrangements()` after
+    /// matching the proposed bus arrangement to one of the supported ones. The plugin's first audio
+    /// IO layout is chosen as the default. Because of the way VST3 works it's not possible to
+    /// change the number of busses from that default, only the channel counts can change.
+    pub current_audio_io_layout: AtomicCell<AudioIOLayout>,
     /// The current buffer configuration, containing the sample rate and the maximum block size.
     /// Will be set in `IAudioProcessor::setupProcessing()`.
     pub current_buffer_config: AtomicCell<Option<BufferConfig>>,
@@ -305,12 +308,9 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             // will try using the plugin's default not yet initialized bus arrangement. Because of
             // that, we'll always initialize this configuration even before the host requests a
             // channel layout.
-            current_bus_config: AtomicCell::new(BusConfig {
-                num_input_channels: P::DEFAULT_INPUT_CHANNELS,
-                num_output_channels: P::DEFAULT_OUTPUT_CHANNELS,
-                aux_input_busses: P::DEFAULT_AUX_INPUTS.unwrap_or_default(),
-                aux_output_busses: P::DEFAULT_AUX_OUTPUTS.unwrap_or_default(),
-            }),
+            current_audio_io_layout: AtomicCell::new(
+                P::AUDIO_IO_LAYOUTS.first().copied().unwrap_or_default(),
+            ),
             current_buffer_config: AtomicCell::new(None),
             current_process_mode: AtomicCell::new(ProcessMode::Realtime),
             last_process_status: AtomicCell::new(ProcessStatus::Normal),
@@ -517,12 +517,12 @@ impl<P: Vst3Plugin> WrapperInner<P> {
                     );
                 }
 
-                let bus_config = self.current_bus_config.load();
+                let audio_io_layout = self.current_audio_io_layout.load();
                 if let Some(buffer_config) = self.current_buffer_config.load() {
                     // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
                     let mut init_context = self.make_init_context();
                     let mut plugin = self.plugin.lock();
-                    plugin.initialize(&bus_config, &buffer_config, &mut init_context);
+                    plugin.initialize(&audio_io_layout, &buffer_config, &mut init_context);
                     process_wrapper(|| plugin.reset());
                 }
 

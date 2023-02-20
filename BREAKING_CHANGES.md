@@ -6,6 +6,29 @@ new and what's changed, this document lists all breaking changes in reverse
 chronological order. If a new feature did not require any changes to existing
 code then it will not be listed here.
 
+## [2023-02-20]
+
+- The way audio IO layouts are configured has changed completely to align better
+  with NIH-plug's current and future supported plugin API backends. Rather than
+  defining a default layout and allowing the host/backend to change the channel
+  counts by polling the `Plugin::accepts_bus_config()` function, the plugin now
+  explicitly enumerates all supported audio IO layouts in a declarative fashion.
+  This change gives the plugin more options for defining alternative audio port
+  layouts including layouts with variable numbers of channels and ports, while
+  simultaneously removing ambiguities and behavior that was previously governed
+  by heuristics.
+
+  All types surrounding bus layouts and port names have changed slightly to
+  accommodate this change. Take a look at the updated examples for more details
+  on how this works. The `Plugin::AUDIO_IO_LAYOUTS` field's documentation also
+  contains an example for how to initialize the layouts slice.
+
+- As a result of the above change, NIH-plug's standalones no longer have
+  `--input` and `--output` command line arguments to change the number of input
+  and output channels. Instead, they now have an `--audio-layout` option that
+  lets the user select an audio layout from the list of available layouts by
+  index. `--audio-layout=help` can be used to list those layouts.
+
 ## [2023-02-01]
 
 - The `Vst3Plugin::VST3_CATEGORIES` string constant has been replaced by a

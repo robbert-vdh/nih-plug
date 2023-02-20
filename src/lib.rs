@@ -36,11 +36,10 @@
 //!   1. When the host loads the plugin, your plugin object will be instantiated using its
 //!      [`Default`] implementation. The plugin should refrain from performing expensive
 //!      calculations or IO at this point.
-//!   2. The host or the plugin wrapper will call
-//!      [`Plugin::accepts_bus_config()`][prelude::Plugin::accepts_bus_config()] several times with
-//!      different IO configurations to poll whether your plugin supports certain IO configurations.
-//!      The plugin should not do any work at this point and just reply with boolean whether it
-//!      supports the configuration or not.
+//!   2. The host will select an audio IO layout from
+//!      [`Plugin::AUDIO_IO_LAYOUTS`][prelude::Plugin::AUDIO_IO_LAYOUTS]. The first layout is always
+//!      used as the default one, and should reflect the plugin's most commonly used configuration.
+//!      Usually this is a stereo layout.
 //!   3. After that, [`Plugin::initialize()`][prelude::Plugin::initialize()] will be called with the
 //!      the selected IO configuration and the audio buffer settings. Here you should allocate any
 //!      data structures you need or precompute data that depends on the sample rate or maximum

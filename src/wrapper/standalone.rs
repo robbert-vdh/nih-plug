@@ -196,15 +196,6 @@ fn run_wrapper<P: Plugin, B: Backend<P>>(backend: B, config: WrapperConfig) -> b
 
 fn print_error(error: WrapperError) {
     match error {
-        WrapperError::IncompatibleConfig {
-            input_channels,
-            output_channels,
-        } => {
-            nih_error!(
-                "The plugin does not support the {input_channels} channel input and \
-                 {output_channels} channel output configuration",
-            );
-        }
         WrapperError::InitializationFailed => {
             nih_error!("The plugin failed to initialize");
         }

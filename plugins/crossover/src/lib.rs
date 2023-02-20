@@ -166,22 +166,24 @@ impl Plugin for Crossover {
 
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
-    const DEFAULT_INPUT_CHANNELS: u32 = NUM_CHANNELS;
-    const DEFAULT_OUTPUT_CHANNELS: u32 = NUM_CHANNELS;
+    const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[AudioIOLayout {
+        main_input_channels: NonZeroU32::new(NUM_CHANNELS),
+        main_output_channels: NonZeroU32::new(NUM_CHANNELS),
 
-    const DEFAULT_AUX_OUTPUTS: Option<AuxiliaryIOConfig> = Some(AuxiliaryIOConfig {
-        // Two to five of these busses will be used at a time
-        num_busses: 5,
-        num_channels: NUM_CHANNELS,
-    });
+        aux_input_ports: &[],
+        // Two to five of these ports will be used at a time
+        aux_output_ports: &[new_nonzero_u32(NUM_CHANNELS); 5],
 
-    const PORT_NAMES: PortNames = PortNames {
-        main_input: None,
-        // We won't output any sound here
-        main_output: Some("The Void"),
-        aux_inputs: None,
-        aux_outputs: Some(&["Band 1", "Band 2", "Band 3", "Band 4", "Band 5"]),
-    };
+        names: PortNames {
+            layout: Some("Up to five bands"),
+
+            main_input: None,
+            // We won't output any sound here
+            main_output: Some("The Void"),
+            aux_inputs: &[],
+            aux_outputs: &["Band 1", "Band 2", "Band 3", "Band 4", "Band 5"],
+        },
+    }];
 
     type SysExMessage = ();
     type BackgroundTask = ();
@@ -190,16 +192,9 @@ impl Plugin for Crossover {
         self.params.clone()
     }
 
-    fn accepts_bus_config(&self, config: &BusConfig) -> bool {
-        // Only do stereo
-        config.num_input_channels == NUM_CHANNELS
-            && config.num_output_channels == NUM_CHANNELS
-            && config.aux_output_busses.num_channels == NUM_CHANNELS
-    }
-
     fn initialize(
         &mut self,
-        _bus_config: &BusConfig,
+        _audio_io_layout: &AudioIOLayout,
         buffer_config: &BufferConfig,
         context: &mut impl InitContext<Self>,
     ) -> bool {

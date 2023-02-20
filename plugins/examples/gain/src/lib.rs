@@ -120,11 +120,27 @@ impl Plugin for Gain {
 
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
-    const DEFAULT_INPUT_CHANNELS: u32 = 2;
-    const DEFAULT_OUTPUT_CHANNELS: u32 = 2;
+    // The first audio IO layout is used as the default. The other layouts may be selected either
+    // explicitly or automatically by the host or the user depending on the plugin API/backend.
+    const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
+        AudioIOLayout {
+            main_input_channels: NonZeroU32::new(2),
+            main_output_channels: NonZeroU32::new(2),
 
-    const DEFAULT_AUX_INPUTS: Option<AuxiliaryIOConfig> = None;
-    const DEFAULT_AUX_OUTPUTS: Option<AuxiliaryIOConfig> = None;
+            aux_input_ports: &[],
+            aux_output_ports: &[],
+
+            // Individual ports and the layout as a whole can be named here. By default these names
+            // are generated as needed. This layout will be called 'Stereo', while the other one is
+            // given the name 'Mono' based no the number of input and output channels.
+            names: PortNames::const_default(),
+        },
+        AudioIOLayout {
+            main_input_channels: NonZeroU32::new(1),
+            main_output_channels: NonZeroU32::new(1),
+            ..AudioIOLayout::const_default()
+        },
+    ];
 
     const MIDI_INPUT: MidiConfig = MidiConfig::None;
     // Setting this to `true` will tell the wrapper to split the buffer up into smaller blocks
@@ -145,11 +161,6 @@ impl Plugin for Gain {
 
     fn params(&self) -> Arc<dyn Params> {
         self.params.clone()
-    }
-
-    fn accepts_bus_config(&self, config: &BusConfig) -> bool {
-        // This works with any symmetrical IO layout
-        config.num_input_channels == config.num_output_channels && config.num_input_channels > 0
     }
 
     // This plugin doesn't need any special initialization, but if you need to do anything expensive

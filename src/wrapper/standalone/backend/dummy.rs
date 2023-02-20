@@ -1,8 +1,9 @@
+use std::num::NonZeroU32;
 use std::time::{Duration, Instant};
 
 use super::super::config::WrapperConfig;
 use super::Backend;
-use crate::audio_setup::{AuxiliaryIOConfig, BusConfig};
+use crate::audio_setup::AudioIOLayout;
 use crate::buffer::Buffer;
 use crate::context::process::Transport;
 use crate::midi::PluginNoteEvent;
@@ -13,7 +14,7 @@ use crate::plugin::Plugin;
 /// useful for testing plugin GUIs.
 pub struct Dummy {
     config: WrapperConfig,
-    bus_config: BusConfig,
+    audio_io_layout: AudioIOLayout,
 }
 
 impl<P: Plugin> Backend<P> for Dummy {
@@ -33,10 +34,13 @@ impl<P: Plugin> Backend<P> for Dummy {
         let interval =
             Duration::from_secs_f32(self.config.period_size as f32 / self.config.sample_rate);
 
-        let mut channels = vec![
-            vec![0.0f32; self.config.period_size as usize];
-            self.bus_config.num_output_channels as usize
-        ];
+        let num_output_channels = self
+            .audio_io_layout
+            .main_output_channels
+            .map(NonZeroU32::get)
+            .unwrap_or_default() as usize;
+        let mut channels =
+            vec![vec![0.0f32; self.config.period_size as usize]; num_output_channels];
         let mut buffer = Buffer::default();
         unsafe {
             buffer.set_slices(self.config.period_size as usize, |output_slices| {
@@ -81,13 +85,7 @@ impl<P: Plugin> Backend<P> for Dummy {
 impl Dummy {
     pub fn new<P: Plugin>(config: WrapperConfig) -> Self {
         Self {
-            bus_config: BusConfig {
-                num_input_channels: config.input_channels.unwrap_or(P::DEFAULT_INPUT_CHANNELS),
-                num_output_channels: config.output_channels.unwrap_or(P::DEFAULT_OUTPUT_CHANNELS),
-                // TODO: Support these in the standalone
-                aux_input_busses: AuxiliaryIOConfig::default(),
-                aux_output_busses: AuxiliaryIOConfig::default(),
-            },
+            audio_io_layout: config.audio_io_layout_or_exit::<P>(),
             config,
         }
     }

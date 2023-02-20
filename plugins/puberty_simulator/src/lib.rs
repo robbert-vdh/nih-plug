@@ -165,8 +165,12 @@ impl Plugin for PubertySimulator {
 
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
-    const DEFAULT_INPUT_CHANNELS: u32 = 2;
-    const DEFAULT_OUTPUT_CHANNELS: u32 = 2;
+    // We'll only do stereo for simplicity's sake
+    const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[AudioIOLayout {
+        main_input_channels: NonZeroU32::new(2),
+        main_output_channels: NonZeroU32::new(2),
+        ..AudioIOLayout::const_default()
+    }];
 
     type SysExMessage = ();
     type BackgroundTask = ();
@@ -175,14 +179,9 @@ impl Plugin for PubertySimulator {
         self.params.clone()
     }
 
-    fn accepts_bus_config(&self, config: &BusConfig) -> bool {
-        // We'll only do stereo for simplicity's sake
-        config.num_input_channels == config.num_output_channels && config.num_input_channels == 2
-    }
-
     fn initialize(
         &mut self,
-        _bus_config: &BusConfig,
+        _audio_io_layout: &AudioIOLayout,
         _buffer_config: &BufferConfig,
         context: &mut impl InitContext<Self>,
     ) -> bool {
@@ -431,8 +430,11 @@ impl ClapPlugin for PubertySimulator {
 
 impl Vst3Plugin for PubertySimulator {
     const VST3_CLASS_ID: [u8; 16] = *b"PubertySim..RvdH";
-    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] =
-        &[Vst3SubCategory::Fx, Vst3SubCategory::PitchShift];
+    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] = &[
+        Vst3SubCategory::Fx,
+        Vst3SubCategory::PitchShift,
+        Vst3SubCategory::Stereo,
+    ];
 }
 
 nih_export_clap!(PubertySimulator);

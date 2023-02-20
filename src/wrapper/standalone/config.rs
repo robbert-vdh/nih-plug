@@ -1,4 +1,8 @@
 use clap::{Parser, ValueEnum};
+use std::num::NonZeroU32;
+
+use crate::audio_setup::AudioIOLayout;
+use crate::plugin::Plugin;
 
 /// Configuration for a standalone plugin that would normally be provided by the DAW.
 #[derive(Debug, Clone, Parser)]
@@ -22,15 +26,14 @@ pub struct WrapperConfig {
     #[clap(value_parser, long)]
     pub output_device: Option<String>,
 
-    // These will default to the plugin's default input and output channel count. We could set the
-    // default value here to match those, but that would require a custom Args+FromArgMatches
-    // implementation and access to the `Plugin` type.
-    /// The number of input channels.
-    #[clap(value_parser, short = 'i', long)]
-    pub input_channels: Option<u32>,
-    /// The number of output channels.
-    #[clap(value_parser, short = 'o', long)]
-    pub output_channels: Option<u32>,
+    /// The audio layout to use. Defaults to the first layout.
+    ///
+    /// Specifying an empty argument or other invalid value will list all available audio layouts.
+    //
+    // NOTE: This takes a `String` instead of a `usize` so we can list the layouts when the argument
+    //       is invalid
+    #[clap(value_parser, short = 'l', long)]
+    pub audio_layout: Option<String>,
     /// The audio backend's sample rate.
     ///
     /// This setting is ignored when using the JACK backend.
@@ -103,4 +106,68 @@ pub enum BackendType {
     Wasapi,
     /// Does not playback or receive any audio or MIDI.
     Dummy,
+}
+
+impl WrapperConfig {
+    /// Get the audio IO layout for a plugin based on this configuration. Exits the application if
+    /// the IO layout could not be parsed from the config. This doesn't return a `Result` to be able to differentiate between backend-specific errors and config parsing errors.
+    pub fn audio_io_layout_or_exit<P: Plugin>(&self) -> AudioIOLayout {
+        // The layouts are one-indexed here
+        match &self.audio_layout {
+            Some(audio_layout) if !P::AUDIO_IO_LAYOUTS.is_empty() => {
+                match audio_layout.parse::<usize>() {
+                    Ok(n) if n >= 1 && n - 1 < P::AUDIO_IO_LAYOUTS.len() => {
+                        P::AUDIO_IO_LAYOUTS[n - 1]
+                    }
+                    _ => {
+                        // This is made to be consistent with how audio input and output devices are
+                        // listed in the CPAL backend
+                        let mut layouts_str = String::new();
+                        for (idx, layout) in P::AUDIO_IO_LAYOUTS.iter().enumerate() {
+                            let num_input_channels = layout
+                                .main_input_channels
+                                .map(NonZeroU32::get)
+                                .unwrap_or_default();
+                            let num_output_channels = layout
+                                .main_output_channels
+                                .map(NonZeroU32::get)
+                                .unwrap_or_default();
+                            layouts_str.push_str(&format!(
+                                "\n{}: {} ({} input {}, {} output {}{}{})",
+                                idx + 1,
+                                layout.name(),
+                                num_input_channels,
+                                if num_input_channels == 1 {
+                                    "channel"
+                                } else {
+                                    "channels"
+                                },
+                                num_output_channels,
+                                if num_output_channels == 1 {
+                                    "channel"
+                                } else {
+                                    "channels"
+                                },
+                                if layout.aux_input_ports.is_empty() {
+                                    String::new()
+                                } else {
+                                    format!("{} sidechain inputs", layout.aux_input_ports.len())
+                                },
+                                if layout.aux_output_ports.is_empty() {
+                                    String::new()
+                                } else {
+                                    format!("{} sidechain outputs", layout.aux_output_ports.len())
+                                },
+                            ))
+                        }
+
+                        nih_log!("The available audio layouts are:{layouts_str}");
+
+                        std::process::exit(1);
+                    }
+                }
+            }
+            _ => P::AUDIO_IO_LAYOUTS.first().copied().unwrap_or_default(),
+        }
+    }
 }

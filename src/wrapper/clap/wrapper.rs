@@ -68,6 +68,7 @@ use std::cmp;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::ffi::{c_void, CStr};
 use std::mem;
+use std::num::NonZeroU32;
 use std::os::raw::c_char;
 use std::ptr;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -78,7 +79,7 @@ use std::time::Duration;
 use super::context::{WrapperGuiContext, WrapperInitContext, WrapperProcessContext};
 use super::descriptor::PluginDescriptor;
 use super::util::ClapPtr;
-use crate::audio_setup::{AuxiliaryBuffers, BufferConfig, BusConfig, ProcessMode};
+use crate::audio_setup::{AudioIOLayout, AuxiliaryBuffers, BufferConfig, ProcessMode};
 use crate::buffer::Buffer;
 use crate::context::gui::AsyncExecutor;
 use crate::context::process::Transport;
@@ -127,8 +128,8 @@ pub struct Wrapper<P: ClapPlugin> {
 
     is_processing: AtomicBool,
     /// The current IO configuration, modified through the `clap_plugin_audio_ports_config`
-    /// extension.
-    current_bus_config: AtomicCell<BusConfig>,
+    /// extension. Initialized to the plugin's first audio IO configuration.
+    current_audio_io_layout: AtomicCell<AudioIOLayout>,
     /// The current buffer configuration, containing the sample rate and the maximum block size.
     /// Will be set in `clap_plugin::activate()`.
     current_buffer_config: AtomicCell<Option<BufferConfig>>,
@@ -181,14 +182,6 @@ pub struct Wrapper<P: ClapPlugin> {
     host_callback: ClapPtr<clap_host>,
 
     clap_plugin_audio_ports_config: clap_plugin_audio_ports_config,
-    /// During initialization we'll ask `P` which bus configurations it supports. The host can then
-    /// use the audio ports config extension to choose a configuration. Right now we only query mono
-    /// and stereo configurations, with and without inputs, as well as the plugin's default input
-    /// and output channel counts if that does not match one of those configurations (to do the
-    /// least surprising thing).
-    ///
-    /// TODO: Support surround setups once a plugin needs that
-    supported_bus_configs: Vec<BusConfig>,
 
     // The main `clap_plugin` vtable. A pointer to this `Wrapper<P>` instance is stored in the
     // `plugin_data` field. This pointer is set after creating the `Arc<Wrapper<P>>`.
@@ -538,52 +531,6 @@ impl<P: ClapPlugin> Wrapper<P> {
             }
         }
 
-        // Query all sensible bus configurations supported by the plugin. We don't do surround or
-        // anything beyond stereo right now.
-        let mut supported_bus_configs = Vec::new();
-        for num_output_channels in [1, 2] {
-            for num_input_channels in [0, num_output_channels] {
-                #[allow(clippy::single_element_loop)]
-                for num_aux_channels in [num_output_channels] {
-                    let bus_config = BusConfig {
-                        num_input_channels,
-                        num_output_channels,
-                        // We won't support a variable number of busses until that's required, so
-                        // we'll always use the number of auxiliary busses specified by the plugin
-                        aux_input_busses: P::DEFAULT_AUX_INPUTS
-                            .map(|mut aux| {
-                                aux.num_channels = num_aux_channels;
-                                aux
-                            })
-                            .unwrap_or_default(),
-                        aux_output_busses: P::DEFAULT_AUX_OUTPUTS
-                            .map(|mut aux| {
-                                aux.num_channels = num_aux_channels;
-                                aux
-                            })
-                            .unwrap_or_default(),
-                    };
-                    if plugin.accepts_bus_config(&bus_config) {
-                        supported_bus_configs.push(bus_config);
-                    }
-                }
-            }
-        }
-
-        // In the off chance that the default config specified by the plugin is not in the above
-        // list, we'll try that as well.
-        let default_bus_config = BusConfig {
-            num_input_channels: P::DEFAULT_INPUT_CHANNELS,
-            num_output_channels: P::DEFAULT_OUTPUT_CHANNELS,
-            aux_input_busses: P::DEFAULT_AUX_INPUTS.unwrap_or_default(),
-            aux_output_busses: P::DEFAULT_AUX_OUTPUTS.unwrap_or_default(),
-        };
-        if !supported_bus_configs.contains(&default_bus_config)
-            && plugin.accepts_bus_config(&default_bus_config)
-        {
-            supported_bus_configs.push(default_bus_config);
-        }
-
         let wrapper = Self {
             this: AtomicRefCell::new(Weak::new()),
 
@@ -596,12 +543,9 @@ impl<P: ClapPlugin> Wrapper<P> {
             editor_scaling_factor: AtomicF32::new(1.0),
 
             is_processing: AtomicBool::new(false),
-            current_bus_config: AtomicCell::new(BusConfig {
-                num_input_channels: P::DEFAULT_INPUT_CHANNELS,
-                num_output_channels: P::DEFAULT_OUTPUT_CHANNELS,
-                aux_input_busses: P::DEFAULT_AUX_INPUTS.unwrap_or_default(),
-                aux_output_busses: P::DEFAULT_AUX_OUTPUTS.unwrap_or_default(),
-            }),
+            current_audio_io_layout: AtomicCell::new(
+                P::AUDIO_IO_LAYOUTS.first().copied().unwrap_or_default(),
+            ),
             current_buffer_config: AtomicCell::new(None),
             current_process_mode: AtomicCell::new(ProcessMode::Realtime),
             input_events: AtomicRefCell::new(VecDeque::with_capacity(512)),
@@ -643,7 +587,6 @@ impl<P: ClapPlugin> Wrapper<P> {
                 get: Some(Self::ext_audio_ports_config_get),
                 select: Some(Self::ext_audio_ports_config_select),
             },
-            supported_bus_configs,
 
             clap_plugin_audio_ports: clap_plugin_audio_ports {
                 count: Some(Self::ext_audio_ports_count),
@@ -1748,12 +1691,12 @@ impl<P: ClapPlugin> Wrapper<P> {
                     );
                 }
 
-                let bus_config = self.current_bus_config.load();
+                let audio_io_layout = self.current_audio_io_layout.load();
                 if let Some(buffer_config) = self.current_buffer_config.load() {
                     // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
                     let mut init_context = self.make_init_context();
                     let mut plugin = self.plugin.lock();
-                    plugin.initialize(&bus_config, &buffer_config, &mut init_context);
+                    plugin.initialize(&audio_io_layout, &buffer_config, &mut init_context);
                     process_wrapper(|| plugin.reset());
                 }
 
@@ -1841,7 +1784,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         check_null_ptr!(false, plugin, (*plugin).plugin_data);
         let wrapper = &*((*plugin).plugin_data as *const Self);
 
-        let bus_config = wrapper.current_bus_config.load();
+        let audio_io_layout = wrapper.current_audio_io_layout.load();
         let buffer_config = BufferConfig {
             sample_rate: sample_rate as f32,
             min_buffer_size: Some(min_frames_count),
@@ -1857,7 +1800,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
         let mut init_context = wrapper.make_init_context();
         let mut plugin = wrapper.plugin.lock();
-        if plugin.initialize(&bus_config, &buffer_config, &mut init_context) {
+        if plugin.initialize(&audio_io_layout, &buffer_config, &mut init_context) {
             // NOTE: `Plugin::reset()` is called in `clap_plugin::start_processing()` instead of in
             //       this function
 
@@ -1867,7 +1810,13 @@ impl<P: ClapPlugin> Wrapper<P> {
                 .output_buffer
                 .borrow_mut()
                 .set_slices(0, |output_slices| {
-                    output_slices.resize_with(bus_config.num_output_channels as usize, || &mut []);
+                    output_slices.resize_with(
+                        audio_io_layout
+                            .main_output_channels
+                            .map(NonZeroU32::get)
+                            .unwrap_or_default() as usize,
+                        || &mut [],
+                    );
                     // All slices must have the same length, so if the number of output channels has
                     // changed since the last call then we should make sure to clear any old
                     // (dangling) slices to be consistent
@@ -1878,43 +1827,34 @@ impl<P: ClapPlugin> Wrapper<P> {
             // inputs. The slices will be assigned in the process function as this object may have
             // been moved before then.
             let mut aux_input_storage = wrapper.aux_input_storage.borrow_mut();
-            aux_input_storage
-                .resize_with(bus_config.aux_input_busses.num_busses as usize, Vec::new);
-            for bus_storage in aux_input_storage.iter_mut() {
-                bus_storage
-                    .resize_with(bus_config.aux_input_busses.num_channels as usize, Vec::new);
-                for channel_storage in bus_storage {
+            let mut aux_input_buffers = wrapper.aux_input_buffers.borrow_mut();
+            aux_input_storage.resize_with(audio_io_layout.aux_input_ports.len(), Vec::new);
+            aux_input_buffers.resize_with(audio_io_layout.aux_input_ports.len(), Buffer::default);
+            for ((buffer_storage, buffer), num_channels) in aux_input_storage
+                .iter_mut()
+                .zip(aux_input_buffers.iter_mut())
+                .zip(audio_io_layout.aux_input_ports.iter())
+            {
+                buffer_storage.resize_with(num_channels.get() as usize, Vec::new);
+                for channel_storage in buffer_storage {
                     channel_storage.resize(max_frames_count as usize, 0.0);
                 }
-            }
 
-            let mut aux_input_buffers = wrapper.aux_input_buffers.borrow_mut();
-            aux_input_buffers.resize_with(
-                bus_config.aux_input_busses.num_busses as usize,
-                Buffer::default,
-            );
-            for buffer in aux_input_buffers.iter_mut() {
                 buffer.set_slices(0, |channel_slices| {
-                    channel_slices
-                        .resize_with(bus_config.aux_input_busses.num_channels as usize, || {
-                            &mut []
-                        });
+                    channel_slices.resize_with(num_channels.get() as usize, || &mut []);
                     channel_slices.fill_with(|| &mut []);
                 });
             }
 
             // And the same thing for the output buffers
             let mut aux_output_buffers = wrapper.aux_output_buffers.borrow_mut();
-            aux_output_buffers.resize_with(
-                bus_config.aux_output_busses.num_busses as usize,
-                Buffer::default,
-            );
-            for buffer in aux_output_buffers.iter_mut() {
+            aux_output_buffers.resize_with(audio_io_layout.aux_output_ports.len(), Buffer::default);
+            for (buffer, num_channels) in aux_output_buffers
+                .iter_mut()
+                .zip(audio_io_layout.aux_output_ports.iter())
+            {
                 buffer.set_slices(0, |channel_slices| {
-                    channel_slices
-                        .resize_with(bus_config.aux_output_busses.num_channels as usize, || {
-                            &mut []
-                        });
+                    channel_slices.resize_with(num_channels.get() as usize, || &mut []);
                     channel_slices.fill_with(|| &mut []);
                 });
             }
@@ -1984,14 +1924,18 @@ impl<P: ClapPlugin> Wrapper<P> {
 
             // Before doing anything, clear out any auxiliary outputs since they may contain
             // uninitialized data when the host assumes that we'll always write something there
-            let current_bus_config = wrapper.current_bus_config.load();
-            let has_main_input = current_bus_config.num_input_channels > 0;
-            let has_main_output = current_bus_config.num_output_channels > 0;
+            let current_audio_io_layout = wrapper.current_audio_io_layout.load();
+            let (aux_input_start_idx, aux_output_start_idx) = {
+                let has_main_input = current_audio_io_layout.main_input_channels.is_some();
+                let has_main_output = current_audio_io_layout.main_output_channels.is_some();
+                (
+                    if has_main_input { 1 } else { 0 },
+                    if has_main_output { 1 } else { 0 },
+                )
+            };
             if process.audio_outputs_count > 0 && !process.audio_outputs.is_null() {
-                for output_idx in
-                    if has_main_output { 1 } else { 0 }..process.audio_outputs_count as isize
-                {
-                    let host_output = process.audio_outputs.offset(output_idx);
+                for output_idx in aux_output_start_idx..process.audio_outputs_count as usize {
+                    let host_output = process.audio_outputs.add(output_idx);
                     if !(*host_output).data32.is_null() {
                         for channel_idx in 0..(*host_output).channel_count as isize {
                             ptr::write_bytes(
@@ -2160,13 +2104,9 @@ impl<P: ClapPlugin> Wrapper<P> {
                     .zip(aux_input_buffers.iter_mut())
                     .enumerate()
                 {
-                    let host_input_idx = if has_main_input {
-                        auxiliary_input_idx as isize + 1
-                    } else {
-                        auxiliary_input_idx as isize
-                    };
-                    let host_input = process.audio_inputs.offset(host_input_idx);
-                    if host_input_idx >= process.audio_inputs_count as isize
+                    let host_input_idx = auxiliary_input_idx + aux_input_start_idx;
+                    let host_input = process.audio_inputs.add(host_input_idx);
+                    if host_input_idx >= process.audio_inputs_count as usize
                             || process.audio_inputs.is_null()
                             || (*host_input).data32.is_null()
                             // Would only happen if the user configured zero channels for the
@@ -2174,7 +2114,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                             || storage.is_empty()
                             || (*host_input).channel_count != buffer.channels() as u32
                     {
-                        nih_debug_assert!(host_input_idx < process.audio_inputs_count as isize);
+                        nih_debug_assert!(host_input_idx < process.audio_inputs_count as usize);
                         nih_debug_assert!(!process.audio_inputs.is_null());
                         nih_debug_assert!(!(*host_input).data32.is_null());
                         nih_debug_assert!(!storage.is_empty());
@@ -2217,18 +2157,14 @@ impl<P: ClapPlugin> Wrapper<P> {
                 // And the same thing for auxiliary output buffers
                 let mut aux_output_buffers = wrapper.aux_output_buffers.borrow_mut();
                 for (auxiliary_output_idx, buffer) in aux_output_buffers.iter_mut().enumerate() {
-                    let host_output_idx = if has_main_output {
-                        auxiliary_output_idx as isize + 1
-                    } else {
-                        auxiliary_output_idx as isize
-                    };
-                    let host_output = process.audio_outputs.offset(host_output_idx);
-                    if host_output_idx >= process.audio_outputs_count as isize
+                    let host_output_idx = auxiliary_output_idx + aux_output_start_idx;
+                    let host_output = process.audio_outputs.add(host_output_idx);
+                    if host_output_idx >= process.audio_outputs_count as usize
                         || process.audio_outputs.is_null()
                         || (*host_output).data32.is_null()
                         || buffer.channels() == 0
                     {
-                        nih_debug_assert!(host_output_idx < process.audio_outputs_count as isize);
+                        nih_debug_assert!(host_output_idx < process.audio_outputs_count as usize);
                         nih_debug_assert!(!process.audio_outputs.is_null());
                         nih_debug_assert!(!(*host_output).data32.is_null());
 
@@ -2402,14 +2338,16 @@ impl<P: ClapPlugin> Wrapper<P> {
 
                 // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
                 let mut init_context = wrapper.make_init_context();
-                let bus_config = wrapper.current_bus_config.load();
+                let audio_io_layout = wrapper.current_audio_io_layout.load();
                 let buffer_config = wrapper.current_buffer_config.load().unwrap();
                 let mut plugin = wrapper.plugin.lock();
                 // FIXME: This is obviously not realtime-safe, but loading presets without doing
                 //         this could lead to inconsistencies. It's the plugin's responsibility to
                 //         not perform any realtime-unsafe work when the initialize function is
                 //         called a second time if it supports runtime preset loading.
-                permit_alloc(|| plugin.initialize(&bus_config, &buffer_config, &mut init_context));
+                permit_alloc(|| {
+                    plugin.initialize(&audio_io_layout, &buffer_config, &mut init_context)
+                });
                 plugin.reset();
 
                 // Reinitialize the plugin after loading state so it can respond to the new parameter values
@@ -2481,9 +2419,8 @@ impl<P: ClapPlugin> Wrapper<P> {
 
     unsafe extern "C" fn ext_audio_ports_config_count(plugin: *const clap_plugin) -> u32 {
         check_null_ptr!(0, plugin, (*plugin).plugin_data);
-        let wrapper = &*((*plugin).plugin_data as *const Self);
 
-        wrapper.supported_bus_configs.len() as u32
+        P::AUDIO_IO_LAYOUTS.len() as u32
     }
 
     unsafe extern "C" fn ext_audio_ports_config_get(
@@ -2492,37 +2429,24 @@ impl<P: ClapPlugin> Wrapper<P> {
         config: *mut clap_audio_ports_config,
     ) -> bool {
         check_null_ptr!(false, plugin, (*plugin).plugin_data, config);
-        let wrapper = &*((*plugin).plugin_data as *const Self);
 
-        match wrapper.supported_bus_configs.get(index as usize) {
-            Some(bus_config) => {
-                // We don't support variable auxiliary IO configs right now, so we don't need to
-                // specify sidechain inputs and aux outputs in these descriptions
-                let name = match bus_config {
-                    BusConfig {
-                        num_input_channels: _,
-                        num_output_channels: 1,
-                        ..
-                    } => String::from("Mono"),
-                    BusConfig {
-                        num_input_channels: _,
-                        num_output_channels: 2,
-                        ..
-                    } => String::from("Stereo"),
-                    BusConfig {
-                        num_input_channels,
-                        num_output_channels,
-                        ..
-                    } => format!("{num_input_channels} inputs, {num_output_channels} outputs"),
-                };
-                let input_port_type = match bus_config.num_input_channels {
-                    1 => CLAP_PORT_MONO.as_ptr(),
-                    2 => CLAP_PORT_STEREO.as_ptr(),
+        // This function directly maps to `P::AUDIO_IO_LAYOUTS`, and we thus also don't need to
+        // access the `wrapper` instance
+        match P::AUDIO_IO_LAYOUTS.get(index as usize) {
+            Some(audio_io_layout) => {
+                let name = audio_io_layout.name();
+
+                let main_input_channels = audio_io_layout.main_input_channels.map(NonZeroU32::get);
+                let main_output_channels =
+                    audio_io_layout.main_output_channels.map(NonZeroU32::get);
+                let input_port_type = match main_input_channels {
+                    Some(1) => CLAP_PORT_MONO.as_ptr(),
+                    Some(2) => CLAP_PORT_STEREO.as_ptr(),
                     _ => ptr::null(),
                 };
-                let output_port_type = match bus_config.num_output_channels {
-                    1 => CLAP_PORT_MONO.as_ptr(),
-                    2 => CLAP_PORT_STEREO.as_ptr(),
+                let output_port_type = match main_output_channels {
+                    Some(1) => CLAP_PORT_MONO.as_ptr(),
+                    Some(2) => CLAP_PORT_STEREO.as_ptr(),
                     _ => ptr::null(),
                 };
 
@@ -2531,21 +2455,17 @@ impl<P: ClapPlugin> Wrapper<P> {
                 let config = &mut *config;
                 config.id = index;
                 strlcpy(&mut config.name, &name);
-                config.input_port_count = if bus_config.num_input_channels > 0 {
-                    1
-                } else {
-                    0
-                } + bus_config.aux_input_busses.num_busses;
-                config.output_port_count = if bus_config.num_output_channels > 0 {
-                    1
-                } else {
-                    0
-                } + bus_config.aux_output_busses.num_busses;
-                config.has_main_input = bus_config.num_output_channels > 0;
-                config.main_input_channel_count = bus_config.num_output_channels;
+                config.input_port_count = (if main_input_channels.is_some() { 1 } else { 0 }
+                    + audio_io_layout.aux_input_ports.len())
+                    as u32;
+                config.output_port_count = (if main_output_channels.is_some() { 1 } else { 0 }
+                    + audio_io_layout.aux_output_ports.len())
+                    as u32;
+                config.has_main_input = main_input_channels.is_some();
+                config.main_input_channel_count = main_input_channels.unwrap_or_default();
                 config.main_input_port_type = input_port_type;
-                config.has_main_output = bus_config.num_output_channels > 0;
-                config.main_output_channel_count = bus_config.num_output_channels;
+                config.has_main_output = main_output_channels.is_some();
+                config.main_output_channel_count = main_output_channels.unwrap_or_default();
                 config.main_output_port_type = output_port_type;
 
                 true
@@ -2569,9 +2489,9 @@ impl<P: ClapPlugin> Wrapper<P> {
         let wrapper = &*((*plugin).plugin_data as *const Self);
 
         // We use the vector indices for the config ID
-        match wrapper.supported_bus_configs.get(config_id as usize) {
-            Some(bus_config) => {
-                wrapper.current_bus_config.store(*bus_config);
+        match P::AUDIO_IO_LAYOUTS.get(config_id as usize) {
+            Some(audio_io_layout) => {
+                wrapper.current_audio_io_layout.store(*audio_io_layout);
 
                 true
             }
@@ -2590,25 +2510,25 @@ impl<P: ClapPlugin> Wrapper<P> {
         check_null_ptr!(0, plugin, (*plugin).plugin_data);
         let wrapper = &*((*plugin).plugin_data as *const Self);
 
-        let bus_config = wrapper.current_bus_config.load();
+        let audio_io_layout = wrapper.current_audio_io_layout.load();
         if is_input {
-            let main_busses = if bus_config.num_input_channels > 0 {
+            let main_ports = if audio_io_layout.main_input_channels.is_some() {
                 1
             } else {
                 0
             };
-            let aux_busses = bus_config.aux_input_busses.num_busses;
+            let aux_ports = audio_io_layout.aux_input_ports.len();
 
-            main_busses + aux_busses
+            (main_ports + aux_ports) as u32
         } else {
-            let main_busses = if bus_config.num_output_channels > 0 {
+            let main_ports = if audio_io_layout.main_output_channels.is_some() {
                 1
             } else {
                 0
             };
-            let aux_busses = bus_config.aux_output_busses.num_busses;
+            let aux_ports = audio_io_layout.aux_output_ports.len();
 
-            main_busses + aux_busses
+            (main_ports + aux_ports) as u32
         }
     }
 
@@ -2633,9 +2553,9 @@ impl<P: ClapPlugin> Wrapper<P> {
             return false;
         }
 
-        let current_bus_config = wrapper.current_bus_config.load();
-        let has_main_input = current_bus_config.num_input_channels > 0;
-        let has_main_output = current_bus_config.num_output_channels > 0;
+        let current_audio_io_layout = wrapper.current_audio_io_layout.load();
+        let has_main_input = current_audio_io_layout.main_input_channels.is_some();
+        let has_main_output = current_audio_io_layout.main_output_channels.is_some();
 
         // Whether this port is a main port or an auxiliary (sidechain) port
         let is_main_port =
@@ -2656,11 +2576,22 @@ impl<P: ClapPlugin> Wrapper<P> {
             _ => CLAP_INVALID_ID,
         };
 
-        let channel_count = match (is_input, is_main_port) {
-            (true, true) => current_bus_config.num_input_channels,
-            (false, true) => current_bus_config.num_output_channels,
-            (true, false) => current_bus_config.aux_input_busses.num_channels,
-            (false, false) => current_bus_config.aux_output_busses.num_channels,
+        let channel_count = match (index, is_input) {
+            (0, true) if has_main_input => {
+                current_audio_io_layout.main_input_channels.unwrap().get()
+            }
+            (0, false) if has_main_output => {
+                current_audio_io_layout.main_output_channels.unwrap().get()
+            }
+            // `index` is off by one for the auxiliary ports if the plugin has a main port
+            (n, true) if has_main_input => {
+                current_audio_io_layout.aux_input_ports[n as usize - 1].get()
+            }
+            (n, false) if has_main_output => {
+                current_audio_io_layout.aux_output_ports[n as usize - 1].get()
+            }
+            (n, true) => current_audio_io_layout.aux_input_ports[n as usize].get(),
+            (n, false) => current_audio_io_layout.aux_output_ports[n as usize].get(),
         };
 
         let port_type = match channel_count {
@@ -2674,46 +2605,25 @@ impl<P: ClapPlugin> Wrapper<P> {
         let info = &mut *info;
         info.id = stable_id;
         match (is_input, is_main_port) {
-            (true, true) => strlcpy(&mut info.name, P::PORT_NAMES.main_input.unwrap_or("Input")),
-            (false, true) => strlcpy(
-                &mut info.name,
-                P::PORT_NAMES.main_output.unwrap_or("Output"),
-            ),
+            (true, true) => strlcpy(&mut info.name, &current_audio_io_layout.main_input_name()),
+            (false, true) => strlcpy(&mut info.name, &current_audio_io_layout.main_output_name()),
             (true, false) => {
-                let aux_input_idx = if has_main_input { index - 1 } else { index };
-                let custom_port_name = P::PORT_NAMES
-                    .aux_inputs
-                    .map(|names| names[aux_input_idx as usize]);
-                if current_bus_config.aux_input_busses.num_busses <= 1 {
-                    strlcpy(
-                        &mut info.name,
-                        custom_port_name.unwrap_or("Sidechain Input"),
-                    );
-                } else {
-                    strlcpy(
-                        &mut info.name,
-                        custom_port_name
-                            .unwrap_or(&format!("Sidechain Input {}", aux_input_idx + 1)),
-                    );
-                }
+                let aux_input_idx = if has_main_input { index - 1 } else { index } as usize;
+                strlcpy(
+                    &mut info.name,
+                    &current_audio_io_layout
+                        .aux_input_name(aux_input_idx)
+                        .expect("Out of bounds auxiliary input port"),
+                );
             }
             (false, false) => {
-                let aux_output_idx = if has_main_output { index - 1 } else { index };
-                let custom_port_name = P::PORT_NAMES
-                    .aux_outputs
-                    .map(|names| names[aux_output_idx as usize]);
-                if current_bus_config.aux_output_busses.num_busses <= 1 {
-                    strlcpy(
-                        &mut info.name,
-                        custom_port_name.unwrap_or("Auxiliary Output"),
-                    );
-                } else {
-                    strlcpy(
-                        &mut info.name,
-                        custom_port_name
-                            .unwrap_or(&format!("Auxiliary Output {}", aux_output_idx + 1)),
-                    );
-                }
+                let aux_output_idx = if has_main_output { index - 1 } else { index } as usize;
+                strlcpy(
+                    &mut info.name,
+                    &current_audio_io_layout
+                        .aux_output_name(aux_output_idx)
+                        .expect("Out of bounds auxiliary output port"),
+                );
             }
         };
         info.flags = if is_main_port {
@@ -3301,12 +3211,12 @@ impl<P: ClapPlugin> Wrapper<P> {
             return false;
         }
 
-        let bus_config = wrapper.current_bus_config.load();
+        let audio_io_layout = wrapper.current_audio_io_layout.load();
         if let Some(buffer_config) = wrapper.current_buffer_config.load() {
             // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
             let mut init_context = wrapper.make_init_context();
             let mut plugin = wrapper.plugin.lock();
-            plugin.initialize(&bus_config, &buffer_config, &mut init_context);
+            plugin.initialize(&audio_io_layout, &buffer_config, &mut init_context);
             // TODO: This also goes for the VST3 version, but should we call reset here? Won't the
             //       host always restart playback? Check this with a couple of hosts and remove the
             //       duplicate reset if it's not needed.

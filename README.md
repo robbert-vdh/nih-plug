@@ -144,8 +144,8 @@ Scroll down for more information on the underlying plugin framework.
   - MIDI SysEx is also supported. Plugins can define their own structs or sum
     types to wrap around those messages so they don't need to interact with raw
     byte buffers in the process function.
-- Support for flexible dynamic buffer configurations, including multiple input
-  and output busses.
+- Support for flexible dynamic buffer configurations, including variable numbers
+  of input and output ports.
 - A plugin bundler accessible through the
   `cargo xtask bundle <package> <build_arguments>` command that automatically
   detects which plugin targets your plugin exposes and creates the correct
