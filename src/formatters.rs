@@ -114,7 +114,7 @@ pub fn v2s_f32_panning() -> Arc<dyn Fn(f32) -> String + Send + Sync> {
 pub fn s2v_f32_panning() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> {
     Arc::new(|string| {
         let string = string.trim();
-        let cleaned_string = string.trim_end_matches(&[' ', 'l', 'L']).parse().ok();
+        let cleaned_string = string.trim_end_matches(&[' ', 'l', 'L', 'c', 'C', 'r', 'R']).parse().ok();
         match string.chars().last()?.to_uppercase().next()? {
             'L' => cleaned_string.map(|x: f32| x / -100.0),
             'C' => Some(0.0),
