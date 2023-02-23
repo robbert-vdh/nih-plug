@@ -212,14 +212,6 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
             }
         }
 
-        // TODO: Sidechain inputs and auxiliary outputs
-        if !audio_io_layout.aux_input_ports.is_empty() {
-            nih_warn!("Sidechain inputs are not yet supported in this standalone version");
-        }
-        if !audio_io_layout.aux_output_ports.is_empty() {
-            nih_warn!("Auxiliary outputs are not yet supported in this standalone version");
-        }
-
         let wrapper = Arc::new(Wrapper {
             backend: AtomicRefCell::new(backend),
 

@@ -284,6 +284,15 @@ impl Cpal {
             nih_log!("Audio-only, MIDI input and output has not been implemented yet.");
         }
 
+        // There's no obvious way to do sidechain inputs and additional outputs with the CPAL
+        // backends like there is with JACK. So we'll just provide empty buffers instead.
+        if !audio_io_layout.aux_input_ports.is_empty() {
+            nih_warn!("Sidechain inputs are not supported with this audio backend");
+        }
+        if !audio_io_layout.aux_output_ports.is_empty() {
+            nih_warn!("Auxiliary outputs are not supported with this audio backend");
+        }
+
         Ok(Cpal {
             config,
             audio_io_layout,
