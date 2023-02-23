@@ -381,6 +381,7 @@ impl Cpal {
                         .collect();
                 })
             }
+            aux_input_buffers.push(aux_buffer);
         }
 
         let mut aux_output_storage: Vec<Vec<Vec<f32>>> = Vec::new();
@@ -402,6 +403,7 @@ impl Cpal {
                         .collect();
                 })
             }
+            aux_output_buffers.push(aux_buffer);
         }
 
         // TODO: MIDI input and output

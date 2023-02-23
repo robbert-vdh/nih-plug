@@ -74,6 +74,7 @@ impl<P: Plugin> Backend<P> for Dummy {
                         .collect();
                 })
             }
+            aux_input_buffers.push(aux_buffer);
         }
 
         let mut aux_output_storage: Vec<Vec<Vec<f32>>> = Vec::new();
@@ -95,6 +96,7 @@ impl<P: Plugin> Backend<P> for Dummy {
                         .collect();
                 })
             }
+            aux_output_buffers.push(aux_buffer);
         }
 
         // This queue will never actually be used
