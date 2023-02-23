@@ -12,7 +12,7 @@ use parking_lot::Mutex;
 
 use super::super::config::WrapperConfig;
 use super::Backend;
-use crate::audio_setup::AuxiliaryBuffers;
+use crate::audio_setup::{AudioIOLayout, AuxiliaryBuffers};
 use crate::buffer::Buffer;
 use crate::context::process::Transport;
 use crate::midi::{MidiConfig, MidiResult, NoteEvent, PluginNoteEvent};
@@ -20,17 +20,17 @@ use crate::plugin::Plugin;
 use crate::wrapper::util::{clamp_input_event_timing, clamp_output_event_timing};
 
 /// Uses JACK audio and MIDI.
-//
-// TODO: Use the bus names
-// TODO: Support auxiliary inputs and outputs
 pub struct Jack {
+    audio_io_layout: AudioIOLayout,
     config: WrapperConfig,
     /// The JACK client, wrapped in an option since it needs to be transformed into an `AsyncClient`
     /// and then back into a regular `Client`.
     client: Option<Client>,
 
-    inputs: Arc<Vec<Port<AudioIn>>>,
-    outputs: Arc<Mutex<Vec<Port<AudioOut>>>>,
+    main_inputs: Arc<Vec<Port<AudioIn>>>,
+    main_outputs: Arc<Mutex<Vec<Port<AudioOut>>>>,
+    aux_input_ports: Arc<Mutex<Vec<Vec<Port<AudioIn>>>>>,
+    aux_output_ports: Arc<Mutex<Vec<Vec<Port<AudioOut>>>>>,
     midi_input: Option<Arc<Port<MidiIn>>>,
     midi_output: Option<Arc<Mutex<Port<MidiOut>>>>,
 }
@@ -51,11 +51,44 @@ impl<P: Plugin> Backend<P> for Jack {
         let client = self.client.take().unwrap();
         let buffer_size = client.buffer_size();
 
+        // We'll preallocate the buffers here, and then assign them to the slices belonging to the
+        // JACK ports later
         let mut buffer = Buffer::default();
         unsafe {
             buffer.set_slices(0, |output_slices| {
-                output_slices.resize_with(self.outputs.lock().len(), || &mut []);
+                output_slices.resize_with(self.main_outputs.lock().len(), || &mut []);
             })
+        }
+
+        // For the inputs we'll need to allocate storage because the NIH-plug API expects all
+        // buffers to be mutable, and the jack crate doesn't give us mutable slices on audio input
+        // ports
+        let mut aux_input_storage: Vec<Vec<Vec<f32>>> = Vec::new();
+        let mut aux_input_buffers: Vec<Buffer> = Vec::new();
+        for channel_count in self.audio_io_layout.aux_input_ports {
+            aux_input_storage.push(vec![
+                vec![0.0f32; self.config.period_size as usize];
+                channel_count.get() as usize
+            ]);
+
+            let mut aux_buffer = Buffer::default();
+            unsafe {
+                aux_buffer.set_slices(0, |output_slices| {
+                    output_slices.resize_with(channel_count.get() as usize, || &mut []);
+                })
+            }
+            aux_input_buffers.push(aux_buffer);
+        }
+
+        let mut aux_output_buffers: Vec<Buffer> = Vec::new();
+        for channel_count in self.audio_io_layout.aux_output_ports {
+            let mut aux_buffer = Buffer::default();
+            unsafe {
+                aux_buffer.set_slices(0, |output_slices| {
+                    output_slices.resize_with(channel_count.get() as usize, || &mut []);
+                })
+            }
+            aux_output_buffers.push(aux_buffer);
         }
 
         let mut input_events: Vec<PluginNoteEvent<P>> = Vec::with_capacity(2048);
@@ -66,8 +99,10 @@ impl<P: Plugin> Backend<P> for Jack {
         let unparker = parker.unparker().clone();
 
         let config = self.config.clone();
-        let inputs = self.inputs.clone();
-        let outputs = self.outputs.clone();
+        let main_inputs = self.main_inputs.clone();
+        let main_outputs = self.main_outputs.clone();
+        let aux_input_ports = self.aux_input_ports.clone();
+        let aux_output_ports = self.aux_output_ports.clone();
         let midi_input = self.midi_input.clone();
         let midi_output = self.midi_output.clone();
         let process_handler = ClosureProcessHandler::new(move |client, ps| {
@@ -108,8 +143,8 @@ impl<P: Plugin> Backend<P> for Jack {
 
             // Just like all of the plugin backends, we need to grab the output slices and copy the
             // inputs to the outputs
-            let mut outputs = outputs.lock();
-            for (input, output) in inputs.iter().zip(outputs.iter_mut()) {
+            let mut main_outputs = main_outputs.lock();
+            for (input, output) in main_inputs.iter().zip(main_outputs.iter_mut()) {
                 // XXX: Since the JACK bindings let us do this, presumably these two can't alias,
                 //      right?
                 output.as_mut_slice(ps).copy_from_slice(input.as_slice(ps));
@@ -118,12 +153,58 @@ impl<P: Plugin> Backend<P> for Jack {
             // And the buffer's slices need to point to the JACK output ports
             unsafe {
                 buffer.set_slices(num_frames as usize, |output_slices| {
-                    for (output_slice, output) in output_slices.iter_mut().zip(outputs.iter_mut()) {
+                    for (output_slice, output) in
+                        output_slices.iter_mut().zip(main_outputs.iter_mut())
+                    {
                         // SAFETY: This buffer is only read from after in this callback, and the
                         //         reference passed to `cb` cannot outlive that function call
                         *output_slice = &mut *(output.as_mut_slice(ps) as *mut _);
                     }
-                })
+                });
+            }
+
+            // For auxiliary input ports we first need to copy the port data to our input storage
+            // because the NIH-plug API expects every buffer to be mutable
+            let mut aux_input_ports = aux_input_ports.lock();
+            for (aux_inputs, (aux_storage, aux_buffer)) in aux_input_ports.iter_mut().zip(
+                aux_input_storage
+                    .iter_mut()
+                    .zip(aux_input_buffers.iter_mut()),
+            ) {
+                for (aux_input, channel) in aux_inputs.iter_mut().zip(aux_storage.iter_mut()) {
+                    channel.copy_from_slice(aux_input.as_slice(ps));
+                }
+
+                unsafe {
+                    aux_buffer.set_slices(num_frames as usize, |input_slices| {
+                        for (input_slice, channel) in
+                            input_slices.iter_mut().zip(aux_storage.iter_mut())
+                        {
+                            // SAFETY: This buffer is only read from after in this callback, and the
+                            //         reference passed to `cb` cannot outlive that function call
+                            *input_slice = &mut *(channel.as_mut_slice() as *mut _);
+                        }
+                    });
+                }
+            }
+
+            // We can point the buffers for the auxiliary output pots directly at the ports
+            let mut aux_output_ports = aux_output_ports.lock();
+            for (aux_outputs, aux_buffer) in aux_output_ports
+                .iter_mut()
+                .zip(aux_output_buffers.iter_mut())
+            {
+                unsafe {
+                    aux_buffer.set_slices(num_frames as usize, |output_slices| {
+                        for (output_slice, channel) in
+                            output_slices.iter_mut().zip(aux_outputs.iter_mut())
+                        {
+                            // SAFETY: This buffer is only read from after in this callback, and the
+                            //         reference passed to `cb` cannot outlive that function call
+                            *output_slice = &mut *(channel.as_mut_slice(ps) as *mut _);
+                        }
+                    });
+                }
             }
 
             input_events.clear();
@@ -135,14 +216,20 @@ impl<P: Plugin> Backend<P> for Jack {
                 }));
             }
 
+            // SAFETY: Shortening these borrows is safe as even if the plugin overwrites the
+            //         slices (which it cannot do without using unsafe code), then they
+            //         would still be reset on the next iteration
+            let mut aux = unsafe {
+                AuxiliaryBuffers {
+                    inputs: &mut *(aux_input_buffers.as_mut_slice() as *mut [Buffer]),
+                    outputs: &mut *(aux_output_buffers.as_mut_slice() as *mut [Buffer]),
+                }
+            };
+
             output_events.clear();
             if cb(
                 &mut buffer,
-                // TODO: Support auxiliary IO in the JACK backend
-                &mut AuxiliaryBuffers {
-                    inputs: &mut [],
-                    outputs: &mut [],
-                },
+                &mut aux,
                 transport,
                 &input_events,
                 &mut output_events,
@@ -223,7 +310,7 @@ impl Jack {
             )
         }
 
-        let mut inputs = Vec::new();
+        let mut main_inputs = Vec::new();
         let num_input_channels = audio_io_layout
             .main_input_channels
             .map(NonZeroU32::get)
@@ -233,13 +320,14 @@ impl Jack {
             .to_lowercase()
             .replace(' ', "_");
         for port_no in 1..num_input_channels + 1 {
-            inputs.push(client.register_port(&format!("{main_input_name}_{port_no}"), AudioIn)?);
+            main_inputs
+                .push(client.register_port(&format!("{main_input_name}_{port_no}"), AudioIn)?);
         }
 
         // We can't immediately connect the outputs. Or well we can with PipeWire, but JACK2 says
         // no. So the connections are made just after activating the client in the `run()` function
         // above.
-        let mut outputs = Vec::new();
+        let mut main_outputs = Vec::new();
         let num_output_channels = audio_io_layout
             .main_output_channels
             .map(NonZeroU32::get)
@@ -249,7 +337,42 @@ impl Jack {
             .to_lowercase()
             .replace(' ', "_");
         for port_no in 1..num_output_channels + 1 {
-            outputs.push(client.register_port(&format!("{main_output_name}_{port_no}"), AudioOut)?);
+            main_outputs
+                .push(client.register_port(&format!("{main_output_name}_{port_no}"), AudioOut)?);
+        }
+
+        // The JACK backend also exposes ports for auxiliary inputs and outputs
+        let mut aux_input_ports = Vec::new();
+        for (aux_input_idx, channel_count) in audio_io_layout.aux_input_ports.iter().enumerate() {
+            let aux_input_name = audio_io_layout
+                .aux_input_name(aux_input_idx)
+                .expect("Out of range aux input port")
+                .to_lowercase()
+                .replace(' ', "_");
+
+            let mut ports = Vec::new();
+            for port_no in 1..channel_count.get() + 1 {
+                ports.push(client.register_port(&format!("{aux_input_name}_{port_no}"), AudioIn)?);
+            }
+
+            aux_input_ports.push(ports);
+        }
+
+        let mut aux_output_ports = Vec::new();
+        for (aux_output_idx, channel_count) in audio_io_layout.aux_output_ports.iter().enumerate() {
+            let aux_output_name = audio_io_layout
+                .aux_output_name(aux_output_idx)
+                .expect("Out of range aux output port")
+                .to_lowercase()
+                .replace(' ', "_");
+
+            let mut ports = Vec::new();
+            for port_no in 1..channel_count.get() + 1 {
+                ports
+                    .push(client.register_port(&format!("{aux_output_name}_{port_no}"), AudioOut)?);
+            }
+
+            aux_output_ports.push(ports);
         }
 
         let midi_input = if P::MIDI_INPUT >= MidiConfig::Basic {
@@ -267,11 +390,14 @@ impl Jack {
         };
 
         Ok(Self {
+            audio_io_layout,
             config,
             client: Some(client),
 
-            inputs: Arc::new(inputs),
-            outputs: Arc::new(Mutex::new(outputs)),
+            main_inputs: Arc::new(main_inputs),
+            main_outputs: Arc::new(Mutex::new(main_outputs)),
+            aux_input_ports: Arc::new(Mutex::new(aux_input_ports)),
+            aux_output_ports: Arc::new(Mutex::new(aux_output_ports)),
             midi_input,
             midi_output,
         })
@@ -285,7 +411,7 @@ impl Jack {
 
         // We don't connect the inputs automatically to avoid feedback loops, but this should be
         // safe. And if this fails, then that's fine.
-        for (i, output) in self.outputs.lock().iter().enumerate() {
+        for (i, output) in self.main_outputs.lock().iter().enumerate() {
             // The system ports are 1-indexed
             let port_no = i + 1;
 
@@ -297,13 +423,13 @@ impl Jack {
         // comma separated list of ports
         if let Some(port_name) = &self.config.connect_jack_inputs {
             if port_name.contains(',') {
-                for (port_name, input) in port_name.split(',').zip(self.inputs.iter()) {
+                for (port_name, input) in port_name.split(',').zip(self.main_inputs.iter()) {
                     if let Err(err) = client.connect_ports_by_name(port_name, &input.name()?) {
                         nih_error!("Could not connect to '{port_name}': {err}");
                     }
                 }
             } else {
-                for input in self.inputs.iter() {
+                for input in self.main_inputs.iter() {
                     if let Err(err) = client.connect_ports_by_name(port_name, &input.name()?) {
                         nih_error!("Could not connect to '{port_name}': {err}");
                         break;
