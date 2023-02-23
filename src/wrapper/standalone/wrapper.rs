@@ -13,7 +13,6 @@ use std::thread;
 use super::backend::Backend;
 use super::config::WrapperConfig;
 use super::context::{WrapperGuiContext, WrapperInitContext, WrapperProcessContext};
-use crate::audio_setup::AuxiliaryBuffers;
 use crate::audio_setup::{AudioIOLayout, BufferConfig, ProcessMode};
 use crate::context::gui::AsyncExecutor;
 use crate::context::process::Transport;
@@ -466,7 +465,7 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
         gui_task_sender: channel::Sender<GuiTask>,
     ) {
         self.clone().backend.borrow_mut().run(
-            move |buffer, transport, input_events, output_events| {
+            move |buffer, aux, transport, input_events, output_events| {
                 // TODO: This process wrapper should actually be in the backends (since the backends
                 //       should also not allocate in their audio callbacks), but that's a bit more
                 //       error prone
@@ -479,11 +478,7 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
                     let mut plugin = self.plugin.lock();
                     if let ProcessStatus::Error(err) = plugin.process(
                         buffer,
-                        // TODO: Provide extra inputs and outputs in the JACk backend
-                        &mut AuxiliaryBuffers {
-                            inputs: &mut [],
-                            outputs: &mut [],
-                        },
+                        aux,
                         &mut self.make_process_context(transport, input_events, output_events),
                     ) {
                         nih_error!("The plugin returned an error while processing:");

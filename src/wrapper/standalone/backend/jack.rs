@@ -12,6 +12,7 @@ use parking_lot::Mutex;
 
 use super::super::config::WrapperConfig;
 use super::Backend;
+use crate::audio_setup::AuxiliaryBuffers;
 use crate::buffer::Buffer;
 use crate::context::process::Transport;
 use crate::midi::{MidiConfig, MidiResult, NoteEvent, PluginNoteEvent};
@@ -39,6 +40,7 @@ impl<P: Plugin> Backend<P> for Jack {
         &mut self,
         mut cb: impl FnMut(
                 &mut Buffer,
+                &mut AuxiliaryBuffers,
                 Transport,
                 &[PluginNoteEvent<P>],
                 &mut Vec<PluginNoteEvent<P>>,
@@ -134,7 +136,17 @@ impl<P: Plugin> Backend<P> for Jack {
             }
 
             output_events.clear();
-            if cb(&mut buffer, transport, &input_events, &mut output_events) {
+            if cb(
+                &mut buffer,
+                // TODO: Support auxiliary IO in the JACK backend
+                &mut AuxiliaryBuffers {
+                    inputs: &mut [],
+                    outputs: &mut [],
+                },
+                transport,
+                &input_events,
+                &mut output_events,
+            ) {
                 if let Some(midi_output) = &midi_output {
                     let mut midi_output = midi_output.lock();
                     let mut midi_writer = midi_output.writer(ps);

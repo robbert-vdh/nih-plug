@@ -10,7 +10,7 @@ use rtrb::RingBuffer;
 
 use super::super::config::WrapperConfig;
 use super::Backend;
-use crate::audio_setup::AudioIOLayout;
+use crate::audio_setup::{AudioIOLayout, AuxiliaryBuffers};
 use crate::buffer::Buffer;
 use crate::context::process::Transport;
 use crate::midi::{MidiConfig, PluginNoteEvent};
@@ -34,6 +34,7 @@ impl<P: Plugin> Backend<P> for Cpal {
         &mut self,
         cb: impl FnMut(
                 &mut Buffer,
+                &mut AuxiliaryBuffers,
                 Transport,
                 &[PluginNoteEvent<P>],
                 &mut Vec<PluginNoteEvent<P>>,
@@ -321,6 +322,7 @@ impl Cpal {
         mut input_rb_consumer: Option<rtrb::Consumer<f32>>,
         mut cb: impl FnMut(
                 &mut Buffer,
+                &mut AuxiliaryBuffers,
                 Transport,
                 &[PluginNoteEvent<P>],
                 &mut Vec<PluginNoteEvent<P>>,
@@ -404,6 +406,11 @@ impl Cpal {
             midi_output_events.clear();
             if !cb(
                 &mut buffer,
+                // FIXME: Use zero filled buffers with the correct size instead
+                &mut AuxiliaryBuffers {
+                    inputs: &mut [],
+                    outputs: &mut [],
+                },
                 transport,
                 &midi_input_events,
                 &mut midi_output_events,

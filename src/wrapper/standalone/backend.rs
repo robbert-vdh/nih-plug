@@ -1,3 +1,4 @@
+use crate::audio_setup::AuxiliaryBuffers;
 use crate::context::process::Transport;
 use crate::midi::PluginNoteEvent;
 
@@ -17,12 +18,11 @@ pub trait Backend<P: Plugin>: 'static + Send + Sync {
     /// there's a new block of audio to be processed. The process callback receives the audio
     /// buffers for the wrapped plugin's outputs. Any inputs will have already been copied to this
     /// buffer. This will block until the process callback returns `false`.
-    ///
-    /// TODO: Auxiliary inputs and outputs
     fn run(
         &mut self,
         cb: impl FnMut(
                 &mut Buffer,
+                &mut AuxiliaryBuffers,
                 Transport,
                 &[PluginNoteEvent<P>],
                 &mut Vec<PluginNoteEvent<P>>,
