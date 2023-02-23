@@ -44,7 +44,7 @@ const MAX_OVERLAP_ORDER: usize = 5;
 const MAX_OVERLAP_TIMES: usize = 1 << MAX_OVERLAP_ORDER; // 32
 
 /// This is a port of <https://github.com/robbert-vdh/spectral-compressor/>.
-struct SpectralCompressor {
+pub struct SpectralCompressor {
     params: Arc<SpectralCompressorParams>,
     editor_state: Arc<ViziaState>,
 
