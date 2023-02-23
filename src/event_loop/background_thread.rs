@@ -83,6 +83,8 @@ lazy_static::lazy_static! {
 
 impl<T, E> Clone for WorkerThreadHandle<T, E> {
     fn clone(&self) -> Self {
+        self.reference_count.fetch_add(1, Ordering::SeqCst);
+
         Self {
             tasks_sender: self.tasks_sender.clone(),
             reference_count: self.reference_count.clone(),
