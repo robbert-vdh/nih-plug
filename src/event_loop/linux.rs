@@ -2,7 +2,7 @@
 //! of a main thread does not exist there. Because of that, this mostly just serves as a way to
 //! delegate expensive processing to another thread.
 
-use std::sync::Arc;
+use std::sync::Weak;
 use std::thread::{self, ThreadId};
 
 use super::{BackgroundThread, EventLoop, MainThreadExecutor};
@@ -13,7 +13,7 @@ pub(crate) struct LinuxEventLoop<T, E> {
     /// The thing that ends up executing these tasks. The tasks are usually executed from the worker
     /// thread, but if the current thread is the main thread then the task cna also be executed
     /// directly.
-    executor: Arc<E>,
+    executor: Weak<E>,
 
     /// The actual background thread. The implementation is shared with the background thread used
     /// in other backends.
@@ -29,7 +29,7 @@ where
     T: Send + 'static,
     E: MainThreadExecutor<T> + 'static,
 {
-    fn new_and_spawn(executor: Arc<E>) -> Self {
+    fn new_and_spawn(executor: Weak<E>) -> Self {
         Self {
             executor: executor.clone(),
             background_thread: BackgroundThread::get_or_create(executor),
@@ -39,7 +39,13 @@ where
 
     fn schedule_gui(&self, task: T) -> bool {
         if self.is_main_thread() {
-            self.executor.execute(task, true);
+            match self.executor.upgrade() {
+                Some(executor) => executor.execute(task, true),
+                None => {
+                    nih_debug_assert_failure!("GUI task was posted after the executor was dropped")
+                }
+            }
+
             true
         } else {
             self.background_thread.schedule(task)

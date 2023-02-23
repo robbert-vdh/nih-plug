@@ -5,7 +5,7 @@ use crossbeam::channel;
 use std::ffi::{c_void, CString};
 use std::mem;
 use std::ptr;
-use std::sync::Arc;
+use std::sync::Weak;
 use std::thread::{self, ThreadId};
 use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, PSTR, WPARAM};
 use windows::Win32::System::{
@@ -37,7 +37,7 @@ pub(crate) struct WindowsEventLoop<T, E> {
     /// The thing that ends up executing these tasks. The tasks are usually executed from the worker
     /// thread, but if the current thread is the main thread then the task cna also be executed
     /// directly.
-    executor: Arc<E>,
+    executor: Weak<E>,
 
     /// The ID of the main thread. In practice this is the ID of the thread that created this task
     /// queue.
@@ -63,7 +63,7 @@ where
     T: Send + 'static,
     E: MainThreadExecutor<T> + 'static,
 {
-    fn new_and_spawn(executor: Arc<E>) -> Self {
+    fn new_and_spawn(executor: Weak<E>) -> Self {
         let (tasks_sender, tasks_receiver) = channel::bounded(super::TASK_QUEUE_CAPACITY);
 
         // Window classes need to have unique names or else multiple plugins loaded into the same
@@ -87,8 +87,7 @@ where
         // can't pass the tasks queue and the executor to it directly, so this is a simple type
         // erased version of the polling loop.
         let callback: PollCallback = {
-            let executor = Arc::downgrade(&executor);
-
+            let executor = executor.clone();
             Box::new(move || {
                 let executor = match executor.upgrade() {
                     Some(e) => e,
@@ -137,7 +136,13 @@ where
 
     fn schedule_gui(&self, task: T) -> bool {
         if self.is_main_thread() {
-            self.executor.execute(task, true);
+            match self.executor.upgrade() {
+                Some(executor) => executor.execute(task, true),
+                None => {
+                    nih_debug_assert_failure!("GUI task was posted after the executor was dropped")
+                }
+            }
+
             true
         } else {
             let success = self.tasks_sender.try_send(task).is_ok();

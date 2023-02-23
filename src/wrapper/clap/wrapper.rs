@@ -326,7 +326,7 @@ pub enum OutputParamEvent {
 /// Because CLAP has this [`clap_host::request_host_callback()`] function, we don't need to use
 /// `OsEventLoop` and can instead just request a main thread callback directly.
 impl<P: ClapPlugin> EventLoop<Task<P>, Wrapper<P>> for Wrapper<P> {
-    fn new_and_spawn(_executor: std::sync::Arc<Self>) -> Self {
+    fn new_and_spawn(_executor: Weak<Self>) -> Self {
         panic!("What are you doing");
     }
 
@@ -713,7 +713,7 @@ impl<P: ClapPlugin> Wrapper<P> {
 
         // Same with the background thread
         *wrapper.background_thread.borrow_mut() =
-            Some(BackgroundThread::get_or_create(wrapper.clone()));
+            Some(BackgroundThread::get_or_create(Arc::downgrade(&wrapper)));
 
         wrapper
     }

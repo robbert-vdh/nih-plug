@@ -19,7 +19,7 @@ pub(crate) struct BackgroundThread<T, E> {
     /// The object that actually executes the task `T`. We'll send a weak reference to this to the
     /// worker thread whenever a task needs to be executed. This allows multiple plugin instances to
     /// share the same worker thread.
-    executor: Arc<E>,
+    executor: Weak<E>,
     /// A thread that act as our worker thread. When [`schedule()`][Self::schedule()] is called,
     /// this thread will be woken up to execute the task on the executor. When the last worker
     /// thread handle gets dropped the thread is shut down.
@@ -52,7 +52,7 @@ where
     T: Send + 'static,
     E: MainThreadExecutor<T> + 'static,
 {
-    pub fn get_or_create(executor: Arc<E>) -> Self {
+    pub fn get_or_create(executor: Weak<E>) -> Self {
         Self {
             executor,
             // The same worker thread can be shared by multiple instances. Lifecycle management
@@ -67,7 +67,7 @@ where
         permit_alloc(|| {
             self.worker_thread
                 .tasks_sender
-                .try_send(Message::Task((task, Arc::downgrade(&self.executor))))
+                .try_send(Message::Task((task, self.executor.clone())))
                 .is_ok()
         })
     }

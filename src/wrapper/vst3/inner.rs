@@ -337,7 +337,8 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         // FIXME: Right now this is safe, but if we are going to have a singleton main thread queue
         //        serving multiple plugin instances, Arc can't be used because its reference count
         //        is separate from the internal COM-style reference count.
-        *wrapper.event_loop.borrow_mut() = Some(OsEventLoop::new_and_spawn(wrapper.clone()));
+        *wrapper.event_loop.borrow_mut() =
+            Some(OsEventLoop::new_and_spawn(Arc::downgrade(&wrapper)));
 
         // The editor also needs to be initialized later so the Async executor can work.
         *wrapper.editor.borrow_mut() = wrapper

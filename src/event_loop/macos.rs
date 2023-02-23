@@ -9,7 +9,7 @@ use core_foundation::runloop::{
 use crossbeam::channel::{self, Receiver, Sender};
 use objc::{class, msg_send, sel, sel_impl};
 use std::os::raw::c_void;
-use std::sync::Arc;
+use std::sync::Weak;
 
 use super::{BackgroundThread, EventLoop, MainThreadExecutor};
 
@@ -24,7 +24,7 @@ pub(crate) struct MacOSEventLoop<T, E> {
     /// The thing that ends up executing these tasks. The tasks are usually executed from the worker
     /// thread, but if the current thread is the main thread then the task cna also be executed
     /// directly.
-    executor: Arc<E>,
+    executor: Weak<E>,
 
     /// A background thread for running tasks independently from the host's GUI thread. Useful for
     /// longer, blocking tasks.
@@ -40,7 +40,7 @@ pub(crate) struct MacOSEventLoop<T, E> {
     /// The data that is passed to the external run loop source callback function via a raw pointer.
     /// The data is not accessed from the Rust side after creating it but it's kept here so as not
     /// to get dropped.
-    _callback_data: Box<(Arc<E>, Receiver<T>)>,
+    _callback_data: Box<(Weak<E>, Receiver<T>)>,
 }
 
 impl<T, E> EventLoop<T, E> for MacOSEventLoop<T, E>
@@ -48,7 +48,7 @@ where
     T: Send + 'static,
     E: MainThreadExecutor<T> + 'static,
 {
-    fn new_and_spawn(executor: Arc<E>) -> Self {
+    fn new_and_spawn(executor: Weak<E>) -> Self {
         let (main_thread_sender, main_thread_receiver) =
             channel::bounded::<T>(super::TASK_QUEUE_CAPACITY);
 
@@ -88,7 +88,11 @@ where
 
     fn schedule_gui(&self, task: T) -> bool {
         if self.is_main_thread() {
-            self.executor.execute(task, true);
+            match self.executor.upgrade() {
+                Some(executor) => executor.execute(task, true),
+                None => nih_debug_assert_failure!("GUI task posted after the executor was dropped"),
+            }
+
             true
         } else {
             // Only signal the main thread callback to be called if the task was added to the queue.
@@ -131,7 +135,15 @@ where
     T: Send + 'static,
     E: MainThreadExecutor<T> + 'static,
 {
-    let (executor, receiver) = unsafe { &*(info as *mut (Arc<E>, Receiver<T>)) };
+    let (executor, receiver) = unsafe { &*(info as *mut (Weak<E>, Receiver<T>)) };
+    let executor = match executor.upgrade() {
+        Some(executor) => executor,
+        None => {
+            nih_debug_assert_failure!("GUI task was posted after the executor was dropped");
+            return;
+        }
+    };
+
     while let Ok(task) = receiver.try_recv() {
         executor.execute(task, true);
     }

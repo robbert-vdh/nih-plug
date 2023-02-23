@@ -248,7 +248,8 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
             updated_state_receiver,
         });
 
-        *wrapper.event_loop.borrow_mut() = Some(OsEventLoop::new_and_spawn(wrapper.clone()));
+        *wrapper.event_loop.borrow_mut() =
+            Some(OsEventLoop::new_and_spawn(Arc::downgrade(&wrapper)));
 
         // The editor needs to be initialized later so the Async executor can work.
         *wrapper.editor.borrow_mut() = wrapper
