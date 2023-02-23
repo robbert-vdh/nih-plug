@@ -297,7 +297,8 @@ impl Jack {
     /// standalone should expose JACK MIDI ports.
     pub fn new<P: Plugin>(config: WrapperConfig) -> Result<Self> {
         let audio_io_layout = config.audio_io_layout_or_exit::<P>();
-        let (client, status) = Client::new(P::NAME, ClientOptions::NO_START_SERVER)
+        let plugin_name = P::NAME.to_lowercase().replace(' ', "_");
+        let (client, status) = Client::new(&plugin_name, ClientOptions::NO_START_SERVER)
             .context("Error while initializing the JACK client")?;
         if !status.is_empty() {
             anyhow::bail!("The JACK server returned an error: {status:?}");
