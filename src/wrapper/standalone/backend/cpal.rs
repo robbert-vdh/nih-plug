@@ -360,6 +360,50 @@ impl Cpal {
             })
         }
 
+        // We'll do the same thing for auxiliary inputs and outputs, so the plugin always gets the
+        // buffers it expects
+        let mut aux_input_storage: Vec<Vec<Vec<f32>>> = Vec::new();
+        let mut aux_input_buffers: Vec<Buffer> = Vec::new();
+        for channel_count in self.audio_io_layout.aux_input_ports {
+            aux_input_storage.push(vec![
+                vec![0.0f32; self.config.period_size as usize];
+                channel_count.get() as usize
+            ]);
+
+            let aux_storage = aux_input_storage.last_mut().unwrap();
+            let mut aux_buffer = Buffer::default();
+            unsafe {
+                aux_buffer.set_slices(self.config.period_size as usize, |output_slices| {
+                    // SAFETY: `aux_storage` is no longer used directly after this
+                    *output_slices = aux_storage
+                        .iter_mut()
+                        .map(|channel| &mut *(channel.as_mut_slice() as *mut [f32]))
+                        .collect();
+                })
+            }
+        }
+
+        let mut aux_output_storage: Vec<Vec<Vec<f32>>> = Vec::new();
+        let mut aux_output_buffers: Vec<Buffer> = Vec::new();
+        for channel_count in self.audio_io_layout.aux_output_ports {
+            aux_output_storage.push(vec![
+                vec![0.0f32; self.config.period_size as usize];
+                channel_count.get() as usize
+            ]);
+
+            let aux_storage = aux_output_storage.last_mut().unwrap();
+            let mut aux_buffer = Buffer::default();
+            unsafe {
+                aux_buffer.set_slices(self.config.period_size as usize, |output_slices| {
+                    // SAFETY: `aux_storage` is no longer used directly after this
+                    *output_slices = aux_storage
+                        .iter_mut()
+                        .map(|channel| &mut *(channel.as_mut_slice() as *mut [f32]))
+                        .collect();
+                })
+            }
+        }
+
         // TODO: MIDI input and output
         let midi_input_events = Vec::with_capacity(1024);
         let mut midi_output_events = Vec::with_capacity(1024);
@@ -412,14 +456,34 @@ impl Cpal {
                 }
             }
 
+            // The CPAL backends don't support auxiliary IO, so we'll just zero them out. The
+            // buffers are still provided to the wrapped plugin since it should not expect the
+            // wrapper/host to deviate from its audio IO layouts.
+            for aux_buffer in &mut aux_input_buffers {
+                for channel in aux_buffer.as_slice() {
+                    channel.fill(0.0);
+                }
+            }
+            for aux_buffer in &mut aux_output_buffers {
+                for channel in aux_buffer.as_slice() {
+                    channel.fill(0.0);
+                }
+            }
+
+            // SAFETY: Shortening these borrows is safe as even if the plugin overwrites the
+            //         slices (which it cannot do without using unsafe code), then they
+            //         would still be reset on the next iteration
+            let mut aux = unsafe {
+                AuxiliaryBuffers {
+                    inputs: &mut *(aux_input_buffers.as_mut_slice() as *mut [Buffer]),
+                    outputs: &mut *(aux_output_buffers.as_mut_slice() as *mut [Buffer]),
+                }
+            };
+
             midi_output_events.clear();
             if !cb(
                 &mut buffer,
-                // FIXME: Use zero filled buffers with the correct size instead
-                &mut AuxiliaryBuffers {
-                    inputs: &mut [],
-                    outputs: &mut [],
-                },
+                &mut aux,
                 transport,
                 &midi_input_events,
                 &mut midi_output_events,
