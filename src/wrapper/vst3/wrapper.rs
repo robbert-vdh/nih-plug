@@ -60,6 +60,12 @@ impl<P: Vst3Plugin> Wrapper<P> {
     }
 }
 
+impl<P: Vst3Plugin> Drop for Wrapper<P> {
+    fn drop(&mut self) {
+        nih_debug_assert_eq!(Arc::strong_count(&self.inner), 1);
+    }
+}
+
 impl<P: Vst3Plugin> IPluginBase for Wrapper<P> {
     unsafe fn initialize(&self, _context: *mut c_void) -> tresult {
         // We currently don't need or allow any initialization logic

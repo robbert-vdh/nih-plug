@@ -1772,7 +1772,10 @@ impl<P: ClapPlugin> Wrapper<P> {
 
     unsafe extern "C" fn destroy(plugin: *const clap_plugin) {
         assert!(!plugin.is_null() && !(*plugin).plugin_data.is_null());
-        drop(Arc::from_raw((*plugin).plugin_data as *mut Self));
+        let this = Arc::from_raw((*plugin).plugin_data as *mut Self);
+        nih_debug_assert_eq!(Arc::strong_count(&this), 1);
+
+        drop(this);
     }
 
     unsafe extern "C" fn activate(
