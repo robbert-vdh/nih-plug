@@ -43,7 +43,7 @@ impl View for ResizeHandle {
     fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
         event.map(|window_event, meta| match *window_event {
             WindowEvent::MouseDown(MouseButton::Left) => {
-                // The handle is a triangle, so we should also interac twith it as if it was a
+                // The handle is a triangle, so we should also interact with it as if it was a
                 // triangle
                 if intersects_triangle(
                     cx.cache.get_bounds(cx.current()),

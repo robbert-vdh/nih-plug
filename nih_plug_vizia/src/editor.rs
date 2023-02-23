@@ -5,6 +5,7 @@ use crossbeam::atomic::AtomicCell;
 use nih_plug::prelude::{Editor, GuiContext, ParentWindowHandle};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use vizia::context::backend::TextConfig;
 use vizia::prelude::*;
 
 use crate::widgets::RawParamEvent;
@@ -81,6 +82,10 @@ impl Editor for ViziaEditor {
         )
         .inner_size((unscaled_width, unscaled_height))
         .user_scale_factor(user_scale_factor)
+        .with_text_config(TextConfig {
+            hint: false,
+            subpixel: true,
+        })
         .on_idle({
             let emit_parameters_changed_event = self.emit_parameters_changed_event.clone();
             move |cx| {
