@@ -37,7 +37,7 @@ pub const NUM_BANDS: usize = 5;
 const MIN_CROSSOVER_FREQUENCY: f32 = 40.0;
 const MAX_CROSSOVER_FREQUENCY: f32 = 20_000.0;
 
-struct Crossover {
+pub struct Crossover {
     params: Arc<CrossoverParams>,
 
     buffer_config: BufferConfig,
