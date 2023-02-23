@@ -370,15 +370,12 @@ impl Cpal {
                 channel_count.get() as usize
             ]);
 
-            let aux_storage = aux_input_storage.last_mut().unwrap();
+            // We'll preallocate the slices, but we'll only assign them to point to
+            // `aux_input_storage` at the start of the audio callback
             let mut aux_buffer = Buffer::default();
             unsafe {
                 aux_buffer.set_slices(self.config.period_size as usize, |output_slices| {
-                    // SAFETY: `aux_storage` is no longer used directly after this
-                    *output_slices = aux_storage
-                        .iter_mut()
-                        .map(|channel| &mut *(channel.as_mut_slice() as *mut [f32]))
-                        .collect();
+                    output_slices.resize_with(channel_count.get() as usize, || &mut []);
                 })
             }
             aux_input_buffers.push(aux_buffer);
@@ -392,15 +389,10 @@ impl Cpal {
                 channel_count.get() as usize
             ]);
 
-            let aux_storage = aux_output_storage.last_mut().unwrap();
             let mut aux_buffer = Buffer::default();
             unsafe {
                 aux_buffer.set_slices(self.config.period_size as usize, |output_slices| {
-                    // SAFETY: `aux_storage` is no longer used directly after this
-                    *output_slices = aux_storage
-                        .iter_mut()
-                        .map(|channel| &mut *(channel.as_mut_slice() as *mut [f32]))
-                        .collect();
+                    output_slices.resize_with(channel_count.get() as usize, || &mut []);
                 })
             }
             aux_output_buffers.push(aux_buffer);
@@ -425,6 +417,39 @@ impl Cpal {
                         *output_slice = &mut *(channel.as_mut_slice() as *mut [f32]);
                     }
                 })
+            }
+
+            for (aux_buffer, aux_storage) in aux_input_buffers
+                .iter_mut()
+                .zip(aux_input_storage.iter_mut())
+            {
+                unsafe {
+                    aux_buffer.set_slices(config.period_size as usize, |output_slices| {
+                        for (output_slice, channel) in
+                            output_slices.iter_mut().zip(aux_storage.iter_mut())
+                        {
+                            // SAFETY: `aux_input_storage` is no longer used directly after this,
+                            //         and it outlives the data closure
+                            *output_slice = &mut *(channel.as_mut_slice() as *mut [f32]);
+                        }
+                    })
+                }
+            }
+            for (aux_buffer, aux_storage) in aux_output_buffers
+                .iter_mut()
+                .zip(aux_output_storage.iter_mut())
+            {
+                unsafe {
+                    aux_buffer.set_slices(config.period_size as usize, |output_slices| {
+                        for (output_slice, channel) in
+                            output_slices.iter_mut().zip(aux_storage.iter_mut())
+                        {
+                            // SAFETY: `aux_output_storage` is no longer used directly after this,
+                            //         and it outlives the data closure
+                            *output_slice = &mut *(channel.as_mut_slice() as *mut [f32]);
+                        }
+                    })
+                }
             }
 
             let mut transport = Transport::new(config.sample_rate);
