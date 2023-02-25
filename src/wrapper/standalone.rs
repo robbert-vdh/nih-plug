@@ -80,7 +80,7 @@ pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = Stri
 
             #[cfg(target_os = "linux")]
             let result = result.or_else(|_| {
-                match backend::Cpal::new::<P>(config.clone(), cpal::HostId::Alsa) {
+                match backend::CpalMidir::new::<P>(config.clone(), cpal::HostId::Alsa) {
                     Ok(backend) => {
                         nih_log!("Using the ALSA backend");
                         Ok(run_wrapper::<P, _>(backend, config.clone()))
@@ -96,7 +96,7 @@ pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = Stri
             });
             #[cfg(target_os = "macos")]
             let result = result.or_else(|_| {
-                match backend::Cpal::new::<P>(config.clone(), cpal::HostId::CoreAudio) {
+                match backend::CpalMidir::new::<P>(config.clone(), cpal::HostId::CoreAudio) {
                     Ok(backend) => {
                         nih_log!("Using the CoreAudio backend");
                         Ok(run_wrapper::<P, _>(backend, config.clone()))
@@ -112,7 +112,7 @@ pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = Stri
             });
             #[cfg(target_os = "windows")]
             let result = result.or_else(|_| {
-                match backend::Cpal::new::<P>(config.clone(), cpal::HostId::Wasapi) {
+                match backend::CpalMidir::new::<P>(config.clone(), cpal::HostId::Wasapi) {
                     Ok(backend) => {
                         nih_log!("Using the WASAPI backend");
                         Ok(run_wrapper::<P, _>(backend, config.clone()))
@@ -141,7 +141,7 @@ pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = Stri
         },
         #[cfg(target_os = "linux")]
         config::BackendType::Alsa => {
-            match backend::Cpal::new::<P>(config.clone(), cpal::HostId::Alsa) {
+            match backend::CpalMidir::new::<P>(config.clone(), cpal::HostId::Alsa) {
                 Ok(backend) => run_wrapper::<P, _>(backend, config),
                 Err(err) => {
                     nih_error!("Could not initialize the ALSA backend: {:#}", err);
@@ -151,7 +151,7 @@ pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = Stri
         }
         #[cfg(target_os = "macos")]
         config::BackendType::CoreAudio => {
-            match backend::Cpal::new::<P>(config.clone(), cpal::HostId::CoreAudio) {
+            match backend::CpalMidir::new::<P>(config.clone(), cpal::HostId::CoreAudio) {
                 Ok(backend) => run_wrapper::<P, _>(backend, config),
                 Err(err) => {
                     nih_error!("Could not initialize the CoreAudio backend: {:#}", err);
@@ -161,7 +161,7 @@ pub fn nih_export_standalone_with_args<P: Plugin, Args: IntoIterator<Item = Stri
         }
         #[cfg(target_os = "windows")]
         config::BackendType::Wasapi => {
-            match backend::Cpal::new::<P>(config.clone(), cpal::HostId::Wasapi) {
+            match backend::CpalMidir::new::<P>(config.clone(), cpal::HostId::Wasapi) {
                 Ok(backend) => run_wrapper::<P, _>(backend, config),
                 Err(err) => {
                     nih_error!("Could not initialize the WASAPI backend: {:#}", err);

@@ -6,7 +6,7 @@ mod cpal;
 mod dummy;
 mod jack;
 
-pub use self::cpal::Cpal;
+pub use self::cpal::CpalMidir;
 pub use self::dummy::Dummy;
 pub use self::jack::Jack;
 pub use crate::buffer::Buffer;

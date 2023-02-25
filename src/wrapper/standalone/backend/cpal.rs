@@ -17,7 +17,7 @@ use crate::midi::{MidiConfig, PluginNoteEvent};
 use crate::plugin::Plugin;
 
 /// Uses CPAL for audio and midir for MIDI.
-pub struct Cpal {
+pub struct CpalMidir {
     config: WrapperConfig,
     audio_io_layout: AudioIOLayout,
 
@@ -29,7 +29,7 @@ pub struct Cpal {
     // TODO: MIDI
 }
 
-impl<P: Plugin> Backend<P> for Cpal {
+impl<P: Plugin> Backend<P> for CpalMidir {
     fn run(
         &mut self,
         cb: impl FnMut(
@@ -135,7 +135,7 @@ impl<P: Plugin> Backend<P> for Cpal {
     }
 }
 
-impl Cpal {
+impl CpalMidir {
     /// Initialize the backend with the specified host. Returns an error if this failed for whatever
     /// reason.
     pub fn new<P: Plugin>(config: WrapperConfig, cpal_host_id: cpal::HostId) -> Result<Self> {
@@ -293,7 +293,7 @@ impl Cpal {
             nih_warn!("Auxiliary outputs are not supported with this audio backend");
         }
 
-        Ok(Cpal {
+        Ok(CpalMidir {
             config,
             audio_io_layout,
 
