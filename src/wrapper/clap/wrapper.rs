@@ -2037,6 +2037,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                     {
                         let audio_outputs = &*process.audio_outputs;
                         let num_output_channels = audio_outputs.channel_count as usize;
+                        // This ensures that we never feed dangling slices to the wrapped plugin
                         buffer_is_valid = num_output_channels == output_slices.len();
                         nih_debug_assert_eq!(num_output_channels, output_slices.len());
 

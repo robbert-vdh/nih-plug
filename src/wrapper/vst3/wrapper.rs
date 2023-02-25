@@ -1302,6 +1302,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
 
                     if !data.outputs.is_null() {
                         let num_output_channels = (*data.outputs).num_channels as usize;
+                        // This ensures that we never feed dangling slices to the wrapped plugin
                         buffer_is_valid = num_output_channels == output_slices.len();
                         nih_debug_assert_eq!(num_output_channels, output_slices.len());
 
