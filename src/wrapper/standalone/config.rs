@@ -44,6 +44,16 @@ pub struct WrapperConfig {
     /// Specifying an empty string or other invalid value will list all available output devices.
     #[clap(value_parser, long)]
     pub output_device: Option<String>,
+    /// The input MIDI device for the ALSA, CoreAudio, and WASAPI backends.
+    ///
+    /// Specifying an empty string or other invalid value will list all available MIDI inputs.
+    #[clap(value_parser, long)]
+    pub midi_input: Option<String>,
+    /// The output output device for the ALSA, CoreAudio, and WASAPI backends.
+    ///
+    /// Specifying an empty string or other invalid value will list all available MIDI output.
+    #[clap(value_parser, long)]
+    pub midi_output: Option<String>,
 
     /// If set to a port name ('foo:bar_1'), then all all inputs will be connected to that port. If
     /// the option is set to a comma separated list of port names ('foo:bar_1,foo:bar_2') then the
