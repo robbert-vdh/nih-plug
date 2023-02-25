@@ -14,18 +14,6 @@ pub struct WrapperConfig {
     /// no audio input or output if the other backends are not available.
     #[clap(value_parser, short = 'b', long, default_value = "auto")]
     pub backend: BackendType,
-    /// The input device for the ALSA, CoreAudio, and WASAPI backends. No input will be connected if
-    /// this is not specified.
-    ///
-    /// Specifying an empty string or other invalid value will list all available input devices.
-    #[clap(value_parser, long)]
-    pub input_device: Option<String>,
-    /// The output device for the ALSA, CoreAudio, and WASAPI backends.
-    ///
-    /// Specifying an empty string or other invalid value will list all available output devices.
-    #[clap(value_parser, long)]
-    pub output_device: Option<String>,
-
     /// The audio layout to use. Defaults to the first layout.
     ///
     /// Specifying an empty argument or other invalid value will list all available audio layouts.
@@ -44,6 +32,18 @@ pub struct WrapperConfig {
     /// This setting is ignored when using the JACK backend.
     #[clap(value_parser, short = 'p', long, default_value = "512")]
     pub period_size: u32,
+
+    /// The input device for the ALSA, CoreAudio, and WASAPI backends. No input will be connected if
+    /// this is not specified.
+    ///
+    /// Specifying an empty string or other invalid value will list all available input devices.
+    #[clap(value_parser, long)]
+    pub input_device: Option<String>,
+    /// The output device for the ALSA, CoreAudio, and WASAPI backends.
+    ///
+    /// Specifying an empty string or other invalid value will list all available output devices.
+    #[clap(value_parser, long)]
+    pub output_device: Option<String>,
 
     /// If set to a port name ('foo:bar_1'), then all all inputs will be connected to that port. If
     /// the option is set to a comma separated list of port names ('foo:bar_1,foo:bar_2') then the
