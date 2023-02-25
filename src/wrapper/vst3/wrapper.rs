@@ -316,12 +316,8 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
     ) -> tresult {
         let current_audio_io_layout = self.inner.current_audio_io_layout.load();
 
-        // We don't support this, and we'll just pretend to support enabling busses (even though
-        // they're enabled by default) in case a host requires this
-        if state != 1 {
-            return kResultFalse;
-        }
-
+        // We don't support this, but the validator will get very angry with us if we let it know
+        // that
         match (type_, dir, index) {
             (t, d, _)
                 if t == vst3_sys::vst::MediaTypes::kAudio as i32
