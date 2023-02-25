@@ -90,6 +90,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "alsa"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8512c9117059663fb5606788fbca3619e2a91dac0e3fe516242eab1fa6be5e44"
+dependencies = [
+ "alsa-sys",
+ "bitflags",
+ "libc",
+ "nix 0.24.3",
+]
+
+[[package]]
 name = "alsa-sys"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -857,6 +869,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "coremidi"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a7847ca018a67204508b77cb9e6de670125075f7464fff5f673023378fa34f5"
+dependencies = [
+ "core-foundation",
+ "core-foundation-sys",
+ "coremidi-sys",
+]
+
+[[package]]
+name = "coremidi-sys"
+version = "3.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "79a6deed0c97b2d40abbab77e4c97f81d71e162600423382c277dd640019116c"
+dependencies = [
+ "core-foundation-sys",
+]
+
+[[package]]
 name = "cosmic-text"
 version = "0.6.0"
 source = "git+https://github.com/pop-os/cosmic-text?rev=e00109d77f06d5a2e3057865eda3f530bc40a046#e00109d77f06d5a2e3057865eda3f530bc40a046"
@@ -881,7 +913,7 @@ version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f342c1b63e185e9953584ff2199726bf53850d96610a310e3aca09e9405a2d0b"
 dependencies = [
- "alsa",
+ "alsa 0.6.0",
  "core-foundation-sys",
  "coreaudio-rs",
  "jni",
@@ -2253,6 +2285,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "midir"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a456444d83e7ead06ae6a5c0a215ed70282947ff3897fb45fcb052b757284731"
+dependencies = [
+ "alsa 0.7.0",
+ "bitflags",
+ "coremidi",
+ "js-sys",
+ "libc",
+ "wasm-bindgen",
+ "web-sys",
+ "windows 0.43.0",
+]
+
+[[package]]
 name = "minimal-lexical"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2363,6 +2411,7 @@ dependencies = [
  "libc",
  "log",
  "midi-consts",
+ "midir",
  "nih_plug_derive",
  "objc",
  "parking_lot 0.12.1",
@@ -4562,6 +4611,21 @@ dependencies = [
  "windows_i686_msvc 0.37.0",
  "windows_x86_64_gnu 0.37.0",
  "windows_x86_64_msvc 0.37.0",
+]
+
+[[package]]
+name = "windows"
+version = "0.43.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04662ed0e3e5630dfa9b26e4cb823b817f1a9addda855d973a9458c236556244"
+dependencies = [
+ "windows_aarch64_gnullvm",
+ "windows_aarch64_msvc 0.42.1",
+ "windows_i686_gnu 0.42.1",
+ "windows_i686_msvc 0.42.1",
+ "windows_x86_64_gnu 0.42.1",
+ "windows_x86_64_gnullvm",
+ "windows_x86_64_msvc 0.42.1",
 ]
 
 [[package]]

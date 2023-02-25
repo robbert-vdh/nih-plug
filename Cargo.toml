@@ -52,7 +52,7 @@ assert_process_allocs = ["dep:assert_no_alloc"]
 # Enables an export target for standalone binaries through the
 # `nih_export_standalone()` function. Disabled by default as this requires
 # building additional dependencies for audio and MIDI handling.
-standalone = ["dep:baseview", "dep:clap", "dep:cpal", "dep:jack", "dep:rtrb"]
+standalone = ["dep:baseview", "dep:clap", "dep:cpal", "dep:jack", "dep:midir", "dep:rtrb"]
 # Enables the `nih_export_vst3!()` macro. Enabled by default. This feature
 # exists mostly for GPL-compliance reasons, since even if you don't use the VST3
 # wrapper you might otherwise still include a couple (unused) symbols from the
@@ -113,6 +113,7 @@ cpal = { version = "0.14.1", optional = true }
 # Current upstream JACK always links to libjack, even when using the default
 # dynamic loading feature
 jack = { git = "https://github.com/robbert-vdh/rust-jack.git", tag = "tmp-handle-library-failure", optional = true }
+midir = { version = "0.9.1", optional = true }
 rtrb = { version = "0.2.2", optional = true }
 
 # Used for the `vst3` feature

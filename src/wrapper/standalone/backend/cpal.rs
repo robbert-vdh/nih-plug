@@ -6,6 +6,8 @@ use cpal::{
     StreamConfig,
 };
 use crossbeam::sync::{Parker, Unparker};
+use midir::{MidiInput, MidiInputPort, MidiOutput, MidiOutputPort};
+use parking_lot::Mutex;
 use rtrb::RingBuffer;
 
 use super::super::config::WrapperConfig;
@@ -24,13 +26,29 @@ pub struct CpalMidir {
     input: Option<CpalDevice>,
     output: CpalDevice,
 
-    // TODO: MIDI
+    midi_input: Option<Mutex<MidirInputDevice>>,
+    midi_output: Option<Mutex<(MidirOutputDevice)>>,
+}
 
 /// All data needed for a CPAL input or output stream.
 struct CpalDevice {
     pub device: Device,
     pub config: StreamConfig,
     pub sample_format: SampleFormat,
+}
+
+/// All data needed to create a Midir input stream.
+struct MidirInputDevice {
+    pub backend: MidiInput,
+    pub port: MidiInputPort,
+    // The name can be retrieved from the port, not sure why the connect function needs the name
+    // again
+}
+
+/// All data needed to create a Midir output stream.
+struct MidirOutputDevice {
+    pub backend: MidiOutput,
+    pub port: MidiOutputPort,
 }
 
 impl<P: Plugin> Backend<P> for CpalMidir {
@@ -311,12 +329,97 @@ impl CpalMidir {
             nih_warn!("Auxiliary outputs are not supported with this audio backend");
         }
 
+        let midi_input = match &config.midi_input {
+            Some(midi_input_name) => {
+                // Midir lets us preemptively ignore MIDI messages we'll never use like active
+                // sensing and timing, but for maximum flexibility with NIH-plug's SysEx parsing
+                // types (which could technically be used to also parse those things) we won't do
+                // that.
+                let midi_backend = MidiInput::new(P::NAME)
+                    .context("Could not initialize the MIDI input backend")?;
+                let available_ports = midi_backend.ports();
+
+                // In case there somehow is a MIDI port with an empty name, we'll still want to
+                // preserve the behavior of an empty argument resulting in a listing of options.
+                let found_port = if !midi_input_name.is_empty() {
+                    // This API is a bit weird
+                    available_ports
+                        .iter()
+                        .find(|port| midi_backend.port_name(port).as_deref() == Ok(midi_input_name))
+                } else {
+                    None
+                };
+
+                match found_port {
+                    Some(port) => Some(Mutex::new(MidirInputDevice {
+                        backend: midi_backend,
+                        port: port.clone(),
+                    })),
+                    None => {
+                        let mut message = format!(
+                            "Unknown input MIDI device '{midi_input_name}'. Available devices are:"
+                        );
+                        for port in available_ports {
+                            match midi_backend.port_name(&port) {
+                                Ok(device_name) => message.push_str(&format!("\n{device_name}")),
+                                Err(err) => message.push_str(&format!("\nERROR: {err:?}")),
+                            }
+                        }
+
+                        anyhow::bail!(message);
+                    }
+                }
+            }
+            None => None,
+        };
+
+        let midi_output = match &config.midi_output {
+            Some(midi_output_name) => {
+                let midi_backend = MidiOutput::new(P::NAME)
+                    .context("Could not initialize the MIDI output backend")?;
+                let available_ports = midi_backend.ports();
+
+                let found_port = if !midi_output_name.is_empty() {
+                    available_ports.iter().find(|port| {
+                        midi_backend.port_name(port).as_deref() == Ok(midi_output_name)
+                    })
+                } else {
+                    None
+                };
+
+                match found_port {
+                    Some(port) => Some(Mutex::new(MidirOutputDevice {
+                        backend: midi_backend,
+                        port: port.clone(),
+                    })),
+                    None => {
+                        let mut message = format!(
+                            "Unknown output MIDI device '{midi_output_name}'. Available devices \
+                             are:"
+                        );
+                        for port in available_ports {
+                            match midi_backend.port_name(&port) {
+                                Ok(device_name) => message.push_str(&format!("\n{device_name}")),
+                                Err(err) => message.push_str(&format!("\nERROR: {err:?}")),
+                            }
+                        }
+
+                        anyhow::bail!(message);
+                    }
+                }
+            }
+            None => None,
+        };
+
         Ok(CpalMidir {
             config,
             audio_io_layout,
 
             input,
             output,
+
+            midi_input,
+            midi_output,
         })
     }
 
