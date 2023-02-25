@@ -21,12 +21,16 @@ pub struct CpalMidir {
     config: WrapperConfig,
     audio_io_layout: AudioIOLayout,
 
-    input: Option<(Device, StreamConfig, SampleFormat)>,
+    input: Option<CpalDevice>,
+    output: CpalDevice,
 
-    output_device: Device,
-    output_config: StreamConfig,
-    output_sample_format: SampleFormat,
     // TODO: MIDI
+
+/// All data needed for a CPAL input or output stream.
+struct CpalDevice {
+    pub device: Device,
+    pub config: StreamConfig,
+    pub sample_format: SampleFormat,
 }
 
 impl<P: Plugin> Backend<P> for CpalMidir {
@@ -50,10 +54,10 @@ impl<P: Plugin> Backend<P> for CpalMidir {
         // connected by default) waits a read a period of data before starting the output stream
         let mut _input_stream: Option<Stream> = None;
         let mut input_rb_consumer: Option<rtrb::Consumer<f32>> = None;
-        if let Some((input_device, input_config, input_sample_format)) = &self.input {
+        if let Some(input) = &self.input {
             // Data is sent to the output data callback using a wait-free ring buffer
             let (rb_producer, rb_consumer) = RingBuffer::new(
-                self.output_config.channels as usize * self.config.period_size as usize,
+                self.output.config.channels as usize * self.config.period_size as usize,
             );
             input_rb_consumer = Some(rb_consumer);
 
@@ -67,19 +71,19 @@ impl<P: Plugin> Backend<P> for CpalMidir {
                 }
             };
 
-            let stream = match input_sample_format {
-                SampleFormat::I16 => input_device.build_input_stream(
-                    input_config,
+            let stream = match input.sample_format {
+                SampleFormat::I16 => input.device.build_input_stream(
+                    &input.config,
                     self.build_input_data_callback::<i16>(input_unparker, rb_producer),
                     error_cb,
                 ),
-                SampleFormat::U16 => input_device.build_input_stream(
-                    input_config,
+                SampleFormat::U16 => input.device.build_input_stream(
+                    &input.config,
                     self.build_input_data_callback::<u16>(input_unparker, rb_producer),
                     error_cb,
                 ),
-                SampleFormat::F32 => input_device.build_input_stream(
-                    input_config,
+                SampleFormat::F32 => input.device.build_input_stream(
+                    &input.config,
                     self.build_input_data_callback::<f32>(input_unparker, rb_producer),
                     error_cb,
                 ),
@@ -106,19 +110,19 @@ impl<P: Plugin> Backend<P> for CpalMidir {
             }
         };
 
-        let output_stream = match self.output_sample_format {
-            SampleFormat::I16 => self.output_device.build_output_stream(
-                &self.output_config,
+        let output_stream = match self.output.sample_format {
+            SampleFormat::I16 => self.output.device.build_output_stream(
+                &self.output.config,
                 self.build_output_data_callback::<P, i16>(unparker, input_rb_consumer, cb),
                 error_cb,
             ),
-            SampleFormat::U16 => self.output_device.build_output_stream(
-                &self.output_config,
+            SampleFormat::U16 => self.output.device.build_output_stream(
+                &self.output.config,
                 self.build_output_data_callback::<P, u16>(unparker, input_rb_consumer, cb),
                 error_cb,
             ),
-            SampleFormat::F32 => self.output_device.build_output_stream(
-                &self.output_config,
+            SampleFormat::F32 => self.output.device.build_output_stream(
+                &self.output.config,
                 self.build_output_data_callback::<P, f32>(unparker, input_rb_consumer, cb),
                 error_cb,
             ),
@@ -210,7 +214,7 @@ impl CpalMidir {
             .map(NonZeroU32::get)
             .unwrap_or_default() as usize;
         let input = input_device
-            .map(|device| -> Result<(Device, StreamConfig, SampleFormat)> {
+            .map(|device| -> Result<CpalDevice> {
                 let input_configs: Vec<_> = device
                     .supported_input_configs()
                     .context("Could not get supported audio input configurations")?
@@ -246,7 +250,11 @@ impl CpalMidir {
                 };
                 let input_sample_format = input_config_range.sample_format();
 
-                Ok((device, input_config, input_sample_format))
+                Ok(CpalDevice {
+                    device,
+                    config: input_config,
+                    sample_format: input_sample_format,
+                })
             })
             .transpose()?;
 
@@ -254,37 +262,45 @@ impl CpalMidir {
             .main_output_channels
             .map(NonZeroU32::get)
             .unwrap_or_default() as usize;
-        let output_configs: Vec<_> = output_device
-            .supported_output_configs()
-            .context("Could not get supported audio output configurations")?
-            .filter(|c| match c.buffer_size() {
-                cpal::SupportedBufferSize::Range { min, max } => {
-                    c.channels() as usize == num_output_channels
-                        && (c.min_sample_rate()..=c.max_sample_rate())
-                            .contains(&requested_sample_rate)
-                        && (min..=max).contains(&&config.period_size)
-                }
-                cpal::SupportedBufferSize::Unknown => false,
-            })
-            .collect();
-        let output_config_range = output_configs
-            .iter()
-            .find(|c| c.sample_format() == SampleFormat::F32)
-            .or_else(|| output_configs.first())
-            .cloned()
-            .with_context(|| {
-                format!(
-                    "The audio output device does not support {} audio channels at a sample rate \
-                     of {} Hz and a period size of {} samples",
-                    num_output_channels, config.sample_rate, config.period_size,
-                )
-            })?;
-        let output_config = StreamConfig {
-            channels: output_config_range.channels(),
-            sample_rate: requested_sample_rate,
-            buffer_size: requested_buffer_size,
+        let output = {
+            let output_configs: Vec<_> = output_device
+                .supported_output_configs()
+                .context("Could not get supported audio output configurations")?
+                .filter(|c| match c.buffer_size() {
+                    cpal::SupportedBufferSize::Range { min, max } => {
+                        c.channels() as usize == num_output_channels
+                            && (c.min_sample_rate()..=c.max_sample_rate())
+                                .contains(&requested_sample_rate)
+                            && (min..=max).contains(&&config.period_size)
+                    }
+                    cpal::SupportedBufferSize::Unknown => false,
+                })
+                .collect();
+            let output_config_range = output_configs
+                .iter()
+                .find(|c| c.sample_format() == SampleFormat::F32)
+                .or_else(|| output_configs.first())
+                .cloned()
+                .with_context(|| {
+                    format!(
+                        "The audio output device does not support {} audio channels at a sample \
+                         rate of {} Hz and a period size of {} samples",
+                        num_output_channels, config.sample_rate, config.period_size,
+                    )
+                })?;
+            let output_config = StreamConfig {
+                channels: output_config_range.channels(),
+                sample_rate: requested_sample_rate,
+                buffer_size: requested_buffer_size,
+            };
+            let output_sample_format = output_config_range.sample_format();
+
+            CpalDevice {
+                device: output_device,
+                config: output_config,
+                sample_format: output_sample_format,
+            }
         };
-        let output_sample_format = output_config_range.sample_format();
 
         // There's no obvious way to do sidechain inputs and additional outputs with the CPAL
         // backends like there is with JACK. So we'll just provide empty buffers instead.
@@ -300,10 +316,7 @@ impl CpalMidir {
             audio_io_layout,
 
             input,
-
-            output_device,
-            output_config,
-            output_sample_format,
+            output,
         })
     }
 
