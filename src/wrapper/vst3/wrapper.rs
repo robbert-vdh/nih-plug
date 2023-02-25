@@ -1025,6 +1025,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
             // uninitialized data when the host assumes that we'll always write something there
             let current_audio_io_layout = self.inner.current_audio_io_layout.load();
             let has_main_input = current_audio_io_layout.main_input_channels.is_some();
+            let has_main_output = current_audio_io_layout.main_output_channels.is_some();
             if !data.outputs.is_null() {
                 // HACK: Bitwig requires VST3 plugins to always have a main output. We'll however
                 //       still use this variable here to maintain consistency between the backends.
@@ -1300,7 +1301,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                     // Buffers for zero-channel plugins like note effects should always be allowed
                     buffer_is_valid = output_slices.is_empty();
 
-                    if !data.outputs.is_null() {
+                    if !data.outputs.is_null() && has_main_output {
                         let num_output_channels = (*data.outputs).num_channels as usize;
                         // This ensures that we never feed dangling slices to the wrapped plugin
                         buffer_is_valid = num_output_channels == output_slices.len();
@@ -1334,7 +1335,11 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                 // Some hosts process data in place, in which case we don't need to do any copying
                 // ourselves. If the pointers do not alias, then we'll do the copy here and then the
                 // plugin can just do normal in place processing.
-                if !data.outputs.is_null() && !data.inputs.is_null() {
+                if !data.outputs.is_null()
+                    && !data.inputs.is_null()
+                    && has_main_input
+                    && has_main_output
+                {
                     let num_output_channels = (*data.outputs).num_channels as usize;
                     let num_input_channels = (*data.inputs).num_channels as usize;
                     nih_debug_assert!(

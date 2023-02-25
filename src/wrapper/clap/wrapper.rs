@@ -1928,14 +1928,10 @@ impl<P: ClapPlugin> Wrapper<P> {
             // Before doing anything, clear out any auxiliary outputs since they may contain
             // uninitialized data when the host assumes that we'll always write something there
             let current_audio_io_layout = wrapper.current_audio_io_layout.load();
-            let (aux_input_start_idx, aux_output_start_idx) = {
-                let has_main_input = current_audio_io_layout.main_input_channels.is_some();
-                let has_main_output = current_audio_io_layout.main_output_channels.is_some();
-                (
-                    if has_main_input { 1 } else { 0 },
-                    if has_main_output { 1 } else { 0 },
-                )
-            };
+            let has_main_input = current_audio_io_layout.main_input_channels.is_some();
+            let has_main_output = current_audio_io_layout.main_output_channels.is_some();
+            let aux_input_start_idx = if has_main_input { 1 } else { 0 };
+            let aux_output_start_idx = if has_main_output { 1 } else { 0 };
             if process.audio_outputs_count > 0 && !process.audio_outputs.is_null() {
                 for output_idx in aux_output_start_idx..process.audio_outputs_count as usize {
                     let host_output = process.audio_outputs.add(output_idx);
@@ -2034,6 +2030,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                         && !process.audio_outputs.is_null()
                         && !(*process.audio_outputs).data32.is_null()
                         && !output_slices.is_empty()
+                        && has_main_output
                     {
                         let audio_outputs = &*process.audio_outputs;
                         let num_output_channels = audio_outputs.channel_count as usize;
@@ -2073,6 +2070,8 @@ impl<P: ClapPlugin> Wrapper<P> {
                     && process.audio_inputs_count > 0
                     && !process.audio_inputs.is_null()
                     && !(*process.audio_inputs).data32.is_null()
+                    && has_main_input
+                    && has_main_output
                 {
                     // We currently don't support sidechain inputs
                     let audio_outputs = &*process.audio_outputs;
