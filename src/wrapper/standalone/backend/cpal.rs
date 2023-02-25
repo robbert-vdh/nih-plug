@@ -149,6 +149,13 @@ impl CpalMidir {
             )
         }
 
+        if config.midi_input.is_none() && P::MIDI_INPUT >= MidiConfig::Basic {
+            nih_log!("Use the '--midi-input' option to select a MIDI input device.")
+        }
+        if config.midi_output.is_none() && P::MIDI_OUTPUT >= MidiConfig::Basic {
+            nih_log!("Use the '--midi-output' option to select a MIDI output device.")
+        }
+
         // No input device is connected unless requested by the user to avoid feedback loops
         let input_device = config
             .input_device
@@ -278,11 +285,6 @@ impl CpalMidir {
             buffer_size: requested_buffer_size,
         };
         let output_sample_format = output_config_range.sample_format();
-
-        // TODO: Implement MIDI support
-        if P::MIDI_INPUT >= MidiConfig::Basic || P::MIDI_OUTPUT >= MidiConfig::Basic {
-            nih_log!("Audio-only, MIDI input and output has not been implemented yet.");
-        }
 
         // There's no obvious way to do sidechain inputs and additional outputs with the CPAL
         // backends like there is with JACK. So we'll just provide empty buffers instead.
