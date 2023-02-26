@@ -1381,14 +1381,18 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                              || storage.is_empty()
                              || (*host_input).num_channels != buffer.channels() as i32
                     {
-                        nih_debug_assert!(host_input_idx < data.num_inputs as usize);
-                        nih_debug_assert!(!data.inputs.is_null());
+                        // During a parameter flush the number of inputs/outputs may be 0 and the
+                        // number of channels may be 0, so these assertions need to be a bit more
+                        // relaxed
+                        nih_debug_assert!(
+                            data.num_inputs == 0 || host_input_idx < data.num_inputs as usize
+                        );
                         nih_debug_assert!(!storage.is_empty());
                         if !data.inputs.is_null() && host_input_idx < data.num_inputs as usize {
                             nih_debug_assert!(!(*host_input).buffers.is_null());
-                            nih_debug_assert_eq!(
-                                (*host_input).num_channels,
-                                buffer.channels() as i32
+                            nih_debug_assert!(
+                                (*host_input).num_channels == 0
+                                    || (*host_input).num_channels == buffer.channels() as i32
                             );
                         }
 
