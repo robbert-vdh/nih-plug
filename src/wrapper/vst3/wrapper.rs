@@ -114,10 +114,11 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
             x if x == vst3_sys::vst::MediaTypes::kAudio as i32
                 && dir == vst3_sys::vst::BusDirections::kOutput as i32 =>
             {
-                // HACK: Bitwig will not call the process function at all if the plugin does not have any
-                //       audio IO, so we'll add a zero channel output to work around this if that is the
-                //       case
-                let main_busses = 1;
+                let main_busses = if current_audio_io_layout.main_output_channels.is_some() {
+                    1
+                } else {
+                    0
+                };
                 let aux_busses = current_audio_io_layout.aux_output_ports.len() as i32;
 
                 main_busses + aux_busses
@@ -198,12 +199,10 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                 info.direction = dir;
                 info.flags = vst3_sys::vst::BusFlags::kDefaultActive as u32;
 
-                // HACK: Bitwig will not call the process function at all if the plugin does not have any
-                //       audio IO, so we'll add a zero channel output to work around this if that is the
-                //       case
-                let aux_output_start_idx = 1;
+                let has_main_output = current_audio_io_layout.main_output_channels.is_some();
+                let aux_output_start_idx = if has_main_output { 1 } else { 0 };
                 let aux_output_idx = (index - aux_output_start_idx).max(0) as usize;
-                if index == 0 {
+                if index == 0 && has_main_output {
                     info.bus_type = vst3_sys::vst::BusTypes::kMain as i32;
                     // NOTE: See above, this becomes a 0 channel output if the plugin doesn't have a
                     //       main output
@@ -340,10 +339,11 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                 if t == vst3_sys::vst::MediaTypes::kAudio as i32
                     && d == vst3_sys::vst::BusDirections::kOutput as i32 =>
             {
-                // HACK: Bitwig will not call the process function at all if the plugin does not have any
-                //       audio IO, so we'll add a zero channel output to work around this if that is the
-                //       case
-                let main_busses = 1;
+                let main_busses = if current_audio_io_layout.main_output_channels.is_some() {
+                    1
+                } else {
+                    0
+                };
                 let aux_busses = current_audio_io_layout.aux_output_ports.len() as i32;
 
                 if (0..main_busses + aux_busses).contains(&index) {
@@ -795,10 +795,11 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                 } else {
                     0
                 } + layout.aux_input_ports.len();
-                // HACK: Bitwig will not call the process function at all if the plugin does not
-                //       have any audio IO, so we'll add a zero channel output to work around this
-                //       if that is the case
-                let num_layout_outs = 1 + layout.aux_input_ports.len();
+                let num_layout_outs = if layout.main_output_channels.is_some() {
+                    1
+                } else {
+                    0
+                } + layout.aux_output_ports.len();
                 if num_ins as usize != num_layout_ins || num_outs as usize != num_layout_outs {
                     return false;
                 }
@@ -820,8 +821,8 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                     }
                 }
 
-                // See above, there is always a main output
-                let aux_output_start_idx = 1;
+                let has_main_output = layout.main_output_channels.is_some();
+                let aux_output_start_idx = if has_main_output { 0 } else { 1 };
                 if (*outputs).count_ones()
                     != layout
                         .main_output_channels
@@ -892,12 +893,10 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                 return kInvalidArgument;
             }
         } else if dir == vst3_sys::vst::BusDirections::kOutput as i32 {
-            // HACK: Bitwig will not call the process function at all if the plugin does not have any
-            //       audio IO, so we'll add a zero channel output to work around this if that is the
-            //       case
-            let aux_output_start_idx = 1;
+            let has_main_output = current_audio_io_layout.main_output_channels.is_some();
+            let aux_output_start_idx = if has_main_output { 1 } else { 0 };
             let aux_output_idx = (index - aux_output_start_idx).max(0) as usize;
-            if index == 0 {
+            if index == 0 && has_main_output {
                 current_audio_io_layout.main_output_channels.unwrap().get()
             } else if aux_output_idx < current_audio_io_layout.aux_output_ports.len() {
                 current_audio_io_layout.aux_output_ports[aux_output_idx].get()
@@ -1026,11 +1025,11 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
             let current_audio_io_layout = self.inner.current_audio_io_layout.load();
             let has_main_input = current_audio_io_layout.main_input_channels.is_some();
             let has_main_output = current_audio_io_layout.main_output_channels.is_some();
+            let aux_input_start_idx = if has_main_input { 1 } else { 0 };
+            let aux_output_start_idx = if has_main_output { 1 } else { 0 };
             if !data.outputs.is_null() {
-                // HACK: Bitwig requires VST3 plugins to always have a main output. We'll however
-                //       still use this variable here to maintain consistency between the backends.
-                for output_idx in 1..data.num_outputs as isize {
-                    let host_output = data.outputs.offset(output_idx);
+                for output_idx in aux_output_start_idx..data.num_outputs as usize {
+                    let host_output = data.outputs.add(output_idx);
                     if !(*host_output).buffers.is_null() {
                         for channel_idx in 0..(*host_output).num_channels as isize {
                             ptr::write_bytes(
@@ -1367,18 +1366,14 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                 // the `aux` parameter on the `process()` function.
                 let mut aux_input_storage = self.inner.aux_input_storage.borrow_mut();
                 let mut aux_input_buffers = self.inner.aux_input_buffers.borrow_mut();
-                for (auxiliary_input_idx, (storage, buffer)) in aux_input_storage
+                for (aux_input_idx, (storage, buffer)) in aux_input_storage
                     .iter_mut()
                     .zip(aux_input_buffers.iter_mut())
                     .enumerate()
                 {
-                    let host_input_idx = if has_main_input {
-                        auxiliary_input_idx as isize + 1
-                    } else {
-                        auxiliary_input_idx as isize
-                    };
-                    let host_input = data.inputs.offset(host_input_idx);
-                    if host_input_idx >= data.num_inputs as isize
+                    let host_input_idx = aux_input_start_idx + aux_input_idx;
+                    let host_input = data.inputs.add(host_input_idx);
+                    if host_input_idx >= data.num_inputs as usize
                              || data.inputs.is_null()
                              || (*host_input).buffers.is_null()
                              // Would only happen if the user configured zero channels for the
@@ -1386,7 +1381,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                              || storage.is_empty()
                              || (*host_input).num_channels != buffer.channels() as i32
                     {
-                        nih_debug_assert!(host_input_idx < data.num_inputs as isize);
+                        nih_debug_assert!(host_input_idx < data.num_inputs as usize);
                         nih_debug_assert!(!data.inputs.is_null());
                         nih_debug_assert!(!(*host_input).buffers.is_null());
                         nih_debug_assert!(!storage.is_empty());
@@ -1429,17 +1424,15 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
 
                 // And the same thing for auxiliary output buffers
                 let mut aux_output_buffers = self.inner.aux_output_buffers.borrow_mut();
-                for (auxiliary_output_idx, buffer) in aux_output_buffers.iter_mut().enumerate() {
-                    // HACK: Bitwig requires VST3 plugins to always have a main output. We'll however still
-                    //       use this variable here to maintain consistency between the backends.
-                    let host_output_idx = auxiliary_output_idx as isize + 1;
-                    let host_output = data.outputs.offset(host_output_idx);
-                    if host_output_idx >= data.num_outputs as isize
+                for (aux_output_idx, buffer) in aux_output_buffers.iter_mut().enumerate() {
+                    let host_output_idx = aux_output_start_idx + aux_output_idx;
+                    let host_output = data.outputs.add(host_output_idx);
+                    if host_output_idx >= data.num_outputs as usize
                         || data.outputs.is_null()
                         || (*host_output).buffers.is_null()
                         || buffer.channels() == 0
                     {
-                        nih_debug_assert!(host_output_idx < data.num_outputs as isize);
+                        nih_debug_assert!(host_output_idx < data.num_outputs as usize);
                         nih_debug_assert!(!data.outputs.is_null());
                         nih_debug_assert!(!(*host_output).buffers.is_null());
 
