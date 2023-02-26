@@ -1383,9 +1383,14 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                     {
                         nih_debug_assert!(host_input_idx < data.num_inputs as usize);
                         nih_debug_assert!(!data.inputs.is_null());
-                        nih_debug_assert!(!(*host_input).buffers.is_null());
                         nih_debug_assert!(!storage.is_empty());
-                        nih_debug_assert_eq!((*host_input).num_channels, buffer.channels() as i32);
+                        if !data.inputs.is_null() && host_input_idx < data.num_inputs as usize {
+                            nih_debug_assert!(!(*host_input).buffers.is_null());
+                            nih_debug_assert_eq!(
+                                (*host_input).num_channels,
+                                buffer.channels() as i32
+                            );
+                        }
 
                         // If the host passes weird data then we need to be very sure that there are
                         // no dangling references to previous data
@@ -1434,7 +1439,9 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                     {
                         nih_debug_assert!(host_output_idx < data.num_outputs as usize);
                         nih_debug_assert!(!data.outputs.is_null());
-                        nih_debug_assert!(!(*host_output).buffers.is_null());
+                        if !data.outputs.is_null() && host_output_idx < data.num_outputs as usize {
+                            nih_debug_assert!(!(*host_output).buffers.is_null());
+                        }
 
                         // If the host passes weird data then we need to be very sure that there are
                         // no dangling references to previous data

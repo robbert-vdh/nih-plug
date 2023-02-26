@@ -2119,9 +2119,16 @@ impl<P: ClapPlugin> Wrapper<P> {
                     {
                         nih_debug_assert!(host_input_idx < process.audio_inputs_count as usize);
                         nih_debug_assert!(!process.audio_inputs.is_null());
-                        nih_debug_assert!(!(*host_input).data32.is_null());
                         nih_debug_assert!(!storage.is_empty());
-                        nih_debug_assert_eq!((*host_input).channel_count, buffer.channels() as u32);
+                        if !process.audio_inputs.is_null()
+                            && host_input_idx < process.audio_inputs_count as usize
+                        {
+                            nih_debug_assert!(!(*host_input).data32.is_null());
+                            nih_debug_assert_eq!(
+                                (*host_input).channel_count,
+                                buffer.channels() as u32
+                            );
+                        }
 
                         // If the host passes weird data then we need to be very sure that there are
                         // no dangling references to previous data
@@ -2169,7 +2176,11 @@ impl<P: ClapPlugin> Wrapper<P> {
                     {
                         nih_debug_assert!(host_output_idx < process.audio_outputs_count as usize);
                         nih_debug_assert!(!process.audio_outputs.is_null());
-                        nih_debug_assert!(!(*host_output).data32.is_null());
+                        if !process.audio_outputs.is_null()
+                            && host_output_idx < process.audio_outputs_count as usize
+                        {
+                            nih_debug_assert!(!(*host_output).data32.is_null());
+                        }
 
                         // If the host passes weird data then we need to be very sure that there are
                         // no dangling references to previous data
