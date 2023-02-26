@@ -109,3 +109,9 @@ pub mod midi;
 pub mod params;
 pub mod plugin;
 pub mod wrapper;
+
+// This is also re-exported from the prelude but since the other export entry points are macros and
+// macros are always accessible from the crate's root, it seems like a good idea to keep the
+// symmetry and also export this function in the same places
+#[cfg(feature = "standalone")]
+pub use wrapper::standalone::nih_export_standalone;
