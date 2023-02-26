@@ -312,7 +312,7 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
         type_: vst3_sys::vst::MediaType,
         dir: vst3_sys::vst::BusDirection,
         index: i32,
-        state: vst3_sys::base::TBool,
+        _state: vst3_sys::base::TBool,
     ) -> tresult {
         let current_audio_io_layout = self.inner.current_audio_io_layout.load();
 
