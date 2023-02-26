@@ -46,7 +46,6 @@ const MAX_OVERLAP_TIMES: usize = 1 << MAX_OVERLAP_ORDER; // 32
 /// This is a port of <https://github.com/robbert-vdh/spectral-compressor/>.
 pub struct SpectralCompressor {
     params: Arc<SpectralCompressorParams>,
-    editor_state: Arc<ViziaState>,
 
     /// The current buffer config, used for updating the compressors.
     buffer_config: BufferConfig,
@@ -79,6 +78,11 @@ struct Plan {
 
 #[derive(Params)]
 pub struct SpectralCompressorParams {
+    /// The editor state, saved together with the parameter state so the custom scaling can be
+    /// restored.
+    #[persist = "editor-state"]
+    pub editor_state: Arc<ViziaState>,
+
     // NOTE: These `Arc`s are only here temporarily to work around Vizia's Lens requirements so we
     // can use the generic UIs
     /// Global parameters. These could just live in this struct but I wanted a separate generic UI
@@ -136,7 +140,6 @@ impl Default for SpectralCompressor {
 
         SpectralCompressor {
             params: Arc::new(SpectralCompressorParams::new(&compressor_bank)),
-            editor_state: editor::default_state(),
 
             buffer_config: BufferConfig {
                 sample_rate: 1.0,
@@ -235,6 +238,8 @@ impl SpectralCompressorParams {
     /// or ratio parameters causes the passed compressor bank's parameters to be updated.
     pub fn new(compressor_bank: &compressor_bank::CompressorBank) -> Self {
         SpectralCompressorParams {
+            editor_state: editor::default_state(),
+
             // TODO: Do still enable per-block smoothing for these settings, because why not. This
             //       will require updating the compressor bank.
             global: Arc::new(GlobalParams::default()),
@@ -282,7 +287,7 @@ impl Plugin for SpectralCompressor {
     }
 
     fn editor(&self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
-        editor::create(self.params.clone(), self.editor_state.clone())
+        editor::create(self.params.clone(), self.params.editor_state.clone())
     }
 
     fn initialize(
