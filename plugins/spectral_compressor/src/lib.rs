@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crossbeam::atomic::AtomicCell;
+use editor::EditorMode;
 use nih_plug::prelude::*;
 use nih_plug_vizia::ViziaState;
 use realfft::num_complex::Complex32;
@@ -82,6 +84,10 @@ pub struct SpectralCompressorParams {
     /// restored.
     #[persist = "editor-state"]
     pub editor_state: Arc<ViziaState>,
+    /// The mode the editor is currently in. Essentially just a fancy boolean to indicate whether
+    /// it's expanded or not.
+    #[persist = "editor-mode"]
+    pub editor_mode: Arc<AtomicCell<EditorMode>>,
 
     // NOTE: These `Arc`s are only here temporarily to work around Vizia's Lens requirements so we
     // can use the generic UIs
@@ -239,6 +245,7 @@ impl SpectralCompressorParams {
     pub fn new(compressor_bank: &compressor_bank::CompressorBank) -> Self {
         SpectralCompressorParams {
             editor_state: editor::default_state(),
+            editor_mode: Arc::default(),
 
             // TODO: Do still enable per-block smoothing for these settings, because why not. This
             //       will require updating the compressor bank.

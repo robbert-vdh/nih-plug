@@ -3756,10 +3756,12 @@ dependencies = [
 name = "spectral_compressor"
 version = "0.3.0"
 dependencies = [
+ "crossbeam",
  "nih_plug",
  "nih_plug_vizia",
  "open",
  "realfft",
+ "serde",
 ]
 
 [[package]]
