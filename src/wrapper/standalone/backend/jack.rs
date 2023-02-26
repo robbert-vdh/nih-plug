@@ -251,7 +251,7 @@ impl<P: Plugin> Backend<P> for Jack {
                                 nih_debug_assert!(write_result.is_ok(), "The MIDI buffer is full");
                             }
                             Some(MidiResult::SysEx(padded_sysex_buffer, length)) => {
-                                // `sysex_buffer` may contain padding
+                                // The SysEx buffer may contain padding
                                 let padded_sysex_buffer = padded_sysex_buffer.borrow();
                                 nih_debug_assert!(length <= padded_sysex_buffer.len());
                                 let write_result = midi_writer.write(&jack::RawMidi {
