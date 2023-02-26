@@ -49,6 +49,22 @@ macro_rules! impl_persistent_arc {
         }
     };
 
+    ($ty:ty, T: $($bounds:tt)*) => {
+        impl<'a, T> PersistentField<'a, T> for Arc<$ty>
+        where
+            T: $($bounds)*,
+        {
+            fn set(&self, new_value: T) {
+                self.as_ref().set(new_value);
+            }
+            fn map<F, R>(&self, f: F) -> R
+            where
+                F: Fn(&T) -> R,
+            {
+                self.as_ref().map(f)
+            }
+        }
+    };
     ($ty:ty, $inner_ty:ty) => {
         impl<'a> PersistentField<'a, $inner_ty> for Arc<$ty> {
             fn set(&self, new_value: $inner_ty) {
@@ -183,6 +199,23 @@ impl_persistent_atomic!(std::sync::atomic::AtomicU64, u64);
 impl_persistent_atomic!(std::sync::atomic::AtomicUsize, usize);
 impl_persistent_atomic!(atomic_float::AtomicF32, f32);
 impl_persistent_atomic!(atomic_float::AtomicF64, f64);
+
+impl<'a, T> PersistentField<'a, T> for crossbeam::atomic::AtomicCell<T>
+where
+    T: serde::Serialize + serde::Deserialize<'a> + Copy + Send,
+{
+    fn set(&self, new_value: T) {
+        self.store(new_value);
+    }
+    fn map<F, R>(&self, f: F) -> R
+    where
+        F: Fn(&T) -> R,
+    {
+        f(&self.load())
+    }
+}
+impl_persistent_arc!(crossbeam::atomic::AtomicCell<T>,
+                     T: serde::Serialize + serde::Deserialize<'a> + Copy + Send);
 
 /// Can be used with the `#[serde(with = "nih_plug::params::internals::serialize_atomic_cell")]`
 /// attribute to serialize `AtomicCell<T>`s.
