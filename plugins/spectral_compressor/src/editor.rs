@@ -23,6 +23,8 @@ use std::sync::Arc;
 
 use crate::{SpectralCompressor, SpectralCompressorParams};
 
+mod mode_button;
+
 /// The entire GUI's width, in logical pixels.
 const EXPANDED_GUI_WIDTH: u32 = 1360;
 /// The width of the GUI's main part containing the controls.
@@ -44,8 +46,8 @@ pub enum EditorMode {
     #[serde(rename = "collapsed")]
     Collapsed,
     #[default]
-    #[serde(rename = "visualizer-shown")]
-    Visualizer,
+    #[serde(rename = "visualizer-visible")]
+    VisualizerVisible,
 }
 
 #[derive(Lens)]
