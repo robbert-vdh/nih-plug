@@ -2173,6 +2173,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                         || process.audio_outputs.is_null()
                         || (*host_output).data32.is_null()
                         || buffer.channels() == 0
+                        || (*host_output).channel_count != buffer.channels() as u32
                     {
                         nih_debug_assert!(host_output_idx < process.audio_outputs_count as usize);
                         nih_debug_assert!(!process.audio_outputs.is_null());
@@ -2180,6 +2181,10 @@ impl<P: ClapPlugin> Wrapper<P> {
                             && host_output_idx < process.audio_outputs_count as usize
                         {
                             nih_debug_assert!(!(*host_output).data32.is_null());
+                            nih_debug_assert_eq!(
+                                !(*host_output).channel_count,
+                                buffer.channels() as u32
+                            );
                         }
 
                         // If the host passes weird data then we need to be very sure that there are

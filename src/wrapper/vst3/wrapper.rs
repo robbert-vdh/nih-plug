@@ -1440,11 +1440,16 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                         || data.outputs.is_null()
                         || (*host_output).buffers.is_null()
                         || buffer.channels() == 0
+                        || (*host_output).num_channels != buffer.channels() as i32
                     {
                         nih_debug_assert!(host_output_idx < data.num_outputs as usize);
                         nih_debug_assert!(!data.outputs.is_null());
                         if !data.outputs.is_null() && host_output_idx < data.num_outputs as usize {
                             nih_debug_assert!(!(*host_output).buffers.is_null());
+                            nih_debug_assert!(
+                                !(*host_output).num_channels == 0
+                                    || !(*host_output).num_channels == buffer.channels() as i32
+                            );
                         }
 
                         // If the host passes weird data then we need to be very sure that there are
