@@ -2128,6 +2128,13 @@ impl<P: ClapPlugin> Wrapper<P> {
                                 (*host_input).channel_count,
                                 buffer.channels() as u32
                             );
+
+                            // This could indicate a parameter flush for a plugin with no main input
+                            // but with auxiliary sidechain inputs, since NIH-plug forbids inputs
+                            // and outputs from having 0 channels
+                            if !(*host_input).channel_count == 0 {
+                                buffer_is_valid = false;
+                            }
                         }
 
                         // If the host passes weird data then we need to be very sure that there are
@@ -2185,6 +2192,13 @@ impl<P: ClapPlugin> Wrapper<P> {
                                 !(*host_output).channel_count,
                                 buffer.channels() as u32
                             );
+
+                            // This could indicate a parameter flush for a plugin with no main
+                            // output but with auxiliary outputs, since NIH-plug forbids inputs and
+                            // outputs from having 0 channels
+                            if !(*host_output).channel_count == 0 {
+                                buffer_is_valid = false;
+                            }
                         }
 
                         // If the host passes weird data then we need to be very sure that there are
