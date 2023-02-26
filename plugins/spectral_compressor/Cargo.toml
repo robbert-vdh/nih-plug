@@ -7,10 +7,10 @@ license = "GPL-3.0-or-later"
 homepage = "https://github.com/robbert-vdh/nih-plug/tree/master/plugins/spectral_compressor"
 
 [lib]
-crate-type = ["lib", "cdylib"]
+crate-type = ["cdylib"]
 
 [dependencies]
-nih_plug = { path = "../../", features = ["assert_process_allocs", "standalone"] }
+nih_plug = { path = "../../", features = ["assert_process_allocs"] }
 nih_plug_vizia = { path = "../../nih_plug_vizia" }
 
 realfft = "3.0"
