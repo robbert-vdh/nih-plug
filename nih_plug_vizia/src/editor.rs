@@ -121,6 +121,12 @@ impl Editor for ViziaEditor {
     }
 
     fn set_scale_factor(&self, factor: f32) -> bool {
+        // If the editor is currently open then the host must not change the current HiDPI scale as
+        // we don't have a way to handle that. Ableton Live does this.
+        if self.vizia_state.is_open() {
+            return false;
+        }
+
         // We're making things a bit more complicated by having both a system scale factor, which is
         // used for HiDPI and also known to the host, and a user scale factor that the user can use
         // to arbitrarily resize the GUI

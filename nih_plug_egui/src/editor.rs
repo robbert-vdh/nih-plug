@@ -97,6 +97,12 @@ where
     }
 
     fn set_scale_factor(&self, factor: f32) -> bool {
+        // If the editor is currently open then the host must not change the current HiDPI scale as
+        // we don't have a way to handle that. Ableton Live does this.
+        if self.egui_state.is_open() {
+            return false;
+        }
+
         self.scaling_factor.store(Some(factor));
         true
     }
