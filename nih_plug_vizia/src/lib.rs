@@ -95,11 +95,17 @@ pub struct ViziaState {
     /// Whether the editor's window is currently open.
     #[serde(skip)]
     open: AtomicBool,
+
+    /// Whether the size should be saved. If the window's size is always scaled uniformly, then this
+    /// is not needed and can only result in problems.
+    should_save_size: bool,
 }
 
 impl<'a> PersistentField<'a, ViziaState> for Arc<ViziaState> {
     fn set(&self, new_value: ViziaState) {
-        self.size.store(new_value.size.load());
+        if self.should_save_size {
+            self.size.store(new_value.size.load());
+        }
         self.scale_factor.store(new_value.scale_factor.load());
     }
 
@@ -114,22 +120,34 @@ impl<'a> PersistentField<'a, ViziaState> for Arc<ViziaState> {
 impl ViziaState {
     /// Initialize the GUI's state. This value can be passed to [`create_vizia_editor()`]. The
     /// window size is in logical pixels, so before it is multiplied by the DPI scaling factor.
-    pub fn from_size(width: u32, height: u32) -> Arc<ViziaState> {
+    ///
+    /// Setting `should_save_size` to `false` may be useful when the size is supposed to be fixed
+    /// and only the scaling factor changes. This allows the object to be persisted in a `Params`
+    /// object without accidentally restoring old sizes after the window's logical size has changed
+    /// in a plugin update.
+    pub fn from_size(width: u32, height: u32, should_save_size: bool) -> Arc<ViziaState> {
         Arc::new(ViziaState {
             size: AtomicCell::new((width, height)),
             scale_factor: AtomicCell::new(1.0),
             open: AtomicBool::new(false),
+            should_save_size,
         })
     }
 
     /// The same as [`from_size()`][Self::from_size()], but with a separate initial scale factor.
     /// This scale factor gets applied on top of any HiDPI scaling, and it can be modified at
     /// runtime by changing `cx.user_scale_factor`.
-    pub fn from_size_with_scale(width: u32, height: u32, scale_factor: f64) -> Arc<ViziaState> {
+    pub fn from_size_with_scale(
+        width: u32,
+        height: u32,
+        scale_factor: f64,
+        should_save_size: bool,
+    ) -> Arc<ViziaState> {
         Arc::new(ViziaState {
             size: AtomicCell::new((width, height)),
             scale_factor: AtomicCell::new(scale_factor),
             open: AtomicBool::new(false),
+            should_save_size,
         })
     }
 

@@ -6,6 +6,13 @@ new and what's changed, this document lists all breaking changes in reverse
 chronological order. If a new feature did not require any changes to existing
 code then it will not be listed here.
 
+## [2023-02-28]
+
+- `ViziaState::from_size()` now takes a third boolean argument to control
+  whether the window's size is persisted or not. This avoids a potential bug
+  where an old window size is recalled after the plugin's GUI's size has changed
+  in an update to the plugin.
+
 ## [2023-02-20]
 
 - The way audio IO layouts are configured has changed completely to align better
