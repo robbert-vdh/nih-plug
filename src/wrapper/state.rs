@@ -142,8 +142,18 @@ pub(crate) unsafe fn serialize_json<'a, P: Plugin>(
 
     #[cfg(feature = "zstd")]
     {
-        zstd::encode_all(json.as_slice(), zstd::DEFAULT_COMPRESSION_LEVEL)
-            .context("Could not compress state")
+        let compressed = zstd::encode_all(json.as_slice(), zstd::DEFAULT_COMPRESSION_LEVEL)
+            .context("Could not compress state")?;
+
+        let state_bytes = json.len();
+        let compressed_state_bytes = compressed.len();
+        let compression_ratio = compressed_state_bytes as f32 / state_bytes as f32 * 100.0;
+        nih_trace!(
+            "Compressed {state_bytes} bytes of state to {compressed_state_bytes} bytes \
+             ({compression_ratio:.1}% compression ratio)"
+        );
+
+        Ok(compressed)
     }
     #[cfg(not(feature = "zstd"))]
     {
@@ -248,7 +258,17 @@ pub(crate) unsafe fn deserialize_json<P: Plugin>(
     #[cfg(feature = "zstd")]
     let mut state: PluginState = match zstd::decode_all(state) {
         Ok(decompressed) => match serde_json::from_slice(decompressed.as_slice()) {
-            Ok(s) => s,
+            Ok(s) => {
+                let state_bytes = decompressed.len();
+                let compressed_state_bytes = state.len();
+                let compression_ratio = compressed_state_bytes as f32 / state_bytes as f32 * 100.0;
+                nih_trace!(
+                    "Inflated {compressed_state_bytes} bytes of state to {state_bytes} bytes \
+                     ({compression_ratio:.1}% compression ratio)"
+                );
+
+                s
+            }
             Err(err) => {
                 nih_debug_assert_failure!("Error while deserializing state: {}", err);
                 return false;
@@ -257,7 +277,10 @@ pub(crate) unsafe fn deserialize_json<P: Plugin>(
         // Uncompressed state files can still be loaded after enabling this feature to prevent
         // breaking existing plugin instances
         Err(zstd_err) => match serde_json::from_slice(state) {
-            Ok(s) => s,
+            Ok(s) => {
+                nih_trace!("Older uncompressed state found");
+                s
+            }
             Err(json_err) => {
                 nih_debug_assert_failure!(
                     "Error while deserializing state as either compressed or uncompressed state: \
