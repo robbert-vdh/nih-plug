@@ -117,7 +117,9 @@ pub fn setup_logger() {
     let nih_log_env_str = nih_log_env.as_deref().unwrap_or("");
 
     #[cfg(target_os = "windows")]
-    if nih_log_env_str.eq_ignore_ascii_case("windbg") || win_dbg_logger::is_debugger_present() {
+    if nih_log_env_str.eq_ignore_ascii_case("windbg")
+        || (nih_log_env_str.is_empty() && win_dbg_logger::is_debugger_present())
+    {
         win_dbg_logger::init();
         log_panics();
         return;
