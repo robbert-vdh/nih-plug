@@ -112,7 +112,7 @@ rtrb = { version = "0.2.2", optional = true }
 vst3-sys = { git = "https://github.com/robbert-vdh/vst3-sys.git", branch = "fix/drop-box-from-raw", optional = true }
 
 # Used for the `zstd` feature
-zstd = { version = "0.11.2", optional = true }
+zstd = { version = "0.12.3", optional = true }
 
 [dev-dependencies]
 approx = "0.5.1"
