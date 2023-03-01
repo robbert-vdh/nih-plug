@@ -91,11 +91,11 @@ pub fn clamp_output_event_timing(timing: u32, total_buffer_len: u32) -> u32 {
 }
 
 /// Set up the logger so that the `nih_*!()` logging and assertion macros log output to a
-/// centralized location and panics also get written there. By default this logs to STDERR unless
-/// the user is running Windows and a debugger has been attached, in which case
-/// `OutputDebugString()` will be used instead.
+/// centralized location and panics also get written there. By default this logs to STDERR. If a
+/// Windows debugger is attached, then messages will be sent there instead. This uses
+/// [NIH-log](https://github.com/robbert-vdh/nih-log). See the readme there for more information.
 ///
-/// The logger's behavior can be controlled by setting the `NIH_LOG` environment variable to:
+/// In short, NIH-log's behavior can be controlled by setting the `NIH_LOG` environment variable to:
 ///
 /// - `stderr`, in which case the log output always gets written to STDERR.
 /// - `windbg` (only on Windows), in which case the output always gets logged using
@@ -103,70 +103,21 @@ pub fn clamp_output_event_timing(timing: u32, total_buffer_len: u32) -> u32 {
 /// - A file path, in which case the output gets appended to the end of that file which will be
 ///   created if necessary.
 pub fn setup_logger() {
-    // `win_dbg_logger` has no way to let us know that the logger has already been set up, so we'll
-    // need to do it this way
-    static LOGGER_SET_UP: AtomicBool = AtomicBool::new(false);
-    if LOGGER_SET_UP
-        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-        .is_err()
-    {
-        return;
-    }
-
-    let nih_log_env = std::env::var(NIH_LOG_ENV);
-    let nih_log_env_str = nih_log_env.as_deref().unwrap_or("");
-
-    #[cfg(target_os = "windows")]
-    if nih_log_env_str.eq_ignore_ascii_case("windbg")
-        || (nih_log_env_str.is_empty() && win_dbg_logger::is_debugger_present())
-    {
-        win_dbg_logger::init();
-        log_panics();
-        return;
-    }
-
     // If opening the file fails, then we'll log to STDERR anyways, hence this closure
     let log_level = if cfg!(debug_assertions) {
-        simplelog::LevelFilter::Trace
+        log::LevelFilter::Trace
     } else {
-        simplelog::LevelFilter::Info
-    };
-    let logger_config = simplelog::ConfigBuilder::new()
-        .set_thread_mode(simplelog::ThreadLogMode::Both)
-        .set_location_level(simplelog::LevelFilter::Debug)
-        .add_filter_ignore_str("cosmic_text::buffer")
-        .add_filter_ignore_str("cosmic_text::shape")
-        .build();
-    let init_stderr_logger = || {
-        simplelog::TermLogger::init(
-            log_level,
-            logger_config.clone(),
-            simplelog::TerminalMode::Stderr,
-            simplelog::ColorChoice::Auto,
-        )
+        log::LevelFilter::Info
     };
 
-    // If the logger has already been set up outside of this function then that won't cause any
-    // problems, so we can ignore the results here
-    if nih_log_env_str.eq_ignore_ascii_case("stderr") || nih_log_env_str.is_empty() {
-        let _ = init_stderr_logger();
-    } else {
-        let file = File::options()
-            .append(true)
-            .create(true)
-            .open(nih_log_env_str);
-        match file {
-            Ok(file) => {
-                let _ = simplelog::WriteLogger::init(log_level, logger_config, file);
-            }
-            Err(err) => {
-                let _ = init_stderr_logger();
-                nih_debug_assert_failure!("Could not open '{}': {:?}", nih_log_env_str, err);
-            }
-        }
+    let logger_set = nih_log::LoggerBuilder::new(log_level)
+        .filter_module("cosmic_text::buffer")
+        .filter_module("cosmic_text::shape")
+        .build_global()
+        .is_ok();
+    if logger_set {
+        log_panics();
     }
-
-    log_panics();
 }
 
 /// This is copied from same as the `log_panics` crate, but it's wrapped in `permit_alloc()`.

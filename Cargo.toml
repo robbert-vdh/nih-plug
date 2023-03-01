@@ -85,11 +85,11 @@ crossbeam = "0.8"
 lazy_static = "1.4"
 log = { version = "0.4", features = ["std", "release_max_level_info"] }
 midi-consts = "0.1"
+nih_log = "0.1.0"
 parking_lot = "0.12"
 raw-window-handle = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-simplelog = "0.12"
 widestring = "1.0.0-beta.1"
 
 # Used for the `assert_process_allocs` feature. This fork includes support for
@@ -129,11 +129,6 @@ libc = "0.2.124"
 [target.'cfg(target_os = "macos")'.dependencies]
 objc = "0.2.7"
 core-foundation = "0.9.3"
-
-[target.'cfg(target_os = "windows")'.dependencies]
-# STDIO isn't reliable on Windows, so when hosting plugins in a DAW it may be
-# useful to log using `OutputDebugString()` instead
-win_dbg_logger = "0.1"
 
 [target.'cfg(target_os = "windows")'.dependencies.windows]
 version = "0.32"
