@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use cpal::{
-    traits::*, Device, InputCallbackInfo, OutputCallbackInfo, Sample, SampleFormat, Stream,
-    StreamConfig,
+    traits::*, Device, FromSample, InputCallbackInfo, OutputCallbackInfo, Sample, SampleFormat,
+    Stream, StreamConfig,
 };
 use crossbeam::sync::{Parker, Unparker};
 use midir::{
@@ -129,23 +129,32 @@ impl<P: Plugin> Backend<P> for CpalMidir {
                     }
                 };
 
-                let stream = match input.sample_format {
-                    SampleFormat::I16 => input.device.build_input_stream(
-                        &input.config,
-                        self.build_input_data_callback::<i16>(input_unparker, rb_producer),
-                        error_cb,
-                    ),
-                    SampleFormat::U16 => input.device.build_input_stream(
-                        &input.config,
-                        self.build_input_data_callback::<u16>(input_unparker, rb_producer),
-                        error_cb,
-                    ),
-                    SampleFormat::F32 => input.device.build_input_stream(
-                        &input.config,
-                        self.build_input_data_callback::<f32>(input_unparker, rb_producer),
-                        error_cb,
-                    ),
+                macro_rules! build_input_streams {
+                    ($sample_format:expr, $(($format:path, $primitive_type:ty)),*) => {
+                        match $sample_format {
+                            $($format => input.device.build_input_stream(
+                                &input.config,
+                                self.build_input_data_callback::<$primitive_type>(input_unparker, rb_producer),
+                                error_cb,
+                                None,
+                            ),)*
+                            format => todo!("Unsupported sample format {format}"),
+                        }
+                    }
                 }
+                let stream = build_input_streams!(
+                    input.sample_format,
+                    (SampleFormat::I8, i8),
+                    (SampleFormat::I16, i16),
+                    (SampleFormat::I32, i32),
+                    (SampleFormat::I64, i64),
+                    (SampleFormat::U8, u8),
+                    (SampleFormat::U16, u16),
+                    (SampleFormat::U32, u32),
+                    (SampleFormat::U64, u64),
+                    (SampleFormat::F32, f32),
+                    (SampleFormat::F64, f64)
+                )
                 .expect("Fatal error creating the capture stream");
                 stream
                     .play()
@@ -263,43 +272,40 @@ impl<P: Plugin> Backend<P> for CpalMidir {
                 }
             };
 
-            let output_stream = match self.output.sample_format {
-                SampleFormat::I16 => self.output.device.build_output_stream(
-                    &self.output.config,
-                    self.build_output_data_callback::<P, i16>(
-                        unparker,
-                        input_rb_consumer,
-                        midi_input_rb_consumer,
-                        // This is a MPMC crossbeam channel instead of an rtrb ringbuffer, and we
-                        // also need it to terminate the thread
-                        midi_output_rb_producer.clone(),
-                        cb,
-                    ),
-                    error_cb,
-                ),
-                SampleFormat::U16 => self.output.device.build_output_stream(
-                    &self.output.config,
-                    self.build_output_data_callback::<P, u16>(
-                        unparker,
-                        input_rb_consumer,
-                        midi_input_rb_consumer,
-                        midi_output_rb_producer.clone(),
-                        cb,
-                    ),
-                    error_cb,
-                ),
-                SampleFormat::F32 => self.output.device.build_output_stream(
-                    &self.output.config,
-                    self.build_output_data_callback::<P, f32>(
-                        unparker,
-                        input_rb_consumer,
-                        midi_input_rb_consumer,
-                        midi_output_rb_producer.clone(),
-                        cb,
-                    ),
-                    error_cb,
-                ),
+            macro_rules! build_output_streams {
+                ($sample_format:expr, $(($format:path, $primitive_type:ty)),*) => {
+                    match $sample_format {
+                        $($format => self.output.device.build_output_stream(
+                            &self.output.config,
+                            self.build_output_data_callback::<P, $primitive_type>(
+                                unparker,
+                                input_rb_consumer,
+                                midi_input_rb_consumer,
+                                // This is a MPMC crossbeam channel instead of an rtrb ringbuffer, and we
+                                // also need it to terminate the thread
+                                midi_output_rb_producer.clone(),
+                                cb,
+                            ),
+                            error_cb,
+                            None,
+                        ),)*
+                        format => todo!("Unsupported sample format {format}"),
+                    }
+                }
             }
+            let output_stream = build_output_streams!(
+                self.output.sample_format,
+                (SampleFormat::I8, i8),
+                (SampleFormat::I16, i16),
+                (SampleFormat::I32, i32),
+                (SampleFormat::I64, i64),
+                (SampleFormat::U8, u8),
+                (SampleFormat::U16, u16),
+                (SampleFormat::U32, u32),
+                (SampleFormat::U64, u64),
+                (SampleFormat::F32, f32),
+                (SampleFormat::F64, f64)
+            )
             .expect("Fatal error creating the output stream");
 
             // TODO: Wait a period before doing this when also reading the input
@@ -445,7 +451,7 @@ impl CpalMidir {
                 let input_config = StreamConfig {
                     channels: input_config_range.channels(),
                     sample_rate: requested_sample_rate,
-                    buffer_size: requested_buffer_size.clone(),
+                    buffer_size: requested_buffer_size,
                 };
                 let input_sample_format = input_config_range.sample_format();
 
@@ -604,18 +610,24 @@ impl CpalMidir {
         })
     }
 
-    fn build_input_data_callback<T: Sample>(
+    fn build_input_data_callback<T>(
         &self,
         input_unparker: Unparker,
         mut input_rb_producer: rtrb::Producer<f32>,
-    ) -> impl FnMut(&[T], &InputCallbackInfo) + Send + 'static {
+    ) -> impl FnMut(&[T], &InputCallbackInfo) + Send + 'static
+    where
+        T: Sample,
+        // The CPAL update make the whole interface more complicated by using dasp sample, and then
+        // they also forgot to expose the `ToSample` trait so now you need to do this
+        f32: FromSample<T>,
+    {
         // This callback needs to copy input samples to a ring buffer that can be read from in the
         // output data callback
         move |data, _info| {
             for sample in data {
                 // If for whatever reason the input callback is fired twice before an output
                 // callback, then just spin on this until the push succeeds
-                while input_rb_producer.push(sample.to_f32()).is_err() {}
+                while input_rb_producer.push(sample.to_sample()).is_err() {}
             }
 
             // The run function is blocked until a single period has been processed here. After this
@@ -640,7 +652,7 @@ impl CpalMidir {
         }
     }
 
-    fn build_output_data_callback<P: Plugin, T: Sample>(
+    fn build_output_data_callback<P, T>(
         &self,
         unparker: Unparker,
         mut input_rb_consumer: Option<rtrb::Consumer<f32>>,
@@ -655,7 +667,11 @@ impl CpalMidir {
             ) -> bool
             + 'static
             + Send,
-    ) -> impl FnMut(&mut [T], &OutputCallbackInfo) + Send + 'static {
+    ) -> impl FnMut(&mut [T], &OutputCallbackInfo) + Send + 'static
+    where
+        P: Plugin,
+        T: Sample + FromSample<f32>,
+    {
         // We'll receive interlaced input samples from CPAL. These need to converted to deinterlaced
         // channels, processed, and then copied those back to an interlaced buffer for the output.
         // This needs to be wrapped in a struct like this and boxed because the `channels` vectors
@@ -849,7 +865,7 @@ impl CpalMidir {
                     .iter_samples()
                     .flat_map(|channels| channels.into_iter()),
             ) {
-                *output_sample = T::from(buffer_sample);
+                *output_sample = T::from_sample(*buffer_sample);
             }
 
             if let Some(output_event_rb_producer) = &mut output_event_rb_producer {

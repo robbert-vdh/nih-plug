@@ -103,7 +103,7 @@ assert_no_alloc = { git = "https://github.com/robbert-vdh/rust-assert-no-alloc.g
 baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "7001c2521fa1a439a01967cb881b411cd75d9ee0", features = ["opengl"], optional = true }
 # All the claps!
 clap = { version = "3.2", features = ["derive"], optional = true }
-cpal = { version = "0.14.1", optional = true }
+cpal = { version = "0.15", optional = true }
 jack = { version = "0.11.4", optional = true }
 midir = { version = "0.9.1", optional = true }
 rtrb = { version = "0.2.2", optional = true }
