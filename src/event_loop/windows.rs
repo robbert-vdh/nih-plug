@@ -7,7 +7,8 @@ use std::mem;
 use std::ptr;
 use std::sync::Weak;
 use std::thread::{self, ThreadId};
-use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, PSTR, WPARAM};
+use windows::core::PCSTR;
+use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::{
     LibraryLoader::GetModuleHandleA, Performance::QueryPerformanceCounter,
 };
@@ -72,12 +73,13 @@ where
         assert!(unsafe { QueryPerformanceCounter(&mut ticks).as_bool() });
         let class_name = CString::new(format!("nih-event-loop-{ticks}"))
             .expect("Where did these null bytes come from?");
-        let class_name_ptr = PSTR(class_name.as_bytes_with_nul().as_ptr());
+        let class_name_ptr = PCSTR(class_name.as_bytes_with_nul().as_ptr());
 
         let class = WNDCLASSEXA {
             cbSize: mem::size_of::<WNDCLASSEXA>() as u32,
             lpfnWndProc: Some(window_proc),
-            hInstance: unsafe { GetModuleHandleA(PSTR(ptr::null())) },
+            hInstance: unsafe { GetModuleHandleA(PCSTR(ptr::null())) }
+                .expect("Could not get the current module's handle"),
             lpszClassName: class_name_ptr,
             ..Default::default()
         };
@@ -107,7 +109,7 @@ where
             CreateWindowExA(
                 WINDOW_EX_STYLE(0),
                 class_name_ptr,
-                PSTR(b"NIH-plug event loop\0".as_ptr()),
+                PCSTR(b"NIH-plug event loop\0".as_ptr()),
                 WINDOW_STYLE(0),
                 0,
                 0,
@@ -119,10 +121,10 @@ where
                 // NOTE: We're boxing a box here. As mentioned in [PollCallback], we can't directly
                 //       pass around fat pointers, so we need a normal pointer to a fat pointer to
                 //       be able to call this and deallocate it later
-                Box::into_raw(Box::new(callback)) as *const c_void,
+                Some(Box::into_raw(Box::new(callback)) as *const c_void),
             )
         };
-        assert!(!window.is_invalid());
+        assert_ne!(!window.0, 0);
 
         Self {
             executor: executor.clone(),
@@ -174,7 +176,7 @@ impl<T, E> Drop for WindowsEventLoop<T, E> {
         unsafe { DestroyWindow(self.message_window) };
         unsafe {
             UnregisterClassA(
-                PSTR(self.message_window_class_name.as_bytes_with_nul().as_ptr()),
+                PCSTR(self.message_window_class_name.as_bytes_with_nul().as_ptr()),
                 HINSTANCE(0),
             )
         };
