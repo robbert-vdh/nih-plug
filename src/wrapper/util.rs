@@ -1,14 +1,9 @@
 use backtrace::Backtrace;
 use std::cmp;
-use std::fs::File;
 use std::marker::PhantomData;
 use std::os::raw::c_char;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::util::permit_alloc;
-
-/// The environment variable for controlling the logging behavior.
-const NIH_LOG_ENV: &str = "NIH_LOG";
 
 /// The bit that controls flush-to-zero behavior for denormals in 32 and 64-bit floating point
 /// numbers on AArch64.
