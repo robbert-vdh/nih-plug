@@ -61,7 +61,7 @@ where
 }
 
 /// State for an `nih_plug_egui` editor.
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct EguiState {
     /// The window's size in logical pixels before applying `scale_factor`.
     #[serde(with = "nih_plug::params::persist::serialize_atomic_cell")]

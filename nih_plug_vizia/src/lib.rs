@@ -83,7 +83,7 @@ pub enum ViziaTheming {
 
 /// State for an `nih_plug_vizia` editor. The scale factor can be manipulated at runtime by changing
 /// `cx.user_scale_factor`.
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ViziaState {
     /// The window's size in logical pixels before applying `scale_factor`.
     #[serde(with = "nih_plug::params::persist::serialize_atomic_cell")]

@@ -233,7 +233,7 @@ pub trait IcedEditor: 'static + Send + Sync + Sized {
 }
 
 /// State for an `nih_plug_iced` editor.
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct IcedState {
     /// The window's size in logical pixels before applying `scale_factor`.
     #[serde(with = "nih_plug::params::persist::serialize_atomic_cell")]
