@@ -174,7 +174,6 @@ impl<P: Vst3Plugin> WrapperView<P> {
     /// run on the host's UI thread. If not, then this will return an `Err` value containing the
     /// task so it can be run elsewhere.
     #[cfg(not(target_os = "linux"))]
-    #[must_use]
     pub fn do_maybe_in_run_loop(&self, task: Task<P>) -> Result<(), Task<P>> {
         Err(task)
     }
