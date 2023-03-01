@@ -617,8 +617,9 @@ impl CpalMidir {
     ) -> impl FnMut(&[T], &InputCallbackInfo) + Send + 'static
     where
         T: Sample,
-        // The CPAL update make the whole interface more complicated by using dasp sample, and then
-        // they also forgot to expose the `ToSample` trait so now you need to do this
+        // The CPAL update made the whole interface more complicated by switching to dasp's sample
+        // trait, and then they also forgot to expose the `ToSample` trait so now you need to do
+        // this
         f32: FromSample<T>,
     {
         // This callback needs to copy input samples to a ring buffer that can be read from in the
