@@ -1,7 +1,7 @@
 //! A standalone plugin target that directly connects to the system's audio and MIDI ports instead
 //! of relying on a plugin host. This is mostly useful for quickly testing GUI changes.
 
-use clap::{FromArgMatches, IntoApp};
+use clap::{CommandFactory, FromArgMatches};
 
 use self::backend::Backend;
 use self::config::WrapperConfig;
