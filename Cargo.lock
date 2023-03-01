@@ -177,6 +177,7 @@ version = "1.1.2"
 source = "git+https://github.com/robbert-vdh/rust-assert-no-alloc.git?branch=nih-plug#95120d996240a2c279a6067502e11b62d30563a6"
 dependencies = [
  "backtrace",
+ "log",
 ]
 
 [[package]]
