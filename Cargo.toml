@@ -85,7 +85,7 @@ crossbeam = "0.8"
 lazy_static = "1.4"
 log = { version = "0.4", features = ["std", "release_max_level_info"] }
 midi-consts = "0.1"
-nih_log = "0.1.0"
+nih_log = "0.2.0"
 parking_lot = "0.12"
 raw-window-handle = "0.4"
 serde = { version = "1.0", features = ["derive"] }

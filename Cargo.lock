@@ -2392,9 +2392,9 @@ dependencies = [
 
 [[package]]
 name = "nih_log"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6770b5cd61a41a585c932979a3da2b3248be00e879b9cf85ddfb97040ce3f40a"
+checksum = "016c1e345f1130730057d9b5381f423a36393b21c4f38f3ed05638448b6a5c48"
 dependencies = [
  "atty",
  "log",
