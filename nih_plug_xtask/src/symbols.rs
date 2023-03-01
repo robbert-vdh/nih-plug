@@ -17,9 +17,19 @@ pub fn exported<P: AsRef<Path>>(binary: P, symbol: &str) -> Result<bool> {
             .any(|sym| !sym.is_import() && obj.dynstrtab.get_at(sym.st_name) == Some(symbol))),
         goblin::Object::Mach(obj) => {
             let obj = match obj {
-                goblin::mach::Mach::Fat(arches) => arches
+                goblin::mach::Mach::Fat(arches) => match arches
                     .get(0)
-                    .context("Fat Mach-O binary without any binaries")?,
+                    .context("Fat Mach-O binary without any binaries")?
+                {
+                    goblin::mach::SingleArch::MachO(obj) => obj,
+                    // THis shouldn't be hit
+                    goblin::mach::SingleArch::Archive(_) => {
+                        anyhow::bail!(
+                            "'{}' contained an unexpected Mach-O archive",
+                            binary.as_ref().display()
+                        )
+                    }
+                },
                 goblin::mach::Mach::Binary(obj) => obj,
             };
 
