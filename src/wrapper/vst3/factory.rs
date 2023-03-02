@@ -1,8 +1,8 @@
 use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::mem;
-use vst3_sys::base::{kInvalidArgument, kNoInterface, kResultOk, tresult};
-use vst3_sys::base::{IPluginFactory, IPluginFactory2, IPluginFactory3};
+use vst3_sys::base::{kInvalidArgument, kResultOk, tresult};
+use vst3_sys::base::{IPluginFactory, IPluginFactory2, IPluginFactory3, IUnknown};
 use vst3_sys::VST3;
 
 // Alias needed for the VST3 attribute macro
@@ -70,18 +70,35 @@ impl<P: Vst3Plugin> IPluginFactory for Factory<P> {
     unsafe fn create_instance(
         &self,
         cid: *const vst3_sys::IID,
-        _iid: *const vst3_sys::IID,
+        iid: *const vst3_sys::IID,
         obj: *mut *mut vst3_sys::c_void,
     ) -> tresult {
         check_null_ptr!(cid, obj);
 
         if (*cid).data != P::PLATFORM_VST3_CLASS_ID {
-            return kNoInterface;
+            return kInvalidArgument;
         }
 
-        *obj = Box::into_raw(Wrapper::<P>::new()) as *mut vst3_sys::c_void;
+        let wrapper = Wrapper::<P>::new();
 
-        kResultOk
+        // 99.999% of the times `iid` will be that of `IComponent`, but the caller is technically
+        // allowed to create an object for any support interface. We don't have a way to check
+        // whether our plugin supports the interface without creating it, but since the odds that a
+        // caller will create an object with an interface we don't support are basically zero this
+        // is not a problem.
+        let result = wrapper.query_interface(iid, obj);
+        if result == kResultOk {
+            // This is a bit awkward now but if the cast succeeds we need to get rid of the
+            // reference from the `wrapper` binding. The VST3 query interface always increments the
+            // reference count and returns an owned reference, so we need to explicitly release the
+            // reference from `wrapper` and leak the `Box` so the wrapper doesn't automatically get
+            // deallocated when this function returns (`Box` is an incorrect choice on vst3-sys'
+            // part, it should have used a `VstPtr` instead).
+            wrapper.release();
+            Box::leak(wrapper);
+        }
+
+        result
     }
 }
 
