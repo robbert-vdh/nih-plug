@@ -51,6 +51,7 @@ macro_rules! nih_export_clap {
             }
         }
 
+        /// The CLAP plugin's entry point.
         #[no_mangle]
         #[used]
         pub static clap_entry: ::nih_plug::wrapper::clap::clap_plugin_entry =
