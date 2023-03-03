@@ -594,7 +594,13 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         let task_posted = self.schedule_gui(Task::ParameterValuesChanged);
         nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
 
-        // TODO: Check for GUI size changes and resize accordingly
+        // TODO: Right now there's no way to know if loading the state changed the GUI's size. We
+        //       could keep track of the last known size and compare the GUI's current size against
+        //       that but that also seems brittle.
+        if self.plug_view.read().is_some() {
+            let task_posted = self.schedule_gui(Task::RequestResize);
+            nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+        }
 
         success
     }

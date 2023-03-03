@@ -1,6 +1,6 @@
 use atomic_refcell::AtomicRefCell;
 use baseview::{EventStatus, Window, WindowHandler, WindowOpenOptions};
-use crossbeam::channel;
+use crossbeam::channel::{self, Sender};
 use crossbeam::queue::ArrayQueue;
 use parking_lot::Mutex;
 use raw_window_handle::HasRawWindowHandle;
@@ -46,6 +46,8 @@ pub struct Wrapper<P: Plugin, B: Backend<P>> {
     /// to instantiate this in advance so we don't need to lock the entire [`Plugin`] object when
     /// creating an editor. Wrapped in an `AtomicRefCell` because it needs to be initialized late.
     pub editor: AtomicRefCell<Option<Arc<Mutex<Box<dyn Editor>>>>>,
+    /// A channel for sending tasks to the GUI window, if the plugin has a GUI. Set in `run()`.
+    gui_tasks_sender: AtomicRefCell<Option<Sender<GuiTask>>>,
 
     /// A realtime-safe task queue so the plugin can schedule tasks that need to be run later on the
     /// GUI thread. See the same field in the VST3 wrapper for more information on why this looks
@@ -220,6 +222,8 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
             params,
             // Initialized later as it needs a reference to the wrapper for the async executor
             editor: AtomicRefCell::new(None),
+            // Set in `run()`
+            gui_tasks_sender: AtomicRefCell::new(None),
 
             // Also initialized later as it also needs a reference to the wrapper
             event_loop: AtomicRefCell::new(None),
@@ -302,6 +306,7 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
     /// could not be opened.
     pub fn run(self: Arc<Self>) -> Result<(), WrapperError> {
         let (gui_task_sender, gui_task_receiver) = channel::bounded(512);
+        *self.gui_tasks_sender.borrow_mut() = Some(gui_task_sender.clone());
 
         // We'll spawn a separate thread to handle IO and to process audio. This audio thread should
         // terminate together with this function.
@@ -309,13 +314,12 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
         let audio_thread = {
             let this = self.clone();
             let terminate_audio_thread = terminate_audio_thread.clone();
-            let gui_task_sender = gui_task_sender.clone();
             thread::spawn(move || this.run_audio_thread(terminate_audio_thread, gui_task_sender))
         };
 
         match self.editor.borrow().clone() {
             Some(editor) => {
-                let context = self.clone().make_gui_context(gui_task_sender);
+                let context = self.clone().make_gui_context();
 
                 // DPI scaling should not be used on macOS since the OS handles it there
                 #[cfg(target_os = "macos")]
@@ -450,6 +454,20 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
         event_loop.schedule_gui(task)
     }
 
+    /// Request the outer window to be resized to the editor's current size.
+    pub fn request_resize(&self) {
+        if let Some(gui_tasks_sender) = self.gui_tasks_sender.borrow().as_ref() {
+            let (unscaled_width, unscaled_height) =
+                self.editor.borrow().as_ref().unwrap().lock().size();
+
+            // This will cause the editor to be resized at the start of the next frame
+            let push_successful = gui_tasks_sender
+                .send(GuiTask::Resize(unscaled_width, unscaled_height))
+                .is_ok();
+            nih_debug_assert!(push_successful, "Could not queue window resize");
+        }
+    }
+
     /// The audio thread. This should be called from another thread, and it will run until
     /// `should_terminate` is `true`.
     fn run_audio_thread(
@@ -535,14 +553,8 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
         );
     }
 
-    fn make_gui_context(
-        self: Arc<Self>,
-        gui_task_sender: channel::Sender<GuiTask>,
-    ) -> Arc<WrapperGuiContext<P, B>> {
-        Arc::new(WrapperGuiContext {
-            wrapper: self,
-            gui_task_sender,
-        })
+    fn make_gui_context(self: Arc<Self>) -> Arc<WrapperGuiContext<P, B>> {
+        Arc::new(WrapperGuiContext { wrapper: self })
     }
 
     fn make_init_context(&self) -> WrapperInitContext<'_, P, B> {
@@ -623,7 +635,10 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
         let task_posted = self.schedule_gui(Task::ParameterValuesChanged);
         nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
 
-        // TODO: Check for GUI size changes and resize accordingly
+        // TODO: Right now there's no way to know if loading the state changed the GUI's size. We
+        //       could keep track of the last known size and compare the GUI's current size against
+        //       that but that also seems brittle.
+        self.request_resize();
 
         success
     }

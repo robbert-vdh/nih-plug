@@ -1,8 +1,7 @@
-use crossbeam::channel;
 use std::sync::Arc;
 
 use super::backend::Backend;
-use super::wrapper::{GuiTask, Task, Wrapper};
+use super::wrapper::{Task, Wrapper};
 use crate::context::gui::GuiContext;
 use crate::context::init::InitContext;
 use crate::context::process::{ProcessContext, Transport};
@@ -35,10 +34,6 @@ pub(crate) struct WrapperProcessContext<'a, P: Plugin, B: Backend<P>> {
 /// with the host for things like setting parameters.
 pub(crate) struct WrapperGuiContext<P: Plugin, B: Backend<P>> {
     pub(super) wrapper: Arc<Wrapper<P, B>>,
-
-    /// This allows us to send tasks to the parent view that will be handled at the start of its
-    /// next frame.
-    pub(super) gui_task_sender: channel::Sender<GuiTask>,
 }
 
 impl<P: Plugin, B: Backend<P>> InitContext<P> for WrapperInitContext<'_, P, B> {
@@ -110,16 +105,7 @@ impl<P: Plugin, B: Backend<P>> GuiContext for WrapperGuiContext<P, B> {
     }
 
     fn request_resize(&self) -> bool {
-        let (unscaled_width, unscaled_height) =
-            self.wrapper.editor.borrow().as_ref().unwrap().lock().size();
-
-        // This will cause the editor to be resized at the start of the next frame
-        let push_successful = self
-            .gui_task_sender
-            .send(GuiTask::Resize(unscaled_width, unscaled_height))
-            .is_ok();
-        nih_debug_assert!(push_successful, "Could not queue window resize");
-
+        self.wrapper.request_resize();
         true
     }
 
