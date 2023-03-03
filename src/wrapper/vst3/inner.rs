@@ -24,6 +24,7 @@ use crate::midi::{MidiConfig, PluginNoteEvent};
 use crate::params::internals::ParamPtr;
 use crate::params::{ParamFlags, Params};
 use crate::plugin::{Plugin, ProcessStatus, TaskExecutor, Vst3Plugin};
+use crate::util::permit_alloc;
 use crate::wrapper::state::{self, PluginState};
 use crate::wrapper::util::{hash_param_id, process_wrapper};
 
@@ -476,7 +477,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
     /// Update the plugin's internal state, called by the plugin itself from the GUI thread. To
     /// prevent corrupting data and changing parameters during processing the actual state is only
     /// updated at the end of the audio processing cycle.
-    pub fn set_state_object(&self, mut state: PluginState) {
+    pub fn set_state_object_from_gui(&self, mut state: PluginState) {
         // Use a loop and timeouts to handle the super rare edge case when this function gets called
         // between a process call and the host disabling the plugin
         loop {
@@ -509,27 +510,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             } else {
                 // Otherwise we'll set the state right here and now, since this function should be
                 // called from a GUI thread
-                unsafe {
-                    state::deserialize_object::<P>(
-                        &mut state,
-                        self.params.clone(),
-                        state::make_params_getter(&self.param_by_hash, &self.param_id_to_hash),
-                        self.current_buffer_config.load().as_ref(),
-                    );
-                }
-
-                let audio_io_layout = self.current_audio_io_layout.load();
-                if let Some(buffer_config) = self.current_buffer_config.load() {
-                    // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
-                    let mut init_context = self.make_init_context();
-                    let mut plugin = self.plugin.lock();
-                    plugin.initialize(&audio_io_layout, &buffer_config, &mut init_context);
-                    process_wrapper(|| plugin.reset());
-                }
-
-                let task_posted = self.schedule_gui(Task::ParameterValuesChanged);
-                nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
-
+                self.set_state_inner(&mut state);
                 break;
             }
         }
@@ -554,6 +535,68 @@ impl<P: Vst3Plugin> WrapperInner<P> {
                 self.schedule_gui(Task::TriggerRestart(RestartFlags::kLatencyChanged as i32));
             nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
         }
+    }
+
+    /// Immediately set the plugin state. Returns `false` if the deserialization failed. The plugin
+    /// state is set from a couple places, so this function aims to deduplicate that. Includes
+    /// `permit_alloc()`s around the deserialization and initialization for the use case where
+    /// `set_state_object_from_gui()` was called while the plugin is process audio.
+    ///
+    /// Implicitly emits `Task::ParameterValuesChanged`.
+    ///
+    /// # Notes
+    ///
+    /// `self.plugin` must _not_ be locked while calling this function or it will deadlock.
+    pub fn set_state_inner(&self, state: &mut PluginState) -> bool {
+        let audio_io_layout = self.current_audio_io_layout.load();
+        let buffer_config = self.current_buffer_config.load();
+
+        // FIXME: This is obviously not realtime-safe, but loading presets without doing this could
+        //        lead to inconsistencies. It's the plugin's responsibility to not perform any
+        //        realtime-unsafe work when the initialize function is called a second time if it
+        //        supports runtime preset loading.  `state::deserialize_object()` normally never
+        //        allocates, but if the plugin has persistent non-parameter data then its
+        //        `deserialize_fields()` implementation may still allocate.
+        let mut success = permit_alloc(|| unsafe {
+            state::deserialize_object::<P>(
+                state,
+                self.params.clone(),
+                state::make_params_getter(&self.param_by_hash, &self.param_id_to_hash),
+                buffer_config.as_ref(),
+            )
+        });
+        if !success {
+            nih_debug_assert_failure!("Deserializing plugin state from a state object failed");
+            return false;
+        }
+
+        // If the plugin was already initialized then it needs to be reinitialized
+        if let Some(buffer_config) = buffer_config {
+            // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
+            let mut init_context = self.make_init_context();
+            let mut plugin = self.plugin.lock();
+
+            // See above
+            success = permit_alloc(|| {
+                plugin.initialize(&audio_io_layout, &buffer_config, &mut init_context)
+            });
+            if success {
+                process_wrapper(|| plugin.reset());
+            }
+        }
+
+        nih_debug_assert!(
+            success,
+            "Plugin returned false when reinitializing after loading state"
+        );
+
+        // Reinitialize the plugin after loading state so it can respond to the new parameter values
+        let task_posted = self.schedule_gui(Task::ParameterValuesChanged);
+        nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+
+        // TODO: Check for GUI size changes and resize accordingly
+
+        success
     }
 }
 

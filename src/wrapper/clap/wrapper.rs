@@ -1649,7 +1649,7 @@ impl<P: ClapPlugin> Wrapper<P> {
     /// Update the plugin's internal state, called by the plugin itself from the GUI thread. To
     /// prevent corrupting data and changing parameters during processing the actual state is only
     /// updated at the end of the audio processing cycle.
-    pub fn set_state_object(&self, mut state: PluginState) {
+    pub fn set_state_object_from_gui(&self, mut state: PluginState) {
         // Use a loop and timeouts to handle the super rare edge case when this function gets called
         // between a process call and the host disabling the plugin
         loop {
@@ -1682,27 +1682,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             } else {
                 // Otherwise we'll set the state right here and now, since this function should be
                 // called from a GUI thread
-                unsafe {
-                    state::deserialize_object::<P>(
-                        &mut state,
-                        self.params.clone(),
-                        state::make_params_getter(&self.param_by_hash, &self.param_id_to_hash),
-                        self.current_buffer_config.load().as_ref(),
-                    );
-                }
-
-                let audio_io_layout = self.current_audio_io_layout.load();
-                if let Some(buffer_config) = self.current_buffer_config.load() {
-                    // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
-                    let mut init_context = self.make_init_context();
-                    let mut plugin = self.plugin.lock();
-                    plugin.initialize(&audio_io_layout, &buffer_config, &mut init_context);
-                    process_wrapper(|| plugin.reset());
-                }
-
-                let task_posted = self.schedule_gui(Task::ParameterValuesChanged);
-                nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
-
+                self.set_state_inner(&mut state);
                 break;
             }
         }
@@ -1745,6 +1725,68 @@ impl<P: ClapPlugin> Wrapper<P> {
                  'ClapPlugin::CLAP_POLY_MODULATION_CONFIG' is set"
             ),
         }
+    }
+
+    /// Immediately set the plugin state. Returns `false` if the deserialization failed. The plugin
+    /// state is set from a couple places, so this function aims to deduplicate that. Includes
+    /// `permit_alloc()`s around the deserialization and initialization for the use case where
+    /// `set_state_object_from_gui()` was called while the plugin is process audio.
+    ///
+    /// Implicitly emits `Task::ParameterValuesChanged`.
+    ///
+    /// # Notes
+    ///
+    /// `self.plugin` must _not_ be locked while calling this function or it will deadlock.
+    pub fn set_state_inner(&self, state: &mut PluginState) -> bool {
+        let audio_io_layout = self.current_audio_io_layout.load();
+        let buffer_config = self.current_buffer_config.load();
+
+        // FIXME: This is obviously not realtime-safe, but loading presets without doing this could
+        //        lead to inconsistencies. It's the plugin's responsibility to not perform any
+        //        realtime-unsafe work when the initialize function is called a second time if it
+        //        supports runtime preset loading.  `state::deserialize_object()` normally never
+        //        allocates, but if the plugin has persistent non-parameter data then its
+        //        `deserialize_fields()` implementation may still allocate.
+        let mut success = permit_alloc(|| unsafe {
+            state::deserialize_object::<P>(
+                state,
+                self.params.clone(),
+                state::make_params_getter(&self.param_by_hash, &self.param_id_to_hash),
+                self.current_buffer_config.load().as_ref(),
+            )
+        });
+        if !success {
+            nih_debug_assert_failure!("Deserializing plugin state from a state object failed");
+            return false;
+        }
+
+        // If the plugin was already initialized then it needs to be reinitialized
+        if let Some(buffer_config) = buffer_config {
+            // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
+            let mut init_context = self.make_init_context();
+            let mut plugin = self.plugin.lock();
+
+            // See above
+            success = permit_alloc(|| {
+                plugin.initialize(&audio_io_layout, &buffer_config, &mut init_context)
+            });
+            if success {
+                process_wrapper(|| plugin.reset());
+            }
+        }
+
+        nih_debug_assert!(
+            success,
+            "Plugin returned false when reinitializing after loading state"
+        );
+
+        // Reinitialize the plugin after loading state so it can respond to the new parameter values
+        let task_posted = self.schedule_gui(Task::ParameterValuesChanged);
+        nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+
+        // TODO: Check for GUI size changes and resize accordingly
+
+        success
     }
 
     unsafe extern "C" fn init(plugin: *const clap_plugin) -> bool {
@@ -2362,39 +2404,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             //        doesn't do that
             let updated_state = permit_alloc(|| wrapper.updated_state_receiver.try_recv());
             if let Ok(mut state) = updated_state {
-                // FIXME: This is obviously not realtime-safe, but loading presets without doing
-                //         this could lead to inconsistencies. It's the plugin's responsibility to
-                //         not perform any realtime-unsafe work when the initialize function is
-                //         called a second time if it supports runtime preset loading.
-                //         `state::deserialize_object()` normally never allocates, but if the plugin
-                //         has persistent non-parameter data then its `deserialize_fields()`
-                //         implementation may still allocate.
-                permit_alloc(|| {
-                    state::deserialize_object::<P>(
-                        &mut state,
-                        wrapper.params.clone(),
-                        state::make_params_getter(
-                            &wrapper.param_by_hash,
-                            &wrapper.param_id_to_hash,
-                        ),
-                        wrapper.current_buffer_config.load().as_ref(),
-                    );
-                });
-
-                // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
-                let mut init_context = wrapper.make_init_context();
-                let audio_io_layout = wrapper.current_audio_io_layout.load();
-                let buffer_config = wrapper.current_buffer_config.load().unwrap();
-                let mut plugin = wrapper.plugin.lock();
-                // See above
-                permit_alloc(|| {
-                    plugin.initialize(&audio_io_layout, &buffer_config, &mut init_context)
-                });
-                plugin.reset();
-
-                // Reinitialize the plugin after loading state so it can respond to the new parameter values
-                let task_posted = wrapper.schedule_gui(Task::ParameterValuesChanged);
-                nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+                wrapper.set_state_inner(&mut state);
 
                 // We'll pass the state object back to the GUI thread so deallocation can happen
                 // there without potentially blocking the audio thread
@@ -3243,35 +3253,17 @@ impl<P: ClapPlugin> Wrapper<P> {
         }
         read_buffer.set_len(length as usize);
 
-        let success = state::deserialize_json::<P>(
-            &read_buffer,
-            wrapper.params.clone(),
-            state::make_params_getter(&wrapper.param_by_hash, &wrapper.param_id_to_hash),
-            wrapper.current_buffer_config.load().as_ref(),
-        );
-        if !success {
-            return false;
+        match state::deserialize_json(&read_buffer) {
+            Some(mut state) => {
+                let success = wrapper.set_state_inner(&mut state);
+                if success {
+                    nih_trace!("Loaded state ({} bytes)", read_buffer.len());
+                }
+
+                success
+            }
+            None => false,
         }
-
-        let audio_io_layout = wrapper.current_audio_io_layout.load();
-        if let Some(buffer_config) = wrapper.current_buffer_config.load() {
-            // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
-            let mut init_context = wrapper.make_init_context();
-            let mut plugin = wrapper.plugin.lock();
-            plugin.initialize(&audio_io_layout, &buffer_config, &mut init_context);
-            // TODO: This also goes for the VST3 version, but should we call reset here? Won't the
-            //       host always restart playback? Check this with a couple of hosts and remove the
-            //       duplicate reset if it's not needed.
-            process_wrapper(|| plugin.reset());
-        }
-
-        // Reinitialize the plugin after loading state so it can respond to the new parameter values
-        let task_posted = wrapper.schedule_gui(Task::ParameterValuesChanged);
-        nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
-
-        nih_trace!("Loaded state ({length} bytes)");
-
-        true
     }
 
     unsafe extern "C" fn ext_tail_get(plugin: *const clap_plugin) -> u32 {

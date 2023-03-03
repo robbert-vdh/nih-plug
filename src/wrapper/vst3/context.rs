@@ -193,6 +193,6 @@ impl<P: Vst3Plugin> GuiContext for WrapperGuiContext<P> {
     }
 
     fn set_state(&self, state: PluginState) {
-        self.inner.set_state_object(state)
+        self.inner.set_state_object_from_gui(state)
     }
 }

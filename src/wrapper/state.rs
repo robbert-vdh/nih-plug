@@ -240,23 +240,13 @@ pub(crate) unsafe fn deserialize_object<P: Plugin>(
     true
 }
 
-/// Deserialize a plugin's state from a vector containing (compressed) JSON data. This can (and
-/// should) be shared across plugin formats. Returns `false` and logs an error if the state could
-/// not be deserialized. If the `zstd` feature is enabled, then this can
-///
-/// Make sure to reinitialize plugin after deserializing the state so it can react to the new
-/// parameter values. The smoothers have already been reset by this function.
-///
-/// The [`Plugin`] argument is used to call [`Plugin::filter_state()`] just before loading the
-/// state.
-pub(crate) unsafe fn deserialize_json<P: Plugin>(
-    state: &[u8],
-    plugin_params: Arc<dyn Params>,
-    params_getter: impl Fn(&str) -> Option<ParamPtr>,
-    current_buffer_config: Option<&BufferConfig>,
-) -> bool {
+/// Deserialize a plugin's state from a vector containing (compressed) JSON data. Doesn't load the
+/// plugin state since doing so should be accompanied by calls to `Plugin::init()` and
+/// `Plugin::reset()`, and this way all of that behavior can be encapsulated so it can be reused in
+/// multiple places. The returned state object can be passed to [`deserialize_object()`].
+pub(crate) unsafe fn deserialize_json(state: &[u8]) -> Option<PluginState> {
     #[cfg(feature = "zstd")]
-    let mut state: PluginState = match zstd::decode_all(state) {
+    let result: Option<PluginState> = match zstd::decode_all(state) {
         Ok(decompressed) => match serde_json::from_slice(decompressed.as_slice()) {
             Ok(s) => {
                 let state_bytes = decompressed.len();
@@ -267,11 +257,11 @@ pub(crate) unsafe fn deserialize_json<P: Plugin>(
                      ({compression_ratio:.1}% compression ratio)"
                 );
 
-                s
+                Some(s)
             }
             Err(err) => {
                 nih_debug_assert_failure!("Error while deserializing state: {}", err);
-                return false;
+                None
             }
         },
         // Uncompressed state files can still be loaded after enabling this feature to prevent
@@ -279,7 +269,7 @@ pub(crate) unsafe fn deserialize_json<P: Plugin>(
         Err(zstd_err) => match serde_json::from_slice(state) {
             Ok(s) => {
                 nih_trace!("Older uncompressed state found");
-                s
+                Some(s)
             }
             Err(json_err) => {
                 nih_debug_assert_failure!(
@@ -288,24 +278,19 @@ pub(crate) unsafe fn deserialize_json<P: Plugin>(
                     zstd_err,
                     json_err
                 );
-                return false;
+                None
             }
         },
     };
 
     #[cfg(not(feature = "zstd"))]
-    let mut state: PluginState = match serde_json::from_slice(state) {
-        Ok(s) => s,
+    let result: Option<PluginState> = match serde_json::from_slice(state) {
+        Ok(s) => Some(s),
         Err(err) => {
             nih_debug_assert_failure!("Error while deserializing state: {}", err);
-            return false;
+            None
         }
     };
 
-    deserialize_object::<P>(
-        &mut state,
-        plugin_params,
-        params_getter,
-        current_buffer_config,
-    )
+    result
 }

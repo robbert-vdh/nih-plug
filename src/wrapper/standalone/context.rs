@@ -138,6 +138,6 @@ impl<P: Plugin, B: Backend<P>> GuiContext for WrapperGuiContext<P, B> {
     }
 
     fn set_state(&self, state: crate::wrapper::state::PluginState) {
-        self.wrapper.set_state_object(state)
+        self.wrapper.set_state_object_from_gui(state)
     }
 }

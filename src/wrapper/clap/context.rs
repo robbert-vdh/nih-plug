@@ -189,6 +189,6 @@ impl<P: ClapPlugin> GuiContext for WrapperGuiContext<P> {
     }
 
     fn set_state(&self, state: crate::wrapper::state::PluginState) {
-        self.wrapper.set_state_object(state)
+        self.wrapper.set_state_object_from_gui(state)
     }
 }

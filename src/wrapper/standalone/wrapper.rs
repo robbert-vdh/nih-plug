@@ -411,7 +411,7 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
     /// Update the plugin's internal state, called by the plugin itself from the GUI thread. To
     /// prevent corrupting data and changing parameters during processing the actual state is only
     /// updated at the end of the audio processing cycle.
-    pub fn set_state_object(&self, state: PluginState) {
+    pub fn set_state_object_from_gui(&self, state: PluginState) {
         match self.updated_state_sender.send(state) {
             Ok(_) => {
                 // As mentioned above, the state object will be passed back to this thread
@@ -517,38 +517,7 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
                     //        alternative that doesn't do that
                     let updated_state = permit_alloc(|| self.updated_state_receiver.try_recv());
                     if let Ok(mut state) = updated_state {
-                        // FIXME: This is obviously not realtime-safe, but loading presets without
-                        //         doing this could lead to inconsistencies. It's the plugin's
-                        //         responsibility to not perform any realtime-unsafe work when the
-                        //         initialize function is called a second time if it supports
-                        //         runtime preset loading.  `state::deserialize_object()` normally
-                        //         never allocates, but if the plugin has persistent non-parameter
-                        //         data then its `deserialize_fields()` implementation may still
-                        //         allocate.
-                        permit_alloc(|| unsafe {
-                            state::deserialize_object::<P>(
-                                &mut state,
-                                self.params.clone(),
-                                |param_id| self.param_id_to_ptr.get(param_id).copied(),
-                                Some(&self.buffer_config),
-                            );
-                        });
-
-                        // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
-                        let mut init_context = self.make_init_context();
-                        let mut plugin = self.plugin.lock();
-                        // See above
-                        permit_alloc(|| {
-                            plugin.initialize(
-                                &self.audio_io_layout,
-                                &self.buffer_config,
-                                &mut init_context,
-                            )
-                        });
-                        plugin.reset();
-
-                        let task_posted = self.schedule_gui(Task::ParameterValuesChanged);
-                        nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+                        self.set_state_inner(&mut state);
 
                         // We'll pass the state object back to the GUI thread so deallocation can
                         // happen there without potentially blocking the audio thread
@@ -593,5 +562,69 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
             output_events,
             transport,
         }
+    }
+
+    /// Immediately set the plugin state. Returns `false` if the deserialization failed. In other
+    /// wrappers state is set from a couple places, so this function is here to be consistent and to
+    /// centralize all of this behavior. Includes `permit_alloc()`s around the deserialization and
+    /// initialization for the use case where `set_state_object_from_gui()` was called while the
+    /// plugin is process audio.
+    ///
+    /// Implicitly emits `Task::ParameterValuesChanged`.
+    ///
+    /// # Notes
+    ///
+    /// `self.plugin` must _not_ be locked while calling this function or it will deadlock.
+    fn set_state_inner(&self, state: &mut PluginState) -> bool {
+        // FIXME: This is obviously not realtime-safe, but loading presets without doing this could
+        //        lead to inconsistencies. It's the plugin's responsibility to not perform any
+        //        realtime-unsafe work when the initialize function is called a second time if it
+        //        supports runtime preset loading. `state::deserialize_object()` normally never
+        //        allocates, but if the plugin has persistent non-parameter data then its
+        //        `deserialize_fields()` implementation may still allocate.
+        let mut success = permit_alloc(|| unsafe {
+            state::deserialize_object::<P>(
+                state,
+                self.params.clone(),
+                |param_id| self.param_id_to_ptr.get(param_id).copied(),
+                Some(&self.buffer_config),
+            )
+        });
+        if !success {
+            nih_debug_assert_failure!("Deserializing plugin state from a state object failed");
+            return false;
+        }
+
+        // If the plugin was already initialized then it needs to be reinitialized
+        {
+            // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
+            let mut init_context = self.make_init_context();
+            let mut plugin = self.plugin.lock();
+
+            // See above
+            success = permit_alloc(|| {
+                plugin.initialize(
+                    &self.audio_io_layout,
+                    &self.buffer_config,
+                    &mut init_context,
+                )
+            });
+            if success {
+                process_wrapper(|| plugin.reset());
+            }
+        }
+
+        nih_debug_assert!(
+            success,
+            "Plugin returned false when reinitializing after loading state"
+        );
+
+        // Reinitialize the plugin after loading state so it can respond to the new parameter values
+        let task_posted = self.schedule_gui(Task::ParameterValuesChanged);
+        nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+
+        // TODO: Check for GUI size changes and resize accordingly
+
+        success
     }
 }

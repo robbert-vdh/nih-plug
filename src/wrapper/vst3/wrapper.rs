@@ -20,7 +20,7 @@ use vst3_sys::vst::{
 use vst3_sys::VST3;
 use widestring::U16CStr;
 
-use super::inner::{ProcessEvent, Task, WrapperInner};
+use super::inner::{ProcessEvent, WrapperInner};
 use super::note_expressions::{self, NoteExpressionController};
 use super::util::{
     u16strlcpy, VstPtr, VST3_MIDI_CCS, VST3_MIDI_NUM_PARAMS, VST3_MIDI_PARAMS_START,
@@ -497,35 +497,17 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
             return kResultFalse;
         }
 
-        let success = state::deserialize_json::<P>(
-            &read_buffer,
-            self.inner.params.clone(),
-            state::make_params_getter(&self.inner.param_by_hash, &self.inner.param_id_to_hash),
-            self.inner.current_buffer_config.load().as_ref(),
-        );
-        if !success {
-            return kResultFalse;
+        match state::deserialize_json(&read_buffer) {
+            Some(mut state) => {
+                if self.inner.set_state_inner(&mut state) {
+                    nih_trace!("Loaded state ({} bytes)", read_buffer.len());
+                    kResultOk
+                } else {
+                    kResultFalse
+                }
+            }
+            None => kResultFalse,
         }
-
-        if let Some(buffer_config) = self.inner.current_buffer_config.load() {
-            // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
-            let mut init_context = self.inner.make_init_context();
-            let audio_io_layout = self.inner.current_audio_io_layout.load();
-            let mut plugin = self.inner.plugin.lock();
-            plugin.initialize(&audio_io_layout, &buffer_config, &mut init_context);
-            // TODO: This also goes for the CLAP version, but should we call reset here? Won't the
-            //       host always restart playback? Check this with a couple of hosts and remove the
-            //       duplicate reset if it's not needed.
-            process_wrapper(|| plugin.reset());
-        }
-
-        // Reinitialize the plugin after loading state so it can respond to the new parameter values
-        let task_posted = self.inner.schedule_gui(Task::ParameterValuesChanged);
-        nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
-
-        nih_trace!("Loaded state ({} bytes)", read_buffer.len());
-
-        kResultOk
     }
 
     unsafe fn get_state(&self, state: SharedVstPtr<dyn IBStream>) -> tresult {
@@ -1795,38 +1777,7 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
             //        doesn't do that
             let updated_state = permit_alloc(|| self.inner.updated_state_receiver.try_recv());
             if let Ok(mut state) = updated_state {
-                // FIXME: This is obviously not realtime-safe, but loading presets without doing
-                //         this could lead to inconsistencies. It's the plugin's responsibility to
-                //         not perform any realtime-unsafe work when the initialize function is
-                //         called a second time if it supports runtime preset loading.
-                //         `state::deserialize_object()` normally never allocates, but if the plugin
-                //         has persistent non-parameter data then its `deserialize_fields()`
-                //         implementation may still allocate.
-                permit_alloc(|| {
-                    state::deserialize_object::<P>(
-                        &mut state,
-                        self.inner.params.clone(),
-                        state::make_params_getter(
-                            &self.inner.param_by_hash,
-                            &self.inner.param_id_to_hash,
-                        ),
-                        self.inner.current_buffer_config.load().as_ref(),
-                    );
-                });
-
-                // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
-                let mut init_context = self.inner.make_init_context();
-                let audio_io_layout = self.inner.current_audio_io_layout.load();
-                let buffer_config = self.inner.current_buffer_config.load().unwrap();
-                let mut plugin = self.inner.plugin.lock();
-                // See above
-                permit_alloc(|| {
-                    plugin.initialize(&audio_io_layout, &buffer_config, &mut init_context)
-                });
-                plugin.reset();
-
-                let task_posted = self.inner.schedule_gui(Task::ParameterValuesChanged);
-                nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
+                self.inner.set_state_inner(&mut state);
 
                 // We'll pass the state object back to the GUI thread so deallocation can happen
                 // there without potentially blocking the audio thread
