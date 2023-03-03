@@ -468,22 +468,24 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
                     }
 
                     let sample_rate = self.buffer_config.sample_rate;
-                    let mut plugin = self.plugin.lock();
-                    if let ProcessStatus::Error(err) = plugin.process(
-                        buffer,
-                        aux,
-                        &mut self.make_process_context(transport, input_events, output_events),
-                    ) {
-                        nih_error!("The plugin returned an error while processing:");
-                        nih_error!("{}", err);
+                    {
+                        let mut plugin = self.plugin.lock();
+                        if let ProcessStatus::Error(err) = plugin.process(
+                            buffer,
+                            aux,
+                            &mut self.make_process_context(transport, input_events, output_events),
+                        ) {
+                            nih_error!("The plugin returned an error while processing:");
+                            nih_error!("{}", err);
 
-                        let push_successful = gui_task_sender.send(GuiTask::Close).is_ok();
-                        nih_debug_assert!(
-                            push_successful,
-                            "Could not queue window close, the editor will remain open"
-                        );
+                            let push_successful = gui_task_sender.send(GuiTask::Close).is_ok();
+                            nih_debug_assert!(
+                                push_successful,
+                                "Could not queue window close, the editor will remain open"
+                            );
 
-                        return false;
+                            return false;
+                        }
                     }
 
                     // Any output note events are now in a vector that can be processed by the
@@ -532,12 +534,15 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
                             );
                         });
 
+                        // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
+                        let mut init_context = self.make_init_context();
+                        let mut plugin = self.plugin.lock();
                         // See above
                         permit_alloc(|| {
                             plugin.initialize(
                                 &self.audio_io_layout,
                                 &self.buffer_config,
-                                &mut self.make_init_context(),
+                                &mut init_context,
                             )
                         });
                         plugin.reset();
