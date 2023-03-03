@@ -515,20 +515,24 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
                     //        alternative that doesn't do that
                     let updated_state = permit_alloc(|| self.updated_state_receiver.try_recv());
                     if let Ok(mut state) = updated_state {
-                        unsafe {
+                        // FIXME: This is obviously not realtime-safe, but loading presets without
+                        //         doing this could lead to inconsistencies. It's the plugin's
+                        //         responsibility to not perform any realtime-unsafe work when the
+                        //         initialize function is called a second time if it supports
+                        //         runtime preset loading.  `state::deserialize_object()` normally
+                        //         never allocates, but if the plugin has persistent non-parameter
+                        //         data then its `deserialize_fields()` implementation may still
+                        //         allocate.
+                        permit_alloc(|| unsafe {
                             state::deserialize_object::<P>(
                                 &mut state,
                                 self.params.clone(),
                                 |param_id| self.param_id_to_ptr.get(param_id).copied(),
                                 Some(&self.buffer_config),
                             );
-                        }
+                        });
 
-                        // FIXME: This is obviously not realtime-safe, but loading presets without
-                        //         doing this could lead to inconsistencies. It's the plugin's
-                        //         responsibility to not perform any realtime-unsafe work when the
-                        //         initialize function is called a second time if it supports
-                        //         runtime preset loading.
+                        // See above
                         permit_alloc(|| {
                             plugin.initialize(
                                 &self.audio_io_layout,

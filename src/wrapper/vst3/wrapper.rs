@@ -1795,25 +1795,31 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
             //        doesn't do that
             let updated_state = permit_alloc(|| self.inner.updated_state_receiver.try_recv());
             if let Ok(mut state) = updated_state {
-                state::deserialize_object::<P>(
-                    &mut state,
-                    self.inner.params.clone(),
-                    state::make_params_getter(
-                        &self.inner.param_by_hash,
-                        &self.inner.param_id_to_hash,
-                    ),
-                    self.inner.current_buffer_config.load().as_ref(),
-                );
+                // FIXME: This is obviously not realtime-safe, but loading presets without doing
+                //         this could lead to inconsistencies. It's the plugin's responsibility to
+                //         not perform any realtime-unsafe work when the initialize function is
+                //         called a second time if it supports runtime preset loading.
+                //         `state::deserialize_object()` normally never allocates, but if the plugin
+                //         has persistent non-parameter data then its `deserialize_fields()`
+                //         implementation may still allocate.
+                permit_alloc(|| {
+                    state::deserialize_object::<P>(
+                        &mut state,
+                        self.inner.params.clone(),
+                        state::make_params_getter(
+                            &self.inner.param_by_hash,
+                            &self.inner.param_id_to_hash,
+                        ),
+                        self.inner.current_buffer_config.load().as_ref(),
+                    );
+                });
 
                 // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
                 let mut init_context = self.inner.make_init_context();
                 let audio_io_layout = self.inner.current_audio_io_layout.load();
                 let buffer_config = self.inner.current_buffer_config.load().unwrap();
                 let mut plugin = self.inner.plugin.lock();
-                // FIXME: This is obviously not realtime-safe, but loading presets without doing
-                //         this could lead to inconsistencies. It's the plugin's responsibility to
-                //         not perform any realtime-unsafe work when the initialize function is
-                //         called a second time if it supports runtime preset loading.
+                // See above
                 permit_alloc(|| {
                     plugin.initialize(&audio_io_layout, &buffer_config, &mut init_context)
                 });

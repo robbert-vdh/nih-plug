@@ -2362,22 +2362,31 @@ impl<P: ClapPlugin> Wrapper<P> {
             //        doesn't do that
             let updated_state = permit_alloc(|| wrapper.updated_state_receiver.try_recv());
             if let Ok(mut state) = updated_state {
-                state::deserialize_object::<P>(
-                    &mut state,
-                    wrapper.params.clone(),
-                    state::make_params_getter(&wrapper.param_by_hash, &wrapper.param_id_to_hash),
-                    wrapper.current_buffer_config.load().as_ref(),
-                );
+                // FIXME: This is obviously not realtime-safe, but loading presets without doing
+                //         this could lead to inconsistencies. It's the plugin's responsibility to
+                //         not perform any realtime-unsafe work when the initialize function is
+                //         called a second time if it supports runtime preset loading.
+                //         `state::deserialize_object()` normally never allocates, but if the plugin
+                //         has persistent non-parameter data then its `deserialize_fields()`
+                //         implementation may still allocate.
+                permit_alloc(|| {
+                    state::deserialize_object::<P>(
+                        &mut state,
+                        wrapper.params.clone(),
+                        state::make_params_getter(
+                            &wrapper.param_by_hash,
+                            &wrapper.param_id_to_hash,
+                        ),
+                        wrapper.current_buffer_config.load().as_ref(),
+                    );
+                });
 
                 // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
                 let mut init_context = wrapper.make_init_context();
                 let audio_io_layout = wrapper.current_audio_io_layout.load();
                 let buffer_config = wrapper.current_buffer_config.load().unwrap();
                 let mut plugin = wrapper.plugin.lock();
-                // FIXME: This is obviously not realtime-safe, but loading presets without doing
-                //         this could lead to inconsistencies. It's the plugin's responsibility to
-                //         not perform any realtime-unsafe work when the initialize function is
-                //         called a second time if it supports runtime preset loading.
+                // See above
                 permit_alloc(|| {
                     plugin.initialize(&audio_io_layout, &buffer_config, &mut init_context)
                 });
