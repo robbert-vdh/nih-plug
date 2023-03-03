@@ -92,10 +92,8 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 widestring = "1.0.0-beta.1"
 
-# Used for the `assert_process_allocs` feature. This fork includes support for
-# the log crate and printing backtraces on allocation failure so you can trace
-# the allocation back to a place in the code.
-assert_no_alloc = { git = "https://github.com/robbert-vdh/rust-assert-no-alloc.git", branch = "nih-plug", features = ["backtrace", "log"], optional = true }
+# Used for the `assert_process_allocs` feature
+assert_no_alloc = { git = "https://github.com/robbert-vdh/rust-assert-no-alloc.git", branch = "feature/nested-permit-forbid", features = ["backtrace", "log"], optional = true }
 
 # Used for the `standalone` feature
 # NOTE: OpenGL support is not needed here, but rust-analyzer gets confused when

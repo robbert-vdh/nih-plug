@@ -162,7 +162,7 @@ checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 [[package]]
 name = "assert_no_alloc"
 version = "1.1.2"
-source = "git+https://github.com/robbert-vdh/rust-assert-no-alloc.git?branch=nih-plug#95120d996240a2c279a6067502e11b62d30563a6"
+source = "git+https://github.com/robbert-vdh/rust-assert-no-alloc.git?branch=feature/nested-permit-forbid#a6fb4f62b9624715291e320ea5f0f70e73b035cf"
 dependencies = [
  "backtrace",
  "log",
