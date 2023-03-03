@@ -164,10 +164,12 @@ impl Param for IntParam {
         Some(self.preview_normalized(value))
     }
 
+    #[inline]
     fn preview_normalized(&self, plain: Self::Plain) -> f32 {
         self.range.normalize(plain)
     }
 
+    #[inline]
     fn preview_plain(&self, normalized: f32) -> Self::Plain {
         self.range.unnormalize(normalized)
     }

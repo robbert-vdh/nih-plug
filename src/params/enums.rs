@@ -191,10 +191,12 @@ impl<T: Enum + PartialEq> Param for EnumParam<T> {
         self.inner.string_to_normalized_value(string)
     }
 
+    #[inline]
     fn preview_normalized(&self, plain: Self::Plain) -> f32 {
         self.inner.preview_normalized(T::to_index(plain) as i32)
     }
 
+    #[inline]
     fn preview_plain(&self, normalized: f32) -> Self::Plain {
         T::from_index(self.inner.preview_plain(normalized) as usize)
     }
@@ -276,10 +278,12 @@ impl Param for EnumParamInner {
             .map(|idx| self.preview_normalized(idx as i32))
     }
 
+    #[inline]
     fn preview_normalized(&self, plain: Self::Plain) -> f32 {
         self.inner.preview_normalized(plain)
     }
 
+    #[inline]
     fn preview_plain(&self, normalized: f32) -> Self::Plain {
         self.inner.preview_plain(normalized)
     }

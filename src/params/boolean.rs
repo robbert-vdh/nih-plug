@@ -146,6 +146,7 @@ impl Param for BoolParam {
         Some(self.preview_normalized(value))
     }
 
+    #[inline]
     fn preview_normalized(&self, plain: Self::Plain) -> f32 {
         if plain {
             1.0
@@ -154,6 +155,7 @@ impl Param for BoolParam {
         }
     }
 
+    #[inline]
     fn preview_plain(&self, normalized: f32) -> Self::Plain {
         normalized > 0.5
     }
