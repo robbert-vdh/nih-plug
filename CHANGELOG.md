@@ -1,12 +1,18 @@
-# Breaking changes
+# Changelog
 
-Since there is no stable release yet, there is also no proper changelog yet. But
-since not everyone might want to dive through commit messages to find out what's
-new and what's changed, this document lists all breaking changes in reverse
-chronological order. If a new feature did not require any changes to existing
-code then it will not be listed here.
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic
+Versioning](https://semver.org/spec/v2.0.0.html).
+
+Since there is no stable release yet, the changes are organized per day in
+reverse chronological order. The main purpose of this document in its current
+state is to list breaking changes.
 
 ## [2023-02-28]
+
+### Breaking changes
 
 - `ViziaState::from_size()` now takes a third boolean argument to control
   whether the window's size is persisted or not. This avoids a potential bug
@@ -14,6 +20,8 @@ code then it will not be listed here.
   in an update to the plugin.
 
 ## [2023-02-20]
+
+### Breaking changes
 
 - The way audio IO layouts are configured has changed completely to align better
   with NIH-plug's current and future supported plugin API backends. Rather than
@@ -38,6 +46,8 @@ code then it will not be listed here.
 
 ## [2023-02-01]
 
+### Breaking changes
+
 - The `Vst3Plugin::VST3_CATEGORIES` string constant has been replaced by a
   `Vst3Plugin::VST3_SUBCATEGORIES` constant of type `&[Vst3SubCategory]`.
   `Vst3SubCategory` is an enum containing all of VST3's predefined categories,
@@ -45,6 +55,8 @@ code then it will not be listed here.
   makes defining subcategories for VST3 plugins easier and less error prone.
 
 ## [2023-01-31]
+
+### Breaking changes
 
 - NIH-plug has gained support MIDI SysEx in a simple, type-safe, and
   realtime-safe way. This sadly does mean that every `Plugin` instance now needs
@@ -62,6 +74,8 @@ code then it will not be listed here.
 
 ## [2023-01-12]
 
+### Breaking changes
+
 - The Vizia dependency has been updated. This updated version uses a new text
   rendering engine, so there are a couple breaking changes:
   - The names for some of Vizia's fonts have changed. The constants and font
@@ -74,6 +88,8 @@ code then it will not be listed here.
 
 ## [2023-01-11]
 
+### Breaking changes
+
 - `Editor::param_values_changes()` is no longer called from the audio thread and
   thus no longer needs to be realtime safe.
 - A new `Editor::param_value_changed(id, normalized_value)` method has been
@@ -83,6 +99,8 @@ code then it will not be listed here.
 
 ## [2023-01-06]
 
+### Breaking changes
+
 - The threads used for the `.schedule_gui()` and `.schedule_background()`
   methods are now shared between all instances of a plugin. This makes
   `.schedule_gui()` on Linux behave more like it does on Windows and macOS, and
@@ -91,11 +109,15 @@ code then it will not be listed here.
 
 ## [2023-01-05]
 
+### Breaking changes
+
 - `Buffer::len()` has been renamed to `Buffer::samples()` to make this less
   ambiguous.
 - `Block::len()` has been renamed to `Block::samples()`.
 
 ## [2022-11-17]
+
+### Breaking changes
 
 - The `Params` derive macro now also properly supports persistent fields in
   `#[nested]` parameter structs. This takes `#[nested(id_prefix = "...")]` and
@@ -105,11 +127,15 @@ code then it will not be listed here.
 
 ## [2022-11-17]
 
+### Breaking changes
+
 - The order of `#[nested]` parameters in the parameter list now always follows
   the declaration order instead of nested parameters being ordered below regular
   parameters.
 
 ## [2022-11-08]
+
+### Breaking changes
 
 - The `Param::{next_previous}{_step,_normalized_step}()` functions now take an
   additional boolean argument to indicate that the range must be finer. This is
@@ -117,6 +143,8 @@ code then it will not be listed here.
   when using Shift+scroll.
 
 ## [2022-11-07]
+
+### Breaking changes
 
 - `Param::plain_value()` and `Param::normalized_value()` have been renamed to
   `Param::modulated_plain_value()` and `Param::modulated_normalized_value()`.
@@ -126,6 +154,8 @@ code then it will not be listed here.
   the wrong value when handling user input in GUI widgets.
 
 ## [2022-11-06]
+
+### Breaking changes
 
 - `nih_plug_vizia::create_vizia_editor_without_theme()` has been removed, and
   `nih_plug_vizia::create_vizia_editor()` has gained a new argument to specify
@@ -146,10 +176,14 @@ code then it will not be listed here.
 
 ## [2022-10-23]
 
+### Breaking changes
+
 - `nih_plug_vizia` has been updated. Widgets with custom drawing code will need
   to be updated because of changes in Vizia itself.
 
 ## [2022-10-22]
+
+### Breaking changes
 
 - The `Editor` trait and the `ParentWindowHandle` struct have been moved from
   `nih_plug::plugin` to a new `nih_plug::editor` module. If you only use the
@@ -177,6 +211,8 @@ code then it will not be listed here.
 
 ## [2022-10-20]
 
+### Breaking changes
+
 - Some items have been moved out of `nih_plug::param::internals`. The main
   `Params` trait is now located under `nih_plug::param`, and the
   `PersistentTrait` trait, implementations, and helper functions are now part of
@@ -193,6 +229,8 @@ code then it will not be listed here.
 
 ## [2022-10-13]
 
+### Breaking changes
+
 - The `#[nested]` parameter attribute has gained super powers and has its syntax
   changed. It can now automatically handle many situations that previously
   required custom `Params` implementations to have multiple almost identical
@@ -203,11 +241,15 @@ code then it will not be listed here.
 
 ## [2022-09-22]
 
+### Breaking changes
+
 - `nih_plug_vizia` has been updated. Custom widgets will need to be updated
   because of changes Vizia itself.
 - `nih_plug_egui` has been updated from egui 0.17 to egui 0.19.
 
 ## [2022-09-06]
+
+### Breaking changes
 
 - Parameter values are now accessed using `param.value()` instead of
   `param.value`, with `param.value()` being an alias for the existing
@@ -220,6 +262,8 @@ code then it will not be listed here.
 
 ## [2022-09-04]
 
+### Breaking changes
+
 - `Smoother::next_block_mapped()` and `Smoother::next_block_exact_mapped()` have
   been redesigned. They now take an index of the element being generated and the
   float representation of the smoothed value. This makes it easier to use them
@@ -230,6 +274,8 @@ code then it will not be listed here.
 
 ## [2022-08-19]
 
+### Breaking changes
+
 - Standalones now use the plugin's default input and output channel counts
   instead of always defaulting to two inputs and two outputs.
 - `Plugin::DEFAULT_NUM_INPUTS` and `Plugin::DEFAULT_NUM_OUTPUTS` have been
@@ -239,11 +285,15 @@ code then it will not be listed here.
 
 ## [2022-07-18]
 
+### Breaking changes
+
 - `IntRange` and `FloatRange` no longer have min/max methods and instead have
   next/previous step methods. This is for better compatibility with the new
   reversed ranges.
 
 ## [2022-07-06]
+
+### Breaking changes
 
 - There are new `NoteEvent::PolyModulation` and `NoteEvent::MonoAutomation`
   events as part of polyphonic modulation support for CLAP plugins.
@@ -256,11 +306,15 @@ code then it will not be listed here.
 
 ## [2022-07-05]
 
+### Breaking changes
+
 - The `ClapPlugin::CLAP_HARD_REALTIME` constant was moved to the general
   `Plugin` trait as `Plugin::HARD_REALTIME_ONLY`, and best-effort support for
   VST3 has been added.
 
 ## [2022-07-04]
+
+### Breaking changes
 
 - The `CLAP_DESCRIPTION`, `CLAP_MANUAL_URL`, and `CLAP_SUPPORT_URL` associated
   constants from the `ClapPlugin` are now optional and have the type
@@ -275,6 +329,8 @@ code then it will not be listed here.
 
 ## [2022-07-02]
 
+### Breaking changes
+
 - The `Params::serialize_fields()` and `Params::deserialize_fields()` methods
   and the `State` struct now use `BTreeMap`s instead of `HashMap`s so the order
   is consistent the plugin's state to JSON multiple times. These things are part
@@ -283,6 +339,8 @@ code then it will not be listed here.
 
 ## [2022-06-01]
 
+### Breaking changes
+
 - The `ClapPlugin::CLAP_FEATURES` field now uses an array of `ClapFeature`
   values instead of `&'static str`s. CLAP 0.26 contains many new predefined
   features, and the existing ones now use dashes instead of underscores. Custom
@@ -290,12 +348,16 @@ code then it will not be listed here.
 
 ## [2022-05-27]
 
+### Breaking changes
+
 - `Plugin::process()` now takes a new `aux: &mut AuxiliaryBuffers` parameter.
   This was needed to allow auxiliary (sidechain) inputs and outputs.
 - The `Plugin::initialize()` method now takes a `&mut impl InitContext` instead
   of a `&mut impl ProcessContext`.
 
 ## [2022-05-22]
+
+### Breaking changes
 
 - The current processing mode is now stored in `BufferConfig`. Previously this
   could be fetched through a function on the `ProcessContext`, but this makes
