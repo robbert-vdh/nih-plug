@@ -5,6 +5,8 @@
 //! None of these widgets are finalized, and their sizes or looks can change at any point. Feel free
 //! to copy the widgets and modify them to your personal taste.
 
+use crossbeam::atomic::AtomicCell;
+use nih_plug::nih_debug_assert_eq;
 use nih_plug::prelude::{GuiContext, Param, ParamPtr};
 use std::sync::Arc;
 use vizia::prelude::*;
@@ -78,6 +80,10 @@ pub(crate) struct ParamModel {
 pub(crate) struct WindowModel {
     pub context: Arc<dyn GuiContext>,
     pub vizia_state: Arc<ViziaState>,
+
+    /// The last known unscaled logical window size. Used to prevent sending duplicate resize
+    /// requests.
+    pub last_inner_window_size: AtomicCell<(u32, u32)>,
 }
 
 impl Model for ParamModel {
@@ -104,8 +110,16 @@ impl Model for WindowModel {
         event.map(|window_event, _| {
             if let WindowEvent::GeometryChanged { .. } = window_event {
                 let logical_size = (cx.window_size().width, cx.window_size().height);
+                // `self.vizia_state.inner_logical_size()` should match `logical_size`. Since it's
+                // computed we need to store the last logical size on this object.
+                nih_debug_assert_eq!(
+                    logical_size,
+                    self.vizia_state.inner_logical_size(),
+                    "The window size set on the vizia context does not match the size returned by \
+                     'ViziaState::size_fn'"
+                );
                 let old_logical_size @ (old_logical_width, old_logical_height) =
-                    self.vizia_state.size.load();
+                    self.last_inner_window_size.load();
                 let scale_factor = cx.user_scale_factor();
                 let old_user_scale_factor = self.vizia_state.scale_factor.load();
 
@@ -117,13 +131,14 @@ impl Model for WindowModel {
 
                 // Our embedded baseview window will have already been resized. If the host does not
                 // accept our new size, then we'll try to undo that
-                self.vizia_state.size.store(logical_size);
+                self.last_inner_window_size.store(logical_size);
                 self.vizia_state.scale_factor.store(scale_factor);
                 if !self.context.request_resize() {
-                    self.vizia_state.size.store(old_logical_size);
+                    self.last_inner_window_size.store(old_logical_size);
                     self.vizia_state.scale_factor.store(old_user_scale_factor);
 
                     // This will cause the window's size to be reverted on the next event loop
+                    // NOTE: Is resizing back the correct behavior now that the size is computed?
                     cx.set_window_size(WindowSize {
                         width: old_logical_width,
                         height: old_logical_height,

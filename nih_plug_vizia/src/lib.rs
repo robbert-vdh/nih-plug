@@ -7,6 +7,7 @@ use crossbeam::atomic::AtomicCell;
 use nih_plug::params::persist::PersistentField;
 use nih_plug::prelude::{Editor, GuiContext};
 use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use vizia::prelude::*;
@@ -81,13 +82,14 @@ pub enum ViziaTheming {
     Custom,
 }
 
-/// State for an `nih_plug_vizia` editor. The scale factor can be manipulated at runtime by changing
-/// `cx.user_scale_factor`.
-#[derive(Debug, Serialize, Deserialize)]
+/// State for an `nih_plug_vizia` editor. The scale factor can be manipulated at runtime using
+/// `cx.set_user_scale_factor()`.
+#[derive(Serialize, Deserialize)]
 pub struct ViziaState {
-    /// The window's size in logical pixels before applying `scale_factor`.
-    #[serde(with = "nih_plug::params::persist::serialize_atomic_cell")]
-    size: AtomicCell<(u32, u32)>,
+    /// A function that returns the window's current size in logical pixels, before any sort of
+    /// scaling is applied. This size can be computed based on the plugin's current state.
+    #[serde(skip, default = "empty_size_fn")]
+    size_fn: Box<dyn Fn() -> (u32, u32) + Send + Sync>,
     /// A scale factor that should be applied to `size` separate from from any system HiDPI scaling.
     /// This can be used to allow GUIs to be scaled uniformly.
     #[serde(with = "nih_plug::params::persist::serialize_atomic_cell")]
@@ -95,17 +97,27 @@ pub struct ViziaState {
     /// Whether the editor's window is currently open.
     #[serde(skip)]
     open: AtomicBool,
+}
 
-    /// Whether the size should be saved. If the window's size is always scaled uniformly, then this
-    /// is not needed and can only result in problems.
-    should_save_size: bool,
+/// A default implementation for `size_fn` needed to be able to derive the `Deserialize` trait.
+fn empty_size_fn() -> Box<dyn Fn() -> (u32, u32) + Send + Sync> {
+    Box::new(|| (0, 0))
+}
+
+impl Debug for ViziaState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let (width, height) = (self.size_fn)();
+
+        f.debug_struct("ViziaState")
+            .field("size_fn", &format!("<fn> ({}, {})", width, height))
+            .field("scale_factor", &self.scale_factor)
+            .field("open", &self.open)
+            .finish()
+    }
 }
 
 impl<'a> PersistentField<'a, ViziaState> for Arc<ViziaState> {
     fn set(&self, new_value: ViziaState) {
-        if self.should_save_size {
-            self.size.store(new_value.size.load());
-        }
         self.scale_factor.store(new_value.scale_factor.load());
     }
 
@@ -119,42 +131,35 @@ impl<'a> PersistentField<'a, ViziaState> for Arc<ViziaState> {
 
 impl ViziaState {
     /// Initialize the GUI's state. This value can be passed to [`create_vizia_editor()`]. The
-    /// window size is in logical pixels, so before it is multiplied by the DPI scaling factor.
-    ///
-    /// Setting `should_save_size` to `false` may be useful when the size is supposed to be fixed
-    /// and only the scaling factor changes. This allows the object to be persisted in a `Params`
-    /// object without accidentally restoring old sizes after the window's logical size has changed
-    /// in a plugin update.
-    pub fn from_size(width: u32, height: u32, should_save_size: bool) -> Arc<ViziaState> {
+    /// callback always returns the window's current size is in logical pixels, so before it is
+    /// multiplied by the DPI scaling factor. This size can be computed based on the plugin's
+    /// current state.
+    pub fn new(size_fn: impl Fn() -> (u32, u32) + Send + Sync + 'static) -> Arc<ViziaState> {
         Arc::new(ViziaState {
-            size: AtomicCell::new((width, height)),
+            size_fn: Box::new(size_fn),
             scale_factor: AtomicCell::new(1.0),
             open: AtomicBool::new(false),
-            should_save_size,
         })
     }
 
-    /// The same as [`from_size()`][Self::from_size()], but with a separate initial scale factor.
-    /// This scale factor gets applied on top of any HiDPI scaling, and it can be modified at
-    /// runtime by changing `cx.user_scale_factor`.
-    pub fn from_size_with_scale(
-        width: u32,
-        height: u32,
-        scale_factor: f64,
-        should_save_size: bool,
+    /// The same as [`new()`][Self::new()], but with a separate initial scale factor. This scale
+    /// factor gets applied on top of any HiDPI scaling, and it can be modified at runtime by
+    /// changing `cx.set_user_scale_factor()`.
+    pub fn new_with_default_scale_factor(
+        size_fn: impl Fn() -> (u32, u32) + Send + Sync + 'static,
+        default_scale_factor: f64,
     ) -> Arc<ViziaState> {
         Arc::new(ViziaState {
-            size: AtomicCell::new((width, height)),
-            scale_factor: AtomicCell::new(scale_factor),
+            size_fn: Box::new(size_fn),
+            scale_factor: AtomicCell::new(default_scale_factor),
             open: AtomicBool::new(false),
-            should_save_size,
         })
     }
 
     /// Returns a `(width, height)` pair for the current size of the GUI in logical pixels, after
     /// applying the user scale factor.
     pub fn scaled_logical_size(&self) -> (u32, u32) {
-        let (logical_width, logical_height) = self.size.load();
+        let (logical_width, logical_height) = self.inner_logical_size();
         let scale_factor = self.scale_factor.load();
 
         (
@@ -166,7 +171,7 @@ impl ViziaState {
     /// Returns a `(width, height)` pair for the current size of the GUI in logical pixels before
     /// applying the user scale factor.
     pub fn inner_logical_size(&self) -> (u32, u32) {
-        self.size.load()
+        (self.size_fn)()
     }
 
     /// Get the non-DPI related uniform scaling factor the GUI's size will be multiplied with. This

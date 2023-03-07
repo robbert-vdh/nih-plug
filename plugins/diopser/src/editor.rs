@@ -60,7 +60,7 @@ impl Model for Data {}
 
 // Makes sense to also define this here, makes it a bit easier to keep track of
 pub(crate) fn default_state() -> Arc<ViziaState> {
-    ViziaState::from_size(EDITOR_WIDTH, EDITOR_HEIGHT, false)
+    ViziaState::new(|| (EDITOR_WIDTH, EDITOR_HEIGHT))
 }
 
 pub(crate) fn create(editor_data: Data, editor_state: Arc<ViziaState>) -> Option<Box<dyn Editor>> {

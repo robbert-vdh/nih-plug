@@ -14,10 +14,22 @@ state is to list breaking changes.
 
 This document is now also used to keep track of non-breaking changes.
 
+### Breaking changes
+
+- The way window sizes work in `ViziaState` has been reworked to be more
+  predictable and reliable. Instead of creating a `ViziaState` with a predefined
+  size and then tracking the window's current size in that object, `ViziaState`
+  now takes a callback that returns the window's current logical size. This can
+  be used to compute the window's current size based on the plugin's state. The
+  result is that window sizes always match the plugin's current state and
+  recalling an old incorrect size is no longer possible.
+
 ### Added
 
 - Debug builds now include debug assertions that detect incorrect use of the
   `GuiContext`'s parameter setting methods.
+
+### Changed
 
 ## [2023-02-28]
 
