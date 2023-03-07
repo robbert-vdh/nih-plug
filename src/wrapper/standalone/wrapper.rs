@@ -378,6 +378,13 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
         Ok(())
     }
 
+    /// Get a parameter's ID based on a `ParamPtr`. Used in the `GuiContext` implementation for the
+    /// gesture checks.
+    #[allow(unused)]
+    pub fn param_id_from_ptr(&self, param: ParamPtr) -> Option<&str> {
+        self.param_ptr_to_id.get(&param).map(|s| s.as_str())
+    }
+
     /// Set a parameter based on a `ParamPtr`. The value will be updated at the end of the next
     /// processing cycle, and this won't do anything if the parameter has not been registered by the
     /// plugin.
@@ -554,7 +561,11 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
     }
 
     fn make_gui_context(self: Arc<Self>) -> Arc<WrapperGuiContext<P, B>> {
-        Arc::new(WrapperGuiContext { wrapper: self })
+        Arc::new(WrapperGuiContext {
+            wrapper: self,
+            #[cfg(debug_assertions)]
+            param_gesture_checker: Default::default(),
+        })
     }
 
     fn make_init_context(&self) -> WrapperInitContext<'_, P, B> {

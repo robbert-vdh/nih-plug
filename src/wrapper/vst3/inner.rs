@@ -369,7 +369,11 @@ impl<P: Vst3Plugin> WrapperInner<P> {
     }
 
     pub fn make_gui_context(self: Arc<Self>) -> Arc<WrapperGuiContext<P>> {
-        Arc::new(WrapperGuiContext { inner: self })
+        Arc::new(WrapperGuiContext {
+            inner: self,
+            #[cfg(debug_assertions)]
+            param_gesture_checker: Default::default(),
+        })
     }
 
     /// # Note
@@ -429,6 +433,16 @@ impl<P: Vst3Plugin> WrapperInner<P> {
                 None => event_loop.schedule_gui(task),
             }
         }
+    }
+
+    /// Get a parameter's ID based on a `ParamPtr`. Used in the `GuiContext` implementation for the
+    /// gesture checks.
+    #[allow(unused)]
+    pub fn param_id_from_ptr(&self, param: ParamPtr) -> Option<&str> {
+        self.param_ptr_to_hash
+            .get(&param)
+            .and_then(|hash| self.param_id_by_hash.get(hash))
+            .map(|s| s.as_str())
     }
 
     /// Convenience function for setting a value for a parameter as triggered by a VST3 parameter

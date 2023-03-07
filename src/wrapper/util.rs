@@ -5,6 +5,8 @@ use std::os::raw::c_char;
 
 use crate::util::permit_alloc;
 
+pub(crate) mod context_checks;
+
 /// The bit that controls flush-to-zero behavior for denormals in 32 and 64-bit floating point
 /// numbers on AArch64.
 ///

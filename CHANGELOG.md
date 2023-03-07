@@ -10,6 +10,15 @@ Since there is no stable release yet, the changes are organized per day in
 reverse chronological order. The main purpose of this document in its current
 state is to list breaking changes.
 
+## [2023-03-07]
+
+This document is now also used to keep track of non-breaking changes.
+
+### Added
+
+- Debug builds now include debug assertions that detect incorrect use of the
+  `GuiContext`'s parameter setting methods.
+
 ## [2023-02-28]
 
 ### Breaking changes

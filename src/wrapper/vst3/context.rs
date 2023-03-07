@@ -52,6 +52,9 @@ pub(crate) struct WrapperProcessContext<'a, P: Vst3Plugin> {
 /// with the host for things like setting parameters.
 pub(crate) struct WrapperGuiContext<P: Vst3Plugin> {
     pub(super) inner: Arc<WrapperInner<P>>,
+    #[cfg(debug_assertions)]
+    pub(super) param_gesture_checker:
+        atomic_refcell::AtomicRefCell<crate::wrapper::util::context_checks::ParamGestureChecker>,
 }
 
 impl<P: Vst3Plugin> Drop for WrapperInitContext<'_, P> {
@@ -144,6 +147,17 @@ impl<P: Vst3Plugin> GuiContext for WrapperGuiContext<P> {
             },
             None => nih_debug_assert_failure!("Component handler not yet set"),
         }
+
+        #[cfg(debug_assertions)]
+        match self.inner.param_id_from_ptr(param) {
+            Some(param_id) => self
+                .param_gesture_checker
+                .borrow_mut()
+                .begin_set_parameter(param_id),
+            None => nih_debug_assert_failure!(
+                "raw_begin_set_parameter() called with an unknown ParamPtr"
+            ),
+        }
     }
 
     unsafe fn raw_set_parameter_normalized(&self, param: ParamPtr, normalized: f32) {
@@ -174,6 +188,17 @@ impl<P: Vst3Plugin> GuiContext for WrapperGuiContext<P> {
             },
             None => nih_debug_assert_failure!("Component handler not yet set"),
         }
+
+        #[cfg(debug_assertions)]
+        match self.inner.param_id_from_ptr(param) {
+            Some(param_id) => self
+                .param_gesture_checker
+                .borrow_mut()
+                .set_parameter(param_id),
+            None => {
+                nih_debug_assert_failure!("raw_set_parameter() called with an unknown ParamPtr")
+            }
+        }
     }
 
     unsafe fn raw_end_set_parameter(&self, param: ParamPtr) {
@@ -185,6 +210,17 @@ impl<P: Vst3Plugin> GuiContext for WrapperGuiContext<P> {
                 None => nih_debug_assert_failure!("Unknown parameter: {:?}", param),
             },
             None => nih_debug_assert_failure!("Component handler not yet set"),
+        }
+
+        #[cfg(debug_assertions)]
+        match self.inner.param_id_from_ptr(param) {
+            Some(param_id) => self
+                .param_gesture_checker
+                .borrow_mut()
+                .end_set_parameter(param_id),
+            None => {
+                nih_debug_assert_failure!("raw_end_set_parameter() called with an unknown ParamPtr")
+            }
         }
     }
 
