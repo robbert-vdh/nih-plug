@@ -29,8 +29,6 @@ This document is now also used to keep track of non-breaking changes.
 - Debug builds now include debug assertions that detect incorrect use of the
   `GuiContext`'s parameter setting methods.
 
-### Changed
-
 ## [2023-02-28]
 
 ### Breaking changes
