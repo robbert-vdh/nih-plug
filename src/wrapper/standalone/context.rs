@@ -48,8 +48,8 @@ impl<P: Plugin, B: Backend<P>> InitContext<P> for WrapperInitContext<'_, P, B> {
         (self.wrapper.task_executor.lock())(task);
     }
 
-    fn set_latency_samples(&self, _samples: u32) {
-        nih_debug_assert_failure!("TODO: WrapperInitContext::set_latency_samples()");
+    fn set_latency_samples(&self, samples: u32) {
+        self.wrapper.set_latency_samples(samples)
     }
 
     fn set_current_voice_capacity(&self, _capacity: u32) {
@@ -93,8 +93,8 @@ impl<P: Plugin, B: Backend<P>> ProcessContext<P> for WrapperProcessContext<'_, P
         self.output_events.push(event);
     }
 
-    fn set_latency_samples(&self, _samples: u32) {
-        nih_debug_assert_failure!("TODO: WrapperProcessContext::set_latency_samples()");
+    fn set_latency_samples(&self, samples: u32) {
+        self.wrapper.set_latency_samples(samples)
     }
 
     fn set_current_voice_capacity(&self, _capacity: u32) {

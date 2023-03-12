@@ -6,7 +6,7 @@ use parking_lot::Mutex;
 use raw_window_handle::HasRawWindowHandle;
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use std::thread;
 
@@ -86,6 +86,11 @@ pub struct Wrapper<P: Plugin, B: Backend<P>> {
     updated_state_sender: channel::Sender<PluginState>,
     /// The receiver belonging to [`new_state_sender`][Self::new_state_sender].
     updated_state_receiver: channel::Receiver<PluginState>,
+    /// The current latency in samples, as set by the plugin through the [`InitContext`] and the
+    /// [`ProcessContext`]. This value may not be used depending on the audio backend, but it's
+    /// still kept track of to avoid firing debug assertions multiple times for the same latency
+    /// value.
+    current_latency: AtomicU32,
 }
 
 /// Tasks that can be sent from the plugin to be executed on the main thread in a non-blocking
@@ -250,6 +255,7 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
             unprocessed_param_changes: ArrayQueue::new(EVENT_QUEUE_CAPACITY),
             updated_state_sender,
             updated_state_receiver,
+            current_latency: AtomicU32::new(0),
         });
 
         *wrapper.event_loop.borrow_mut() =
@@ -472,6 +478,15 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
                 .send(GuiTask::Resize(unscaled_width, unscaled_height))
                 .is_ok();
             nih_debug_assert!(push_successful, "Could not queue window resize");
+        }
+    }
+
+    pub fn set_latency_samples(&self, samples: u32) {
+        // This should only change the value if it's actually needed
+        let old_latency = self.current_latency.swap(samples, Ordering::SeqCst);
+        if old_latency != samples {
+            // None of the backends actually support this at the moment
+            nih_debug_assert_failure!("Standalones currently don't support latency reporting");
         }
     }
 
