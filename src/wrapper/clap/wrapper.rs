@@ -146,8 +146,8 @@ pub struct Wrapper<P: ClapPlugin> {
     output_events: AtomicRefCell<VecDeque<PluginNoteEvent<P>>>,
     /// The last process status returned by the plugin. This is used for tail handling.
     last_process_status: AtomicCell<ProcessStatus>,
-    /// The current latency in samples, as set by the plugin through the [`ProcessContext`]. uses
-    /// the latency extension
+    /// The current latency in samples, as set by the plugin through the [`ProcessContext`]. Uses
+    /// the latency extension.
     pub current_latency: AtomicU32,
     /// Contains slices for the plugin's outputs. You can't directly create a nested slice from
     /// a pointer to pointers, so this needs to be preallocated in the setup call and kept around

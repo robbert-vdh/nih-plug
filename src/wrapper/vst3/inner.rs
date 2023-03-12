@@ -79,7 +79,8 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     pub current_process_mode: AtomicCell<ProcessMode>,
     /// The last process status returned by the plugin. This is used for tail handling.
     pub last_process_status: AtomicCell<ProcessStatus>,
-    /// The current latency in samples, as set by the plugin through the [`ProcessContext`].
+    /// The current latency in samples, as set by the plugin through the [`InitContext`] and the
+    /// [`ProcessContext`].
     pub current_latency: AtomicU32,
     /// Contains slices for the plugin's outputs. You can't directly create a nested slice from
     /// a pointer to pointers, so this needs to be preallocated in the setup call and kept around
