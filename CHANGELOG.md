@@ -10,6 +10,13 @@ Since there is no stable release yet, the changes are organized per day in
 reverse chronological order. The main purpose of this document in its current
 state is to list breaking changes.
 
+## [2023-03-17]
+
+### Added
+
+- Added a `NoteEvent::channel()` method to get an event's channel, if it has
+  any. ([#62](https://github.com/robbert-vdh/nih-plug/pull/62))
+
 ## [2023-03-07]
 
 This document is now also used to keep track of non-breaking changes.
