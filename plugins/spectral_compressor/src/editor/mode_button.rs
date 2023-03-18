@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use crossbeam::atomic::AtomicCell;
 use nih_plug_vizia::vizia::prelude::*;
+use nih_plug_vizia::widgets::GuiContextEvent;
 
 use super::EditorMode;
 
@@ -55,27 +56,17 @@ impl View for EditorModeButton {
             WindowEvent::MouseDown(MouseButton::Left)
             | WindowEvent::MouseDoubleClick(MouseButton::Left)
             | WindowEvent::MouseTripleClick(MouseButton::Left) => {
-                // TODO: Somehow change the way window sizes work in NIH-plug to be callback based.
-                //       Now this can technically go out of sync if the GUI is closed between the
-                //       mode changing and the resize actually getting processed
                 let current_mode = self.mode.load();
                 let new_mode = match current_mode {
                     EditorMode::Collapsed => EditorMode::VisualizerVisible,
                     EditorMode::VisualizerVisible => EditorMode::Collapsed,
                 };
-
-                match new_mode {
-                    EditorMode::Collapsed => cx.set_window_size(WindowSize {
-                        width: super::COLLAPSED_GUI_WIDTH,
-                        height: super::GUI_HEIGHT,
-                    }),
-                    EditorMode::VisualizerVisible => cx.set_window_size(WindowSize {
-                        width: super::EXPANDED_GUI_WIDTH,
-                        height: super::GUI_HEIGHT,
-                    }),
-                }
-
                 self.mode.store(new_mode);
+
+                // This uses the function stored in our `ViziaState` to declaratively resize the GUI
+                // to the correct size
+                cx.emit(GuiContextEvent::Resize);
+
                 meta.consume();
             }
             // Mouse scrolling is intentionally not implemented here since it could be very easy to
