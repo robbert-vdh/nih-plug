@@ -35,15 +35,15 @@ param-button {
   child-right: 7px;
   child-bottom: 1s;
   child-left: 7px;
-  background-color: #80808000;
+  background-color: #d0d0d000;
   transition: background-color 0.1 0;
 }
 param-button:hover {
-  background-color: #80808020;
+  background-color: #d0d0d080;
   transition: background-color 0.1 0;
 }
 param-button:checked {
-  background-color: #808080;
+  background-color: #d0d0d0;
   transition: background-color 0.1 0;
 }
 

@@ -40,7 +40,7 @@ impl<L: Lens<Target = SafeModeClamper>> SafeModeButton<L> {
             scrolled_lines: 0.0,
         }
         .build(cx, move |cx| {
-            Label::new(cx, label);
+            Label::new(cx, label).hoverable(false);
         })
         .checked(lens.map(|v| v.status()))
         // We'll pretend this is a param-button, so this class is used for assigning a unique color

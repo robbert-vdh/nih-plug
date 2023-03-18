@@ -36,7 +36,7 @@ impl EditorModeButton {
     {
         Self { mode: lens.get(cx) }
             .build(cx, move |cx| {
-                Label::new(cx, label);
+                Label::new(cx, label).hoverable(false);
             })
             .checked(lens.map(|v| v.load() == EditorMode::VisualizerVisible))
             // We'll pretend this is a param-button, so this class is used for assigning a unique

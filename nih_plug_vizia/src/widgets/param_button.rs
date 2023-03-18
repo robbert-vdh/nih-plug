@@ -53,7 +53,8 @@ impl ParamButton {
                     match label_override.get(cx) {
                         Some(label_override) => Label::new(cx, &label_override),
                         None => Label::new(cx, param_data.param().name()),
-                    };
+                    }
+                    .hoverable(false);
                 })
             }),
         )
