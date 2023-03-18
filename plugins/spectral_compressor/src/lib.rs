@@ -243,9 +243,11 @@ impl SpectralCompressorParams {
     /// Create a new [`SpectralCompressorParams`] object. Changing any of the compressor threshold
     /// or ratio parameters causes the passed compressor bank's parameters to be updated.
     pub fn new(compressor_bank: &compressor_bank::CompressorBank) -> Self {
+        let editor_mode: Arc<AtomicCell<EditorMode>> = Arc::default();
+
         SpectralCompressorParams {
-            editor_state: editor::default_state(),
-            editor_mode: Arc::default(),
+            editor_state: editor::default_state(editor_mode.clone()),
+            editor_mode,
 
             // TODO: Do still enable per-block smoothing for these settings, because why not. This
             //       will require updating the compressor bank.

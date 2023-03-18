@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crossbeam::atomic::AtomicCell;
 use nih_plug::prelude::*;
 use nih_plug_vizia::vizia::prelude::*;
 use nih_plug_vizia::widgets::*;
@@ -21,6 +22,7 @@ use nih_plug_vizia::{assets, create_vizia_editor, ViziaState, ViziaTheming};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+use self::mode_button::EditorModeButton;
 use crate::{SpectralCompressor, SpectralCompressorParams};
 
 mod mode_button;
@@ -58,8 +60,11 @@ struct Data {
 impl Model for Data {}
 
 // Makes sense to also define this here, makes it a bit easier to keep track of
-pub(crate) fn default_state() -> Arc<ViziaState> {
-    ViziaState::new(|| (EXPANDED_GUI_WIDTH, GUI_HEIGHT))
+pub(crate) fn default_state(editor_mode: Arc<AtomicCell<EditorMode>>) -> Arc<ViziaState> {
+    ViziaState::new(move || match editor_mode.load() {
+        EditorMode::Collapsed => (COLLAPSED_GUI_WIDTH, GUI_HEIGHT),
+        EditorMode::VisualizerVisible => (EXPANDED_GUI_WIDTH, GUI_HEIGHT),
+    })
 }
 
 pub(crate) fn create(
