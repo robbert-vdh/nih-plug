@@ -88,6 +88,14 @@ pub(crate) fn create(
 
         HStack::new(cx, |cx| {
             main_column(cx);
+
+            let visualizer_visible = Data::editor_mode
+                .map(|editor_mode| editor_mode.load() == EditorMode::VisualizerVisible);
+            Binding::new(cx, visualizer_visible, |cx, visualizer_visible| {
+                if visualizer_visible.get(cx) {
+                    visualizer_column(cx);
+                }
+            });
         });
     })
 }
@@ -211,6 +219,20 @@ fn main_column(cx: &mut Context) {
     .row_between(Pixels(15.0))
     .child_left(Stretch(1.0))
     .child_right(Stretch(1.0));
+}
+
+fn visualizer_column(cx: &mut Context) {
+    HStack::new(cx, |cx| {
+        Label::new(cx, "When I grow up I want to be a spectrum analyzer!");
+    })
+    // These arbitrary 12 pixels are to align with the visualizer toggle botton
+    .space(Pixels(12.0))
+    .bottom(Pixels(12.0))
+    .left(Pixels(2.0))
+    .top(Pixels(12.0))
+    .child_space(Stretch(1.0))
+    .border_width(Pixels(1.0))
+    .border_color(Color::black());
 }
 
 fn make_column(cx: &mut Context, title: &str, contents: impl FnOnce(&mut Context)) {
