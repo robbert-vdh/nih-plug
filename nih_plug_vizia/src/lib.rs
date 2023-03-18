@@ -29,7 +29,8 @@ pub mod widgets;
 ///
 /// The [`GuiContext`] is also passed to the app function. This is only meant for saving and
 /// restoring state as part of your plugin's preset handling. You should not interact with this
-/// directly to set parameters. Use the [`ParamEvent`][widgets::ParamEvent]s instead.
+/// directly to set parameters. Use the [`ParamEvent`][widgets::ParamEvent]s to change parameter
+/// values, and [`GuiContextEvent`] to trigger window resizes.
 ///
 /// The `theming` argument controls what level of theming to apply. If you use
 /// [`ViziaTheming::Custom`], then you **need** to call

@@ -53,7 +53,8 @@ pub enum ParamEvent<'a, P: Param> {
     EndSetParameter(&'a P),
 }
 
-/// The same as [`ParamEvent`], but type erased.
+/// The same as [`ParamEvent`], but type erased. Use `ParamEvent` as an easier way to construct
+/// these if you are working with regular parameter objects.
 #[derive(Debug, Clone, Copy)]
 pub enum RawParamEvent {
     /// Begin an automation gesture for a parameter.
@@ -66,6 +67,43 @@ pub enum RawParamEvent {
     /// Sent by the wrapper to indicate that one or more parameter values have changed. Useful when
     /// using properties based on a parameter's value that are computed inside of an event handler.
     ParametersChanged,
+}
+
+/// Events that directly interact with the [`GuiContext`]. Used to trigger resizes.
+pub enum GuiContextEvent {
+    /// Resize the window to match the current size reported by the [`ViziaState`]'s size function.
+    /// By changing the plugin's state that is used to determine the window's size before emitting
+    /// this event, the window can be resized in a declarative and predictable way:
+    ///
+    /// ```
+    /// # use std::sync::Arc;
+    /// # use std::sync::atomic::{AtomicBool, Ordering};
+    /// # use nih_plug_vizia::ViziaState;
+    /// # use nih_plug_vizia::vizia::prelude::*;
+    /// # use nih_plug_vizia::widgets::GuiContextEvent;
+    /// // Assuming there is some kind of state variable passed to the editor, likely stored as a
+    /// // `#[persist]` field in the `Params` struct:
+    /// let window_state = Arc::new(AtomicBool::new(false));
+    ///
+    /// // And this is the `ViziaState` passed to `create_vizia_editor()`:
+    /// ViziaState::new(move || {
+    ///     if window_state.load(Ordering::Relaxed) {
+    ///         (800, 400)
+    ///     } else {
+    ///         (400, 400)
+    ///     }
+    /// });
+    ///
+    /// // Then the window's size can be toggled between the two sizes like so:
+    /// fn toggle_window_size(cx: &mut EventContext, window_state: Arc<AtomicBool>) {
+    ///     window_state.fetch_xor(true, Ordering::Relaxed);
+    ///
+    ///     // This will cause NIH-plug to query the size from the `ViziaState` again and resize the
+    ///     // windo to that size
+    ///     cx.emit(GuiContextEvent::Resize);
+    /// }
+    /// ```
+    Resize,
 }
 
 /// Handles parameter updates for VIZIA GUIs. Registered in
@@ -106,6 +144,17 @@ impl Model for ParamModel {
 
 impl Model for WindowModel {
     fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
+        event.map(|gui_context_event, meta| match gui_context_event {
+            GuiContextEvent::Resize => {
+                // This will trigger a `WindowEvent::GeometryChanged`, which in turn causes the
+                // handler below this to be fired
+                let (width, height) = self.vizia_state.inner_logical_size();
+                cx.set_window_size(WindowSize { width, height });
+
+                meta.consume();
+            }
+        });
+
         // This gets fired whenever the inner window gets resized
         event.map(|window_event, _| {
             if let WindowEvent::GeometryChanged { .. } = window_event {

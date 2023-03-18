@@ -10,6 +10,16 @@ Since there is no stable release yet, the changes are organized per day in
 reverse chronological order. The main purpose of this document in its current
 state is to list breaking changes.
 
+## [2023-03-18]
+
+### Added
+
+- `nih_plug_vizia`: Added a `GuiContextEvent::Resize` event. The plugin can emit
+  this to trigger a resize to its current size, as specified by its
+  `ViziaState`'s size callback. This can be used to declaratively resize a
+  plugin GUI and it removes some potential surface for making mistakes in the
+  process. See `GuiContextEvent::Resize`'s documentation for an example.
+
 ## [2023-03-17]
 
 ### Added
