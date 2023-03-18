@@ -38,9 +38,9 @@ const MAX_WINDOW_SIZE: usize = 1 << MAX_WINDOW_ORDER; // 32768
 const MIN_OVERLAP_ORDER: usize = 2;
 #[allow(dead_code)]
 const MIN_OVERLAP_TIMES: usize = 1 << MIN_OVERLAP_ORDER; // 4
-const DEFAULT_OVERLAP_ORDER: usize = 3;
+const DEFAULT_OVERLAP_ORDER: usize = 4;
 #[allow(dead_code)]
-const DEFAULT_OVERLAP_TIMES: usize = 1 << DEFAULT_OVERLAP_ORDER; // 4
+const DEFAULT_OVERLAP_TIMES: usize = 1 << DEFAULT_OVERLAP_ORDER; // 16
 const MAX_OVERLAP_ORDER: usize = 5;
 #[allow(dead_code)]
 const MAX_OVERLAP_TIMES: usize = 1 << MAX_OVERLAP_ORDER; // 32
