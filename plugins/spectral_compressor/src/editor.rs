@@ -55,6 +55,8 @@ pub enum EditorMode {
 #[derive(Lens)]
 struct Data {
     params: Arc<SpectralCompressorParams>,
+
+    editor_mode: Arc<AtomicCell<EditorMode>>,
 }
 
 impl Model for Data {}
@@ -77,6 +79,8 @@ pub(crate) fn create(
 
         Data {
             params: params.clone(),
+
+            editor_mode: params.editor_mode.clone(),
         }
         .build(cx);
 
@@ -91,29 +95,39 @@ pub(crate) fn create(
 fn main_column(cx: &mut Context) {
     VStack::new(cx, |cx| {
         HStack::new(cx, |cx| {
-            Label::new(cx, "Spectral Compressor")
-                .font_family(vec![FamilyOwned::Name(String::from(
-                    assets::NOTO_SANS_THIN,
-                ))])
-                .font_size(30.0)
-                .on_mouse_down(|_, _| {
-                    // Try to open the plugin's page when clicking on the title. If this fails
-                    // then that's not a problem
-                    let result = open::that(SpectralCompressor::URL);
-                    if cfg!(debug) && result.is_err() {
-                        nih_debug_assert_failure!("Failed to open web browser: {:?}", result);
-                    }
-                });
-            Label::new(cx, SpectralCompressor::VERSION)
-                .color(DARKER_GRAY)
-                .top(Stretch(1.0))
-                .bottom(Pixels(4.0))
+            EditorModeButton::new(cx, Data::editor_mode, "Show visualizer")
+                // Makes this align a bit nicer with the plugin name
+                .top(Pixels(2.0))
                 .left(Pixels(2.0));
+
+            HStack::new(cx, |cx| {
+                Label::new(cx, "Spectral Compressor")
+                    .font_family(vec![FamilyOwned::Name(String::from(
+                        assets::NOTO_SANS_THIN,
+                    ))])
+                    .font_size(30.0)
+                    .on_mouse_down(|_, _| {
+                        // Try to open the plugin's page when clicking on the title. If this fails
+                        // then that's not a problem
+                        let result = open::that(SpectralCompressor::URL);
+                        if cfg!(debug) && result.is_err() {
+                            nih_debug_assert_failure!("Failed to open web browser: {:?}", result);
+                        }
+                    });
+                Label::new(cx, SpectralCompressor::VERSION)
+                    .color(DARKER_GRAY)
+                    .top(Stretch(1.0))
+                    .bottom(Pixels(4.0))
+                    .left(Pixels(2.0));
+            });
         })
         .height(Pixels(30.0))
-        .right(Pixels(-22.0))
+        .right(Pixels(17.0))
         .bottom(Pixels(-5.0))
-        .top(Pixels(10.0));
+        .left(Pixels(10.0))
+        .top(Pixels(10.0))
+        // This contains the editor mode buttom all the way on the left, and the plugin's name all the way on the right
+        .col_between(Stretch(1.0));
 
         HStack::new(cx, |cx| {
             make_column(cx, "Globals", |cx| {
