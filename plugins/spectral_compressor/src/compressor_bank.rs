@@ -560,6 +560,22 @@ impl CompressorBank {
     ) {
         nih_debug_assert_eq!(buffer.len(), self.log2_freqs.len());
 
+        // The gain reduction amounts are accumulated in `self.analyzer_input_data`. When processing
+        // the last channel, this data is divided by the channel count, the envelope follower data
+        // is added, and the data is then sent to the editor so it can be displayed.
+        // `analyzer_input_data` contains excess capacity so it can handle any supported window
+        // size, so all operations on it are limited to the actual number of used bins.
+        let num_bins = buffer.len();
+        let num_channels = self.sidechain_spectrum_magnitudes.len();
+        let should_update_analyzer_data = params.editor_state.is_open();
+        if should_update_analyzer_data && channel_idx == 0 {
+            // NOTE: This may briefly show a huge amount of accumulated data when the editor has
+            //       just been opened. If this doesn't look too obvious or too jarring this is
+            //       probably worth letting it be like this.
+            let analyzer_input_data = self.analyzer_input_data.input_buffer();
+            analyzer_input_data.gain_reduction_db[..num_bins].fill(0.0);
+        }
+
         self.update_if_needed(params);
         match params.threshold.mode.value() {
             ThresholdMode::Internal => {
@@ -578,6 +594,44 @@ impl CompressorBank {
                 self.compress(buffer, channel_idx, params, first_non_dc_bin)
             }
         };
+
+        // When processing the last channel we can finalize the spectrum analyzer data and send it
+        // to the editor for display
+        if should_update_analyzer_data && channel_idx == num_channels - 1 {
+            let analyzer_input_data = self.analyzer_input_data.input_buffer();
+
+            // The gain reduction data needs to be averaged, see above
+            let channel_multiplier = (num_channels as f32).recip();
+            for gain_reduction_db in &mut analyzer_input_data.gain_reduction_db[..num_bins] {
+                *gain_reduction_db *= channel_multiplier;
+            }
+
+            // The spectrum analyzer data has not yet been added
+            assert!(self.envelopes.len() == num_channels);
+            assert!(self.envelopes[0].len() >= num_bins);
+            for (bin_idx, spectrum_data) in analyzer_input_data.spectrum[..num_bins]
+                .iter_mut()
+                .enumerate()
+            {
+                *spectrum_data = 0.0;
+                for channel_idx in 0..num_channels {
+                    // SAFETY: These bounds are already checked
+                    *spectrum_data += unsafe {
+                        self.envelopes
+                            .get_unchecked(channel_idx)
+                            .get_unchecked(bin_idx)
+                    };
+                }
+
+                *spectrum_data *= channel_multiplier;
+            }
+
+            // After filling the object with data it can be sent to the editor. This happens
+            // automatically when using the `.write()` interface, but since `AnalyzerData` contains
+            // a lot of padding and we only use the first `num_bins` of the arrays that would be a
+            // bit wasteful.
+            self.analyzer_input_data.publish();
+        }
     }
 
     /// Set the sidechain frequency spectrum magnitudes just before a [`process()`][Self::process()]
@@ -714,15 +768,20 @@ impl CompressorBank {
     /// Panics if the buffer does not have the same length as the one that was passed to the last
     /// `resize()` call.
     fn compress(
-        &self,
+        &mut self,
         buffer: &mut [Complex32],
         channel_idx: usize,
         params: &SpectralCompressorParams,
         first_non_dc_bin: usize,
     ) {
+        // The gain reduction values are always added to the arrays stored in this object. This
+        // makes it possible to visualize the gain reduction without a lot of conditionals.
+        let analyzer_input_data = self.analyzer_input_data.input_buffer();
+
         let downwards_knee_width_db = params.compressors.downwards.knee_width_db.value();
         let upwards_knee_width_db = params.compressors.upwards.knee_width_db.value();
 
+        assert!(analyzer_input_data.gain_reduction_db.len() >= buffer.len());
         assert!(self.downwards_thresholds_db.len() == buffer.len());
         assert!(self.downwards_ratios.len() == buffer.len());
         assert!(self.downwards_knee_parabola_scale.len() == buffer.len());
@@ -787,9 +846,14 @@ impl CompressorBank {
 
             // If the comprssed output is -10 dBFS and the envelope follower was at -6 dBFS, then we
             // want to apply -4 dB of gain to the bin
-            *bin *= util::db_to_gain_fast(
-                downwards_compressed + upwards_compressed - (envelope_db * 2.0),
-            );
+            let gain_reduction_db = downwards_compressed + upwards_compressed - (envelope_db * 2.0);
+            unsafe {
+                *analyzer_input_data
+                    .gain_reduction_db
+                    .get_unchecked_mut(bin_idx) += gain_reduction_db;
+            }
+
+            *bin *= util::db_to_gain_fast(gain_reduction_db);
         }
     }
 
@@ -801,12 +865,15 @@ impl CompressorBank {
     /// Panics if the buffer does not have the same length as the one that was passed to the last
     /// `resize()` call.
     fn compress_sidechain_match(
-        &self,
+        &mut self,
         buffer: &mut [Complex32],
         channel_idx: usize,
         params: &SpectralCompressorParams,
         first_non_dc_bin: usize,
     ) {
+        // See `compress()`
+        let analyzer_input_data = self.analyzer_input_data.input_buffer();
+
         let downwards_knee_width_db = params.compressors.downwards.knee_width_db.value();
         let upwards_knee_width_db = params.compressors.upwards.knee_width_db.value();
 
@@ -815,6 +882,7 @@ impl CompressorBank {
         let other_channels_t = params.threshold.sc_channel_link.value() / num_channels;
         let this_channel_t = 1.0 - (other_channels_t * (num_channels - 1.0));
 
+        assert!(analyzer_input_data.gain_reduction_db.len() >= buffer.len());
         assert!(self.sidechain_spectrum_magnitudes[channel_idx].len() == buffer.len());
         assert!(self.downwards_thresholds_db.len() == buffer.len());
         assert!(self.downwards_ratios.len() == buffer.len());
@@ -893,9 +961,16 @@ impl CompressorBank {
                 envelope_db
             };
 
-            *bin *= util::db_to_gain_fast(
-                downwards_compressed + upwards_compressed - (envelope_db * 2.0),
-            );
+            // If the comprssed output is -10 dBFS and the envelope follower was at -6 dBFS, then we
+            // want to apply -4 dB of gain to the bin
+            let gain_reduction_db = downwards_compressed + upwards_compressed - (envelope_db * 2.0);
+            unsafe {
+                *analyzer_input_data
+                    .gain_reduction_db
+                    .get_unchecked_mut(bin_idx) += gain_reduction_db;
+            }
+
+            *bin *= util::db_to_gain_fast(gain_reduction_db);
         }
     }
 
