@@ -19,6 +19,7 @@ use realfft::num_complex::Complex32;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+use crate::analyzer::AnalyzerData;
 use crate::SpectralCompressorParams;
 
 // These are the parameter name prefixes used for the downwards and upwards compression parameters.
@@ -97,6 +98,11 @@ pub struct CompressorBank {
     /// The sample rate this compressor bank was configured for. This is used to compute the
     /// coefficients for the envelope followers in the process function.
     sample_rate: f32,
+
+    /// The input data for the spectrum analyzer. Stores both the spectrum analyzer values and the
+    /// current gain reduction. Used to draw the spectrum analyzer and gain reduction display in the
+    /// editor.
+    analyzer_input_data: triple_buffer::Input<AnalyzerData>,
 }
 
 #[derive(Params)]
@@ -393,7 +399,11 @@ impl CompressorParams {
 impl CompressorBank {
     /// Set up the compressor for the given channel count and maximum FFT window size. The
     /// compressors won't be initialized yet.
-    pub fn new(num_channels: usize, max_window_size: usize) -> Self {
+    pub fn new(
+        analyzer_input_data: triple_buffer::Input<AnalyzerData>,
+        num_channels: usize,
+        max_window_size: usize,
+    ) -> Self {
         let complex_buffer_len = max_window_size / 2 + 1;
 
         CompressorBank {
@@ -423,6 +433,8 @@ impl CompressorBank {
             ],
             window_size: 0,
             sample_rate: 1.0,
+
+            analyzer_input_data,
         }
     }
 

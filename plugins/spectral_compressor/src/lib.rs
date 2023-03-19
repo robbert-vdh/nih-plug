@@ -14,13 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use analyzer::AnalyzerData;
 use crossbeam::atomic::AtomicCell;
 use editor::EditorMode;
 use nih_plug::prelude::*;
 use nih_plug_vizia::ViziaState;
 use realfft::num_complex::Complex32;
 use realfft::{ComplexToReal, RealFftPlanner, RealToComplex};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use triple_buffer::TripleBuffer;
 
 mod analyzer;
 mod compressor_bank;
@@ -69,6 +71,10 @@ pub struct SpectralCompressor {
     plan_for_order: Option<[Plan; MAX_WINDOW_ORDER - MIN_WINDOW_ORDER + 1]>,
     /// The output of our real->complex FFT.
     complex_fft_buffer: Vec<Complex32>,
+
+    /// The output for the analyzer data computed in `CompressorBank` while the editor is open. This
+    /// can be cloned and moved into the editor.
+    analyzer_output_data: Arc<Mutex<triple_buffer::Output<AnalyzerData>>>,
 }
 
 /// An FFT plan for a specific window size, all of which will be precomputed during initilaization.
@@ -141,9 +147,15 @@ pub struct GlobalParams {
 
 impl Default for SpectralCompressor {
     fn default() -> Self {
+        // The spectrum analyzer and gain reduction data is computed directly in the spectral
+        // compression routine in `compressor_bank`. `analyzer_output_data` can then be used in the
+        // editor to draw the data.
+        let (analyzer_input_data, analyzer_output_data) = TripleBuffer::default().split();
+
         // Changing any of the compressor threshold or ratio parameters will set an atomic flag in
         // this object that causes the compressor thresholds and ratios to be recalcualted
-        let compressor_bank = compressor_bank::CompressorBank::new(2, MAX_WINDOW_SIZE);
+        let compressor_bank =
+            compressor_bank::CompressorBank::new(analyzer_input_data, 2, MAX_WINDOW_SIZE);
 
         SpectralCompressor {
             params: Arc::new(SpectralCompressorParams::new(&compressor_bank)),
@@ -165,6 +177,8 @@ impl Default for SpectralCompressor {
             // the plugin is initialized
             plan_for_order: None,
             complex_fft_buffer: Vec::with_capacity(MAX_WINDOW_SIZE / 2 + 1),
+
+            analyzer_output_data: Arc::new(Mutex::new(analyzer_output_data)),
         }
     }
 }

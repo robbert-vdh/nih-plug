@@ -19,3 +19,4 @@ realfft = "3.0"
 crossbeam = "0.8"
 open = "3.0"
 serde = { version = "1.0", features = ["derive"] }
+triple_buffer = "6.2"

@@ -30,8 +30,8 @@ const SPECTRUM_WINDOW_OVERLAP: usize = 2;
 /// peak meter.
 const SMOOTHING_DECAY_MS: f32 = 100.0;
 
-/// The amplitudes of all frequency bins in a windowed FFT of the input. Also includes the DC offset
-/// bin which we don't draw, just to make this a bit less confusing.
+/// The amplitudes of all frequency bins in a windowed FFT of Diopser's output. Also includes the DC
+/// offset bin which we don't draw, just to make this a bit less confusing.
 pub type Spectrum = [f32; SPECTRUM_WINDOW_SIZE / 2 + 1];
 /// A receiver for a spectrum computed by [`SpectrumInput`].
 pub type SpectrumOutput = triple_buffer::Output<Spectrum>;
