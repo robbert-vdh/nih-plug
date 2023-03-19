@@ -12,6 +12,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - The default window overlap amount setting has changed to 16x. Existing patches
   are not affected.
+- On Windows, clicking on the plugin's name no longer takes you to Spectral
+  Compressor's home page. This is a temporary workaround for an issue with an
+  underlying library.
 
 ## [0.3.0] - 2023-01-15
 
