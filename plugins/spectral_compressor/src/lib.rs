@@ -22,6 +22,7 @@ use realfft::num_complex::Complex32;
 use realfft::{ComplexToReal, RealFftPlanner, RealToComplex};
 use std::sync::Arc;
 
+mod analyzer;
 mod compressor_bank;
 mod dry_wet_mixer;
 mod editor;
