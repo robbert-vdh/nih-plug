@@ -39,7 +39,7 @@ const COLUMN_WIDTH: Units = Pixels(330.0);
 
 const DARKER_GRAY: Color = Color::rgb(0x69, 0x69, 0x69);
 
-/// The editor's mode. Essentially just a boolean to indicate whether the visualizer is shown or
+/// The editor's mode. Essentially just a boolean to indicate whether the analyzer is shown or
 /// not.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EditorMode {
@@ -48,8 +48,8 @@ pub enum EditorMode {
     #[serde(rename = "collapsed")]
     Collapsed,
     #[default]
-    #[serde(rename = "visualizer-visible")]
-    VisualizerVisible,
+    #[serde(rename = "analyzer-visible")]
+    AnalyzerVisible,
 }
 
 #[derive(Lens)]
@@ -65,7 +65,7 @@ impl Model for Data {}
 pub(crate) fn default_state(editor_mode: Arc<AtomicCell<EditorMode>>) -> Arc<ViziaState> {
     ViziaState::new(move || match editor_mode.load() {
         EditorMode::Collapsed => (COLLAPSED_GUI_WIDTH, GUI_HEIGHT),
-        EditorMode::VisualizerVisible => (EXPANDED_GUI_WIDTH, GUI_HEIGHT),
+        EditorMode::AnalyzerVisible => (EXPANDED_GUI_WIDTH, GUI_HEIGHT),
     })
 }
 
@@ -89,11 +89,11 @@ pub(crate) fn create(
         HStack::new(cx, |cx| {
             main_column(cx);
 
-            let visualizer_visible = Data::editor_mode
-                .map(|editor_mode| editor_mode.load() == EditorMode::VisualizerVisible);
-            Binding::new(cx, visualizer_visible, |cx, visualizer_visible| {
-                if visualizer_visible.get(cx) {
-                    visualizer_column(cx);
+            let analyzer_visible = Data::editor_mode
+                .map(|editor_mode| editor_mode.load() == EditorMode::AnalyzerVisible);
+            Binding::new(cx, analyzer_visible, |cx, analyzer_visible| {
+                if analyzer_visible.get(cx) {
+                    analyzer_column(cx);
                 }
             });
         });
@@ -103,7 +103,7 @@ pub(crate) fn create(
 fn main_column(cx: &mut Context) {
     VStack::new(cx, |cx| {
         HStack::new(cx, |cx| {
-            EditorModeButton::new(cx, Data::editor_mode, "Show visualizer")
+            EditorModeButton::new(cx, Data::editor_mode, "Show analyzer")
                 // Makes this align a bit nicer with the plugin name
                 .top(Pixels(2.0))
                 .left(Pixels(2.0));
@@ -229,11 +229,11 @@ fn main_column(cx: &mut Context) {
     .child_right(Stretch(1.0));
 }
 
-fn visualizer_column(cx: &mut Context) {
+fn analyzer_column(cx: &mut Context) {
     HStack::new(cx, |cx| {
         Label::new(cx, "When I grow up I want to be a spectrum analyzer!");
     })
-    // These arbitrary 12 pixels are to align with the visualizer toggle botton
+    // These arbitrary 12 pixels are to align with the analyzer toggle botton
     .space(Pixels(12.0))
     .bottom(Pixels(12.0))
     .left(Pixels(2.0))

@@ -38,7 +38,7 @@ impl EditorModeButton {
             .build(cx, move |cx| {
                 Label::new(cx, label).hoverable(false);
             })
-            .checked(lens.map(|v| v.load() == EditorMode::VisualizerVisible))
+            .checked(lens.map(|v| v.load() == EditorMode::AnalyzerVisible))
             // We'll pretend this is a param-button, so this class is used for assigning a unique
             // color
             .class("editor-mode")
@@ -58,8 +58,8 @@ impl View for EditorModeButton {
             | WindowEvent::MouseTripleClick(MouseButton::Left) => {
                 let current_mode = self.mode.load();
                 let new_mode = match current_mode {
-                    EditorMode::Collapsed => EditorMode::VisualizerVisible,
-                    EditorMode::VisualizerVisible => EditorMode::Collapsed,
+                    EditorMode::Collapsed => EditorMode::AnalyzerVisible,
+                    EditorMode::AnalyzerVisible => EditorMode::Collapsed,
                 };
                 self.mode.store(new_mode);
 
