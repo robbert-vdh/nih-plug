@@ -36,7 +36,7 @@ const EXPANDED_GUI_WIDTH: u32 = 1360;
 /// The width of the GUI's main part containing the controls.
 const COLLAPSED_GUI_WIDTH: u32 = 680;
 /// The entire GUI's height, in logical pixels.
-const GUI_HEIGHT: u32 = 535;
+const GUI_HEIGHT: u32 = 530;
 // I couldn't get `LayoutType::Grid` to work as expected, so we'll fake a 4x4 grid with
 // hardcoded column widths
 const COLUMN_WIDTH: Units = Pixels(330.0);
