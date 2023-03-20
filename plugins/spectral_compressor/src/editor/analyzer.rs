@@ -106,7 +106,7 @@ impl View for Analyzer {
 }
 
 /// Draw the spectrum analyzer part of the analyzer. These are drawn as vertical bars until the
-/// spacing between the bars becomes less than 1 pixel, at which point it's drawn as a solid mesh
+/// spacing between the bars becomes less the line width, at which point it's drawn as a solid mesh
 /// instead.
 fn draw_spectrum(
     cx: &mut DrawContext,
@@ -118,34 +118,116 @@ fn draw_spectrum(
 
     let line_width = cx.style.dpi_factor as f32 * 1.5;
     let text_color: vg::Color = cx.font_color().cloned().unwrap_or_default().into();
+    // This is used to draw the individual bars
     let spectrum_paint = vg::Paint::color(text_color).with_line_width(line_width);
+    // And this color is used to draw the mesh part of the spectrum. We'll create a gradient paint
+    // that fades from this to `text_color` when we know the mesh's x-coordinates.
+    let mut lighter_text_color = text_color;
+    lighter_text_color.r = (lighter_text_color.r + 0.25) / 1.25;
+    lighter_text_color.g = (lighter_text_color.g + 0.25) / 1.25;
+    lighter_text_color.b = (lighter_text_color.b + 0.25) / 1.25;
 
+    // The frequency belonging to a bin in Hz
     let bin_frequency = |bin_idx: f32| (bin_idx / analyzer_data.num_bins as f32) * nyquist_hz;
+    // A `[0, 1]` value indicating at which relative x-coordinate a bin should be drawn at
+    let bin_t = |bin_idx: f32| (bin_frequency(bin_idx).ln() - LN_40_HZ) / LN_FREQ_RANGE;
+    // Converts a linear magnitude value in to a `[0, 1]` value where 0 is -80 dB or lower, and 1 is
+    // +20 dB or higher.
+    let magnitude_height = |magnitude: f32| {
+        nih_debug_assert!(magnitude >= 0.0);
+        let magnitude_db = nih_plug::util::gain_to_db(magnitude);
+        ((magnitude_db + 80.0) / 100.0).clamp(0.0, 1.0)
+    };
 
-    // TODO: Draw individual bars until the difference between the next two bars becomes less
-    //       than one pixel. At that point draw it as a single mesh to get rid of aliasing.
-    for (bin_idx, magnetude) in analyzer_data.envelope_followers.iter().enumerate() {
-        let ln_frequency = bin_frequency(bin_idx as f32).ln();
-        let t = (ln_frequency - LN_40_HZ) / LN_FREQ_RANGE;
+    // The first part of this drawing routing is simple. Individual bins are drawn as bars until the
+    // distance between the bars approaches `mesh_start_delta_threshold`. After that the rest is
+    // drawn as a solid mesh.
+    let mesh_start_delta_threshold = line_width + 0.5;
+    let mut mesh_bin_start_idx = analyzer_data.num_bins;
+    let mut previous_physical_x_coord = bounds.x - 2.0;
+    for (bin_idx, magnitude) in analyzer_data
+        .envelope_followers
+        .iter()
+        .enumerate()
+        .take(analyzer_data.num_bins)
+    {
+        let t = bin_t(bin_idx as f32);
         if t <= 0.0 || t >= 1.0 {
             continue;
         }
 
-        // Scale this so that 1.0/0 dBFS magnetude is at 80% of the height, the bars begin
+        let physical_x_coord = bounds.x + (bounds.w * t);
+        if physical_x_coord - previous_physical_x_coord < mesh_start_delta_threshold {
+            // NOTE: We'll draw this one bar earlier because we're not stroking the solid mesh part,
+            //       and otherwise there would be a weird looking gap at the left side
+            mesh_bin_start_idx = bin_idx.saturating_sub(1);
+            previous_physical_x_coord = physical_x_coord;
+            break;
+        }
+
+        // Scale this so that 1.0/0 dBFS magnitude is at 80% of the height, the bars begin
         // at -80 dBFS, and that the scaling is linear. This is the same scaling used in
         // Diopser's spectrum analyzer.
-        nih_debug_assert!(*magnetude >= 0.0);
-        let magnetude_db = nih_plug::util::gain_to_db(*magnetude);
-        let height = ((magnetude_db + 80.0) / 100.0).clamp(0.0, 1.0);
+        let height = magnitude_height(*magnitude);
 
         let mut path = vg::Path::new();
-        path.move_to(
-            bounds.x + (bounds.w * t),
-            bounds.y + (bounds.h * (1.0 - height)),
-        );
-        path.line_to(bounds.x + (bounds.w * t), bounds.y + bounds.h);
+        path.move_to(physical_x_coord, bounds.y + (bounds.h * (1.0 - height)));
+        path.line_to(physical_x_coord, bounds.y + bounds.h);
         canvas.stroke_path(&mut path, &spectrum_paint);
+
+        previous_physical_x_coord = physical_x_coord;
     }
+
+    // The mesh path starts at the bottom left, follows the top envelope of the spectrum analyzer,
+    // and ends in the bottom right
+    let mut mesh_path = vg::Path::new();
+    let mesh_start_x_coordiante = bounds.x + (bounds.w * bin_t(mesh_bin_start_idx as f32));
+    let mesh_start_y_coordinate = bounds.y + bounds.h;
+
+    mesh_path.move_to(mesh_start_x_coordiante, mesh_start_y_coordinate);
+    for (bin_idx, magnitude) in analyzer_data
+        .envelope_followers
+        .iter()
+        .enumerate()
+        .take(analyzer_data.num_bins)
+        .skip(mesh_bin_start_idx)
+    {
+        let t = bin_t(bin_idx as f32);
+        if t <= 0.0 || t >= 1.0 {
+            continue;
+        }
+
+        let physical_x_coord = bounds.x + (bounds.w * t);
+        previous_physical_x_coord = physical_x_coord;
+        let height = magnitude_height(*magnitude);
+        if height > 0.0 {
+            mesh_path.line_to(
+                physical_x_coord,
+                // This includes the line width, since this path is not stroked
+                bounds.y + (bounds.h * (1.0 - height) - (line_width / 2.0)).max(0.0),
+            );
+        } else {
+            mesh_path.line_to(physical_x_coord, mesh_start_y_coordinate);
+        }
+    }
+
+    mesh_path.line_to(previous_physical_x_coord, mesh_start_y_coordinate);
+    mesh_path.close();
+
+    let mesh_paint = vg::Paint::linear_gradient_stops(
+        mesh_start_x_coordiante,
+        0.0,
+        previous_physical_x_coord,
+        0.0,
+        &[
+            (0.0, lighter_text_color),
+            (0.707, text_color),
+            (1.0, text_color),
+        ],
+    )
+    // NOTE:  This is very important, otherwise this looks all kinds of gnarly
+    .with_anti_alias(false);
+    canvas.fill_path(&mut mesh_path, &mesh_paint);
 }
 
 /// Overlays the gain reduction display over the spectrum analyzer.
@@ -164,7 +246,12 @@ fn draw_gain_reduction(
     let bin_frequency = |bin_idx: f32| (bin_idx / analyzer_data.num_bins as f32) * nyquist_hz;
 
     // TODO: This should be drawn as one mesh, or multiple meshes if there are empty gain reduction bars
-    for (bin_idx, gain_difference_db) in analyzer_data.gain_difference_db.iter().enumerate() {
+    for (bin_idx, gain_difference_db) in analyzer_data
+        .gain_difference_db
+        .iter()
+        .enumerate()
+        .take(analyzer_data.num_bins)
+    {
         // TODO: Draw this as a single mesh instead, this doesn't work.
         // Avoid drawing tiny slivers for low gain reduction values
         if gain_difference_db.abs() > 0.2 {

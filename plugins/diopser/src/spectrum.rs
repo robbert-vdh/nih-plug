@@ -131,12 +131,12 @@ impl SpectrumInput {
                     .iter()
                     .zip(&mut self.spectrum_result_buffer)
                 {
-                    let magnetude = bin.norm();
-                    if magnetude > *spectrum_result {
-                        *spectrum_result = magnetude;
+                    let magnitude = bin.norm();
+                    if magnitude > *spectrum_result {
+                        *spectrum_result = magnitude;
                     } else {
                         *spectrum_result = (*spectrum_result * self.smoothing_decay_weight)
-                            + (magnetude * (1.0 - self.smoothing_decay_weight));
+                            + (magnitude * (1.0 - self.smoothing_decay_weight));
                     }
                 }
 

@@ -90,7 +90,7 @@ impl View for SpectrumAnalyzer {
         let line_width = cx.style.dpi_factor as f32 * 1.5;
         let paint = vg::Paint::color(cx.font_color().cloned().unwrap_or_default().into())
             .with_line_width(line_width);
-        for (bin_idx, magnetude) in spectrum.iter().enumerate() {
+        for (bin_idx, magnitude) in spectrum.iter().enumerate() {
             // We'll match up the bin's x-coordinate with the filter frequency parameter
             let frequency = (bin_idx as f32 / spectrum.len() as f32) * nyquist;
             // NOTE: This takes the safe-mode switch into acocunt. When it is enabled, the range is
@@ -100,11 +100,11 @@ impl View for SpectrumAnalyzer {
                 continue;
             }
 
-            // Scale this so that 1.0/0 dBFS magnetude is at 80% of the height, the bars begin at
+            // Scale this so that 1.0/0 dBFS magnitude is at 80% of the height, the bars begin at
             // -80 dBFS, and that the scaling is linear
-            nih_debug_assert!(*magnetude >= 0.0);
-            let magnetude_db = nih_plug::util::gain_to_db(*magnetude);
-            let height = ((magnetude_db + 80.0) / 100.0).clamp(0.0, 1.0);
+            nih_debug_assert!(*magnitude >= 0.0);
+            let magnitude_db = nih_plug::util::gain_to_db(*magnitude);
+            let height = ((magnitude_db + 80.0) / 100.0).clamp(0.0, 1.0);
 
             let mut path = vg::Path::new();
             path.move_to(

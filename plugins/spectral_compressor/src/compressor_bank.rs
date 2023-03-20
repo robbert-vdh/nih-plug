@@ -646,7 +646,7 @@ impl CompressorBank {
         self.update_sidechain_spectra(sc_buffer, channel_idx);
     }
 
-    /// Update the envelope followers based on the bin magnetudes.
+    /// Update the envelope followers based on the bin magnitudes.
     fn update_envelopes(
         &mut self,
         buffer: &mut [Complex32],
