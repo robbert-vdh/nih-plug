@@ -39,10 +39,6 @@ const NUM_CHANNELS: u32 = 2;
 /// The maximum number of samples to iterate over at a time.
 const MAX_BLOCK_SIZE: usize = 64;
 
-// All features from the original Diopser have been implemented (and the spread control has been
-// improved). Other features I want to implement are:
-// - Briefly muting the output when changing the number of filters to get rid of the clicks
-// - A proper GUI
 pub struct Diopser {
     params: Arc<DiopserParams>,
 
