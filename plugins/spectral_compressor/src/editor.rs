@@ -14,15 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use atomic_float::AtomicF32;
 use crossbeam::atomic::AtomicCell;
 use nih_plug::prelude::*;
 use nih_plug_vizia::vizia::prelude::*;
 use nih_plug_vizia::widgets::*;
 use nih_plug_vizia::{assets, create_vizia_editor, ViziaState, ViziaTheming};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use self::mode_button::EditorModeButton;
+use crate::analyzer::AnalyzerData;
 use crate::{SpectralCompressor, SpectralCompressorParams};
 
 mod mode_button;
@@ -52,11 +54,16 @@ pub enum EditorMode {
     AnalyzerVisible,
 }
 
-#[derive(Lens)]
-struct Data {
-    params: Arc<SpectralCompressorParams>,
+#[derive(Clone, Lens)]
+pub struct Data {
+    pub(crate) params: Arc<SpectralCompressorParams>,
 
-    editor_mode: Arc<AtomicCell<EditorMode>>,
+    /// Determines which parts of the GUI are visible, and in turn decides the GUI's size.
+    pub(crate) editor_mode: Arc<AtomicCell<EditorMode>>,
+
+    pub(crate) analyzer_data: Arc<Mutex<triple_buffer::Output<AnalyzerData>>>,
+    /// Used by the analyzer to determine which FFT bins belong to which frequencies.
+    pub(crate) sample_rate: Arc<AtomicF32>,
 }
 
 impl Model for Data {}
@@ -69,20 +76,12 @@ pub(crate) fn default_state(editor_mode: Arc<AtomicCell<EditorMode>>) -> Arc<Viz
     })
 }
 
-pub(crate) fn create(
-    params: Arc<SpectralCompressorParams>,
-    editor_state: Arc<ViziaState>,
-) -> Option<Box<dyn Editor>> {
+pub(crate) fn create(editor_state: Arc<ViziaState>, editor_data: Data) -> Option<Box<dyn Editor>> {
     create_vizia_editor(editor_state, ViziaTheming::Custom, move |cx, _| {
         assets::register_noto_sans_light(cx);
         assets::register_noto_sans_thin(cx);
 
-        Data {
-            params: params.clone(),
-
-            editor_mode: params.editor_mode.clone(),
-        }
-        .build(cx);
+        editor_data.clone().build(cx);
 
         ResizeHandle::new(cx);
 

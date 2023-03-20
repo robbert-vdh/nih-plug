@@ -15,12 +15,14 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use analyzer::AnalyzerData;
+use atomic_float::AtomicF32;
 use crossbeam::atomic::AtomicCell;
 use editor::EditorMode;
 use nih_plug::prelude::*;
 use nih_plug_vizia::ViziaState;
 use realfft::num_complex::Complex32;
 use realfft::{ComplexToReal, RealFftPlanner, RealToComplex};
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use triple_buffer::TripleBuffer;
 
@@ -54,6 +56,9 @@ pub struct SpectralCompressor {
 
     /// The current buffer config, used for updating the compressors.
     buffer_config: BufferConfig,
+    /// The current sample rate. Stores the same information as in `BufferConfig`, but this can be
+    /// shared with the editor where it's used to compute frequencies for the spectrum analyzer.
+    sample_rate: Arc<AtomicF32>,
 
     /// An adapter that performs most of the overlap-add algorithm for us.
     stft: util::StftHelper<1>,
@@ -166,6 +171,7 @@ impl Default for SpectralCompressor {
                 max_buffer_size: 0,
                 process_mode: ProcessMode::Realtime,
             },
+            sample_rate: Arc::new(AtomicF32::new(1.0)),
 
             // These three will be set to the correct values in the initialize function
             stft: util::StftHelper::new(2, MAX_WINDOW_SIZE, 0),
@@ -311,7 +317,17 @@ impl Plugin for SpectralCompressor {
     }
 
     fn editor(&self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
-        editor::create(self.params.clone(), self.params.editor_state.clone())
+        editor::create(
+            self.params.editor_state.clone(),
+            editor::Data {
+                params: self.params.clone(),
+
+                editor_mode: self.params.editor_mode.clone(),
+
+                analyzer_data: self.analyzer_output_data.clone(),
+                sample_rate: self.sample_rate.clone(),
+            },
+        )
     }
 
     fn initialize(
@@ -322,6 +338,10 @@ impl Plugin for SpectralCompressor {
     ) -> bool {
         // Needed to update the compressors later
         self.buffer_config = *buffer_config;
+
+        // And this is used in the editor to draw the analyzer
+        self.sample_rate
+            .store(buffer_config.sample_rate, Ordering::Relaxed);
 
         // This plugin can accept a variable number of audio channels, so we need to resize
         // channel-dependent data structures accordingly

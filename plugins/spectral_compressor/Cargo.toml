@@ -16,6 +16,7 @@ nih_plug_vizia = { path = "../../nih_plug_vizia" }
 realfft = "3.0"
 
 # For the GUI
+atomic_float = "0.1"
 crossbeam = "0.8"
 open = "3.0"
 serde = { version = "1.0", features = ["derive"] }
