@@ -23,10 +23,12 @@ use nih_plug_vizia::{assets, create_vizia_editor, ViziaState, ViziaTheming};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 
+use self::analyzer::Analyzer;
 use self::mode_button::EditorModeButton;
 use crate::analyzer::AnalyzerData;
 use crate::{SpectralCompressor, SpectralCompressorParams};
 
+mod analyzer;
 mod mode_button;
 
 /// The entire GUI's width, in logical pixels.
@@ -80,6 +82,8 @@ pub(crate) fn create(editor_state: Arc<ViziaState>, editor_data: Data) -> Option
     create_vizia_editor(editor_state, ViziaTheming::Custom, move |cx, _| {
         assets::register_noto_sans_light(cx);
         assets::register_noto_sans_thin(cx);
+
+        cx.add_theme(include_str!("editor/theme.css"));
 
         editor_data.clone().build(cx);
 
@@ -229,17 +233,12 @@ fn main_column(cx: &mut Context) {
 }
 
 fn analyzer_column(cx: &mut Context) {
-    HStack::new(cx, |cx| {
-        Label::new(cx, "When I grow up I want to be a spectrum analyzer!");
-    })
-    // These arbitrary 12 pixels are to align with the analyzer toggle botton
-    .space(Pixels(12.0))
-    .bottom(Pixels(12.0))
-    .left(Pixels(2.0))
-    .top(Pixels(12.0))
-    .child_space(Stretch(1.0))
-    .border_width(Pixels(1.0))
-    .border_color(Color::black());
+    Analyzer::new(cx, Data::analyzer_data, Data::sample_rate)
+        // These arbitrary 12 pixels are to align with the analyzer toggle botton
+        .space(Pixels(12.0))
+        .bottom(Pixels(12.0))
+        .left(Pixels(2.0))
+        .top(Pixels(12.0));
 }
 
 fn make_column(cx: &mut Context, title: &str, contents: impl FnOnce(&mut Context)) {

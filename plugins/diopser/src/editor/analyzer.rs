@@ -26,7 +26,7 @@ use crate::params;
 use crate::spectrum::SpectrumOutput;
 
 /// A very abstract spectrum analyzer. This draws the magnitude spectrum's bins as vertical lines
-/// with the same distirubtion as the filter frequency parameter..
+/// with the same distribution as the filter frequency parameter..
 pub struct SpectrumAnalyzer {
     spectrum: Arc<Mutex<SpectrumOutput>>,
     sample_rate: Arc<AtomicF32>,
