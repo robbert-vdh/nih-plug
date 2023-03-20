@@ -25,12 +25,15 @@
 /// current window size is 2048, then only the first `2048 / 2 + 1` elements in the arrays are used.
 #[derive(Debug)]
 pub struct AnalyzerData {
+    /// The number of used bins. This is part of the `AnalyzerData` since recomputing it in the
+    /// editor could result in a race condition.
+    pub num_bins: usize,
     /// The amplitudes of all frequency bins in a windowed FFT of Spectral Compressor's output. Also
     /// includes the DC offset bin which we don't draw, just to make this a bit less confusing.
     ///
     /// This data is taken directly from the envelope followers, so it has the same rise and fall
     /// time as what is used by the compressors.
-    pub spectrum: [f32; crate::MAX_WINDOW_SIZE / 2 + 1],
+    pub envelope_followers: [f32; crate::MAX_WINDOW_SIZE / 2 + 1],
     /// The gain reduction applied to each band, in decibels. Positive values mean that a band
     /// becomes louder, and negative values mean a band got attenuated. Does not (and should not)
     /// factor in the output gain.
@@ -43,7 +46,8 @@ pub struct AnalyzerData {
 impl Default for AnalyzerData {
     fn default() -> Self {
         Self {
-            spectrum: [0.0; crate::MAX_WINDOW_SIZE / 2 + 1],
+            num_bins: 0,
+            envelope_followers: [0.0; crate::MAX_WINDOW_SIZE / 2 + 1],
             gain_reduction_db: [0.0; crate::MAX_WINDOW_SIZE / 2 + 1],
         }
     }

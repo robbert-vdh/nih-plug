@@ -15,13 +15,16 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use atomic_float::AtomicF32;
+use nih_plug::nih_debug_assert;
 use nih_plug_vizia::vizia::prelude::*;
 use nih_plug_vizia::vizia::vg;
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 
 use crate::analyzer::AnalyzerData;
 
-/// A very spectrum analyzer with an overlay for the gain reduction.
+/// A very analyzer showing the envelope followers as a magnitude spectrum with an overlay for the
+/// gain reduction.
 pub struct Analyzer {
     analyzer_data: Arc<Mutex<triple_buffer::Output<AnalyzerData>>>,
     sample_rate: Arc<AtomicF32>,
@@ -57,12 +60,12 @@ impl View for Analyzer {
 
     fn draw(&self, cx: &mut DrawContext, canvas: &mut Canvas) {
         let bounds = cx.bounds();
-        dbg!(bounds);
         if bounds.w == 0.0 || bounds.h == 0.0 {
             return;
         }
 
-        // This only covers the style rules we're actually setting
+        // This only covers the style rules we're actually setting. Right now this doesn't support
+        // backgrounds.
         let opacity = cx.opacity();
         let border_width = match cx.border_width().unwrap_or_default() {
             Units::Pixels(val) => val,
@@ -72,7 +75,52 @@ impl View for Analyzer {
         let mut border_color: vg::Color = cx.border_color().cloned().unwrap_or_default().into();
         border_color.set_alphaf(border_color.a * opacity);
 
-        // TODO: Draw the spectrum analyzer
+        // The analyzer data is pulled directly from the spectral `CompressorBank`
+        let mut analyzer_data = self.analyzer_data.lock().unwrap();
+        let analyzer_data = analyzer_data.read();
+        let nyquist = self.sample_rate.load(Ordering::Relaxed) / 2.0;
+
+        let line_width = cx.style.dpi_factor as f32 * 1.5;
+        let paint = vg::Paint::color(cx.font_color().cloned().unwrap_or_default().into())
+            .with_line_width(line_width);
+        for (bin_idx, (magnetude, gain_reduction_db)) in analyzer_data
+            .envelope_followers
+            .iter()
+            .zip(analyzer_data.gain_reduction_db.iter())
+            .enumerate()
+        {
+            // We'll show the bins from 30 Hz (to your chest) to 22 kHz, scaled logarithmically
+            const LN_40_HZ: f32 = 3.4011974; // 30.0f32.ln();
+            const LN_22_KHZ: f32 = 9.998797; // 22000.0f32.ln();
+            const LN_FREQ_RANGE: f32 = LN_22_KHZ - LN_40_HZ;
+
+            let frequency = (bin_idx as f32 / analyzer_data.num_bins as f32) * nyquist;
+            let ln_frequency = frequency.ln();
+            let t = (ln_frequency - LN_40_HZ) / LN_FREQ_RANGE;
+            if t <= 0.0 || t >= 1.0 {
+                continue;
+            }
+
+            // Scale this so that 1.0/0 dBFS magnetude is at 80% of the height, the bars begin at
+            // -80 dBFS, and that the scaling is linear. This is the same scaling used in Diopser's
+            // spectrum analyzer.
+            nih_debug_assert!(*magnetude >= 0.0);
+            let magnetude_db = nih_plug::util::gain_to_db(*magnetude);
+            let height = ((magnetude_db + 80.0) / 100.0).clamp(0.0, 1.0);
+
+            let mut path = vg::Path::new();
+            path.move_to(
+                bounds.x + (bounds.w * t),
+                bounds.y + (bounds.h * (1.0 - height)),
+            );
+            path.line_to(bounds.x + (bounds.w * t), bounds.y + bounds.h);
+            canvas.stroke_path(&mut path, &paint);
+
+            // TODO: Visualize the gain reduction
+            // TODO: Visualize the target curve
+        }
+
+        // TODO: Display the frequency range below the graph
 
         // Draw the border last
         let mut path = vg::Path::new();
@@ -89,8 +137,7 @@ impl View for Analyzer {
             path.close();
         }
 
-        let mut paint = vg::Paint::color(border_color);
-        paint.set_line_width(border_width);
+        let paint = vg::Paint::color(border_color).with_line_width(border_width);
         canvas.stroke_path(&mut path, &paint);
     }
 }

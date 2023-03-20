@@ -600,6 +600,9 @@ impl CompressorBank {
         if should_update_analyzer_data && channel_idx == num_channels - 1 {
             let analyzer_input_data = self.analyzer_input_data.input_buffer();
 
+            // The editor needs to know about this too so it can draw the spectra correctly
+            analyzer_input_data.num_bins = num_bins;
+
             // The gain reduction data needs to be averaged, see above
             let channel_multiplier = (num_channels as f32).recip();
             for gain_reduction_db in &mut analyzer_input_data.gain_reduction_db[..num_bins] {
@@ -609,7 +612,7 @@ impl CompressorBank {
             // The spectrum analyzer data has not yet been added
             assert!(self.envelopes.len() == num_channels);
             assert!(self.envelopes[0].len() >= num_bins);
-            for (bin_idx, spectrum_data) in analyzer_input_data.spectrum[..num_bins]
+            for (bin_idx, spectrum_data) in analyzer_input_data.envelope_followers[..num_bins]
                 .iter_mut()
                 .enumerate()
             {
