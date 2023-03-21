@@ -108,11 +108,21 @@ pub fn setup_logger() {
         log::LevelFilter::Info
     };
 
-    let logger_set = nih_log::LoggerBuilder::new(log_level)
+    let logger_builder = nih_log::LoggerBuilder::new(log_level)
         .filter_module("cosmic_text::buffer")
-        .filter_module("cosmic_text::shape")
-        .build_global()
-        .is_ok();
+        .filter_module("cosmic_text::shape");
+
+    // Always show the module in debug builds, makes it clearer where messages are coming from and
+    // it helps set up filters
+    #[cfg(debug_assertions)]
+    let logger_builder = logger_builder.always_show_module_path();
+
+    // In release builds there are some more logging messages from libraries that are not relevant
+    // to the end user that can be filtered out
+    #[cfg(not(debug_assertions))]
+    let logger_builder = logger_builder.filter_module("cosmic_text::font::system::std");
+
+    let logger_set = logger_builder.build_global().is_ok();
     if logger_set {
         log_panics();
     }

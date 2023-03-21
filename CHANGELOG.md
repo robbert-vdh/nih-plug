@@ -14,6 +14,11 @@ state is to list breaking changes.
 
 ### Changed
 
+- The logger now always shows the module in debug builds to make it easier to
+  know where logging messages are sent from. Previously this was only done for
+  the debug and trace message levels.
+- The logger now filters out the `Mapped XXXX font faces in YYYms.` messages
+  from cosmic text in release builds as this is unnecessary noise for end users.
 - `nih_plug_vizia`: `ParamButton`'s active color was made much lighter to make
   the text more readable, and the hover state has been fixed.
 
