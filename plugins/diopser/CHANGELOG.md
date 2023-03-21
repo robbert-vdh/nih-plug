@@ -13,3 +13,4 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - On Windows, clicking on the plugin's name no longer takes you to Spectral
   Compressor's home page. This is a temporary workaround for an issue with an
   underlying library.
+- Rendering the GUI now takes slightly less resources.

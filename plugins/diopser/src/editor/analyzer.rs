@@ -87,9 +87,13 @@ impl View for SpectrumAnalyzer {
         let nyquist = self.sample_rate.load(Ordering::Relaxed) / 2.0;
 
         // This skips background and border drawing
+        // NOTE: We could do the same thing like in Spectral Compressor and draw part of this
+        //       spectrum analyzer as a single mesh but for whatever erason the aliasing/moire
+        //       pattern here doesn't look nearly as bad.
         let line_width = cx.style.dpi_factor as f32 * 1.5;
         let paint = vg::Paint::color(cx.font_color().cloned().unwrap_or_default().into())
             .with_line_width(line_width);
+        let mut path = vg::Path::new();
         for (bin_idx, magnitude) in spectrum.iter().enumerate() {
             // We'll match up the bin's x-coordinate with the filter frequency parameter
             let frequency = (bin_idx as f32 / spectrum.len() as f32) * nyquist;
@@ -106,14 +110,13 @@ impl View for SpectrumAnalyzer {
             let magnitude_db = nih_plug::util::gain_to_db(*magnitude);
             let height = ((magnitude_db + 80.0) / 100.0).clamp(0.0, 1.0);
 
-            let mut path = vg::Path::new();
             path.move_to(
                 bounds.x + (bounds.w * t),
                 bounds.y + (bounds.h * (1.0 - height)),
             );
             path.line_to(bounds.x + (bounds.w * t), bounds.y + bounds.h);
-
-            canvas.stroke_path(&mut path, &paint);
         }
+
+        canvas.stroke_path(&mut path, &paint);
     }
 }
