@@ -42,9 +42,12 @@ const LN_FREQ_RANGE: f32 = LN_FREQ_RANGE_END_HZ - LN_FREQ_RANGE_START_HZ;
 /// backgrounds.
 const GR_BAR_OVERLAY_COLOR: vg::Color = vg::Color::rgbaf(0.85, 0.95, 1.0, 0.8);
 
-/// The color used for drawing the target curve. Looks somewhat similar to `GR_BAR_OVERLAY_COLOR`
-/// when factoring in the blending
-const TARGET_CURVE_COLOR: vg::Color = vg::Color::rgbaf(0.45, 0.55, 0.6, 0.9);
+/// The color used for drawing the downwards compression threshold curve. Looks somewhat similar to
+/// `GR_BAR_OVERLAY_COLOR` when factoring in the blending.
+const DOWNWARDS_THRESHOLD_CURVE_COLOR: vg::Color = vg::Color::rgbaf(0.45, 0.55, 0.6, 0.9);
+/// The color used for drawing the upwards compression threshold curve. Slightly color to make to
+/// make the output look less confusing.
+const UPWARDS_THRESHOLD_CURVE_COLOR: vg::Color = vg::Color::rgbaf(0.55, 0.70, 0.65, 0.9);
 
 /// A very analyzer showing the envelope followers as a magnitude spectrum with an overlay for the
 /// gain reduction.
@@ -93,7 +96,7 @@ impl View for Analyzer {
         let nyquist = self.sample_rate.load(Ordering::Relaxed) / 2.0;
 
         draw_spectrum(cx, canvas, analyzer_data, nyquist);
-        draw_target_curve(cx, canvas, analyzer_data);
+        draw_threshold_curve(cx, canvas, analyzer_data);
         draw_gain_reduction(cx, canvas, analyzer_data, nyquist);
         // TODO: Display the frequency range below the graph
 
@@ -257,12 +260,15 @@ fn draw_spectrum(
     canvas.fill_path(&mut mesh_path, &mesh_paint);
 }
 
-/// Overlays the target curve over the spectrum analyzer.
-fn draw_target_curve(cx: &mut DrawContext, canvas: &mut Canvas, analyzer_data: &AnalyzerData) {
+/// Overlays the threshold curve over the spectrum analyzer. If either the upwards or downwards
+/// threshold offsets are non-zero then two curves are drawn.
+fn draw_threshold_curve(cx: &mut DrawContext, canvas: &mut Canvas, analyzer_data: &AnalyzerData) {
     let bounds = cx.bounds();
 
     let line_width = cx.style.dpi_factor as f32 * 3.0;
-    let paint = vg::Paint::color(TARGET_CURVE_COLOR).with_line_width(line_width);
+    let downwards_paint =
+        vg::Paint::color(DOWNWARDS_THRESHOLD_CURVE_COLOR).with_line_width(line_width);
+    let upwards_paint = vg::Paint::color(UPWARDS_THRESHOLD_CURVE_COLOR).with_line_width(line_width);
 
     // This can be done slightly cleverer but for our purposes drawing line segments that are either
     // 1 pixel apart or that split the curve up into 100 segments (whichever results in the least
@@ -270,32 +276,38 @@ fn draw_target_curve(cx: &mut DrawContext, canvas: &mut Canvas, analyzer_data: &
     let curve = Curve::new(&analyzer_data.curve_params);
     let num_points = 100.min(bounds.w.ceil() as usize);
 
-    let mut path = vg::Path::new();
-    for i in 0..num_points {
-        let x_t = i as f32 / (num_points - 1) as f32;
-        let ln_freq = LN_FREQ_RANGE_START_HZ + (LN_FREQ_RANGE * x_t);
+    let mut draw_with_offset = |offset_db: f32, paint: vg::Paint| {
+        let mut path = vg::Path::new();
+        for i in 0..num_points {
+            let x_t = i as f32 / (num_points - 1) as f32;
+            let ln_freq = LN_FREQ_RANGE_START_HZ + (LN_FREQ_RANGE * x_t);
 
-        // Evaluating the curve results in a value in dB, which must then be mapped to the same
-        // scale used in `draw_spectrum()`
-        let y_db = curve.evaluate_ln(ln_freq);
-        let y_t = db_to_unclamped_t(y_db);
+            // Evaluating the curve results in a value in dB, which must then be mapped to the same
+            // scale used in `draw_spectrum()`
+            let y_db = curve.evaluate_ln(ln_freq) + offset_db;
+            let y_t = db_to_unclamped_t(y_db);
 
-        let physical_x_pos = bounds.x + (bounds.w * x_t);
-        // This value increases from bottom to top
-        let physical_y_pos = bounds.y + (bounds.h * (1.0 - y_t));
+            let physical_x_pos = bounds.x + (bounds.w * x_t);
+            // This value increases from bottom to top
+            let physical_y_pos = bounds.y + (bounds.h * (1.0 - y_t));
 
-        if i == 0 {
-            path.move_to(physical_x_pos, physical_y_pos);
-        } else {
-            path.line_to(physical_x_pos, physical_y_pos);
+            if i == 0 {
+                path.move_to(physical_x_pos, physical_y_pos);
+            } else {
+                path.line_to(physical_x_pos, physical_y_pos);
+            }
         }
-    }
 
-    // This does a way better job at cutting off the tops and bottoms of the graph than we could do
-    // by hand
-    canvas.scissor(bounds.x, bounds.y, bounds.w, bounds.h);
-    canvas.stroke_path(&mut path, &paint);
-    canvas.reset_scissor();
+        // This does a way better job at cutting off the tops and bottoms of the graph than we could do
+        // by hand
+        canvas.scissor(bounds.x, bounds.y, bounds.w, bounds.h);
+        canvas.stroke_path(&mut path, &paint);
+        canvas.reset_scissor();
+    };
+
+    let (upwards_offset_db, downwards_offset_db) = analyzer_data.curve_offsets_db;
+    draw_with_offset(upwards_offset_db, upwards_paint);
+    draw_with_offset(downwards_offset_db, downwards_paint);
 }
 
 /// Overlays the gain reduction display over the spectrum analyzer.

@@ -621,6 +621,10 @@ impl CompressorBank {
 
             // The editor needs to know about this too so it can draw the spectra correctly
             analyzer_input_data.curve_params = params.threshold.curve_params();
+            analyzer_input_data.curve_offsets_db = (
+                params.compressors.upwards.threshold_offset_db.value(),
+                params.compressors.downwards.threshold_offset_db.value(),
+            );
             analyzer_input_data.num_bins = num_bins;
 
             // The gain reduction data needs to be averaged, see above

@@ -30,6 +30,9 @@ pub struct AnalyzerData {
     /// The parameters used for the global threshold curve. This is used to draw the same curve used
     /// by the compressors on the analyzer.
     pub curve_params: CurveParams,
+    /// The upwards and downwards threshold offsets for the curve. These are used to draw the curve
+    /// twice with some distance between them if either is non-zero.
+    pub curve_offsets_db: (f32, f32),
 
     /// The number of used bins. This is part of the `AnalyzerData` since recomputing it in the
     /// editor could result in a race condition.
@@ -53,6 +56,7 @@ impl Default for AnalyzerData {
     fn default() -> Self {
         Self {
             curve_params: CurveParams::default(),
+            curve_offsets_db: (0.0, 0.0),
             num_bins: 0,
             envelope_followers: [0.0; crate::MAX_WINDOW_SIZE / 2 + 1],
             gain_difference_db: [0.0; crate::MAX_WINDOW_SIZE / 2 + 1],
