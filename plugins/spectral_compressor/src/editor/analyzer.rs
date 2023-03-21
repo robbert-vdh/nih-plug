@@ -254,9 +254,6 @@ fn draw_gain_reduction(
 
     let bin_frequency = |bin_idx: f32| (bin_idx / analyzer_data.num_bins as f32) * nyquist_hz;
 
-    // TODO: This should be drawn as one mesh, or multiple meshes if there are empty gain reduction
-    //       bars. The leftmost bin should be extended to the left of the analyzer, and the
-    //       rightmost bin should be extended to the right.
     let mut path = vg::Path::new();
     for (bin_idx, gain_difference_db) in analyzer_data
         .gain_difference_db
@@ -264,37 +261,38 @@ fn draw_gain_reduction(
         .enumerate()
         .take(analyzer_data.num_bins)
     {
-        // TODO: Draw this as a single mesh instead, this doesn't work.
         // Avoid drawing tiny slivers for low gain reduction values
-        if gain_difference_db.abs() > 0.2 {
-            // The gain reduction bars are drawn width the width of the bin, centered on the
-            // bin's center frequency
-            let gr_start_ln_frequency = bin_frequency(bin_idx as f32 - 0.5).ln();
-            let gr_end_ln_frequency = bin_frequency(bin_idx as f32 + 0.5).ln();
-
-            let t_start = (gr_start_ln_frequency - LN_40_HZ) / LN_FREQ_RANGE;
-            let t_end = (gr_end_ln_frequency - LN_40_HZ) / LN_FREQ_RANGE;
-            if t_end < 0.0 || t_start > 1.0 {
-                continue;
-            }
-
-            let (t_start, t_end) = (t_start.max(0.0), t_end.min(1.0));
-
-            // For the bar's height we'll draw 0 dB of gain reduction as a flat line (except we
-            // don't actually draw 0 dBs of GR because it looks glitchy, but that's besides the
-            // point). 40 dB of gain reduction causes the bar to be drawn from the center all
-            // the way to the bottom of the spectrum analyzer. 40 dB of additional gain causes
-            // the bar to be drawn from the center all the way to the top of the graph.
-            // NOTE: Y-coordinates go from top to bottom, hence the minus
-            // TODO: The y-position should be relative to the target curve
-            let t_y = ((-gain_difference_db + 40.0) / 80.0).clamp(0.0, 1.0);
-
-            path.move_to(bounds.x + (bounds.w * t_start), bounds.y + (bounds.h * 0.5));
-            path.line_to(bounds.x + (bounds.w * t_end), bounds.y + (bounds.h * 0.5));
-            path.line_to(bounds.x + (bounds.w * t_end), bounds.y + (bounds.h * t_y));
-            path.line_to(bounds.x + (bounds.w * t_start), bounds.y + (bounds.h * t_y));
-            path.close();
+        if gain_difference_db.abs() < 0.2 {
+            continue;
         }
+
+        // The gain reduction bars are drawn width the width of the bin, centered on the bin's
+        // center frequency
+        let gr_start_ln_frequency = bin_frequency(bin_idx as f32 - 0.5).ln();
+        let gr_end_ln_frequency = bin_frequency(bin_idx as f32 + 0.5).ln();
+
+        let t_start = (gr_start_ln_frequency - LN_40_HZ) / LN_FREQ_RANGE;
+        let t_end = (gr_end_ln_frequency - LN_40_HZ) / LN_FREQ_RANGE;
+        if t_end < 0.0 || t_start > 1.0 {
+            continue;
+        }
+
+        let (t_start, t_end) = (t_start.max(0.0), t_end.min(1.0));
+
+        // For the bar's height we'll draw 0 dB of gain reduction as a flat line (except we
+        // don't actually draw 0 dBs of GR because it looks glitchy, but that's besides the
+        // point). 40 dB of gain reduction causes the bar to be drawn from the center all
+        // the way to the bottom of the spectrum analyzer. 40 dB of additional gain causes
+        // the bar to be drawn from the center all the way to the top of the graph.
+        // NOTE: Y-coordinates go from top to bottom, hence the minus
+        // TODO: The y-position should be relative to the target curve
+        let t_y = ((-gain_difference_db + 40.0) / 80.0).clamp(0.0, 1.0);
+
+        path.move_to(bounds.x + (bounds.w * t_start), bounds.y + (bounds.h * 0.5));
+        path.line_to(bounds.x + (bounds.w * t_end), bounds.y + (bounds.h * 0.5));
+        path.line_to(bounds.x + (bounds.w * t_end), bounds.y + (bounds.h * t_y));
+        path.line_to(bounds.x + (bounds.w * t_start), bounds.y + (bounds.h * t_y));
+        path.close();
     }
 
     canvas
