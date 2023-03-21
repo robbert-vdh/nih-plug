@@ -30,7 +30,12 @@ const LN_FREQ_RANGE: f32 = LN_22_KHZ - LN_40_HZ;
 
 /// The color used for drawing the overlay. Currently not configurable using the style sheet (that
 /// would be possible by moving this to a dedicated view and overlaying that).
-const GR_BAR_OVERLAY_COLOR: vg::Color = vg::Color::rgbaf(0.7, 0.9, 1.0, 0.7);
+///
+/// # Notes
+///
+/// This is drawn using some blending options that make it interact differently with darker
+/// backgrounds.
+const GR_BAR_OVERLAY_COLOR: vg::Color = vg::Color::rgbaf(0.85, 0.95, 1.0, 0.8);
 
 /// A very analyzer showing the envelope followers as a magnitude spectrum with an overlay for the
 /// gain reduction.
@@ -292,5 +297,8 @@ fn draw_gain_reduction(
         }
     }
 
+    canvas
+        .global_composite_blend_func(vg::BlendFactor::DstAlpha, vg::BlendFactor::OneMinusDstColor);
     canvas.fill_path(&mut path, &paint);
+    canvas.global_composite_blend_func(vg::BlendFactor::One, vg::BlendFactor::OneMinusSrcAlpha);
 }
