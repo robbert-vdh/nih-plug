@@ -5,7 +5,7 @@
 
 /// Parameters for a curve, similar to the fields found in `ThresholdParams` but using plain floats
 /// instead of parameters.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct CurveParams {
     /// The compressor threshold at the center frequency. When sidechaining is enabled, the input
     /// signal is gained by the inverse of this value. This replaces the input gain in the original
@@ -13,7 +13,7 @@ pub struct CurveParams {
     pub intercept: f32,
     /// The center frqeuency for the target curve when sidechaining is not enabled. The curve is a
     /// polynomial `threshold_db + curve_slope*x + curve_curve*(x^2)` that evaluates to a decibel
-    /// value, where `x = log2(center_frequency) - log2(bin_frequency)`. In other words, this is
+    /// value, where `x = ln(center_frequency) - ln(bin_frequency)`. In other words, this is
     /// evaluated in the log/log domain for decibels and octaves.
     pub center_frequency: f32,
     /// The slope for the curve, in the log/log domain. See the polynomial above.
@@ -33,30 +33,30 @@ pub struct CurveParams {
 /// in decibels being the output of the equation).
 pub struct Curve<'a> {
     params: &'a CurveParams,
-    /// The 2-logarithm of [`CurveParams::cemter_frequency`].
-    log2_center_frequency: f32,
+    /// The natural logarithm of [`CurveParams::cemter_frequency`].
+    ln_center_frequency: f32,
 }
 
 impl<'a> Curve<'a> {
     pub fn new(params: &'a CurveParams) -> Self {
         Self {
             params,
-            log2_center_frequency: params.center_frequency.log2(),
+            ln_center_frequency: params.center_frequency.ln(),
         }
     }
 
-    /// Evaluate the curve for the 2-logarithm of the frequency value. This can be used as an
+    /// Evaluate the curve for the natural logarithm of the frequency value. This can be used as an
     /// optimization to avoid computing these logarithms all the time.
     #[inline]
-    pub fn evaluate_log2(&self, log2_freq: f32) -> f32 {
-        let offset = log2_freq - self.log2_center_frequency;
+    pub fn evaluate_ln(&self, ln_freq: f32) -> f32 {
+        let offset = ln_freq - self.ln_center_frequency;
         self.params.intercept + (self.params.slope * offset) + (self.params.curve * offset * offset)
     }
 
     /// Evaluate the curve for a value in Hertz.
     #[inline]
     #[allow(unused)]
-    pub fn evaluate_plain(&self, freq: f32) -> f32 {
-        self.evaluate_log2(freq.log2())
+    pub fn evaluate_linear(&self, freq: f32) -> f32 {
+        self.evaluate_ln(freq.ln())
     }
 }

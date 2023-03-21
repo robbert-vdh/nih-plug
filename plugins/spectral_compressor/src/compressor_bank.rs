@@ -37,7 +37,7 @@ const ENVELOPE_INIT_VALUE: f32 = std::f32::consts::FRAC_1_SQRT_2 / 8.0;
 /// Compressor from getting brighter as the sample rate increases.
 #[allow(unused)]
 const HIGH_FREQ_RATIO_ROLLOFF_FREQUENCY: f32 = 22_050.0;
-const HIGH_FREQ_RATIO_ROLLOFF_FREQUENCY_LOG2: f32 = 14.428_491;
+const HIGH_FREQ_RATIO_ROLLOFF_FREQUENCY_LN: f32 = 10.001068; // 22_050.0f32.ln()
 
 /// A bank of compressors so each FFT bin can be compressed individually. The vectors in this struct
 /// will have a capacity of `MAX_WINDOW_SIZE / 2 + 1` and a size that matches the current complex
@@ -60,9 +60,9 @@ pub struct CompressorBank {
     /// The same as `should_update_downwards_knee_parabolas`, but for upwards compression.
     pub should_update_upwards_knee_parabolas: Arc<AtomicBool>,
 
-    /// For each compressor bin, `log2(freq)` where `freq` is the frequency associated with that
+    /// For each compressor bin, `ln(freq)` where `freq` is the frequency associated with that
     /// compressor. This is precomputed since all update functions need it.
-    log2_freqs: Vec<f32>,
+    ln_freqs: Vec<f32>,
 
     /// Downwards compressor thresholds, in decibels.
     downwards_thresholds_db: Vec<f32>,
@@ -115,7 +115,7 @@ pub struct ThresholdParams {
     pub threshold_db: FloatParam,
     /// The center frqeuency for the target curve when sidechaining is not enabled. The curve is a
     /// polynomial `threshold_db + curve_slope*x + curve_curve*(x^2)` that evaluates to a decibel
-    /// value, where `x = log2(center_frequency) - log2(bin_frequency)`. In other words, this is
+    /// value, where `x = ln(center_frequency) - ln(bin_frequency)`. In other words, this is
     /// evaluated in the log/log domain for decibels and octaves.
     #[id = "thresh_center_freq"]
     pub center_frequency: FloatParam,
@@ -415,7 +415,7 @@ impl CompressorBank {
             should_update_downwards_knee_parabolas: Arc::new(AtomicBool::new(true)),
             should_update_upwards_knee_parabolas: Arc::new(AtomicBool::new(true)),
 
-            log2_freqs: Vec::with_capacity(complex_buffer_len),
+            ln_freqs: Vec::with_capacity(complex_buffer_len),
 
             downwards_thresholds_db: Vec::with_capacity(complex_buffer_len),
             downwards_ratios: Vec::with_capacity(complex_buffer_len),
@@ -444,8 +444,8 @@ impl CompressorBank {
     pub fn update_capacity(&mut self, num_channels: usize, max_window_size: usize) {
         let complex_buffer_len = max_window_size / 2 + 1;
 
-        self.log2_freqs
-            .reserve_exact(complex_buffer_len.saturating_sub(self.log2_freqs.len()));
+        self.ln_freqs
+            .reserve_exact(complex_buffer_len.saturating_sub(self.ln_freqs.len()));
 
         self.downwards_thresholds_db
             .reserve_exact(complex_buffer_len.saturating_sub(self.downwards_thresholds_db.len()));
@@ -490,11 +490,11 @@ impl CompressorBank {
 
         // These 2-log frequencies are needed when updating the compressor parameters, so we'll just
         // precompute them to avoid having to repeat the same expensive computations all the time
-        self.log2_freqs.resize(complex_buffer_len, 0.0);
-        // The first one should always stay at zero, `0.0f32.log2() == NaN`.
-        for (i, log2_freq) in self.log2_freqs.iter_mut().enumerate().skip(1) {
+        self.ln_freqs.resize(complex_buffer_len, 0.0);
+        // The first one should always stay at zero, `0.0f32.ln() == NaN`.
+        for (i, ln_freq) in self.ln_freqs.iter_mut().enumerate().skip(1) {
             let freq = (i as f32 / window_size as f32) * buffer_config.sample_rate;
-            *log2_freq = freq.log2();
+            *ln_freq = freq.ln();
         }
 
         self.downwards_thresholds_db.resize(complex_buffer_len, 1.0);
@@ -559,7 +559,7 @@ impl CompressorBank {
         overlap_times: usize,
         first_non_dc_bin: usize,
     ) {
-        nih_debug_assert_eq!(buffer.len(), self.log2_freqs.len());
+        nih_debug_assert_eq!(buffer.len(), self.ln_freqs.len());
 
         // The gain difference/reduction amounts are accumulated in `self.analyzer_input_data`. When
         // processing the last channel, this data is divided by the channel count, the envelope
@@ -642,7 +642,7 @@ impl CompressorBank {
     /// call. These will be multiplied with the existing compressor thresholds and knee values to
     /// get the effective values for use with sidechaining.
     pub fn process_sidechain(&mut self, sc_buffer: &mut [Complex32], channel_idx: usize) {
-        nih_debug_assert_eq!(sc_buffer.len(), self.log2_freqs.len());
+        nih_debug_assert_eq!(sc_buffer.len(), self.ln_freqs.len());
 
         self.update_sidechain_spectra(sc_buffer, channel_idx);
     }
@@ -1006,12 +1006,12 @@ impl CompressorBank {
             .is_ok()
         {
             let downwards_intercept = params.compressors.downwards.threshold_offset_db.value();
-            for (log2_freq, threshold_db) in self
-                .log2_freqs
+            for (ln_freq, threshold_db) in self
+                .ln_freqs
                 .iter()
                 .zip(self.downwards_thresholds_db.iter_mut())
             {
-                *threshold_db = curve.evaluate_log2(*log2_freq) + downwards_intercept;
+                *threshold_db = curve.evaluate_ln(*ln_freq) + downwards_intercept;
             }
         }
 
@@ -1021,12 +1021,12 @@ impl CompressorBank {
             .is_ok()
         {
             let upwards_intercept = params.compressors.upwards.threshold_offset_db.value();
-            for (log2_freq, threshold_db) in self
-                .log2_freqs
+            for (ln_freq, threshold_db) in self
+                .ln_freqs
                 .iter()
                 .zip(self.upwards_thresholds_db.iter_mut())
             {
-                *threshold_db = curve.evaluate_log2(*log2_freq) + upwards_intercept;
+                *threshold_db = curve.evaluate_ln(*ln_freq) + upwards_intercept;
             }
         }
 
@@ -1041,8 +1041,8 @@ impl CompressorBank {
             let target_ratio_recip = params.compressors.downwards.ratio.value().recip();
             let downwards_high_freq_ratio_rolloff =
                 params.compressors.downwards.high_freq_ratio_rolloff.value();
-            for (log2_freq, ratio) in self.log2_freqs.iter().zip(self.downwards_ratios.iter_mut()) {
-                let octave_fraction = log2_freq / HIGH_FREQ_RATIO_ROLLOFF_FREQUENCY_LOG2;
+            for (ln_freq, ratio) in self.ln_freqs.iter().zip(self.downwards_ratios.iter_mut()) {
+                let octave_fraction = ln_freq / HIGH_FREQ_RATIO_ROLLOFF_FREQUENCY_LN;
                 let rolloff_t = octave_fraction * downwards_high_freq_ratio_rolloff;
 
                 // If the octave fraction times the rolloff amount is high, then this should get
@@ -1060,8 +1060,8 @@ impl CompressorBank {
             let target_ratio_recip = params.compressors.upwards.ratio.value().recip();
             let upwards_high_freq_ratio_rolloff =
                 params.compressors.upwards.high_freq_ratio_rolloff.value();
-            for (log2_freq, ratio) in self.log2_freqs.iter().zip(self.upwards_ratios.iter_mut()) {
-                let octave_fraction = log2_freq / HIGH_FREQ_RATIO_ROLLOFF_FREQUENCY_LOG2;
+            for (ln_freq, ratio) in self.ln_freqs.iter().zip(self.upwards_ratios.iter_mut()) {
+                let octave_fraction = ln_freq / HIGH_FREQ_RATIO_ROLLOFF_FREQUENCY_LN;
                 let rolloff_t = octave_fraction * upwards_high_freq_ratio_rolloff;
 
                 let ratio_recip = (target_ratio_recip * (1.0 - rolloff_t)) + rolloff_t;
