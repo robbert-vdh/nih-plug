@@ -28,6 +28,10 @@ const LN_40_HZ: f32 = 3.4011974; // 30.0f32.ln();
 const LN_22_KHZ: f32 = 9.998797; // 22000.0f32.ln();
 const LN_FREQ_RANGE: f32 = LN_22_KHZ - LN_40_HZ;
 
+/// The color used for drawing the overlay. Currently not configurable using the style sheet (that
+/// would be possible by moving this to a dedicated view and overlaying that).
+const GR_BAR_OVERLAY_COLOR: vg::Color = vg::Color::rgbaf(0.7, 0.9, 1.0, 0.7);
+
 /// A very analyzer showing the envelope followers as a magnitude spectrum with an overlay for the
 /// gain reduction.
 pub struct Analyzer {
@@ -240,13 +244,15 @@ fn draw_gain_reduction(
 ) {
     let bounds = cx.bounds();
 
-    // TODO: This color should be defined elsewhere
-    let bar_paint_color = vg::Color::rgbaf(0.7, 0.9, 1.0, 0.7);
-    let bar_paint = vg::Paint::color(bar_paint_color);
+    // As with the above, anti aliasing only causes issues
+    let paint = vg::Paint::color(GR_BAR_OVERLAY_COLOR).with_anti_alias(false);
 
     let bin_frequency = |bin_idx: f32| (bin_idx / analyzer_data.num_bins as f32) * nyquist_hz;
 
-    // TODO: This should be drawn as one mesh, or multiple meshes if there are empty gain reduction bars
+    // TODO: This should be drawn as one mesh, or multiple meshes if there are empty gain reduction
+    //       bars. The leftmost bin should be extended to the left of the analyzer, and the
+    //       rightmost bin should be extended to the right.
+    let mut path = vg::Path::new();
     for (bin_idx, gain_difference_db) in analyzer_data
         .gain_difference_db
         .iter()
@@ -273,13 +279,13 @@ fn draw_gain_reduction(
             // TODO: The y-position should be relative to the target curve
             let t_y = ((-gain_difference_db + 40.0) / 80.0).clamp(0.0, 1.0);
 
-            let mut path = vg::Path::new();
             path.move_to(bounds.x + (bounds.w * t_start), bounds.y + (bounds.h * 0.5));
             path.line_to(bounds.x + (bounds.w * t_end), bounds.y + (bounds.h * 0.5));
             path.line_to(bounds.x + (bounds.w * t_end), bounds.y + (bounds.h * t_y));
             path.line_to(bounds.x + (bounds.w * t_start), bounds.y + (bounds.h * t_y));
             path.close();
-            canvas.fill_path(&mut path, &bar_paint);
         }
     }
+
+    canvas.fill_path(&mut path, &paint);
 }
