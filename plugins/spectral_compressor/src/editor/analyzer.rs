@@ -119,7 +119,7 @@ fn draw_spectrum(
     let line_width = cx.style.dpi_factor as f32 * 1.5;
     let text_color: vg::Color = cx.font_color().cloned().unwrap_or_default().into();
     // This is used to draw the individual bars
-    let spectrum_paint = vg::Paint::color(text_color).with_line_width(line_width);
+    let bars_paint = vg::Paint::color(text_color).with_line_width(line_width);
     // And this color is used to draw the mesh part of the spectrum. We'll create a gradient paint
     // that fades from this to `text_color` when we know the mesh's x-coordinates.
     let mut lighter_text_color = text_color;
@@ -145,6 +145,8 @@ fn draw_spectrum(
     let mesh_start_delta_threshold = line_width + 0.5;
     let mut mesh_bin_start_idx = analyzer_data.num_bins;
     let mut previous_physical_x_coord = bounds.x - 2.0;
+
+    let mut bars_path = vg::Path::new();
     for (bin_idx, magnitude) in analyzer_data
         .envelope_followers
         .iter()
@@ -170,13 +172,12 @@ fn draw_spectrum(
         // Diopser's spectrum analyzer.
         let height = magnitude_height(*magnitude);
 
-        let mut path = vg::Path::new();
-        path.move_to(physical_x_coord, bounds.y + (bounds.h * (1.0 - height)));
-        path.line_to(physical_x_coord, bounds.y + bounds.h);
-        canvas.stroke_path(&mut path, &spectrum_paint);
+        bars_path.move_to(physical_x_coord, bounds.y + (bounds.h * (1.0 - height)));
+        bars_path.line_to(physical_x_coord, bounds.y + bounds.h);
 
         previous_physical_x_coord = physical_x_coord;
     }
+    canvas.stroke_path(&mut bars_path, &bars_paint);
 
     // The mesh path starts at the bottom left, follows the top envelope of the spectrum analyzer,
     // and ends in the bottom right
