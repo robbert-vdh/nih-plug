@@ -28,6 +28,7 @@ use triple_buffer::TripleBuffer;
 
 mod analyzer;
 mod compressor_bank;
+mod curve;
 mod dry_wet_mixer;
 mod editor;
 

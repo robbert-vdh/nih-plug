@@ -20,6 +20,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use crate::analyzer::AnalyzerData;
+use crate::curve::{Curve, CurveParams};
 use crate::SpectralCompressorParams;
 
 // These are the parameter name prefixes used for the downwards and upwards compression parameters.
@@ -983,32 +984,34 @@ impl CompressorBank {
     /// are updated in accordance to the atomic flags set on this struct.
     fn update_if_needed(&mut self, params: &SpectralCompressorParams) {
         // The threshold curve is a polynomial in log-log (decibels-octaves) space
-        let intercept = params.threshold.threshold_db.value();
-        // The cheeky 3 additional dB/octave attenuation is to match pink noise with the default
-        // settings. When using sidechaining we explicitly don't want this because the curve should
-        // be a flat offset to the sidechain input at the default settings.
-        let slope = match params.threshold.mode.value() {
-            ThresholdMode::Internal => params.threshold.curve_slope.value() - 3.0,
-            ThresholdMode::SidechainMatch | ThresholdMode::SidechainCompress => {
-                params.threshold.curve_slope.value()
-            }
+        let curve_params = CurveParams {
+            intercept: params.threshold.threshold_db.value(),
+            center_frequency: params.threshold.center_frequency.value(),
+            // The cheeky 3 additional dB/octave attenuation is to match pink noise with the
+            // default settings. When using sidechaining we explicitly don't want this because
+            // the curve should be a flat offset to the sidechain input at the default settings.
+            slope: match params.threshold.mode.value() {
+                ThresholdMode::Internal => params.threshold.curve_slope.value() - 3.0,
+                ThresholdMode::SidechainMatch | ThresholdMode::SidechainCompress => {
+                    params.threshold.curve_slope.value()
+                }
+            },
+            curve: params.threshold.curve_curve.value(),
         };
-        let curve = params.threshold.curve_curve.value();
-        let log2_center_freq = params.threshold.center_frequency.value().log2();
+        let curve = Curve::new(&curve_params);
 
         if self
             .should_update_downwards_thresholds
             .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
             .is_ok()
         {
-            let intercept = intercept + params.compressors.downwards.threshold_offset_db.value();
+            let downwards_intercept = params.compressors.downwards.threshold_offset_db.value();
             for (log2_freq, threshold_db) in self
                 .log2_freqs
                 .iter()
                 .zip(self.downwards_thresholds_db.iter_mut())
             {
-                let offset = log2_freq - log2_center_freq;
-                *threshold_db = intercept + (slope * offset) + (curve * offset * offset);
+                *threshold_db = curve.evaluate_log2(*log2_freq) + downwards_intercept;
             }
         }
 
@@ -1017,14 +1020,13 @@ impl CompressorBank {
             .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
             .is_ok()
         {
-            let intercept = intercept + params.compressors.upwards.threshold_offset_db.value();
+            let upwards_intercept = params.compressors.upwards.threshold_offset_db.value();
             for (log2_freq, threshold_db) in self
                 .log2_freqs
                 .iter()
                 .zip(self.upwards_thresholds_db.iter_mut())
             {
-                let offset = log2_freq - log2_center_freq;
-                *threshold_db = intercept + (slope * offset) + (curve * offset * offset);
+                *threshold_db = curve.evaluate_log2(*log2_freq) + upwards_intercept;
             }
         }
 
