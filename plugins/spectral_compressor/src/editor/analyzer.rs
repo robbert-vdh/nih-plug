@@ -267,8 +267,13 @@ fn draw_gain_reduction(
             let gr_start_ln_frequency = bin_frequency(bin_idx as f32 - 0.5).ln();
             let gr_end_ln_frequency = bin_frequency(bin_idx as f32 + 0.5).ln();
 
-            let t_start = ((gr_start_ln_frequency - LN_40_HZ) / LN_FREQ_RANGE).max(0.0);
-            let t_end = ((gr_end_ln_frequency - LN_40_HZ) / LN_FREQ_RANGE).min(1.0);
+            let t_start = (gr_start_ln_frequency - LN_40_HZ) / LN_FREQ_RANGE;
+            let t_end = (gr_end_ln_frequency - LN_40_HZ) / LN_FREQ_RANGE;
+            if t_end < 0.0 || t_start > 1.0 {
+                continue;
+            }
+
+            let (t_start, t_end) = (t_start.max(0.0), t_end.min(1.0));
 
             // For the bar's height we'll draw 0 dB of gain reduction as a flat line (except we
             // don't actually draw 0 dBs of GR because it looks glitchy, but that's besides the
