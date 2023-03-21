@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::curve::CurveParams;
+
 /// The data stored used for the spectrum analyzer. This also contains the gain reduction and the
 /// threshold curve (which is dynamic in the sidechain matching mode).
 ///
@@ -23,8 +25,12 @@
 /// This pulls the data directly from the spectral compression part of Spectral Compressor, so the
 /// window size and overlap amounts are equal to the ones used by SC's main algorithm. If the
 /// current window size is 2048, then only the first `2048 / 2 + 1` elements in the arrays are used.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AnalyzerData {
+    /// The parameters used for the global threshold curve. This is used to draw the same curve used
+    /// by the compressors on the analyzer.
+    pub curve_params: CurveParams,
+
     /// The number of used bins. This is part of the `AnalyzerData` since recomputing it in the
     /// editor could result in a race condition.
     pub num_bins: usize,
@@ -46,6 +52,7 @@ pub struct AnalyzerData {
 impl Default for AnalyzerData {
     fn default() -> Self {
         Self {
+            curve_params: CurveParams::default(),
             num_bins: 0,
             envelope_followers: [0.0; crate::MAX_WINDOW_SIZE / 2 + 1],
             gain_difference_db: [0.0; crate::MAX_WINDOW_SIZE / 2 + 1],

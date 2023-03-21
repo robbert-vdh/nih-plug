@@ -286,6 +286,24 @@ impl ThresholdParams {
             .with_string_to_value(formatters::s2v_f32_percentage()),
         }
     }
+
+    /// Build [`CurveParams`] out of this set of parameters.
+    pub fn curve_params(&self) -> CurveParams {
+        CurveParams {
+            intercept: self.threshold_db.value(),
+            center_frequency: self.center_frequency.value(),
+            // The cheeky 3 additional dB/octave attenuation is to match pink noise with the
+            // default settings. When using sidechaining we explicitly don't want this because
+            // the curve should be a flat offset to the sidechain input at the default settings.
+            slope: match self.mode.value() {
+                ThresholdMode::Internal => self.curve_slope.value() - 3.0,
+                ThresholdMode::SidechainMatch | ThresholdMode::SidechainCompress => {
+                    self.curve_slope.value()
+                }
+            },
+            curve: self.curve_curve.value(),
+        }
+    }
 }
 
 impl CompressorBankParams {
@@ -602,6 +620,7 @@ impl CompressorBank {
             let analyzer_input_data = self.analyzer_input_data.input_buffer();
 
             // The editor needs to know about this too so it can draw the spectra correctly
+            analyzer_input_data.curve_params = params.threshold.curve_params();
             analyzer_input_data.num_bins = num_bins;
 
             // The gain reduction data needs to be averaged, see above
@@ -984,20 +1003,7 @@ impl CompressorBank {
     /// are updated in accordance to the atomic flags set on this struct.
     fn update_if_needed(&mut self, params: &SpectralCompressorParams) {
         // The threshold curve is a polynomial in log-log (decibels-octaves) space
-        let curve_params = CurveParams {
-            intercept: params.threshold.threshold_db.value(),
-            center_frequency: params.threshold.center_frequency.value(),
-            // The cheeky 3 additional dB/octave attenuation is to match pink noise with the
-            // default settings. When using sidechaining we explicitly don't want this because
-            // the curve should be a flat offset to the sidechain input at the default settings.
-            slope: match params.threshold.mode.value() {
-                ThresholdMode::Internal => params.threshold.curve_slope.value() - 3.0,
-                ThresholdMode::SidechainMatch | ThresholdMode::SidechainCompress => {
-                    params.threshold.curve_slope.value()
-                }
-            },
-            curve: params.threshold.curve_curve.value(),
-        };
+        let curve_params = params.threshold.curve_params();
         let curve = Curve::new(&curve_params);
 
         if self

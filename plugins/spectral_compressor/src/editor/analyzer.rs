@@ -22,11 +22,16 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 
 use crate::analyzer::AnalyzerData;
+use crate::curve::Curve;
 
 // We'll show the bins from 30 Hz (to your chest) to 22 kHz, scaled logarithmically
-const LN_40_HZ: f32 = 3.4011974; // 30.0f32.ln();
-const LN_22_KHZ: f32 = 9.998797; // 22000.0f32.ln();
-const LN_FREQ_RANGE: f32 = LN_22_KHZ - LN_40_HZ;
+#[allow(unused)]
+const FREQ_RANGE_START_HZ: f32 = 30.0;
+#[allow(unused)]
+const FREQ_RANGE_END_HZ: f32 = 22_000.0;
+const LN_FREQ_RANGE_START_HZ: f32 = 3.4011974; // 30.0f32.ln();
+const LN_FREQ_RANGE_END_HZ: f32 = 9.998797; // 22_000.0f32.ln();
+const LN_FREQ_RANGE: f32 = LN_FREQ_RANGE_END_HZ - LN_FREQ_RANGE_START_HZ;
 
 /// The color used for drawing the overlay. Currently not configurable using the style sheet (that
 /// would be possible by moving this to a dedicated view and overlaying that).
@@ -36,6 +41,10 @@ const LN_FREQ_RANGE: f32 = LN_22_KHZ - LN_40_HZ;
 /// This is drawn using some blending options that make it interact differently with darker
 /// backgrounds.
 const GR_BAR_OVERLAY_COLOR: vg::Color = vg::Color::rgbaf(0.85, 0.95, 1.0, 0.8);
+
+/// The color used for drawing the target curve. Looks somewhat similar to `GR_BAR_OVERLAY_COLOR`
+/// when factoring in the blending
+const TARGET_CURVE_COLOR: vg::Color = vg::Color::rgbaf(0.45, 0.55, 0.6, 0.9);
 
 /// A very analyzer showing the envelope followers as a magnitude spectrum with an overlay for the
 /// gain reduction.
@@ -84,7 +93,7 @@ impl View for Analyzer {
         let nyquist = self.sample_rate.load(Ordering::Relaxed) / 2.0;
 
         draw_spectrum(cx, canvas, analyzer_data, nyquist);
-        // TODO: Draw target curve
+        draw_target_curve(cx, canvas, analyzer_data);
         draw_gain_reduction(cx, canvas, analyzer_data, nyquist);
         // TODO: Display the frequency range below the graph
 
@@ -114,6 +123,13 @@ impl View for Analyzer {
     }
 }
 
+/// Compute an unclamped value based on a decibel value -80 and is mapped to 0, +20 is mapped to 1,
+/// and all other values are linearly interpolated from there
+#[inline]
+fn db_to_unclamped_t(db_value: f32) -> f32 {
+    (db_value + 80.0) / 100.0
+}
+
 /// Draw the spectrum analyzer part of the analyzer. These are drawn as vertical bars until the
 /// spacing between the bars becomes less the line width, at which point it's drawn as a solid mesh
 /// instead.
@@ -139,13 +155,14 @@ fn draw_spectrum(
     // The frequency belonging to a bin in Hz
     let bin_frequency = |bin_idx: f32| (bin_idx / analyzer_data.num_bins as f32) * nyquist_hz;
     // A `[0, 1]` value indicating at which relative x-coordinate a bin should be drawn at
-    let bin_t = |bin_idx: f32| (bin_frequency(bin_idx).ln() - LN_40_HZ) / LN_FREQ_RANGE;
+    let bin_t =
+        |bin_idx: f32| (bin_frequency(bin_idx).ln() - LN_FREQ_RANGE_START_HZ) / LN_FREQ_RANGE;
     // Converts a linear magnitude value in to a `[0, 1]` value where 0 is -80 dB or lower, and 1 is
     // +20 dB or higher.
     let magnitude_height = |magnitude: f32| {
         nih_debug_assert!(magnitude >= 0.0);
         let magnitude_db = nih_plug::util::gain_to_db(magnitude);
-        ((magnitude_db + 80.0) / 100.0).clamp(0.0, 1.0)
+        db_to_unclamped_t(magnitude_db).clamp(0.0, 1.0)
     };
 
     // The first part of this drawing routing is simple. Individual bins are drawn as bars until the
@@ -240,6 +257,47 @@ fn draw_spectrum(
     canvas.fill_path(&mut mesh_path, &mesh_paint);
 }
 
+/// Overlays the target curve over the spectrum analyzer.
+fn draw_target_curve(cx: &mut DrawContext, canvas: &mut Canvas, analyzer_data: &AnalyzerData) {
+    let bounds = cx.bounds();
+
+    let line_width = cx.style.dpi_factor as f32 * 3.0;
+    let paint = vg::Paint::color(TARGET_CURVE_COLOR).with_line_width(line_width);
+
+    // This can be done slightly cleverer but for our purposes drawing line segments that are either
+    // 1 pixel apart or that split the curve up into 100 segments (whichever results in the least
+    // amount of line segments) should be sufficient
+    let curve = Curve::new(&analyzer_data.curve_params);
+    let num_points = 100.min(bounds.w.ceil() as usize);
+
+    let mut path = vg::Path::new();
+    for i in 0..num_points {
+        let x_t = i as f32 / (num_points - 1) as f32;
+        let ln_freq = LN_FREQ_RANGE_START_HZ + (LN_FREQ_RANGE * x_t);
+
+        // Evaluating the curve results in a value in dB, which must then be mapped to the same
+        // scale used in `draw_spectrum()`
+        let y_db = curve.evaluate_ln(ln_freq);
+        let y_t = db_to_unclamped_t(y_db);
+
+        let physical_x_pos = bounds.x + (bounds.w * x_t);
+        // This value increases from bottom to top
+        let physical_y_pos = bounds.y + (bounds.h * (1.0 - y_t));
+
+        if i == 0 {
+            path.move_to(physical_x_pos, physical_y_pos);
+        } else {
+            path.line_to(physical_x_pos, physical_y_pos);
+        }
+    }
+
+    // This does a way better job at cutting off the tops and bottoms of the graph than we could do
+    // by hand
+    canvas.scissor(bounds.x, bounds.y, bounds.w, bounds.h);
+    canvas.stroke_path(&mut path, &paint);
+    canvas.reset_scissor();
+}
+
 /// Overlays the gain reduction display over the spectrum analyzer.
 fn draw_gain_reduction(
     cx: &mut DrawContext,
@@ -273,13 +331,13 @@ fn draw_gain_reduction(
             0.0
         } else {
             let gr_start_ln_frequency = bin_frequency(bin_idx as f32 - 0.5).ln();
-            (gr_start_ln_frequency - LN_40_HZ) / LN_FREQ_RANGE
+            (gr_start_ln_frequency - LN_FREQ_RANGE_START_HZ) / LN_FREQ_RANGE
         };
         let t_end = if bin_idx == analyzer_data.num_bins - 1 {
             1.0
         } else {
             let gr_end_ln_frequency = bin_frequency(bin_idx as f32 + 0.5).ln();
-            (gr_end_ln_frequency - LN_40_HZ) / LN_FREQ_RANGE
+            (gr_end_ln_frequency - LN_FREQ_RANGE_START_HZ) / LN_FREQ_RANGE
         };
         if t_end < 0.0 || t_start > 1.0 {
             continue;
