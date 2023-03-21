@@ -266,13 +266,21 @@ fn draw_gain_reduction(
             continue;
         }
 
-        // The gain reduction bars are drawn width the width of the bin, centered on the bin's
-        // center frequency
-        let gr_start_ln_frequency = bin_frequency(bin_idx as f32 - 0.5).ln();
-        let gr_end_ln_frequency = bin_frequency(bin_idx as f32 + 0.5).ln();
-
-        let t_start = (gr_start_ln_frequency - LN_40_HZ) / LN_FREQ_RANGE;
-        let t_end = (gr_end_ln_frequency - LN_40_HZ) / LN_FREQ_RANGE;
+        // The gain reduction bars are drawn with the width of the bin, centered on the bin's center
+        // frequency. The first and the last bin are extended to the edges of the graph because
+        // otherwise it looks weird.
+        let t_start = if bin_idx == 0 {
+            0.0
+        } else {
+            let gr_start_ln_frequency = bin_frequency(bin_idx as f32 - 0.5).ln();
+            (gr_start_ln_frequency - LN_40_HZ) / LN_FREQ_RANGE
+        };
+        let t_end = if bin_idx == analyzer_data.num_bins - 1 {
+            1.0
+        } else {
+            let gr_end_ln_frequency = bin_frequency(bin_idx as f32 + 0.5).ln();
+            (gr_end_ln_frequency - LN_40_HZ) / LN_FREQ_RANGE
+        };
         if t_end < 0.0 || t_start > 1.0 {
             continue;
         }
