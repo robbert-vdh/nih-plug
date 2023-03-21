@@ -12,8 +12,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Added a basic analyzer that visualizes the target curve, the spectral envelope
   followers and gain reduction. The current version will be expanded a bit in
-  the future to show this information relative to the threshold target curve,
-  with some tooltips for more information.
+  the future with some tooltips and labels to show more information.
 
 ### Changed
 

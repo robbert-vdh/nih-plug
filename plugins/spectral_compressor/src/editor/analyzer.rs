@@ -351,7 +351,6 @@ fn draw_gain_reduction(
         // the way to the bottom of the spectrum analyzer. 40 dB of additional gain causes
         // the bar to be drawn from the center all the way to the top of the graph.
         // NOTE: Y-coordinates go from top to bottom, hence the minus
-        // TODO: The y-position should be relative to the target curve
         let t_y = ((-gain_difference_db + 40.0) / 80.0).clamp(0.0, 1.0);
 
         path.move_to(bounds.x + (bounds.w * t_start), bounds.y + (bounds.h * 0.5));
