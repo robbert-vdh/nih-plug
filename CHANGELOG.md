@@ -10,9 +10,7 @@ Since there is no stable release yet, the changes are organized per day in
 reverse chronological order. The main purpose of this document in its current
 state is to list breaking changes.
 
-## [HEAD]
-
-This needs to be moved to a specific date when the below changes are merged.
+## [2023-03-21]
 
 ### Changed
 
