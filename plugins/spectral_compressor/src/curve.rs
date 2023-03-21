@@ -55,6 +55,7 @@ impl<'a> Curve<'a> {
 
     /// Evaluate the curve for a value in Hertz.
     #[inline]
+    #[allow(unused)]
     pub fn evaluate_plain(&self, freq: f32) -> f32 {
         self.evaluate_log2(freq.log2())
     }
