@@ -39,6 +39,10 @@ const ENVELOPE_INIT_VALUE: f32 = std::f32::consts::FRAC_1_SQRT_2 / 8.0;
 const HIGH_FREQ_RATIO_ROLLOFF_FREQUENCY: f32 = 22_050.0;
 const HIGH_FREQ_RATIO_ROLLOFF_FREQUENCY_LN: f32 = 10.001068; // 22_050.0f32.ln()
 
+/// The length of time over which the envelope followers fade back from being instant to using the
+/// configured timingsafter the compressor bank has been reset.
+const ENVELOPE_FOLLOWER_TIMING_FADE_MS: f32 = 150.0;
+
 /// A bank of compressors so each FFT bin can be compressed individually. The vectors in this struct
 /// will have a capacity of `MAX_WINDOW_SIZE / 2 + 1` and a size that matches the current complex
 /// FFT buffer size. This is stored as a struct of arrays to make SIMD-ing easier in the future.
@@ -89,11 +93,10 @@ pub struct CompressorBank {
     /// The current envelope value for this bin, in linear space. Indexed by
     /// `[channel_idx][compressor_idx]`.
     envelopes: Vec<Vec<f32>>,
-    /// This is set to `true` for the first cycle after [`CompressorBank::reset()`] was called. This
-    /// causes the timings to briefly be zero so they'll initialize to the buffer's current value.
-    /// This results in a more natural/less unexpected behavior because with extreme settings you
-    /// might otherwise get a huge spike after a reset
-    envelopes_were_reset: bool,
+    /// A scaling factor for the envelope follower timings. This is set to 0 and then slowly brought
+    /// back up to 1 after after [`CompressorBank::reset()`] has been called to allow the envelope
+    /// followers to settle back in.
+    envelope_followers_timing_scale: f32,
     /// When sidechaining is enabled, this contains the per-channel frqeuency spectrum magnitudes
     /// for the current block. The compressor thresholds and knee values are multiplied by these
     /// values to get the effective thresholds.
@@ -451,7 +454,7 @@ impl CompressorBank {
             upwards_knee_parabola_intercept: Vec::with_capacity(complex_buffer_len),
 
             envelopes: vec![Vec::with_capacity(complex_buffer_len); num_channels],
-            envelopes_were_reset: true,
+            envelope_followers_timing_scale: 0.0,
             sidechain_spectrum_magnitudes: vec![
                 Vec::with_capacity(complex_buffer_len);
                 num_channels
@@ -563,10 +566,11 @@ impl CompressorBank {
 
     /// Clear out the envelope followers.
     pub fn reset(&mut self) {
-        // This will make the timings instant for the first iteration after a reset so it can settle
-        // in. Otherwise suspending and resetting the plugin, or changing the window size, may
-        // result in some huge spikes.
-        self.envelopes_were_reset = true;
+        // This will make the timings instant for the first iteration after a reset and then slowly
+        // fade the timings back to their intended values so the envelope followers can settle in.
+        // Otherwise suspending and resetting the plugin, or changing the window size, may result in
+        // some huge spikes.
+        self.envelope_followers_timing_scale = 0.0;
 
         // Sidechain data doesn't need to be reset as it will be overwritten immediately before use
     }
@@ -685,15 +689,23 @@ impl CompressorBank {
         params: &SpectralCompressorParams,
         overlap_times: usize,
     ) {
-        let (attack_ms, release_ms) = if self.envelopes_were_reset {
-            (0.0, 0.0)
-        } else {
-            (
-                params.global.compressor_attack_ms.value(),
-                params.global.compressor_release_ms.value(),
-            )
-        };
-        self.envelopes_were_reset = false;
+        let effective_sample_rate =
+            self.sample_rate / (self.window_size as f32 / overlap_times as f32);
+
+        // The timings are scaled by `self.envelope_followers_timing_scale` to allow the envelope
+        // followers to settle in quicker after a reset
+        let attack_ms =
+            params.global.compressor_attack_ms.value() * self.envelope_followers_timing_scale;
+        let release_ms =
+            params.global.compressor_release_ms.value() * self.envelope_followers_timing_scale;
+
+        // This needs to gradually fade from 0.0 back to 1.0 after a reset
+        if self.envelope_followers_timing_scale < 1.0 && channel_idx == self.envelopes.len() - 1 {
+            let delta =
+                ((ENVELOPE_FOLLOWER_TIMING_FADE_MS / 1000.0) * effective_sample_rate).recip();
+            self.envelope_followers_timing_scale =
+                (self.envelope_followers_timing_scale + delta).min(1.0);
+        }
 
         // The coefficient the old envelope value is multiplied by when the current rectified sample
         // value is above the envelope's value. The 0 to 1 step response retains 36.8% of the old
@@ -701,8 +713,6 @@ impl CompressorBank {
         // The effective sample rate needs to compensate for the periodic nature of the STFT
         // operation. Since with a 2048 sample window and 4x overlap, you'd run this function once
         // for every 512 samples.
-        let effective_sample_rate =
-            self.sample_rate / (self.window_size as f32 / overlap_times as f32);
         let attack_old_t = if attack_ms == 0.0 {
             0.0
         } else {
@@ -739,19 +749,25 @@ impl CompressorBank {
         params: &SpectralCompressorParams,
         overlap_times: usize,
     ) {
-        let (attack_ms, release_ms) = if self.envelopes_were_reset {
-            (0.0, 0.0)
-        } else {
-            (
-                params.global.compressor_attack_ms.value(),
-                params.global.compressor_release_ms.value(),
-            )
-        };
-        self.envelopes_were_reset = false;
-
-        // See `update_envelopes()`
         let effective_sample_rate =
             self.sample_rate / (self.window_size as f32 / overlap_times as f32);
+
+        // The timings are scaled by `self.envelope_followers_timing_scale` to allow the envelope
+        // followers to settle in quicker after a reset
+        let attack_ms =
+            params.global.compressor_attack_ms.value() * self.envelope_followers_timing_scale;
+        let release_ms =
+            params.global.compressor_release_ms.value() * self.envelope_followers_timing_scale;
+
+        // This needs to gradually fade from 0.0 back to 1.0 after a reset
+        if self.envelope_followers_timing_scale < 1.0 && channel_idx == self.envelopes.len() - 1 {
+            let delta =
+                ((ENVELOPE_FOLLOWER_TIMING_FADE_MS / 1000.0) * effective_sample_rate).recip();
+            self.envelope_followers_timing_scale =
+                (self.envelope_followers_timing_scale + delta).min(1.0);
+        }
+
+        // See `update_envelopes()`
         let attack_old_t = if attack_ms == 0.0 {
             0.0
         } else {
