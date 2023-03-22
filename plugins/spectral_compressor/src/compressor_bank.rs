@@ -693,6 +693,7 @@ impl CompressorBank {
                 params.global.compressor_release_ms.value(),
             )
         };
+        self.envelopes_were_reset = false;
 
         // The coefficient the old envelope value is multiplied by when the current rectified sample
         // value is above the envelope's value. The 0 to 1 step response retains 36.8% of the old
@@ -746,6 +747,7 @@ impl CompressorBank {
                 params.global.compressor_release_ms.value(),
             )
         };
+        self.envelopes_were_reset = false;
 
         // See `update_envelopes()`
         let effective_sample_rate =
