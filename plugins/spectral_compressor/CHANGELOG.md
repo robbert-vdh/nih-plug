@@ -10,18 +10,15 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- Added a basic analyzer that visualizes the target curve, the spectral envelope
-  followers and gain reduction. The current version will be expanded a bit in
-  the future with some tooltips and labels to show more information.
+- Added an analyzer that visualizes the target curve, the spectral envelope
+  followers and gain reduction. The current version will be expanded a bit in a
+  future with tooltips and labels to show more information.
 
 ### Changed
 
-- The envelope follower resetting behavior has changed to immediately snap to
-  the current value after the plugin is reset. When the plugin resets after
-  being suspending or after changing the window size, previously the envelopes
-  would be reset to a fixed value. This could result in loud spikes when the
-  plugin resumed from suspend when using extreme ratios and threshold settings.
-  Resets are now handled much more gracefully.
+- The envelope followers reset in a smarter way after the plugin resumes from
+  sleep or when the window size has changed. This avoids loud spikes in these
+  situations when using extreme compression settings and slow timings.
 - The default window overlap amount setting has changed to 16x. Existing patches
   are not affected.
 - On Windows, clicking on the plugin's name no longer takes you to Spectral
