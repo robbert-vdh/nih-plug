@@ -16,6 +16,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The envelope follower resetting behavior has changed to immediately snap to
+  the current value after the plugin is reset. When the plugin resets after
+  being suspending or after changing the window size, previously the envelopes
+  would be reset to a fixed value. This could result in loud spikes when the
+  plugin resumed from suspend when using extreme ratios and threshold settings.
+  Resets are now handled much more gracefully.
 - The default window overlap amount setting has changed to 16x. Existing patches
   are not affected.
 - On Windows, clicking on the plugin's name no longer takes you to Spectral

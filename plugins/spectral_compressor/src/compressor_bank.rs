@@ -89,6 +89,11 @@ pub struct CompressorBank {
     /// The current envelope value for this bin, in linear space. Indexed by
     /// `[channel_idx][compressor_idx]`.
     envelopes: Vec<Vec<f32>>,
+    /// This is set to `true` for the first cycle after [`CompressorBank::reset()`] was called. This
+    /// causes the timings to briefly be zero so they'll initialize to the buffer's current value.
+    /// This results in a more natural/less unexpected behavior because with extreme settings you
+    /// might otherwise get a huge spike after a reset
+    envelopes_were_reset: bool,
     /// When sidechaining is enabled, this contains the per-channel frqeuency spectrum magnitudes
     /// for the current block. The compressor thresholds and knee values are multiplied by these
     /// values to get the effective thresholds.
@@ -446,6 +451,7 @@ impl CompressorBank {
             upwards_knee_parabola_intercept: Vec::with_capacity(complex_buffer_len),
 
             envelopes: vec![Vec::with_capacity(complex_buffer_len); num_channels],
+            envelopes_were_reset: true,
             sidechain_spectrum_magnitudes: vec![
                 Vec::with_capacity(complex_buffer_len);
                 num_channels
@@ -557,9 +563,10 @@ impl CompressorBank {
 
     /// Clear out the envelope followers.
     pub fn reset(&mut self) {
-        for envelopes in self.envelopes.iter_mut() {
-            envelopes.fill(ENVELOPE_INIT_VALUE);
-        }
+        // This will make the timings instant for the first iteration after a reset so it can settle
+        // in. Otherwise suspending and resetting the plugin, or changing the window size, may
+        // result in some huge spikes.
+        self.envelopes_were_reset = true;
 
         // Sidechain data doesn't need to be reset as it will be overwritten immediately before use
     }
@@ -678,6 +685,15 @@ impl CompressorBank {
         params: &SpectralCompressorParams,
         overlap_times: usize,
     ) {
+        let (attack_ms, release_ms) = if self.envelopes_were_reset {
+            (0.0, 0.0)
+        } else {
+            (
+                params.global.compressor_attack_ms.value(),
+                params.global.compressor_release_ms.value(),
+            )
+        };
+
         // The coefficient the old envelope value is multiplied by when the current rectified sample
         // value is above the envelope's value. The 0 to 1 step response retains 36.8% of the old
         // value after the attack time has elapsed, and current value is 63.2% of the way towards 1.
@@ -686,19 +702,17 @@ impl CompressorBank {
         // for every 512 samples.
         let effective_sample_rate =
             self.sample_rate / (self.window_size as f32 / overlap_times as f32);
-        let attack_old_t = if params.global.compressor_attack_ms.value() == 0.0 {
+        let attack_old_t = if attack_ms == 0.0 {
             0.0
         } else {
-            (-1.0 / (params.global.compressor_attack_ms.value() / 1000.0 * effective_sample_rate))
-                .exp()
+            (-1.0 / (attack_ms / 1000.0 * effective_sample_rate)).exp()
         };
         let attack_new_t = 1.0 - attack_old_t;
         // The same as `attack_old_t`, but for the release phase of the envelope follower
-        let release_old_t = if params.global.compressor_release_ms.value() == 0.0 {
+        let release_old_t = if release_ms == 0.0 {
             0.0
         } else {
-            (-1.0 / (params.global.compressor_release_ms.value() / 1000.0 * effective_sample_rate))
-                .exp()
+            (-1.0 / (release_ms / 1000.0 * effective_sample_rate)).exp()
         };
         let release_new_t = 1.0 - release_old_t;
 
@@ -724,21 +738,28 @@ impl CompressorBank {
         params: &SpectralCompressorParams,
         overlap_times: usize,
     ) {
+        let (attack_ms, release_ms) = if self.envelopes_were_reset {
+            (0.0, 0.0)
+        } else {
+            (
+                params.global.compressor_attack_ms.value(),
+                params.global.compressor_release_ms.value(),
+            )
+        };
+
         // See `update_envelopes()`
         let effective_sample_rate =
             self.sample_rate / (self.window_size as f32 / overlap_times as f32);
-        let attack_old_t = if params.global.compressor_attack_ms.value() == 0.0 {
+        let attack_old_t = if attack_ms == 0.0 {
             0.0
         } else {
-            (-1.0 / (params.global.compressor_attack_ms.value() / 1000.0 * effective_sample_rate))
-                .exp()
+            (-1.0 / (attack_ms / 1000.0 * effective_sample_rate)).exp()
         };
         let attack_new_t = 1.0 - attack_old_t;
-        let release_old_t = if params.global.compressor_release_ms.value() == 0.0 {
+        let release_old_t = if release_ms == 0.0 {
             0.0
         } else {
-            (-1.0 / (params.global.compressor_release_ms.value() / 1000.0 * effective_sample_rate))
-                .exp()
+            (-1.0 / (release_ms / 1000.0 * effective_sample_rate)).exp()
         };
         let release_new_t = 1.0 - release_old_t;
 
