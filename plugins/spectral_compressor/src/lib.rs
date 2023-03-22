@@ -35,9 +35,9 @@ mod editor;
 const MIN_WINDOW_ORDER: usize = 6;
 #[allow(dead_code)]
 const MIN_WINDOW_SIZE: usize = 1 << MIN_WINDOW_ORDER; // 64
-const DEFAULT_WINDOW_ORDER: usize = 12;
+const DEFAULT_WINDOW_ORDER: usize = 11;
 #[allow(dead_code)]
-const DEFAULT_WINDOW_SIZE: usize = 1 << DEFAULT_WINDOW_ORDER; // 4096
+const DEFAULT_WINDOW_SIZE: usize = 1 << DEFAULT_WINDOW_ORDER; // 2048
 const MAX_WINDOW_ORDER: usize = 15;
 const MAX_WINDOW_SIZE: usize = 1 << MAX_WINDOW_ORDER; // 32768
 
