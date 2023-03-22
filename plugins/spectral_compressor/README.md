@@ -5,6 +5,8 @@ Spectral Compressor can squash anything into pink noise, apply simultaneous
 upwards and downwards compressor to dynamically match the sidechain signal's
 spectrum and morph one sound into another, and lots more.
 
+![Screenshot](https://i.imgur.com/r6WfoYp.png)
+
 This is a port of https://github.com/robbert-vdh/spectral-compressor with more
 features and much better performance.
 
