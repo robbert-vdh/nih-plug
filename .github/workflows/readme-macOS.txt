@@ -1,3 +1,8 @@
+You may need to disable Gatekeeper on macOS to be able to use the plugins:
+https://disable-gatekeeper.github.io/
+
+---
+
 To install the VST3 plugins, copy the .vst3 bundles to:
 ~/Library/Audio/Plug-Ins/VST3
 
