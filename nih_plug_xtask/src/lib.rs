@@ -298,7 +298,7 @@ pub fn bundle(package: &str, args: &[String], universal: bool) -> Result<()> {
         let bin_path = target_base.join(binary_basename(package, compilation_target));
         let lib_path = target_base.join(library_basename(package, compilation_target));
         if !bin_path.exists() && !lib_path.exists() {
-            anyhow::bail!("Could not find built library at '{}'", lib_path.display());
+            anyhow::bail!("Could not find built library at '{}'.\nHint: Maybe you forgot to add:\n\n[lib]\ncrate-type = [\"cdylib\"]\n\nto your Cargo.toml?\n", lib_path.display());
         }
 
         eprintln!();
