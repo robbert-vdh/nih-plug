@@ -1139,13 +1139,12 @@ impl CompressorBank {
                 // This is the formula from the Digital Dynamic Range Compressor Design paper by
                 // Dimitrios Giannoulis et. al. These are `a` and `b` from the `x + a * (x + b)^2`
                 // respectively used to compute the soft knee respectively.
-                *knee_parabola_scale = if downwards_knee_width_db != 0.0 {
-                    (2.0 * downwards_knee_width_db * *ratio).recip()
-                        - (2.0 * downwards_knee_width_db).recip()
-                } else {
-                    1.0
-                };
-                *knee_parambola_intercept = -threshold_db + (downwards_knee_width_db / 2.0);
+                (*knee_parabola_scale, *knee_parambola_intercept) =
+                    downwards_soft_knee_coefficients(
+                        *threshold_db,
+                        downwards_knee_width_db,
+                        *ratio,
+                    );
             }
         }
 
@@ -1165,15 +1164,9 @@ impl CompressorBank {
                         .zip(self.upwards_knee_parabola_intercept.iter_mut()),
                 )
             {
-                // For the upwards version the scale becomes negated
-                *knee_parabola_scale = if upwards_knee_width_db != 0.0 {
-                    -((2.0 * upwards_knee_width_db * *ratio).recip()
-                        - (2.0 * upwards_knee_width_db).recip())
-                } else {
-                    1.0
-                };
-                // And the `+ (knee/2)` becomes `- (knee/2)` in the intercept
-                *knee_parambola_intercept = -threshold_db - (upwards_knee_width_db / 2.0);
+                // The upwards version is slightly different
+                (*knee_parabola_scale, *knee_parambola_intercept) =
+                    upwards_soft_knee_coefficients(*threshold_db, upwards_knee_width_db, *ratio);
             }
         }
     }
@@ -1229,4 +1222,38 @@ fn compress_upwards(
     } else {
         threshold_db + ((input_db - threshold_db) / ratio)
     }
+}
+
+/// Compute the `(scale, intercept)`/`(a, b)` coefficients for the parabolic formula `x + a * (x +
+/// b)^2`. The formula is taken from the Digital Dynamic Range Compressor Design paper by Dimitrios
+/// Giannoulis et. al. This version applies to downwards compression. It can be precalculated for
+/// the regular modes, since it's dependent on the threshold it has to be recomputed for every
+/// sample with the sidechain matching mode.
+fn downwards_soft_knee_coefficients(
+    threshold_db: f32,
+    knee_width_db: f32,
+    ratio: f32,
+) -> (f32, f32) {
+    let scale = if knee_width_db != 0.0 {
+        (2.0 * knee_width_db * ratio).recip() - (2.0 * knee_width_db).recip()
+    } else {
+        1.0
+    };
+    let intercept = -threshold_db + (knee_width_db / 2.0);
+
+    (scale, intercept)
+}
+
+/// [`downwards_soft_knee_coefficients()`], but for upwards compression.
+fn upwards_soft_knee_coefficients(threshold_db: f32, knee_width_db: f32, ratio: f32) -> (f32, f32) {
+    // For the upwards version the scale becomes negated
+    let scale = if knee_width_db != 0.0 {
+        -((2.0 * knee_width_db * ratio).recip() - (2.0 * knee_width_db).recip())
+    } else {
+        1.0
+    };
+    // And the `+ (knee/2)` becomes `- (knee/2)` in the intercept
+    let intercept = -threshold_db - (knee_width_db / 2.0);
+
+    (scale, intercept)
 }
