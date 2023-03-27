@@ -16,6 +16,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Fixed the soft-knee options in the sidechain matching mode. They previously
+  didn't account for the changing compressor thresholds, which could result in
+  unexpected loud volume spikes.
 - The sidechain matching mode now caps the relative thresholds to behave more
   consistently with quiet inputs.
 

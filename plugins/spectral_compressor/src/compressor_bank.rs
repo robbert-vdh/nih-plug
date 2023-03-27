@@ -953,12 +953,8 @@ impl CompressorBank {
         assert!(self.sidechain_spectrum_magnitudes[channel_idx].len() == buffer.len());
         assert!(self.downwards_thresholds_db.len() == buffer.len());
         assert!(self.downwards_ratios.len() == buffer.len());
-        assert!(self.downwards_knee_parabola_scale.len() == buffer.len());
-        assert!(self.downwards_knee_parabola_intercept.len() == buffer.len());
         assert!(self.upwards_thresholds_db.len() == buffer.len());
         assert!(self.upwards_ratios.len() == buffer.len());
-        assert!(self.upwards_knee_parabola_scale.len() == buffer.len());
-        assert!(self.upwards_knee_parabola_intercept.len() == buffer.len());
         for (bin_idx, (bin, envelope)) in buffer
             .iter_mut()
             .zip(self.envelopes[channel_idx].iter())
@@ -991,40 +987,44 @@ impl CompressorBank {
                 unsafe { self.downwards_thresholds_db.get_unchecked(bin_idx) + sidechain_scale_db }
                     .max(util::MINUS_INFINITY_DB);
             let downwards_ratio = unsafe { self.downwards_ratios.get_unchecked(bin_idx) };
-            let downwards_knee_parabola_scale =
-                unsafe { self.downwards_knee_parabola_scale.get_unchecked(bin_idx) };
-            let downwards_knee_parabola_intercept = unsafe {
-                self.downwards_knee_parabola_intercept
-                    .get_unchecked(bin_idx)
-            };
+            // Because the thresholds are scaled based on the sidechain input, we also need to
+            // recompute the knee coefficients
+            let (downwards_knee_parabola_scale, downwards_knee_parabola_intercept) =
+                downwards_soft_knee_coefficients(
+                    downwards_threshold_db,
+                    downwards_knee_width_db,
+                    *downwards_ratio,
+                );
             let downwards_compressed = compress_downwards(
                 envelope_db,
                 downwards_threshold_db,
                 *downwards_ratio,
                 downwards_knee_width_db,
-                *downwards_knee_parabola_scale,
-                *downwards_knee_parabola_intercept,
+                downwards_knee_parabola_scale,
+                downwards_knee_parabola_intercept,
             );
 
             let upwards_threshold_db =
                 unsafe { self.upwards_thresholds_db.get_unchecked(bin_idx) + sidechain_scale_db }
                     .max(util::MINUS_INFINITY_DB);
             let upwards_ratio = unsafe { self.upwards_ratios.get_unchecked(bin_idx) };
-            let upwards_knee_parabola_scale =
-                unsafe { self.upwards_knee_parabola_scale.get_unchecked(bin_idx) };
-            let upwards_knee_parabola_intercept =
-                unsafe { self.upwards_knee_parabola_intercept.get_unchecked(bin_idx) };
             let upwards_compressed = if bin_idx >= first_non_dc_bin
                 && *upwards_ratio != 1.0
                 && envelope_db > util::MINUS_INFINITY_DB
             {
+                let (upwards_knee_parabola_scale, upwards_knee_parabola_intercept) =
+                    upwards_soft_knee_coefficients(
+                        upwards_threshold_db,
+                        upwards_knee_width_db,
+                        *upwards_ratio,
+                    );
                 compress_upwards(
                     envelope_db,
                     upwards_threshold_db,
                     *upwards_ratio,
                     upwards_knee_width_db,
-                    *upwards_knee_parabola_scale,
-                    *upwards_knee_parabola_intercept,
+                    upwards_knee_parabola_scale,
+                    upwards_knee_parabola_intercept,
                 )
             } else {
                 envelope_db
