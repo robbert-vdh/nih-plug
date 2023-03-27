@@ -14,6 +14,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   tradeoff between faster timings and more spectral precision. Existing
   instances are not affected.
 
+### Fixed
+
+- The sidechain matching mode now caps the relative thresholds to behave more
+  consistently with quiet inputs.
+
 ## [0.4.2] - 2023-03-22
 
 ### Changed

@@ -988,7 +988,8 @@ impl CompressorBank {
 
             // Notice how the threshold and knee values are scaled here
             let downwards_threshold_db =
-                unsafe { self.downwards_thresholds_db.get_unchecked(bin_idx) + sidechain_scale_db };
+                unsafe { self.downwards_thresholds_db.get_unchecked(bin_idx) + sidechain_scale_db }
+                    .max(util::MINUS_INFINITY_DB);
             let downwards_ratio = unsafe { self.downwards_ratios.get_unchecked(bin_idx) };
             let downwards_knee_parabola_scale =
                 unsafe { self.downwards_knee_parabola_scale.get_unchecked(bin_idx) };
@@ -1006,7 +1007,8 @@ impl CompressorBank {
             );
 
             let upwards_threshold_db =
-                unsafe { self.upwards_thresholds_db.get_unchecked(bin_idx) + sidechain_scale_db };
+                unsafe { self.upwards_thresholds_db.get_unchecked(bin_idx) + sidechain_scale_db }
+                    .max(util::MINUS_INFINITY_DB);
             let upwards_ratio = unsafe { self.upwards_ratios.get_unchecked(bin_idx) };
             let upwards_knee_parabola_scale =
                 unsafe { self.upwards_knee_parabola_scale.get_unchecked(bin_idx) };
