@@ -10,6 +10,24 @@ Since there is no stable release yet, the changes are organized per day in
 reverse chronological order. The main purpose of this document in its current
 state is to list breaking changes.
 
+## [2023-03-31]
+
+### Changed
+
+- Buffer management has been completely rewritten so it can be shared among all
+  of NIH-plug's backends. This should not result in any noticeable changes, but
+  it should reduce the chances of backend-specific bugs when it comes to
+  interacting with audio buffers and it will make it simpler to implement buffer
+  management for new plugin APIs.
+
+### Fixed
+
+- When a main IO audio buffers has more output channels than input channels, the
+  excess output channels are now correctly filled with zeroes instead of
+  containing whatever data was left in the host's output buffers. As part of
+  this change NIH-plug's buffer management has been refactored to reuse the same
+  logic in all of its wrappers.
+
 ## [2023-03-21]
 
 ### Changed
