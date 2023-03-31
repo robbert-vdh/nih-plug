@@ -5,6 +5,7 @@ use std::os::raw::c_char;
 
 use crate::util::permit_alloc;
 
+pub(crate) mod buffer_management;
 #[cfg(debug_assertions)]
 pub(crate) mod context_checks;
 
