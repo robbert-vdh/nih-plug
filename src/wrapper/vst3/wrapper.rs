@@ -1,9 +1,8 @@
 use std::borrow::Borrow;
-use std::cmp;
 use std::ffi::c_void;
 use std::mem::{self, MaybeUninit};
 use std::num::NonZeroU32;
-use std::ptr;
+use std::ptr::NonNull;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use vst3_com::vst::{DataEvent, IProcessContextRequirementsFlags, ProcessModes};
@@ -28,7 +27,6 @@ use super::util::{
 use super::util::{VST3_MIDI_CHANNELS, VST3_MIDI_PARAMS_END};
 use super::view::WrapperView;
 use crate::audio_setup::{AuxiliaryBuffers, BufferConfig, ProcessMode};
-use crate::buffer::Buffer;
 use crate::context::process::Transport;
 use crate::midi::sysex::SysExMessage;
 use crate::midi::{MidiConfig, NoteEvent};
@@ -36,6 +34,7 @@ use crate::params::ParamFlags;
 use crate::plugin::{ProcessStatus, Vst3Plugin};
 use crate::util::permit_alloc;
 use crate::wrapper::state;
+use crate::wrapper::util::buffer_management::{BufferManager, ChannelPointers};
 use crate::wrapper::util::{clamp_input_event_timing, clamp_output_event_timing, process_wrapper};
 
 // Alias needed for the VST3 attribute macro
@@ -390,62 +389,13 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
                     //       instead. Otherwise we would call the function twice, and `set_process()` needs
                     //       to be called after this function before the plugin may process audio again.
 
-                    // Preallocate enough room in the output slices vector so we can convert a `*mut *mut
-                    // f32` to a `&mut [&mut f32]` in the process call
-                    self.inner
-                        .output_buffer
-                        .borrow_mut()
-                        .set_slices(0, |output_slices| {
-                            output_slices.resize_with(
-                                audio_io_layout
-                                    .main_output_channels
-                                    .map(NonZeroU32::get)
-                                    .unwrap_or_default() as usize,
-                                || &mut [],
-                            );
-                            // All slices must have the same length, so if the number of output
-                            // channels has changed since the last call then we should make sure to
-                            // clear any old (dangling) slices to be consistent
-                            output_slices.fill_with(|| &mut []);
-                        });
-
-                    // Also allocate both the buffers and the slices pointing to those buffers for
-                    // sidechain inputs. The slices will be assigned in the process function as this
-                    // object may have been moved before then.
-                    let mut aux_input_storage = self.inner.aux_input_storage.borrow_mut();
-                    let mut aux_input_buffers = self.inner.aux_input_buffers.borrow_mut();
-                    aux_input_storage.resize_with(audio_io_layout.aux_input_ports.len(), Vec::new);
-                    aux_input_buffers
-                        .resize_with(audio_io_layout.aux_input_ports.len(), Buffer::default);
-                    for ((buffer_storage, buffer), num_channels) in aux_input_storage
-                        .iter_mut()
-                        .zip(aux_input_buffers.iter_mut())
-                        .zip(audio_io_layout.aux_input_ports.iter())
-                    {
-                        buffer_storage.resize_with(num_channels.get() as usize, Vec::new);
-                        for channel_storage in buffer_storage {
-                            channel_storage.resize(buffer_config.max_buffer_size as usize, 0.0);
-                        }
-
-                        buffer.set_slices(0, |channel_slices| {
-                            channel_slices.resize_with(num_channels.get() as usize, || &mut []);
-                            channel_slices.fill_with(|| &mut []);
-                        });
-                    }
-
-                    // And the same thing for the output buffers
-                    let mut aux_output_buffers = self.inner.aux_output_buffers.borrow_mut();
-                    aux_output_buffers
-                        .resize_with(audio_io_layout.aux_output_ports.len(), Buffer::default);
-                    for (buffer, num_channels) in aux_output_buffers
-                        .iter_mut()
-                        .zip(audio_io_layout.aux_output_ports.iter())
-                    {
-                        buffer.set_slices(0, |channel_slices| {
-                            channel_slices.resize_with(num_channels.get() as usize, || &mut []);
-                            channel_slices.fill_with(|| &mut []);
-                        });
-                    }
+                    // This preallocates enough space so we can transform all of the host's raw
+                    // channel pointers into a set of `Buffer` objects for the plugin's main and
+                    // auxiliary IO
+                    *self.inner.buffer_manager.borrow_mut() = BufferManager::for_audio_io_layout(
+                        buffer_config.max_buffer_size as usize,
+                        audio_io_layout,
+                    );
 
                     kResultOk
                 } else {
@@ -473,7 +423,11 @@ impl<P: Vst3Plugin> IComponent for Wrapper<P> {
         let mut eof_pos = 0;
         if state.tell(&mut current_pos) != kResultOk
             || state.seek(0, vst3_sys::base::kIBSeekEnd, &mut eof_pos) != kResultOk
-            || state.seek(current_pos, vst3_sys::base::kIBSeekSet, ptr::null_mut()) != kResultOk
+            || state.seek(
+                current_pos,
+                vst3_sys::base::kIBSeekSet,
+                std::ptr::null_mut(),
+            ) != kResultOk
         {
             nih_debug_assert_failure!("Could not get the stream length");
             return kResultFalse;
@@ -744,7 +698,7 @@ impl<P: Vst3Plugin> IEditController for Wrapper<P> {
         match self.inner.editor.borrow().as_ref() {
             Some(editor) => Box::into_raw(WrapperView::new(self.inner.clone(), editor.clone()))
                 as *mut vst3_sys::c_void,
-            None => ptr::null_mut(),
+            None => std::ptr::null_mut(),
         }
     }
 }
@@ -1002,26 +956,22 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
 
             let total_buffer_len = data.num_samples as usize;
 
-            // Before doing anything, clear out any auxiliary outputs since they may contain
-            // uninitialized data when the host assumes that we'll always write something there
             let current_audio_io_layout = self.inner.current_audio_io_layout.load();
             let has_main_input = current_audio_io_layout.main_input_channels.is_some();
             let has_main_output = current_audio_io_layout.main_output_channels.is_some();
             let aux_input_start_idx = if has_main_input { 1 } else { 0 };
             let aux_output_start_idx = if has_main_output { 1 } else { 0 };
-            if !data.outputs.is_null() {
-                for output_idx in aux_output_start_idx..data.num_outputs as usize {
-                    let host_output = data.outputs.add(output_idx);
-                    if !(*host_output).buffers.is_null() {
-                        for channel_idx in 0..(*host_output).num_channels as isize {
-                            ptr::write_bytes(
-                                *((*host_output).buffers.offset(channel_idx)) as *mut f32,
-                                0,
-                                total_buffer_len,
-                            );
-                        }
-                    }
-                }
+
+            // NOTE: VST3 hosts may trigger a 'parameter flush' by calling the process function for
+            //       0 input samples. If this is the case then we'll only handle events and skip all
+            //       audio processing. Some hosts, like Ableton Live, implement this in a broken way
+            //       and instead only set the number of channels to 0. In that case the
+            //       'buffer_is_valid' check from below should still prevent audio processing.
+            let mut is_param_flush = total_buffer_len == 0;
+            if (data.num_outputs == 0 || data.outputs.is_null())
+                && (has_main_output || !current_audio_io_layout.aux_output_ports.is_empty())
+            {
+                is_param_flush = true;
             }
 
             // If `P::SAMPLE_ACCURATE_AUTOMATION` is set, then we'll split up the audio buffer into
@@ -1271,270 +1221,205 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                     }
                 }
 
-                // This vector has been preallocated to contain enough slices as there are output
-                // channels. In case the does does not provide an output or if they don't provide
-                // all of the channels (this should not happen, but Ableton Live might do it) then
-                // we'll skip the process function.
-                let block_len = block_end - block_start;
-                let mut output_buffer = self.inner.output_buffer.borrow_mut();
-                let mut buffer_is_valid = false;
-                output_buffer.set_slices(block_len, |output_slices| {
-                    // Buffers for zero-channel plugins like note effects should always be allowed
-                    buffer_is_valid = output_slices.is_empty();
-
-                    if !data.outputs.is_null() && has_main_output {
-                        let num_output_channels = (*data.outputs).num_channels as usize;
-                        // This ensures that we never feed dangling slices to the wrapped plugin
-                        buffer_is_valid = num_output_channels == output_slices.len();
-                        nih_debug_assert_eq!(num_output_channels, output_slices.len());
-
-                        // In case the host does provide fewer output channels than we expect, we
-                        // should still try to handle that gracefully. This happens when the plugin
-                        // is bypassed in Ableton Live and a parameter is modified. In that case the
-                        // above assertion will still trigger.
-                        for (output_channel_idx, output_channel_slice) in output_slices
-                            .iter_mut()
-                            .take(num_output_channels)
-                            .enumerate()
-                        {
-                            // If `P::SAMPLE_ACCURATE_AUTOMATION` is set, then we may be iterating
-                            // over the buffer in smaller sections.
-                            // SAFETY: These pointers may not be valid outside of this function even
-                            // though their lifetime is equal to this structs. This is still safe
-                            // because they are only dereferenced here later as part of this process
-                            // function.
-                            let channel_ptr =
-                                *((*data.outputs).buffers as *mut *mut f32).add(output_channel_idx);
-                            *output_channel_slice = std::slice::from_raw_parts_mut(
-                                channel_ptr.add(block_start),
-                                block_len,
-                            );
-                        }
-                    }
-                });
-
-                // Some hosts process data in place, in which case we don't need to do any copying
-                // ourselves. If the pointers do not alias, then we'll do the copy here and then the
-                // plugin can just do normal in place processing.
-                if !data.outputs.is_null()
-                    && !data.inputs.is_null()
-                    && has_main_input
-                    && has_main_output
-                {
-                    let num_output_channels = (*data.outputs).num_channels as usize;
-                    let num_input_channels = (*data.inputs).num_channels as usize;
-                    nih_debug_assert!(
-                        num_input_channels <= num_output_channels,
-                        "Stereo to mono and similar configurations are not supported"
-                    );
-                    for input_channel_idx in 0..cmp::min(num_input_channels, num_output_channels) {
-                        let output_channel_ptr =
-                            *((*data.outputs).buffers as *mut *mut f32).add(input_channel_idx);
-                        let input_channel_ptr =
-                            *((*data.inputs).buffers as *const *const f32).add(input_channel_idx);
-                        if input_channel_ptr != output_channel_ptr {
-                            ptr::copy_nonoverlapping(
-                                input_channel_ptr.add(block_start),
-                                output_channel_ptr.add(block_start),
-                                block_len,
-                            );
-                        }
-                    }
-                }
-
-                // We'll need to do the same thing for auxiliary input sidechain buffers. Since we
-                // don't know whether overwriting the host's buffers is safe here or not, we'll copy
-                // the data to our own buffers instead. These buffers are only accessible through
-                // the `aux` parameter on the `process()` function.
-                let mut aux_input_storage = self.inner.aux_input_storage.borrow_mut();
-                let mut aux_input_buffers = self.inner.aux_input_buffers.borrow_mut();
-                for (aux_input_idx, (storage, buffer)) in aux_input_storage
-                    .iter_mut()
-                    .zip(aux_input_buffers.iter_mut())
-                    .enumerate()
-                {
-                    let host_input_idx = aux_input_start_idx + aux_input_idx;
-                    let host_input = data.inputs.add(host_input_idx);
-                    if host_input_idx >= data.num_inputs as usize
-                             || data.inputs.is_null()
-                             || (*host_input).buffers.is_null()
-                             // Would only happen if the user configured zero channels for the
-                             // auxiliary buffers
-                             || storage.is_empty()
-                             || (*host_input).num_channels != buffer.channels() as i32
-                    {
-                        // During a parameter flush the number of inputs/outputs may be 0 and the
-                        // number of channels may be 0, so these assertions need to be a bit more
-                        // relaxed
-                        nih_debug_assert!(
-                            data.num_inputs == 0 || host_input_idx < data.num_inputs as usize
-                        );
-                        nih_debug_assert!(!storage.is_empty());
-                        if !data.inputs.is_null() && host_input_idx < data.num_inputs as usize {
-                            nih_debug_assert!(!(*host_input).buffers.is_null());
-                            nih_debug_assert!(
-                                (*host_input).num_channels == 0
-                                    || (*host_input).num_channels == buffer.channels() as i32
-                            );
-                        }
-
-                        // If the host passes weird data then we need to be very sure that there are
-                        // no dangling references to previous data
-                        buffer.set_slices(0, |slices| slices.fill_with(|| &mut []));
-                        continue;
-                    }
-
-                    // We'll always reuse the start of the buffer even of the current block is
-                    // shorter for cache locality reasons
-                    for (channel_idx, channel_storage) in storage.iter_mut().enumerate() {
-                        // The `set_len()` avoids having to unnecessarily fill the buffer with
-                        // zeroes when sizing up
-                        assert!(block_len <= channel_storage.capacity());
-                        channel_storage.set_len(block_len);
-                        channel_storage.copy_from_slice(std::slice::from_raw_parts(
-                            (*(*host_input).buffers.add(channel_idx)).add(block_start)
-                                as *const f32,
-                            block_len,
-                        ));
-                    }
-
-                    buffer.set_slices(block_len, |slices| {
-                        for (channel_slice, channel_storage) in
-                            slices.iter_mut().zip(storage.iter_mut())
-                        {
-                            // SAFETY: The 'static cast is required because Rust does not allow you
-                            //         to store references to a field in another field.  Because
-                            //         these slices are set here before the process function is
-                            //         called, we ensure that there are no dangling slices. These
-                            //         buffers/slices are only ever read from in the second part of
-                            //         this block process loop.
-                            *channel_slice = &mut *(channel_storage.as_mut_slice() as *mut [f32]);
-                        }
-                    });
-                }
-
-                // And the same thing for auxiliary output buffers
-                let mut aux_output_buffers = self.inner.aux_output_buffers.borrow_mut();
-                for (aux_output_idx, buffer) in aux_output_buffers.iter_mut().enumerate() {
-                    let host_output_idx = aux_output_start_idx + aux_output_idx;
-                    let host_output = data.outputs.add(host_output_idx);
-                    if host_output_idx >= data.num_outputs as usize
-                        || data.outputs.is_null()
-                        || (*host_output).buffers.is_null()
-                        || buffer.channels() == 0
-                        || (*host_output).num_channels != buffer.channels() as i32
-                    {
-                        nih_debug_assert!(host_output_idx < data.num_outputs as usize);
-                        nih_debug_assert!(!data.outputs.is_null());
-                        if !data.outputs.is_null() && host_output_idx < data.num_outputs as usize {
-                            nih_debug_assert!(!(*host_output).buffers.is_null());
-                            nih_debug_assert!(
-                                !(*host_output).num_channels == 0
-                                    || !(*host_output).num_channels == buffer.channels() as i32
-                            );
-                        }
-
-                        // If the host passes weird data then we need to be very sure that there are
-                        // no dangling references to previous data
-                        buffer.set_slices(0, |slices| slices.fill_with(|| &mut []));
-                        continue;
-                    }
-
-                    buffer.set_slices(block_len, |slices| {
-                        for (channel_idx, channel_slice) in slices.iter_mut().enumerate() {
-                            *channel_slice = std::slice::from_raw_parts_mut(
-                                (*(*host_output).buffers.add(channel_idx)).add(block_start)
-                                    as *mut f32,
-                                block_len,
-                            );
-                        }
-                    });
-                }
-
-                // Some of the fields are left empty because VST3 does not provide this
-                // information, but the methods on [`Transport`] can reconstruct these values
-                // from the other fields
-                let mut transport = Transport::new(sample_rate);
-                if !data.context.is_null() {
-                    let context = &*data.context;
-
-                    // These constants are missing from vst3-sys, see:
-                    // https://steinbergmedia.github.io/vst3_doc/vstinterfaces/structSteinberg_1_1Vst_1_1ProcessContext.html
-                    transport.playing = context.state & (1 << 1) != 0; // kPlaying
-                    transport.recording = context.state & (1 << 3) != 0; // kRecording
-                    if context.state & (1 << 10) != 0 {
-                        // kTempoValid
-                        transport.tempo = Some(context.tempo);
-                    }
-                    if context.state & (1 << 13) != 0 {
-                        // kTimeSigValid
-                        transport.time_sig_numerator = Some(context.time_sig_num);
-                        transport.time_sig_denominator = Some(context.time_sig_den);
-                    }
-
-                    // We need to compensate for the block splitting here
-                    transport.pos_samples = Some(context.project_time_samples + block_start as i64);
-                    if context.state & (1 << 9) != 0 {
-                        // kProjectTimeMusicValid
-                        if P::SAMPLE_ACCURATE_AUTOMATION
-                            && block_start > 0
-                            && (context.state & (1 << 10) != 0)
-                        {
-                            // kTempoValid
-                            transport.pos_beats = Some(
-                                context.project_time_music
-                                    + (block_start as f64 / sample_rate as f64 / 60.0
-                                        * context.tempo),
-                            );
-                        } else {
-                            transport.pos_beats = Some(context.project_time_music);
-                        }
-                    }
-
-                    if context.state & (1 << 11) != 0 {
-                        // kBarPositionValid
-                        if P::SAMPLE_ACCURATE_AUTOMATION && block_start > 0 {
-                            // The transport object knows how to recompute this from the other information
-                            transport.bar_start_pos_beats = match transport.bar_start_pos_beats() {
-                                Some(updated) => Some(updated),
-                                None => Some(context.bar_position_music),
-                            };
-                        } else {
-                            transport.bar_start_pos_beats = Some(context.bar_position_music);
-                        }
-                    }
-                    if context.state & (1 << 2) != 0 && context.state & (1 << 12) != 0 {
-                        // kCycleActive && kCycleValid
-                        transport.loop_range_beats =
-                            Some((context.cycle_start_music, context.cycle_end_music));
-                    }
-                }
-
-                let result = if buffer_is_valid {
-                    // NOTE: `parking_lot`'s mutexes sometimes allocate because of their use of
-                    //       thread locals
-                    let mut plugin = permit_alloc(|| self.inner.plugin.lock());
-                    // SAFETY: Shortening these borrows is safe as even if the plugin overwrites the
-                    //         slices (which it cannot do without using unsafe code), then they
-                    //         would still be reset on the next iteration
-                    let mut aux = AuxiliaryBuffers {
-                        inputs: &mut *(aux_input_buffers.as_mut_slice() as *mut [Buffer]),
-                        outputs: &mut *(aux_output_buffers.as_mut_slice() as *mut [Buffer]),
-                    };
-                    let mut context = self.inner.make_process_context(transport);
-                    let result = plugin.process(&mut output_buffer, &mut aux, &mut context);
-                    self.inner.last_process_status.store(result);
-                    result
+                let result = if is_param_flush {
+                    kResultOk
                 } else {
-                    ProcessStatus::Normal
+                    // After processing the events we now know where/if the block should be split,
+                    // and we can start preparing audio processing
+                    let block_len = block_end - block_start;
+
+                    // The buffer manager preallocated buffer slices for all the IO and storage for
+                    // any axuiliary inputs.
+                    let mut buffer_manager = self.inner.buffer_manager.borrow_mut();
+                    let buffers = buffer_manager.create_buffers(block_len, |buffer_source| {
+                        if data.num_outputs > 0
+                            && !data.outputs.is_null()
+                            && !(*data.outputs).buffers.is_null()
+                            && has_main_output
+                        {
+                            let audio_output = &*data.outputs;
+                            let ptrs = NonNull::new(audio_output.buffers as *mut *mut f32).unwrap();
+                            let num_channels = audio_output.num_channels as usize;
+
+                            *buffer_source.main_output_channel_pointers =
+                                Some(ChannelPointers { ptrs, num_channels });
+                        }
+
+                        if data.num_inputs > 0
+                            && !data.inputs.is_null()
+                            && !(*data.inputs).buffers.is_null()
+                            && has_main_input
+                        {
+                            let audio_input = &*data.inputs;
+                            let ptrs = NonNull::new(audio_input.buffers as *mut *mut f32).unwrap();
+                            let num_channels = audio_input.num_channels as usize;
+
+                            *buffer_source.main_input_channel_pointers =
+                                Some(ChannelPointers { ptrs, num_channels });
+                        }
+
+                        if !data.inputs.is_null() {
+                            for (aux_input_no, aux_input_channel_pointers) in buffer_source
+                                .aux_input_channel_pointers
+                                .iter_mut()
+                                .enumerate()
+                            {
+                                let aux_input_idx = aux_input_no + aux_input_start_idx;
+                                if aux_input_idx > data.num_outputs as usize {
+                                    break;
+                                }
+
+                                let audio_input = &*data.inputs.add(aux_input_idx);
+                                match NonNull::new(audio_input.buffers as *mut *mut f32) {
+                                    Some(ptrs) => {
+                                        let num_channels = audio_input.num_channels as usize;
+
+                                        *aux_input_channel_pointers =
+                                            Some(ChannelPointers { ptrs, num_channels });
+                                    }
+                                    None => continue,
+                                }
+                            }
+                        }
+
+                        if !data.outputs.is_null() {
+                            for (aux_output_no, aux_output_channel_pointers) in buffer_source
+                                .aux_output_channel_pointers
+                                .iter_mut()
+                                .enumerate()
+                            {
+                                let aux_output_idx = aux_output_no + aux_output_start_idx;
+                                if aux_output_idx > data.num_outputs as usize {
+                                    break;
+                                }
+
+                                let audio_output = &*data.outputs.add(aux_output_idx);
+                                match NonNull::new(audio_output.buffers as *mut *mut f32) {
+                                    Some(ptrs) => {
+                                        let num_channels = audio_output.num_channels as usize;
+
+                                        *aux_output_channel_pointers =
+                                            Some(ChannelPointers { ptrs, num_channels });
+                                    }
+                                    None => continue,
+                                }
+                            }
+                        }
+                    });
+
+                    // We already checked whether the host has initiated a parameter flush, but in
+                    // case it still did something unexpected that we did not catch we'll still try
+                    // to prevent processing audio when the slices don't contain the values we
+                    // expect.
+                    let mut buffer_is_valid = true;
+                    for output_buffer_slice in
+                        buffers.main_buffer.as_slice_immutable().iter().chain(
+                            buffers
+                                .aux_outputs
+                                .iter()
+                                .flat_map(|buffer| buffer.as_slice_immutable().iter()),
+                        )
+                    {
+                        if output_buffer_slice.is_empty() {
+                            buffer_is_valid = false;
+                            break;
+                        }
+                    }
+                    nih_debug_assert!(buffer_is_valid);
+
+                    // Some of the fields are left empty because VST3 does not provide this
+                    // information, but the methods on [`Transport`] can reconstruct these values
+                    // from the other fields
+                    let mut transport = Transport::new(sample_rate);
+                    if !data.context.is_null() {
+                        let context = &*data.context;
+
+                        // These constants are missing from vst3-sys, see:
+                        // https://steinbergmedia.github.io/vst3_doc/vstinterfaces/structSteinberg_1_1Vst_1_1ProcessContext.html
+                        transport.playing = context.state & (1 << 1) != 0; // kPlaying
+                        transport.recording = context.state & (1 << 3) != 0; // kRecording
+                        if context.state & (1 << 10) != 0 {
+                            // kTempoValid
+                            transport.tempo = Some(context.tempo);
+                        }
+                        if context.state & (1 << 13) != 0 {
+                            // kTimeSigValid
+                            transport.time_sig_numerator = Some(context.time_sig_num);
+                            transport.time_sig_denominator = Some(context.time_sig_den);
+                        }
+
+                        // We need to compensate for the block splitting here
+                        transport.pos_samples =
+                            Some(context.project_time_samples + block_start as i64);
+                        if context.state & (1 << 9) != 0 {
+                            // kProjectTimeMusicValid
+                            if P::SAMPLE_ACCURATE_AUTOMATION
+                                && block_start > 0
+                                && (context.state & (1 << 10) != 0)
+                            {
+                                // kTempoValid
+                                transport.pos_beats = Some(
+                                    context.project_time_music
+                                        + (block_start as f64 / sample_rate as f64 / 60.0
+                                            * context.tempo),
+                                );
+                            } else {
+                                transport.pos_beats = Some(context.project_time_music);
+                            }
+                        }
+
+                        if context.state & (1 << 11) != 0 {
+                            // kBarPositionValid
+                            if P::SAMPLE_ACCURATE_AUTOMATION && block_start > 0 {
+                                // The transport object knows how to recompute this from the other information
+                                transport.bar_start_pos_beats =
+                                    match transport.bar_start_pos_beats() {
+                                        Some(updated) => Some(updated),
+                                        None => Some(context.bar_position_music),
+                                    };
+                            } else {
+                                transport.bar_start_pos_beats = Some(context.bar_position_music);
+                            }
+                        }
+                        if context.state & (1 << 2) != 0 && context.state & (1 << 12) != 0 {
+                            // kCycleActive && kCycleValid
+                            transport.loop_range_beats =
+                                Some((context.cycle_start_music, context.cycle_end_music));
+                        }
+                    }
+
+                    let result = if buffer_is_valid {
+                        // NOTE: `parking_lot`'s mutexes sometimes allocate because of their use of
+                        //       thread locals
+                        let mut plugin = permit_alloc(|| self.inner.plugin.lock());
+                        let mut aux = AuxiliaryBuffers {
+                            inputs: buffers.aux_inputs,
+                            outputs: buffers.aux_outputs,
+                        };
+                        let mut context = self.inner.make_process_context(transport);
+                        let result = plugin.process(buffers.main_buffer, &mut aux, &mut context);
+                        self.inner.last_process_status.store(result);
+                        result
+                    } else {
+                        ProcessStatus::Normal
+                    };
+
+                    match result {
+                        ProcessStatus::Error(err) => {
+                            nih_debug_assert_failure!("Process error: {}", err);
+
+                            return kResultFalse;
+                        }
+                        _ => kResultOk,
+                    }
                 };
 
                 // Send any events output by the plugin during the process cycle
                 if let Some(events) = data.output_events.upgrade() {
                     let mut output_events = self.inner.output_events.borrow_mut();
                     while let Some(event) = output_events.pop_front() {
-                        // We'll set the correct variant on this struct, or skip to the next
-                        // loop iteration if we don't handle the event type
+                        // We'll set the correct variant on this struct, or skip to the next loop
+                        // iteration if we don't handle the event type
                         let mut vst3_event: Event = mem::zeroed();
                         vst3_event.bus_index = 0;
                         // There's also a ppqPos field, but uh how about no
@@ -1561,8 +1446,8 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                                     tuning: 0.0,
                                     velocity,
                                     length: 0, // What?
-                                    // We'll use this for our note IDs, that way we don't have
-                                    // to do anything complicated here
+                                    // We'll use this for our note IDs, that way we don't have to do
+                                    // anything complicated here
                                     note_id: voice_id
                                         .unwrap_or_else(|| ((channel as i32) << 8) | note as i32),
                                 };
@@ -1749,15 +1634,6 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                         nih_debug_assert_eq!(result, kResultOk);
                     }
                 }
-
-                let result = match result {
-                    ProcessStatus::Error(err) => {
-                        nih_debug_assert_failure!("Process error: {}", err);
-
-                        return kResultFalse;
-                    }
-                    _ => kResultOk,
-                };
 
                 // If our block ends at the end of the buffer then that means there are no more
                 // unprocessed (parameter) events. If there are more events, we'll just keep going

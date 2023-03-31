@@ -15,7 +15,6 @@ use super::param_units::ParamUnits;
 use super::util::{ObjectPtr, VstPtr, VST3_MIDI_PARAMS_END, VST3_MIDI_PARAMS_START};
 use super::view::WrapperView;
 use crate::audio_setup::{AudioIOLayout, BufferConfig, ProcessMode};
-use crate::buffer::Buffer;
 use crate::context::gui::AsyncExecutor;
 use crate::context::process::Transport;
 use crate::editor::Editor;
@@ -26,6 +25,7 @@ use crate::params::{ParamFlags, Params};
 use crate::plugin::{Plugin, ProcessStatus, TaskExecutor, Vst3Plugin};
 use crate::util::permit_alloc;
 use crate::wrapper::state::{self, PluginState};
+use crate::wrapper::util::buffer_management::BufferManager;
 use crate::wrapper::util::{hash_param_id, process_wrapper};
 
 /// The actual wrapper bits. We need this as an `Arc<T>` so we can safely use our event loop API.
@@ -82,23 +82,9 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// The current latency in samples, as set by the plugin through the [`InitContext`] and the
     /// [`ProcessContext`].
     pub current_latency: AtomicU32,
-    /// Contains slices for the plugin's outputs. You can't directly create a nested slice from
-    /// a pointer to pointers, so this needs to be preallocated in the setup call and kept around
-    /// between process calls. This buffer owns the vector, because otherwise it would need to store
-    /// a mutable reference to the data contained in this mutex.
-    pub output_buffer: AtomicRefCell<Buffer<'static>>,
-    /// Stores sample data for every sidechain input the plugin has. Indexed by
-    /// `[sidechain_input][channel][sample]` We'll copy the data to these buffers since modifying
-    /// the host's sidechain input buffers may not be safe, and the plugin may want to be able to
-    /// modify the buffers.
-    pub aux_input_storage: AtomicRefCell<Vec<Vec<Vec<f32>>>>,
-    /// Accompanying buffers for `aux_input_storage`. There is no way to do this in safe Rust, so
-    /// the process function needs to make sure all channel pointers stored in these buffers are
-    /// still correct before passing it to the plugin, hence the static lifetime.
-    pub aux_input_buffers: AtomicRefCell<Vec<Buffer<'static>>>,
-    /// Buffers for auxiliary plugin outputs, if the plugin has any. These reference the host's
-    /// memory directly.
-    pub aux_output_buffers: AtomicRefCell<Vec<Buffer<'static>>>,
+    /// A data structure that helps manage and create buffers for all of the plugin's inputs and
+    /// outputs based on channel pointers provided by the host.
+    pub buffer_manager: AtomicRefCell<BufferManager>,
     /// The incoming events for the plugin, if `P::ACCEPTS_MIDI` is set. If
     /// `P::SAMPLE_ACCURATE_AUTOMATION`, this is also read in lockstep with the parameter change
     /// block splitting.
@@ -317,10 +303,12 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             current_process_mode: AtomicCell::new(ProcessMode::Realtime),
             last_process_status: AtomicCell::new(ProcessStatus::Normal),
             current_latency: AtomicU32::new(0),
-            output_buffer: AtomicRefCell::new(Buffer::default()),
-            aux_input_storage: AtomicRefCell::new(Vec::new()),
-            aux_input_buffers: AtomicRefCell::new(Vec::new()),
-            aux_output_buffers: AtomicRefCell::new(Vec::new()),
+            // This is initialized just before calling `Plugin::initialize()` so that during the
+            // process call buffers can be initialized without any allocations
+            buffer_manager: AtomicRefCell::new(BufferManager::for_audio_io_layout(
+                0,
+                AudioIOLayout::default(),
+            )),
             input_events: AtomicRefCell::new(VecDeque::with_capacity(1024)),
             output_events: AtomicRefCell::new(VecDeque::with_capacity(1024)),
             note_expression_controller: AtomicRefCell::new(NoteExpressionController::default()),

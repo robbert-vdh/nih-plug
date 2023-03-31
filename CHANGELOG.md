@@ -27,6 +27,8 @@ state is to list breaking changes.
   containing whatever data was left in the host's output buffers. As part of
   this change NIH-plug's buffer management has been refactored to reuse the same
   logic in all of its wrappers.
+- Any outstanding VST3 output events are now sent to the host during a parameter
+  flush.
 
 ## [2023-03-21]
 
