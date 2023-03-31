@@ -1,5 +1,6 @@
 use std::borrow::Borrow;
 use std::num::NonZeroU32;
+use std::ptr::NonNull;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -17,6 +18,7 @@ use crate::buffer::Buffer;
 use crate::context::process::Transport;
 use crate::midi::{MidiConfig, MidiResult, NoteEvent, PluginNoteEvent};
 use crate::plugin::Plugin;
+use crate::wrapper::util::buffer_management::{BufferManager, ChannelPointers};
 use crate::wrapper::util::{clamp_input_event_timing, clamp_output_event_timing};
 
 /// Uses JACK audio and MIDI.
@@ -33,6 +35,21 @@ pub struct Jack {
     aux_output_ports: Arc<Mutex<Vec<Vec<Port<AudioOut>>>>>,
     midi_input: Option<Arc<Port<MidiIn>>>,
     midi_output: Option<Arc<Mutex<Port<MidiOut>>>>,
+}
+
+/// Send+Sync wrapper for `Vec<*mut f32>` so we can preallocate channel pointer vectors for use with
+/// the `BufferManager` API.
+struct ChannelPointerVec(Vec<*mut f32>);
+
+unsafe impl Send for ChannelPointerVec {}
+unsafe impl Sync for ChannelPointerVec {}
+
+impl ChannelPointerVec {
+    // If you directly access the `.0` field then it will try to move it out of the struct which
+    // undoes the Send+Sync impl.
+    pub fn get(&mut self) -> &mut Vec<*mut f32> {
+        &mut self.0
+    }
 }
 
 impl<P: Plugin> Backend<P> for Jack {
@@ -52,43 +69,36 @@ impl<P: Plugin> Backend<P> for Jack {
         let buffer_size = client.buffer_size();
 
         // We'll preallocate the buffers here, and then assign them to the slices belonging to the
-        // JACK ports later
-        let mut buffer = Buffer::default();
-        unsafe {
-            buffer.set_slices(0, |output_slices| {
-                output_slices.resize_with(self.main_outputs.lock().len(), || &mut []);
-            })
-        }
-
-        // For the inputs we'll need to allocate storage because the NIH-plug API expects all
-        // buffers to be mutable, and the jack crate doesn't give us mutable slices on audio input
-        // ports
-        let mut aux_input_storage: Vec<Vec<Vec<f32>>> = Vec::new();
-        let mut aux_input_buffers: Vec<Buffer> = Vec::new();
+        // JACK ports later. For consistency with the other backends we'll reuse the
+        // `BufferManager`, which means we'll need to collect pointers to individual channel slices
+        // into vectors so we can provide the needed `*mut *mut f32` pointers.
+        let mut buffer_manager =
+            BufferManager::for_audio_io_layout(buffer_size as usize, self.audio_io_layout);
+        let mut main_output_channel_pointers = ChannelPointerVec(Vec::with_capacity(
+            self.audio_io_layout
+                .main_output_channels
+                .map(NonZeroU32::get)
+                .unwrap_or(0) as usize,
+        ));
+        let mut main_input_channel_pointers = ChannelPointerVec(Vec::with_capacity(
+            self.audio_io_layout
+                .main_input_channels
+                .map(NonZeroU32::get)
+                .unwrap_or(0) as usize,
+        ));
+        let mut aux_input_channel_pointers =
+            Vec::with_capacity(self.audio_io_layout.aux_input_ports.len());
         for channel_count in self.audio_io_layout.aux_input_ports {
-            aux_input_storage.push(vec![
-                vec![0.0f32; self.config.period_size as usize];
-                channel_count.get() as usize
-            ]);
-
-            let mut aux_buffer = Buffer::default();
-            unsafe {
-                aux_buffer.set_slices(0, |output_slices| {
-                    output_slices.resize_with(channel_count.get() as usize, || &mut []);
-                })
-            }
-            aux_input_buffers.push(aux_buffer);
+            aux_input_channel_pointers.push(ChannelPointerVec(Vec::with_capacity(
+                channel_count.get() as usize,
+            )));
         }
-
-        let mut aux_output_buffers: Vec<Buffer> = Vec::new();
+        let mut aux_output_channel_pointers =
+            Vec::with_capacity(self.audio_io_layout.aux_output_ports.len());
         for channel_count in self.audio_io_layout.aux_output_ports {
-            let mut aux_buffer = Buffer::default();
-            unsafe {
-                aux_buffer.set_slices(0, |output_slices| {
-                    output_slices.resize_with(channel_count.get() as usize, || &mut []);
-                })
-            }
-            aux_output_buffers.push(aux_buffer);
+            aux_output_channel_pointers.push(ChannelPointerVec(Vec::with_capacity(
+                channel_count.get() as usize,
+            )));
         }
 
         let mut input_events: Vec<PluginNoteEvent<P>> = Vec::with_capacity(2048);
@@ -142,70 +152,92 @@ impl<P: Plugin> Backend<P> for Jack {
             }
 
             // Just like all of the plugin backends, we need to grab the output slices and copy the
-            // inputs to the outputs
+            // inputs to the outputs. To do that we need to first create the same kind of `*mut *mut
+            // f32` pointers we would receive from a plugin API.
             let mut main_outputs = main_outputs.lock();
-            for (input, output) in main_inputs.iter().zip(main_outputs.iter_mut()) {
-                // XXX: Since the JACK bindings let us do this, presumably these two can't alias,
-                //      right?
-                output.as_mut_slice(ps).copy_from_slice(input.as_slice(ps));
+            main_output_channel_pointers.get().clear();
+            for port in main_outputs.iter_mut() {
+                let slice = port.as_mut_slice(ps);
+                assert!(slice.len() == num_frames as usize);
+
+                main_output_channel_pointers.get().push(slice.as_mut_ptr());
             }
 
-            // And the buffer's slices need to point to the JACK output ports
-            unsafe {
-                buffer.set_slices(num_frames as usize, |output_slices| {
-                    for (output_slice, output) in
-                        output_slices.iter_mut().zip(main_outputs.iter_mut())
-                    {
-                        // SAFETY: This buffer is only read from after in this callback, and the
-                        //         reference passed to `cb` cannot outlive that function call
-                        *output_slice = &mut *(output.as_mut_slice(ps) as *mut _);
-                    }
-                });
+            main_input_channel_pointers.get().clear();
+            for port in main_inputs.iter() {
+                let slice = port.as_slice(ps);
+                assert!(slice.len() == num_frames as usize);
+
+                main_input_channel_pointers
+                    .get()
+                    .push(slice.as_ptr() as *mut f32);
             }
 
-            // For auxiliary input ports we first need to copy the port data to our input storage
-            // because the NIH-plug API expects every buffer to be mutable
-            let mut aux_input_ports = aux_input_ports.lock();
-            for (aux_inputs, (aux_storage, aux_buffer)) in aux_input_ports.iter_mut().zip(
-                aux_input_storage
-                    .iter_mut()
-                    .zip(aux_input_buffers.iter_mut()),
-            ) {
-                for (aux_input, channel) in aux_inputs.iter_mut().zip(aux_storage.iter_mut()) {
-                    channel.copy_from_slice(aux_input.as_slice(ps));
-                }
-
-                unsafe {
-                    aux_buffer.set_slices(num_frames as usize, |input_slices| {
-                        for (input_slice, channel) in
-                            input_slices.iter_mut().zip(aux_storage.iter_mut())
-                        {
-                            // SAFETY: This buffer is only read from after in this callback, and the
-                            //         reference passed to `cb` cannot outlive that function call
-                            *input_slice = &mut *(channel.as_mut_slice() as *mut _);
-                        }
-                    });
-                }
-            }
-
-            // We can point the buffers for the auxiliary output pots directly at the ports
-            let mut aux_output_ports = aux_output_ports.lock();
-            for (aux_outputs, aux_buffer) in aux_output_ports
+            let aux_input_ports = aux_input_ports.lock();
+            for (input_channel_pointers, input_ports) in aux_input_channel_pointers
                 .iter_mut()
-                .zip(aux_output_buffers.iter_mut())
+                .zip(aux_input_ports.iter())
             {
-                unsafe {
-                    aux_buffer.set_slices(num_frames as usize, |output_slices| {
-                        for (output_slice, channel) in
-                            output_slices.iter_mut().zip(aux_outputs.iter_mut())
-                        {
-                            // SAFETY: This buffer is only read from after in this callback, and the
-                            //         reference passed to `cb` cannot outlive that function call
-                            *output_slice = &mut *(channel.as_mut_slice(ps) as *mut _);
-                        }
-                    });
+                input_channel_pointers.get().clear();
+                for port in input_ports.iter() {
+                    let slice = port.as_slice(ps);
+                    assert!(slice.len() == num_frames as usize);
+
+                    input_channel_pointers
+                        .get()
+                        .push(slice.as_ptr() as *mut f32);
                 }
             }
+
+            let mut aux_output_ports = aux_output_ports.lock();
+            for (output_channel_pointers, output_ports) in aux_output_channel_pointers
+                .iter_mut()
+                .zip(aux_output_ports.iter_mut())
+            {
+                output_channel_pointers.get().clear();
+                for port in output_ports.iter_mut() {
+                    let slice = port.as_mut_slice(ps);
+                    assert!(slice.len() == num_frames as usize);
+
+                    output_channel_pointers.get().push(slice.as_mut_ptr());
+                }
+            }
+
+            let buffers = unsafe {
+                buffer_manager.create_buffers(num_frames as usize, |buffer_sources| {
+                    *buffer_sources.main_output_channel_pointers = Some(ChannelPointers {
+                        ptrs: NonNull::new(main_output_channel_pointers.get().as_mut_ptr())
+                            .unwrap(),
+                        num_channels: main_output_channel_pointers.get().len(),
+                    });
+                    *buffer_sources.main_input_channel_pointers = Some(ChannelPointers {
+                        ptrs: NonNull::new(main_input_channel_pointers.get().as_mut_ptr()).unwrap(),
+                        num_channels: main_input_channel_pointers.get().len(),
+                    });
+
+                    for (input_source_channel_pointers, input_channel_pointers) in buffer_sources
+                        .aux_input_channel_pointers
+                        .iter_mut()
+                        .zip(aux_input_channel_pointers.iter_mut())
+                    {
+                        *input_source_channel_pointers = Some(ChannelPointers {
+                            ptrs: NonNull::new(input_channel_pointers.get().as_mut_ptr()).unwrap(),
+                            num_channels: input_channel_pointers.get().len(),
+                        });
+                    }
+
+                    for (output_source_channel_pointers, output_channel_pointers) in buffer_sources
+                        .aux_output_channel_pointers
+                        .iter_mut()
+                        .zip(aux_output_channel_pointers.iter_mut())
+                    {
+                        *output_source_channel_pointers = Some(ChannelPointers {
+                            ptrs: NonNull::new(output_channel_pointers.get().as_mut_ptr()).unwrap(),
+                            num_channels: output_channel_pointers.get().len(),
+                        });
+                    }
+                })
+            };
 
             input_events.clear();
             if let Some(midi_input) = &midi_input {
@@ -216,19 +248,13 @@ impl<P: Plugin> Backend<P> for Jack {
                 }));
             }
 
-            // SAFETY: Shortening these borrows is safe as even if the plugin overwrites the
-            //         slices (which it cannot do without using unsafe code), then they
-            //         would still be reset on the next iteration
-            let mut aux = unsafe {
-                AuxiliaryBuffers {
-                    inputs: &mut *(aux_input_buffers.as_mut_slice() as *mut [Buffer]),
-                    outputs: &mut *(aux_output_buffers.as_mut_slice() as *mut [Buffer]),
-                }
-            };
-
             output_events.clear();
+            let mut aux = AuxiliaryBuffers {
+                inputs: buffers.aux_inputs,
+                outputs: buffers.aux_outputs,
+            };
             if cb(
-                &mut buffer,
+                buffers.main_buffer,
                 &mut aux,
                 transport,
                 &input_events,
