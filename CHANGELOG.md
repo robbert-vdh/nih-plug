@@ -10,6 +10,13 @@ Since there is no stable release yet, the changes are organized per day in
 reverse chronological order. The main purpose of this document in its current
 state is to list breaking changes.
 
+## [2023-04-01]
+
+### Fixed
+
+- Auxiliary output buffers are now always zeroed out in case the host didn't do
+  this for us. This was a regression from before 2023-03-31.
+
 ## [2023-03-31]
 
 ### Changed

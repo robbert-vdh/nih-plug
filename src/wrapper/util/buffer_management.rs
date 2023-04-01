@@ -338,6 +338,10 @@ impl BufferManager {
                                 *output_channel_pointer,
                                 num_samples,
                             );
+
+                            // The host may not zero out the buffers, and assume the plugin always
+                            // write something there
+                            output_slice.fill(0.0);
                         }
 
                         // If the caller/host should have provided buffer pointers but didn't then
