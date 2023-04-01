@@ -11,6 +11,7 @@ use parking_lot::Mutex;
 use rtrb::RingBuffer;
 use std::borrow::Borrow;
 use std::num::NonZeroU32;
+use std::ptr::NonNull;
 use std::thread::ScopedJoinHandle;
 
 use super::super::config::WrapperConfig;
@@ -21,6 +22,7 @@ use crate::context::process::Transport;
 use crate::midi::{MidiConfig, MidiResult, PluginNoteEvent};
 use crate::plugin::Plugin;
 use crate::prelude::NoteEvent;
+use crate::wrapper::util::buffer_management::{BufferManager, ChannelPointers};
 
 const MIDI_EVENT_QUEUE_CAPACITY: usize = 2048;
 
@@ -65,6 +67,21 @@ struct MidirOutputDevice {
 struct ActiveMidirOutputDevice {
     pub connection: MidiOutputConnection,
     pub port: MidiOutputPort,
+}
+
+/// Send+Sync wrapper for `Vec<*mut f32>` so we can preallocate channel pointer vectors for use with
+/// the `BufferManager` API.
+struct ChannelPointerVec(Vec<*mut f32>);
+
+unsafe impl Send for ChannelPointerVec {}
+unsafe impl Sync for ChannelPointerVec {}
+
+impl ChannelPointerVec {
+    // If you directly access the `.0` field then it will try to move it out of the struct which
+    // undoes the Send+Sync impl.
+    pub fn get(&mut self) -> &mut Vec<*mut f32> {
+        &mut self.0
+    }
 }
 
 /// A task for the MIDI output thread.
@@ -675,61 +692,61 @@ impl CpalMidir {
     {
         // We'll receive interlaced input samples from CPAL. These need to converted to deinterlaced
         // channels, processed, and then copied those back to an interlaced buffer for the output.
-        // This needs to be wrapped in a struct like this and boxed because the `channels` vectors
-        // need to live just as long as `buffer` when they get moved into the closure.
-        // FIXME: This is pretty nasty, come up with a cleaner alternative
+        let buffer_size = self.config.period_size as usize;
         let num_output_channels = self
             .audio_io_layout
             .main_output_channels
             .map(NonZeroU32::get)
-            .unwrap_or_default() as usize;
-        let mut channels =
-            vec![vec![0.0f32; self.config.period_size as usize]; num_output_channels];
-        let mut buffer = Buffer::default();
-        unsafe {
-            buffer.set_slices(0, |output_slices| {
-                // Pre-allocate enough storage, the pointers are set in the data callback because
-                // `channels` will have been moved between now and the next callback
-                output_slices.resize_with(channels.len(), || &mut []);
-            })
-        }
+            .unwrap_or(0) as usize;
+        let num_input_channels = self
+            .audio_io_layout
+            .main_input_channels
+            .map(NonZeroU32::get)
+            .unwrap_or(0) as usize;
+        let mut main_io_storage = vec![vec![0.0f32; buffer_size]; num_output_channels];
 
-        // We'll do the same thing for auxiliary inputs and outputs, so the plugin always gets the
-        // buffers it expects
+        // This backend does not support auxiliary inputs and outputs, so in order to have the same
+        // behavior as the other backends we'll provide some dummy buffers that we'll zero out every
+        // time
         let mut aux_input_storage: Vec<Vec<Vec<f32>>> = Vec::new();
-        let mut aux_input_buffers: Vec<Buffer> = Vec::new();
         for channel_count in self.audio_io_layout.aux_input_ports {
             aux_input_storage.push(vec![
-                vec![0.0f32; self.config.period_size as usize];
+                vec![0.0f32; buffer_size];
                 channel_count.get() as usize
             ]);
-
-            // We'll preallocate the slices, but we'll only assign them to point to
-            // `aux_input_storage` at the start of the audio callback
-            let mut aux_buffer = Buffer::default();
-            unsafe {
-                aux_buffer.set_slices(self.config.period_size as usize, |output_slices| {
-                    output_slices.resize_with(channel_count.get() as usize, || &mut []);
-                })
-            }
-            aux_input_buffers.push(aux_buffer);
         }
 
         let mut aux_output_storage: Vec<Vec<Vec<f32>>> = Vec::new();
-        let mut aux_output_buffers: Vec<Buffer> = Vec::new();
         for channel_count in self.audio_io_layout.aux_output_ports {
             aux_output_storage.push(vec![
-                vec![0.0f32; self.config.period_size as usize];
+                vec![0.0f32; buffer_size];
                 channel_count.get() as usize
             ]);
+        }
 
-            let mut aux_buffer = Buffer::default();
-            unsafe {
-                aux_buffer.set_slices(self.config.period_size as usize, |output_slices| {
-                    output_slices.resize_with(channel_count.get() as usize, || &mut []);
-                })
-            }
-            aux_output_buffers.push(aux_buffer);
+        // The actual buffer management here works the same as in the JACK backend. See that
+        // implementation for more information.
+        let mut buffer_manager =
+            BufferManager::for_audio_io_layout(buffer_size, self.audio_io_layout);
+        let mut main_io_channel_pointers = ChannelPointerVec(Vec::with_capacity(
+            self.audio_io_layout
+                .main_output_channels
+                .map(NonZeroU32::get)
+                .unwrap_or(0) as usize,
+        ));
+        let mut aux_input_channel_pointers =
+            Vec::with_capacity(self.audio_io_layout.aux_input_ports.len());
+        for channel_count in self.audio_io_layout.aux_input_ports {
+            aux_input_channel_pointers.push(ChannelPointerVec(Vec::with_capacity(
+                channel_count.get() as usize,
+            )));
+        }
+        let mut aux_output_channel_pointers =
+            Vec::with_capacity(self.audio_io_layout.aux_output_ports.len());
+        for channel_count in self.audio_io_layout.aux_output_ports {
+            aux_output_channel_pointers.push(ChannelPointerVec(Vec::with_capacity(
+                channel_count.get() as usize,
+            )));
         }
 
         let mut midi_input_events = Vec::with_capacity(MIDI_EVENT_QUEUE_CAPACITY);
@@ -737,67 +754,25 @@ impl CpalMidir {
 
         // Can't borrow from `self` in the callback
         let config = self.config.clone();
-        let mut num_processed_samples = 0;
+        let mut num_processed_samples = 0usize;
         move |data, _info| {
-            // Things may have been moved in between callbacks, so these pointers need to be set up
-            // again on each invocation
-            unsafe {
-                buffer.set_slices(config.period_size as usize, |output_slices| {
-                    for (output_slice, channel) in output_slices.iter_mut().zip(channels.iter_mut())
-                    {
-                        // SAFETY: `channels` is no longer used directly after this, and it outlives
-                        // the data closure
-                        *output_slice = &mut *(channel.as_mut_slice() as *mut [f32]);
-                    }
-                })
-            }
-
-            for (aux_buffer, aux_storage) in aux_input_buffers
-                .iter_mut()
-                .zip(aux_input_storage.iter_mut())
-            {
-                unsafe {
-                    aux_buffer.set_slices(config.period_size as usize, |output_slices| {
-                        for (output_slice, channel) in
-                            output_slices.iter_mut().zip(aux_storage.iter_mut())
-                        {
-                            // SAFETY: `aux_input_storage` is no longer used directly after this,
-                            //         and it outlives the data closure
-                            *output_slice = &mut *(channel.as_mut_slice() as *mut [f32]);
-                        }
-                    })
-                }
-            }
-            for (aux_buffer, aux_storage) in aux_output_buffers
-                .iter_mut()
-                .zip(aux_output_storage.iter_mut())
-            {
-                unsafe {
-                    aux_buffer.set_slices(config.period_size as usize, |output_slices| {
-                        for (output_slice, channel) in
-                            output_slices.iter_mut().zip(aux_storage.iter_mut())
-                        {
-                            // SAFETY: `aux_output_storage` is no longer used directly after this,
-                            //         and it outlives the data closure
-                            *output_slice = &mut *(channel.as_mut_slice() as *mut [f32]);
-                        }
-                    })
-                }
-            }
-
             let mut transport = Transport::new(config.sample_rate);
-            transport.pos_samples = Some(num_processed_samples);
+            transport.pos_samples = Some(num_processed_samples as i64);
             transport.tempo = Some(config.tempo as f64);
             transport.time_sig_numerator = Some(config.timesig_num as i32);
             transport.time_sig_denominator = Some(config.timesig_denom as i32);
             transport.playing = true;
 
             // If an input was configured, then the output buffer is filled with (interleaved) input
-            // samples. Otherwise it gets filled with silence.
+            // samples. Otherwise it gets filled with silence. There is no need to zero out any of
+            // the other buffers. The `BufferManager` will copy the auxiliary input data to its own
+            // storage buffers because it cannot assume that these buffers are safe to write to.
+            // Because of that we'll never need to reinitialize these, and the output storage is
+            // write-only (with `BufferManager` always zeroing them out when creating the buffers).
             match &mut input_rb_consumer {
                 Some(input_rb_consumer) => {
-                    for channels in buffer.iter_samples() {
-                        for sample in channels {
+                    for channel in main_io_storage.iter_mut() {
+                        for sample in channel {
                             loop {
                                 // Keep spinning on this if the output callback somehow outpaces the
                                 // input callback
@@ -810,62 +785,119 @@ impl CpalMidir {
                     }
                 }
                 None => {
-                    for channel in buffer.as_slice() {
+                    for channel in main_io_storage.iter_mut() {
                         channel.fill(0.0);
                     }
                 }
             }
 
-            // The CPAL backends don't support auxiliary IO, so we'll just zero them out. The
-            // buffers are still provided to the wrapped plugin since it should not expect the
-            // wrapper/host to deviate from its audio IO layouts.
-            for aux_buffer in &mut aux_input_buffers {
-                for channel in aux_buffer.as_slice() {
-                    channel.fill(0.0);
-                }
+            // Things may have been moved in between callbacks, so these pointers need to be set up
+            // again on each invocation
+            main_io_channel_pointers.get().clear();
+            for channel in main_io_storage.iter_mut() {
+                assert!(channel.len() == buffer_size);
+
+                main_io_channel_pointers.get().push(channel.as_mut_ptr());
             }
-            for aux_buffer in &mut aux_output_buffers {
-                for channel in aux_buffer.as_slice() {
-                    channel.fill(0.0);
+
+            for (input_channel_pointers, input_storage) in aux_input_channel_pointers
+                .iter_mut()
+                .zip(aux_input_storage.iter_mut())
+            {
+                input_channel_pointers.get().clear();
+                for channel in input_storage.iter_mut() {
+                    assert!(channel.len() == buffer_size);
+
+                    input_channel_pointers.get().push(channel.as_mut_ptr());
                 }
             }
 
-            midi_input_events.clear();
-            if let Some(input_event_rb_consumer) = &mut input_event_rb_consumer {
-                if let Ok(event) = input_event_rb_consumer.pop() {
-                    midi_input_events.push(event);
+            for (output_channel_pointers, output_storage) in aux_output_channel_pointers
+                .iter_mut()
+                .zip(aux_output_storage.iter_mut())
+            {
+                output_channel_pointers.get().clear();
+                for channel in output_storage.iter_mut() {
+                    assert!(channel.len() == buffer_size);
+
+                    output_channel_pointers.get().push(channel.as_mut_ptr());
                 }
             }
 
-            // SAFETY: Shortening these borrows is safe as even if the plugin overwrites the
-            //         slices (which it cannot do without using unsafe code), then they
-            //         would still be reset on the next iteration
-            let mut aux = unsafe {
-                AuxiliaryBuffers {
-                    inputs: &mut *(aux_input_buffers.as_mut_slice() as *mut [Buffer]),
-                    outputs: &mut *(aux_output_buffers.as_mut_slice() as *mut [Buffer]),
-                }
-            };
+            {
+                let buffers = unsafe {
+                    buffer_manager.create_buffers(buffer_size, |buffer_sources| {
+                        *buffer_sources.main_output_channel_pointers = Some(ChannelPointers {
+                            ptrs: NonNull::new(main_io_channel_pointers.get().as_mut_ptr())
+                                .unwrap(),
+                            num_channels: main_io_channel_pointers.get().len(),
+                        });
+                        *buffer_sources.main_input_channel_pointers = Some(ChannelPointers {
+                            ptrs: NonNull::new(main_io_channel_pointers.get().as_mut_ptr())
+                                .unwrap(),
+                            num_channels: num_input_channels
+                                .min(main_io_channel_pointers.get().len()),
+                        });
 
-            midi_output_events.clear();
-            if !cb(
-                &mut buffer,
-                &mut aux,
-                transport,
-                &midi_input_events,
-                &mut midi_output_events,
-            ) {
-                // TODO: Some way to immediately terminate the stream here would be nice
-                unparker.unpark();
-                return;
+                        for (input_source_channel_pointers, input_channel_pointers) in
+                            buffer_sources
+                                .aux_input_channel_pointers
+                                .iter_mut()
+                                .zip(aux_input_channel_pointers.iter_mut())
+                        {
+                            *input_source_channel_pointers = Some(ChannelPointers {
+                                ptrs: NonNull::new(input_channel_pointers.get().as_mut_ptr())
+                                    .unwrap(),
+                                num_channels: input_channel_pointers.get().len(),
+                            });
+                        }
+
+                        for (output_source_channel_pointers, output_channel_pointers) in
+                            buffer_sources
+                                .aux_output_channel_pointers
+                                .iter_mut()
+                                .zip(aux_output_channel_pointers.iter_mut())
+                        {
+                            *output_source_channel_pointers = Some(ChannelPointers {
+                                ptrs: NonNull::new(output_channel_pointers.get().as_mut_ptr())
+                                    .unwrap(),
+                                num_channels: output_channel_pointers.get().len(),
+                            });
+                        }
+                    })
+                };
+
+                midi_input_events.clear();
+                if let Some(input_event_rb_consumer) = &mut input_event_rb_consumer {
+                    if let Ok(event) = input_event_rb_consumer.pop() {
+                        midi_input_events.push(event);
+                    }
+                }
+
+                midi_output_events.clear();
+                let mut aux = AuxiliaryBuffers {
+                    inputs: buffers.aux_inputs,
+                    outputs: buffers.aux_outputs,
+                };
+                if !cb(
+                    buffers.main_buffer,
+                    &mut aux,
+                    transport,
+                    &midi_input_events,
+                    &mut midi_output_events,
+                ) {
+                    // TODO: Some way to immediately terminate the stream here would be nice
+                    unparker.unpark();
+                    return;
+                }
             }
 
             // The buffer's samples need to be written to `data` in an interlaced format
-            for (output_sample, buffer_sample) in data.iter_mut().zip(
-                buffer
-                    .iter_samples()
-                    .flat_map(|channels| channels.into_iter()),
-            ) {
+            // SAFETY: Dropping `buffers` allows us to borrow `main_io_storage` again
+            for (output_sample, buffer_sample) in data
+                .iter_mut()
+                .zip(main_io_storage.iter().flat_map(|channels| channels.iter()))
+            {
                 *output_sample = T::from_sample(*buffer_sample);
             }
 
@@ -881,7 +913,7 @@ impl CpalMidir {
                 }
             }
 
-            num_processed_samples += buffer.samples() as i64;
+            num_processed_samples += buffer_size;
         }
     }
 }
