@@ -368,3 +368,133 @@ impl BufferManager {
         })
     }
 }
+
+#[cfg(any(miri, test))]
+mod miri {
+    use super::*;
+    use crate::prelude::{new_nonzero_u32, PortNames};
+
+    const BUFFER_SIZE: usize = 512;
+    const NUM_MAIN_INPUT_CHANNELS: usize = 1;
+    const NUM_MAIN_OUTPUT_CHANNELS: usize = 2;
+
+    const NUM_AUX_CHANNELS: usize = 2;
+    const NUM_AUX_PORTS: usize = 2;
+
+    const AUDIO_IO_LAYOUT: AudioIOLayout = AudioIOLayout {
+        main_input_channels: Some(new_nonzero_u32(NUM_MAIN_INPUT_CHANNELS as u32)),
+        main_output_channels: Some(new_nonzero_u32(NUM_MAIN_OUTPUT_CHANNELS as u32)),
+        aux_input_ports: &[new_nonzero_u32(NUM_AUX_CHANNELS as u32); NUM_AUX_PORTS],
+        aux_output_ports: &[new_nonzero_u32(NUM_AUX_CHANNELS as u32); NUM_AUX_PORTS],
+        names: PortNames::const_default(),
+    };
+
+    #[test]
+    fn buffer_io() {
+        // This works very similarly to the standalone CPAL and dummy backends
+        let mut main_io_storage = vec![vec![0.0f32; BUFFER_SIZE]; NUM_MAIN_OUTPUT_CHANNELS];
+        let mut aux_input_storage =
+            vec![vec![vec![0.0f32; BUFFER_SIZE]; NUM_AUX_CHANNELS]; NUM_AUX_PORTS];
+        let mut aux_output_storage =
+            vec![vec![vec![0.0f32; BUFFER_SIZE]; NUM_AUX_CHANNELS]; NUM_AUX_PORTS];
+
+        let mut main_io_channel_pointers: Vec<*mut f32> = main_io_storage
+            .iter_mut()
+            .map(|channel_slice| channel_slice.as_mut_ptr())
+            .collect();
+        let mut aux_input_channel_pointers: Vec<Vec<*mut f32>> = aux_input_storage
+            .iter_mut()
+            .map(|aux_input_storage| {
+                aux_input_storage
+                    .iter_mut()
+                    .map(|channel_slice| channel_slice.as_mut_ptr())
+                    .collect()
+            })
+            .collect();
+        let mut aux_output_channel_pointers: Vec<Vec<*mut f32>> = aux_output_storage
+            .iter_mut()
+            .map(|aux_output_storage| {
+                aux_output_storage
+                    .iter_mut()
+                    .map(|channel_slice| channel_slice.as_mut_ptr())
+                    .collect()
+            })
+            .collect();
+
+        // The actual buffer management here works the same as in the JACK backend. See that
+        // implementation for more information.
+        let mut buffer_manager = BufferManager::for_audio_io_layout(BUFFER_SIZE, AUDIO_IO_LAYOUT);
+        let buffers = unsafe {
+            buffer_manager.create_buffers(BUFFER_SIZE, |buffer_sources| {
+                *buffer_sources.main_output_channel_pointers = Some(ChannelPointers {
+                    ptrs: NonNull::new(main_io_channel_pointers.as_mut_ptr()).unwrap(),
+                    num_channels: main_io_channel_pointers.len(),
+                });
+                *buffer_sources.main_input_channel_pointers = Some(ChannelPointers {
+                    ptrs: NonNull::new(main_io_channel_pointers.as_mut_ptr()).unwrap(),
+                    num_channels: NUM_MAIN_INPUT_CHANNELS.min(main_io_channel_pointers.len()),
+                });
+
+                for (input_source_channel_pointers, input_channel_pointers) in buffer_sources
+                    .aux_input_channel_pointers
+                    .iter_mut()
+                    .zip(aux_input_channel_pointers.iter_mut())
+                {
+                    *input_source_channel_pointers = Some(ChannelPointers {
+                        ptrs: NonNull::new(input_channel_pointers.as_mut_ptr()).unwrap(),
+                        num_channels: input_channel_pointers.len(),
+                    });
+                }
+
+                for (output_source_channel_pointers, output_channel_pointers) in buffer_sources
+                    .aux_output_channel_pointers
+                    .iter_mut()
+                    .zip(aux_output_channel_pointers.iter_mut())
+                {
+                    *output_source_channel_pointers = Some(ChannelPointers {
+                        ptrs: NonNull::new(output_channel_pointers.as_mut_ptr()).unwrap(),
+                        num_channels: output_channel_pointers.len(),
+                    });
+                }
+            })
+        };
+
+        for channel_samples in buffers
+            .main_buffer
+            .iter_samples()
+            .chain(
+                buffers
+                    .aux_inputs
+                    .iter_mut()
+                    .flat_map(|buffer| buffer.iter_samples()),
+            )
+            .chain(
+                buffers
+                    .aux_outputs
+                    .iter_mut()
+                    .flat_map(|buffer| buffer.iter_samples()),
+            )
+        {
+            for sample in channel_samples {
+                *sample += 1.0;
+            }
+        }
+
+        // These checks are fine due to stacked borrows even without explicitly dropping `buffers`.
+        // If we were to access `buffers` again after this miri would trigger an error.
+        for channel in main_io_storage
+            .iter()
+            .chain(aux_output_storage.iter().flat_map(|storage| storage.iter()))
+        {
+            for sample in channel {
+                assert!(*sample == 1.0);
+            }
+        }
+
+        for channel in aux_input_storage.iter().flat_map(|storage| storage.iter()) {
+            for sample in channel {
+                assert!(*sample == 0.0);
+            }
+        }
+    }
+}
