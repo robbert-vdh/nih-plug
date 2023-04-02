@@ -103,6 +103,25 @@ impl Plugin for SoftVacuum {
         _aux: &mut AuxiliaryBuffers,
         _context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
+        // TODO: Parameters
+        // TODO: Dry/wet mixing and output scaling
+        // TODO: Oversampling
+        for channel_samples in buffer.iter_samples() {
+            for (sample, hard_vacuum) in channel_samples
+                .into_iter()
+                .zip(self.hard_vacuum_processors.iter_mut())
+            {
+                *sample = hard_vacuum.process(
+                    *sample,
+                    &hard_vacuum::Params {
+                        drive: 2.0,
+                        warmth: 0.0,
+                        aura: 0.879_645_94,
+                    },
+                );
+            }
+        }
+
         ProcessStatus::Normal
     }
 }
