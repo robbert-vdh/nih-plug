@@ -4,6 +4,9 @@
 # [package_name]
 # name = "Human Readable Plugin Name"  # defaults to <package_name>
 
+[aw_soft_vacuum]
+name = "Soft Vacuum"
+
 [buffr_glitch]
 name = "Buffr Glitch"
 

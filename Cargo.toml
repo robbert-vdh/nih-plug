@@ -31,6 +31,7 @@ members = [
   "plugins/examples/stft",
   "plugins/examples/sysex",
 
+  "plugins/aw_soft_vacuum",
   "plugins/buffr_glitch",
   "plugins/crisp",
   "plugins/crossover",

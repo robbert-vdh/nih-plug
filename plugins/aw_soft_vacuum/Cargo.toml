@@ -1,0 +1,13 @@
+[package]
+name = "aw_soft_vacuum"
+version = "0.1.0"
+edition = "2021"
+authors = ["Robbert van der Helm <mail@robbertvanderhelm.nl>"]
+license = "GPL-3.0-or-later"
+homepage = "https://github.com/robbert-vdh/nih-plug/tree/master/plugins/aw_soft_vacuum"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+nih_plug = { path = "../../", features = ["assert_process_allocs"] }

@@ -1,0 +1,27 @@
+# Soft Vacuum (Airwindows port)
+
+This is a straightforward port of Airwindows' [Hard
+Vacuum](https://www.airwindows.com/hard-vacuum-vst/) plugin with 4x linear-phase
+oversampling and parameter smoothing, because I like the distortion effect and
+wish it had oversampling. All credits go to Chris from Airwindows.
+
+## Download
+
+You can download the development binaries for Linux, Windows and macOS from the
+[automated
+builds](https://github.com/robbert-vdh/nih-plug/actions/workflows/build.yml?query=branch%3Amaster)
+page. Or if you're not signed in on GitHub, then you can also find the latest nightly
+build [here](https://nightly.link/robbert-vdh/nih-plug/workflows/build/master).
+
+On macOS you may need to [disable
+Gatekeeper](https://disable-gatekeeper.github.io/) as Apple has recently made it
+more difficult to run unsigned code on macOS.
+
+### Building
+
+After installing [Rust](https://rustup.rs/), you can compile Safety Limiter as
+follows:
+
+```shell
+cargo xtask bundle aw_soft_vacuum --release
+```
