@@ -115,7 +115,7 @@ impl Default for SoftVacuum {
 }
 
 impl Plugin for SoftVacuum {
-    const NAME: &'static str = "Soft Vacuum (Hard Vacuum port)";
+    const NAME: &'static str = "Soft Vacuum";
     const VENDOR: &'static str = "Robbert van der Helm";
     const URL: &'static str = env!("CARGO_PKG_HOMEPAGE");
     const EMAIL: &'static str = "mail@robbertvanderhelm.nl";
