@@ -3,7 +3,8 @@
 This is a straightforward port of Airwindows' [Hard
 Vacuum](https://www.airwindows.com/hard-vacuum-vst/) plugin with 4x linear-phase
 oversampling and parameter smoothing, because I like the distortion effect and
-wish it had oversampling. All credits go to Chris from Airwindows.
+wish it had oversampling. All credit goes to Chris from Airwindows. I just
+wanted to share this in case anyone else finds it useful.
 
 ## Download
 

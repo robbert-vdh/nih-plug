@@ -73,6 +73,11 @@ Scroll down for more information on the underlying plugin framework.
   again when the input returns back to safe levels. Made for personal use during
   plugin development and intense sound design sessions, but maybe you'll find it
   useful too!
+- [**Soft Vacuum**](plugins/aw_soft_vacuum) is a straightforward port of
+  Airwindows' [Hard Vacuum](https://www.airwindows.com/hard-vacuum-vst/) plugin
+  with 4x linear-phase oversampling and parameter smoothing, because I like the
+  distortion effect and wish it had oversampling. All credit goes to Chris from
+  Airwindows. I just wanted to share this in case anyone else finds it useful.
 - [**Spectral Compressor**](plugins/spectral_compressor) can squash anything
   into pink noise, apply simultaneous upwards and downwards compressor to
   dynamically match the sidechain signal's spectrum and morph one sound into
