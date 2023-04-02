@@ -18,8 +18,14 @@ use std::sync::Arc;
 
 use nih_plug::prelude::*;
 
+mod hard_vacuum;
+
 struct SoftVacuum {
     params: Arc<SoftVacuumParams>,
+
+    /// Stores implementations of the Hard Vacuum algorithm for each channel, since each channel
+    /// needs to maintain its own state.
+    hard_vacuum_processors: Vec<hard_vacuum::HardVacuum>,
 }
 
 #[derive(Params)]
@@ -35,6 +41,8 @@ impl Default for SoftVacuum {
     fn default() -> Self {
         Self {
             params: Arc::new(SoftVacuumParams::default()),
+
+            hard_vacuum_processors: Vec::new(),
         }
     }
 }
@@ -69,15 +77,24 @@ impl Plugin for SoftVacuum {
 
     fn initialize(
         &mut self,
-        _audio_io_layout: &AudioIOLayout,
-        buffer_config: &BufferConfig,
+        audio_io_layout: &AudioIOLayout,
+        _buffer_config: &BufferConfig,
         _context: &mut impl InitContext<Self>,
     ) -> bool {
+        let num_channels = audio_io_layout
+            .main_output_channels
+            .expect("Plugin was initialized without any outputs")
+            .get() as usize;
+        self.hard_vacuum_processors
+            .resize_with(num_channels, hard_vacuum::HardVacuum::default);
+
         true
     }
 
     fn reset(&mut self) {
-        // TODO:
+        for hard_vacuum in &mut self.hard_vacuum_processors {
+            hard_vacuum.reset();
+        }
     }
 
     fn process(
