@@ -84,20 +84,24 @@ macro_rules! nih_dbg {
 pub use nih_dbg;
 
 /// A `debug_assert!()` analogue that prints the error with line number information instead of
-/// panicking.
+/// panicking. During tests this is upgraded to a regular panicking `debug_assert!()`.
 ///
 /// TODO: Detect if we're running under a debugger, and trigger a break if we are
 #[macro_export]
 macro_rules! nih_debug_assert {
     ($cond:expr $(,)?) => (
         #[allow(clippy::neg_cmp_op_on_partial_ord)]
-        if cfg!(debug_assertions) && !$cond {
+        if cfg!(test) {
+           debug_assert!($cond);
+        } else if cfg!(debug_assertions) && !$cond {
             $crate::util::permit_alloc(|| $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($cond))));
         }
     );
     ($cond:expr, $format:expr $(, $($args:tt)*)?) => (
         #[allow(clippy::neg_cmp_op_on_partial_ord)]
-        if cfg!(debug_assertions) && !$cond {
+        if cfg!(test) {
+           debug_assert!($cond, $format, $($($args)*)?);
+        } else if cfg!(debug_assertions) && !$cond {
             $crate::util::permit_alloc(|| $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($cond), ", ", $format), $($($args)*)?));
         }
     );
@@ -106,16 +110,20 @@ macro_rules! nih_debug_assert {
 pub use nih_debug_assert;
 
 /// An unconditional debug assertion failure, for if the condition has already been checked
-/// elsewhere.
+/// elsewhere. See [`nih_debug_assert!()`] for more information.
 #[macro_export]
 macro_rules! nih_debug_assert_failure {
     () => (
-        if cfg!(debug_assertions) {
+        if cfg!(test) {
+           debug_assert!(false, "Debug assertion failed");
+        } else if cfg!(debug_assertions) {
             $crate::util::permit_alloc(|| $crate::log::debug!("Debug assertion failed"));
         }
     );
     ($format:expr $(, $($args:tt)*)?) => (
-        if cfg!(debug_assertions) {
+        if cfg!(test) {
+           debug_assert!(false, concat!("Debug assertion failed: ", $format), $($($args)*)?);
+        } else if cfg!(debug_assertions) {
             $crate::util::permit_alloc(|| $crate::log::debug!(concat!("Debug assertion failed: ", $format), $($($args)*)?));
         }
     );
@@ -124,16 +132,22 @@ macro_rules! nih_debug_assert_failure {
 pub use nih_debug_assert_failure;
 
 /// A `debug_assert_eq!()` analogue that prints the error with line number information instead of
-/// panicking.
+/// panicking. See [`nih_debug_assert!()`] for more information.
 #[macro_export]
 macro_rules! nih_debug_assert_eq {
     ($left:expr, $right:expr $(,)?) => (
-        if cfg!(debug_assertions) && $left != $right {
+        #[allow(clippy::neg_cmp_op_on_partial_ord)]
+        if cfg!(test) {
+           debug_assert_eq!($left, $right);
+        } else if cfg!(debug_assertions) && $left != $right {
             $crate::util::permit_alloc(|| $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($left), " != ", stringify!($right))));
         }
     );
     ($left:expr, $right:expr, $format:expr $(, $($args:tt)*)?) => (
-        if cfg!(debug_assertions) && $left != $right  {
+        #[allow(clippy::neg_cmp_op_on_partial_ord)]
+        if cfg!(test) {
+           debug_assert_eq!($left, $right, $format, $($($args)*)?);
+        } else if cfg!(debug_assertions) && $left != $right {
             $crate::util::permit_alloc(|| $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($left), " != ", stringify!($right), ", ", $format), $($($args)*)?));
         }
     );
@@ -142,16 +156,22 @@ macro_rules! nih_debug_assert_eq {
 pub use nih_debug_assert_eq;
 
 /// A `debug_assert_ne!()` analogue that prints the error with line number information instead of
-/// panicking.
+/// panicking. See [`nih_debug_assert!()`] for more information.
 #[macro_export]
 macro_rules! nih_debug_assert_ne {
     ($left:expr, $right:expr $(,)?) => (
-        if cfg!(debug_assertions) && $left == $right {
+        #[allow(clippy::neg_cmp_op_on_partial_ord)]
+        if cfg!(test) {
+           debug_assert_ne!($left, $right);
+        } else if cfg!(debug_assertions) && $left == $right {
             $crate::util::permit_alloc(|| $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($left), " == ", stringify!($right))));
         }
     );
     ($left:expr, $right:expr, $format:expr $(, $($args:tt)*)?) => (
-        if cfg!(debug_assertions) && $left == $right  {
+        #[allow(clippy::neg_cmp_op_on_partial_ord)]
+        if cfg!(test) {
+           debug_assert_ne!($left, $right, $format, $($($args)*)?);
+        } else if cfg!(debug_assertions) && $left == $right  {
             $crate::util::permit_alloc(|| $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($left), " == ", stringify!($right), ", ", $format), $($($args)*)?));
         }
     );
