@@ -14,7 +14,7 @@ pub enum SmoothingStyle {
     /// the oversampling amount, where `1.0` means no oversampling. This value can change at
     /// runtime, and it effectively scales the sample rate when computing new smoothing coefficients
     /// when the parameter's value changes.
-    OversamplingAware(Arc<AtomicF32>, Arc<SmoothingStyle>),
+    OversamplingAware(Arc<AtomicF32>, &'static SmoothingStyle),
 
     /// No smoothing is applied. The parameter's `value` field contains the latest sample value
     /// available for the parameters.
