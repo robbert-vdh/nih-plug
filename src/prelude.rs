@@ -27,7 +27,7 @@ pub use crate::midi::{control_change, MidiConfig, NoteEvent, PluginNoteEvent};
 pub use crate::params::enums::{Enum, EnumParam};
 pub use crate::params::internals::ParamPtr;
 pub use crate::params::range::{FloatRange, IntRange};
-pub use crate::params::smoothing::{Smoothable, Smoother, SmoothingStyle};
+pub use crate::params::smoothing::{AtomicF32, Smoothable, Smoother, SmoothingStyle};
 pub use crate::params::Params;
 pub use crate::params::{BoolParam, FloatParam, IntParam, Param, ParamFlags};
 #[cfg(feature = "vst3")]

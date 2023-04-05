@@ -1,11 +1,21 @@
 //! Utilities to handle smoothing parameter changes over time.
 
-use atomic_float::AtomicF32;
 use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::Arc;
+
+// Re-exported here because it's sued in `SmoothingStyle`.
+pub use atomic_float::AtomicF32;
 
 /// Controls if and how parameters gets smoothed.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum SmoothingStyle {
+    /// Wraps another smoothing style to create a multi-rate oversampling-aware smoother for a
+    /// parameter that's used in an oversampled part of the plugin. The `Arc<AtomicF32>` indicates
+    /// the oversampling amount, where `1.0` means no oversampling. This value can change at
+    /// runtime, and it effectively scales the sample rate when computing new smoothing coefficients
+    /// when the parameter's value changes.
+    OversamplingAware(Arc<AtomicF32>, Arc<SmoothingStyle>),
+
     /// No smoothing is applied. The parameter's `value` field contains the latest sample value
     /// available for the parameters.
     None,
@@ -64,18 +74,6 @@ pub struct SmootherIter<'a, T: Smoothable> {
 }
 
 impl SmoothingStyle {
-    /// Utility function to modify the duration to compensate for an oversampling factor. When using
-    /// 4x oversampling, the duration needs to be four times as long to compensate for the four
-    /// times higher effective sample rate.
-    pub fn for_oversampling_factor(self, factor: f32) -> Self {
-        match self {
-            SmoothingStyle::None => SmoothingStyle::None,
-            SmoothingStyle::Linear(time) => SmoothingStyle::Linear(time * factor),
-            SmoothingStyle::Logarithmic(time) => SmoothingStyle::Logarithmic(time * factor),
-            SmoothingStyle::Exponential(time) => SmoothingStyle::Exponential(time * factor),
-        }
-    }
-
     /// Compute the number of steps to reach the target value based on the sample rate and this
     /// smoothing style's duration.
     #[inline]
@@ -83,10 +81,12 @@ impl SmoothingStyle {
         nih_debug_assert!(sample_rate > 0.0);
 
         match self {
-            SmoothingStyle::None => 1,
-            SmoothingStyle::Linear(time)
-            | SmoothingStyle::Logarithmic(time)
-            | SmoothingStyle::Exponential(time) => {
+            Self::OversamplingAware(oversampling_times, style) => {
+                style.num_steps(sample_rate * oversampling_times.load(Ordering::Relaxed))
+            }
+
+            Self::None => 1,
+            Self::Linear(time) | Self::Logarithmic(time) | Self::Exponential(time) => {
                 nih_debug_assert!(*time >= 0.0);
                 (sample_rate * time / 1000.0).round() as u32
             }
@@ -101,9 +101,11 @@ impl SmoothingStyle {
         nih_debug_assert!(num_steps >= 1);
 
         match self {
-            SmoothingStyle::None => 0.0,
-            SmoothingStyle::Linear(_) => (target - start) / (num_steps as f32),
-            SmoothingStyle::Logarithmic(_) => {
+            Self::OversamplingAware(_, style) => style.step_size(start, target, num_steps),
+
+            Self::None => 0.0,
+            Self::Linear(_) => (target - start) / (num_steps as f32),
+            Self::Logarithmic(_) => {
                 // We need to solve `start * (step_size ^ num_steps) = target` for `step_size`
                 nih_debug_assert_ne!(start, 0.0);
                 ((target / start) as f64).powf((num_steps as f64).recip()) as f32
@@ -112,7 +114,7 @@ impl SmoothingStyle {
             // multiplied by, while the target value is multiplied by one minus the coefficient. This
             // reaches 99.99% of the target value after `num_steps`. The smoother will snap to the
             // target value after that point.
-            SmoothingStyle::Exponential(_) => 0.0001f64.powf((num_steps as f64).recip()) as f32,
+            Self::Exponential(_) => 0.0001f64.powf((num_steps as f64).recip()) as f32,
         }
     }
 
@@ -125,10 +127,12 @@ impl SmoothingStyle {
     #[inline]
     pub fn next(&self, current: f32, target: f32, step_size: f32) -> f32 {
         match self {
-            SmoothingStyle::None => target,
-            SmoothingStyle::Linear(_) => current + step_size,
-            SmoothingStyle::Logarithmic(_) => current * step_size,
-            SmoothingStyle::Exponential(_) => (current * step_size) + (target * (1.0 - step_size)),
+            Self::OversamplingAware(_, style) => style.next(current, target, step_size),
+
+            Self::None => target,
+            Self::Linear(_) => current + step_size,
+            Self::Logarithmic(_) => current * step_size,
+            Self::Exponential(_) => (current * step_size) + (target * (1.0 - step_size)),
         }
     }
 
@@ -143,10 +147,12 @@ impl SmoothingStyle {
         nih_debug_assert!(steps >= 1);
 
         match self {
-            SmoothingStyle::None => target,
-            SmoothingStyle::Linear(_) => current + (step_size * steps as f32),
-            SmoothingStyle::Logarithmic(_) => current * (step_size.powi(steps as i32)),
-            SmoothingStyle::Exponential(_) => {
+            Self::OversamplingAware(_, style) => style.next_step(current, target, step_size, steps),
+
+            Self::None => target,
+            Self::Linear(_) => current + (step_size * steps as f32),
+            Self::Logarithmic(_) => current * (step_size.powi(steps as i32)),
+            Self::Exponential(_) => {
                 // This is the same as calculating `current = (current * step_size) +
                 // (target * (1 - step_size))` in a loop since the target value won't change
                 let coefficient = step_size.powi(steps as i32);
@@ -198,7 +204,7 @@ impl<T: Smoothable> Clone for Smoother<T> {
         // We can't derive clone because of the atomics, but these atomics are only here to allow
         // Send+Sync interior mutability
         Self {
-            style: self.style,
+            style: self.style.clone(),
             steps_left: AtomicI32::new(self.steps_left.load(Ordering::Relaxed)),
             step_size: AtomicF32::new(self.step_size.load(Ordering::Relaxed)),
             current: AtomicF32::new(self.current.load(Ordering::Relaxed)),

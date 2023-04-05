@@ -114,15 +114,15 @@ impl CrossoverParams {
 
             // TODO: More sensible default frequencies
             crossover_1_freq: FloatParam::new("Crossover 1", 200.0, crossover_range)
-                .with_smoother(crossover_smoothing_style)
+                .with_smoother(crossover_smoothing_style.clone())
                 .with_value_to_string(crossover_value_to_string.clone())
                 .with_string_to_value(crossover_string_to_value.clone()),
             crossover_2_freq: FloatParam::new("Crossover 2", 1000.0, crossover_range)
-                .with_smoother(crossover_smoothing_style)
+                .with_smoother(crossover_smoothing_style.clone())
                 .with_value_to_string(crossover_value_to_string.clone())
                 .with_string_to_value(crossover_string_to_value.clone()),
             crossover_3_freq: FloatParam::new("Crossover 3", 5000.0, crossover_range)
-                .with_smoother(crossover_smoothing_style)
+                .with_smoother(crossover_smoothing_style.clone())
                 .with_value_to_string(crossover_value_to_string.clone())
                 .with_string_to_value(crossover_string_to_value.clone()),
             crossover_4_freq: FloatParam::new("Crossover 4", 10000.0, crossover_range)

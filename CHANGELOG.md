@@ -16,6 +16,23 @@ state is to list breaking changes.
 
 - The `nih_debug_assert*!()` macros are now upgraded to regular panicking
   `debug_assert!()` macros during tests.
+- `SmoothingStyle::for_oversampling_factor()` has been removed in favor of a new
+  mechanism that allows the smmoothers to be aware of oversampling. A new
+  `Smoothingstyle::OversamplingAware(oversampling_times, style)` can be used to
+  wrap another `Smoothingstyle` to make it aware of an oversampling amount that
+  can change at runtime. The `oversampling_times` is an `Arc<AtomicF32>` that
+  indicates the current oversampling amount. This makes it possible to link
+  multiple parameters to the same oversampling amount, have different sets of
+  parameters run at different effective sample rates, and automatically update
+  those oversampling amounts/sample rate multipliers from a parameter callback.
+- As a consequence of the above change, `Smoothingstyle` is no longer `Copy`
+  since the `OversamplingAware` smoothing style contain an
+  `Arc<Smoothingstyle>`. It can still be `Clone`d.
+
+### Changes
+
+- The prelude module now also re-exports the `AtomicF32` type since it's needed
+  to use the new `Smoothingstyle::OversamplingAware`.
 
 ## [2023-04-01]
 
