@@ -292,13 +292,6 @@ impl Plugin for SoftVacuum {
             context.set_latency_samples(oversampler.latency(oversampling_factor));
         }
 
-        // The Hard Vacuum algorithm makes use of slews, and the aura control amplifies this part.
-        // The oversampling rounds out the waveform and reduces those slews. This is a rough
-        // compensation to get the distortion to sound like it normally would. The alternative would
-        // be to upsample the slews independently.
-        // FIXME: Maybe just upsample the slew signal instead, that should be more accurate
-        let slew_oversampling_compensation_factor = (oversampling_times - 1) as f32 * 0.7;
-
         for (_, block) in buffer.iter_blocks(MAX_BLOCK_SIZE) {
             let block_len = block.samples();
             let upsampled_block_len = block_len * oversampling_times;
@@ -349,8 +342,6 @@ impl Plugin for SoftVacuum {
                             drive: unsafe { *drive.get_unchecked(sample_idx) },
                             warmth: unsafe { *warmth.get_unchecked(sample_idx) },
                             aura: unsafe { *aura.get_unchecked(sample_idx) },
-
-                            slew_compensation_factor: slew_oversampling_compensation_factor,
                         };
                         let output_gain = unsafe { *output_gain.get_unchecked(sample_idx) };
                         let dry_wet_ratio = unsafe { *dry_wet_ratio.get_unchecked(sample_idx) };
