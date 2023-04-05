@@ -347,29 +347,26 @@ impl Lanzcos3Stage {
             // NOTE: 'Even samples' is considered from the perspective of a zero latency filter. In
             //       this case the evenness of the filter's latency also needs to be considered. If
             //       it's odd then the direct reading should also happen for odd indexed samples.
-            self.scratch_buffer[output_sample_idx] = if output_sample_idx % 2
-                == (LANZCOS3_KERNEL_LATENCY % 2)
-            {
-                nih_debug_assert!(
-                    self.upsampling_rb[(direct_read_pos + LANCZOS3_UPSAMPLING_KERNEL.len() - 1)
-                        % LANCZOS3_UPSAMPLING_KERNEL.len()]
-                    .abs()
-                        == 0.0
-                );
-                nih_debug_assert!(
-                    self.upsampling_rb[(direct_read_pos + 1) % LANCZOS3_UPSAMPLING_KERNEL.len()]
-                        .abs()
-                        == 0.0
-                );
+            self.scratch_buffer[output_sample_idx] =
+                if output_sample_idx % 2 == (LANZCOS3_KERNEL_LATENCY % 2) {
+                    nih_debug_assert_eq!(
+                        self.upsampling_rb[(direct_read_pos + self.upsampling_rb.len() - 1)
+                            % self.upsampling_rb.len()],
+                        0.0
+                    );
+                    nih_debug_assert_eq!(
+                        self.upsampling_rb[(direct_read_pos + 1) % self.upsampling_rb.len()],
+                        0.0
+                    );
 
-                self.upsampling_rb[direct_read_pos]
-            } else {
-                convolve_rb(
-                    &self.upsampling_rb,
-                    &LANCZOS3_UPSAMPLING_KERNEL,
-                    self.upsampling_write_pos,
-                )
-            };
+                    self.upsampling_rb[direct_read_pos]
+                } else {
+                    convolve_rb(
+                        &self.upsampling_rb,
+                        &LANCZOS3_UPSAMPLING_KERNEL,
+                        self.upsampling_write_pos,
+                    )
+                };
         }
     }
 
