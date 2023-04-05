@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use std::f32::consts::PI;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use nih_plug::prelude::*;
@@ -26,12 +27,14 @@ mod oversampling;
 /// oversampling.
 const MAX_BLOCK_SIZE: usize = 32;
 
-/// The 2-logarithm of the oversampling amount to use. 4x oversampling corresponds to factor 2.
-// FIXME: Set this back to 2
-const OVERSAMPLING_FACTOR: usize = 2;
-const OVERSAMPLING_TIMES: usize = 2usize.pow(OVERSAMPLING_FACTOR as u32);
+/// The 2-logarithm of the maximum oversampling amount to use. 16x oversampling corresponds to factor
+/// 4.
+const MAX_OVERSAMPLING_FACTOR: usize = 4;
+const MAX_OVERSAMPLING_TIMES: usize = oversampling_factor_to_times(MAX_OVERSAMPLING_FACTOR);
+const MAX_OVERSAMPLED_BLOCK_SIZE: usize = MAX_BLOCK_SIZE * MAX_OVERSAMPLING_TIMES;
 
-const MAX_OVERSAMPLED_BLOCK_SIZE: usize = MAX_BLOCK_SIZE * OVERSAMPLING_TIMES;
+/// This corresponds to 4x oversampling.
+const DEFAULT_OVERSAMPLING_FACTOR: usize = 2;
 
 struct SoftVacuum {
     params: Arc<SoftVacuumParams>,
@@ -65,34 +68,45 @@ struct SoftVacuumParams {
     /// A linear dry/wet mix parameter.
     #[id = "dry_wet_ratio"]
     pub dry_wet_ratio: FloatParam,
+
+    /// The current oversampling factor. This is the 2-logarithm of the oversampling amount. 0
+    /// corresponds to 1x/no oversampling, 1 to 2x oversampling, 2 to 4x, etc..
+    #[id = "oversampling_factor"]
+    pub oversampling_factor: IntParam,
 }
 
 impl Default for SoftVacuumParams {
     fn default() -> Self {
+        // This is set by the `oversampling_factor` parameter and is used by the smoothers of the
+        // other parmaeters so the oversampling amount always stays in sync
+        let oversampling_times = Arc::new(AtomicF32::new(oversampling_factor_to_times(
+            DEFAULT_OVERSAMPLING_FACTOR,
+        ) as f32));
+
         Self {
             // Goes up to 200%, with the second half being nonlinear
             drive: FloatParam::new("Drive", 0.0, FloatRange::Linear { min: 0.0, max: 2.0 })
                 .with_unit("%")
-                .with_smoother(
-                    SmoothingStyle::Linear(20.0)
-                        .for_oversampling_factor(OVERSAMPLING_FACTOR as f32),
-                )
+                .with_smoother(SmoothingStyle::OversamplingAware(
+                    oversampling_times.clone(),
+                    &SmoothingStyle::Linear(20.0),
+                ))
                 .with_value_to_string(formatters::v2s_f32_percentage(0))
                 .with_string_to_value(formatters::s2v_f32_percentage()),
             warmth: FloatParam::new("Warmth", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 })
                 .with_unit("%")
-                .with_smoother(
-                    SmoothingStyle::Linear(10.0)
-                        .for_oversampling_factor(OVERSAMPLING_FACTOR as f32),
-                )
+                .with_smoother(SmoothingStyle::OversamplingAware(
+                    oversampling_times.clone(),
+                    &SmoothingStyle::Linear(10.0),
+                ))
                 .with_value_to_string(formatters::v2s_f32_percentage(0))
                 .with_string_to_value(formatters::s2v_f32_percentage()),
             aura: FloatParam::new("Aura", 0.0, FloatRange::Linear { min: 0.0, max: PI })
                 .with_unit("%")
-                .with_smoother(
-                    SmoothingStyle::Linear(10.0)
-                        .for_oversampling_factor(OVERSAMPLING_FACTOR as f32),
-                )
+                .with_smoother(SmoothingStyle::OversamplingAware(
+                    oversampling_times.clone(),
+                    &SmoothingStyle::Linear(10.0),
+                ))
                 // We're displaying the value as a percentage even though it goes from `[0, pi]`
                 .with_value_to_string({
                     let formatter = formatters::v2s_f32_percentage(0);
@@ -115,20 +129,47 @@ impl Default for SoftVacuumParams {
             )
             .with_unit(" dB")
             // The value does not go down to 0 so we can do logarithmic here
-            .with_smoother(
-                SmoothingStyle::Logarithmic(10.0)
-                    .for_oversampling_factor(OVERSAMPLING_FACTOR as f32),
-            )
+            .with_smoother(SmoothingStyle::OversamplingAware(
+                oversampling_times.clone(),
+                &SmoothingStyle::Logarithmic(10.0),
+            ))
             .with_value_to_string(formatters::v2s_f32_gain_to_db(2))
             .with_string_to_value(formatters::s2v_f32_gain_to_db()),
             dry_wet_ratio: FloatParam::new("Mix", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 })
                 .with_unit("%")
-                .with_smoother(
-                    SmoothingStyle::Linear(10.0)
-                        .for_oversampling_factor(OVERSAMPLING_FACTOR as f32),
-                )
+                .with_smoother(SmoothingStyle::OversamplingAware(
+                    oversampling_times.clone(),
+                    &SmoothingStyle::Linear(10.0),
+                ))
                 .with_value_to_string(formatters::v2s_f32_percentage(0))
                 .with_string_to_value(formatters::s2v_f32_percentage()),
+
+            oversampling_factor: IntParam::new(
+                "Oversampling",
+                DEFAULT_OVERSAMPLING_FACTOR as i32,
+                IntRange::Linear {
+                    min: 0,
+                    max: MAX_OVERSAMPLING_FACTOR as i32,
+                },
+            )
+            .with_unit("x")
+            .with_callback(Arc::new(move |new_factor| {
+                oversampling_times.store(
+                    oversampling_factor_to_times(new_factor as usize) as f32,
+                    Ordering::Relaxed,
+                );
+            }))
+            .with_value_to_string(Arc::new(|value| {
+                // NIH-plug prevents `value` from being out of range and thus negative
+                let oversampling_times = oversampling_factor_to_times(value as usize);
+
+                oversampling_times.to_string()
+            }))
+            .with_string_to_value(Arc::new(|string| {
+                let oversampling_times: usize = string.parse().ok()?;
+
+                Some(oversampling_times_to_factor(oversampling_times) as i32)
+            })),
         }
     }
 }
@@ -185,14 +226,14 @@ impl Plugin for SoftVacuum {
 
         self.hard_vacuum_processors
             .resize_with(num_channels, hard_vacuum::HardVacuum::default);
-        // If the number of stages ever becomes configurable, then this needs to also change the
-        // existinginstances
         self.oversamplers.resize_with(num_channels, || {
-            oversampling::Lanczos3Oversampler::new(MAX_BLOCK_SIZE, OVERSAMPLING_FACTOR)
+            oversampling::Lanczos3Oversampler::new(MAX_BLOCK_SIZE, MAX_OVERSAMPLING_FACTOR)
         });
 
         if let Some(oversampler) = self.oversamplers.first() {
-            context.set_latency_samples(oversampler.latency(OVERSAMPLING_FACTOR));
+            context.set_latency_samples(
+                oversampler.latency(self.params.oversampling_factor.value() as usize),
+            );
         }
 
         true
@@ -212,25 +253,29 @@ impl Plugin for SoftVacuum {
         &mut self,
         buffer: &mut Buffer,
         _aux: &mut AuxiliaryBuffers,
-        _context: &mut impl ProcessContext<Self>,
+        context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
-        // TODO: When the oversampling amount becomes dynamic, then we should update the latency here:
-        // context.set_latency_samples(self.oversampler.latency() as u32);
+        let oversampling_factor = self.params.oversampling_factor.value() as usize;
+        let oversampling_times = oversampling_factor_to_times(oversampling_factor);
+
+        // If the oversampling factor parameter is changed then the host needs to know about the new
+        // latency
+        if let Some(oversampler) = self.oversamplers.first() {
+            context.set_latency_samples(oversampler.latency(oversampling_factor));
+        }
 
         // The Hard Vacuum algorithm makes use of slews, and the aura control amplifies this part.
         // The oversampling rounds out the waveform and reduces those slews. This is a rough
         // compensation to get the distortion to sound like it normally would. The alternative would
         // be to upsample the slews independently.
         // FIXME: Maybe just upsample the slew signal instead, that should be more accurate
-        let slew_oversampling_compensation_factor = (OVERSAMPLING_TIMES - 1) as f32 * 0.7;
+        let slew_oversampling_compensation_factor = (oversampling_times - 1) as f32 * 0.7;
 
         for (_, block) in buffer.iter_blocks(MAX_BLOCK_SIZE) {
             let block_len = block.samples();
-            let upsampled_block_len = block_len * OVERSAMPLING_TIMES;
+            let upsampled_block_len = block_len * oversampling_times;
 
             // These are the parameters for the distortion algorithm
-            // TODO: When the oversampling amount becomes dynamic, then the block size here needs to
-            //       change depending on the oversampling amount
             let mut drive = [0.0; MAX_OVERSAMPLED_BLOCK_SIZE];
             self.params
                 .drive
@@ -264,7 +309,7 @@ impl Plugin for SoftVacuum {
                     .iter_mut()
                     .zip(self.hard_vacuum_processors.iter_mut()),
             ) {
-                oversampler.process(block_channel, OVERSAMPLING_FACTOR, |upsampled| {
+                oversampler.process(block_channel, oversampling_factor, |upsampled| {
                     assert!(upsampled.len() == upsampled_block_len);
 
                     for (sample_idx, sample) in upsampled.iter_mut().enumerate() {
@@ -292,6 +337,15 @@ impl Plugin for SoftVacuum {
 
         ProcessStatus::Normal
     }
+}
+
+// Used in the conversion for the oversampling amount parameter
+const fn oversampling_factor_to_times(factor: usize) -> usize {
+    2usize.pow(factor as u32)
+}
+
+const fn oversampling_times_to_factor(times: usize) -> usize {
+    times.ilog2() as usize
 }
 
 impl ClapPlugin for SoftVacuum {
