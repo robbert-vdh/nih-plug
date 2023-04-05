@@ -56,6 +56,26 @@ impl HardVacuum {
     ///
     /// Output scaling and dry/wet mixing should be done externally.
     pub fn process(&mut self, input: f32, params: &Params) -> f32 {
+        let slew = self.compute_slew(input);
+
+        self.process_with_slew(input, params, slew)
+    }
+
+    /// Compute only the slew value. Used together with `process_with_slew()` to compute the slews,
+    /// upsample that, and then process the upsampled signal using those upsampled slews so the
+    /// oversampled version ends up sounding more similar to the original algorithm.
+    pub fn compute_slew(&mut self, input: f32) -> f32 {
+        // AW: skew will be direction/angle
+        let skew = input - self.last_sample;
+        self.last_sample = input;
+
+        skew
+    }
+
+    /// The same as `process()`, but with an externally computed slew value (`input - last_value`).
+    /// This is useful for the oversampled version of this algorithm as we can upsample the slew
+    /// signal separately.
+    pub fn process_with_slew(&self, input: f32, params: &Params, slew: f32) -> f32 {
         // We'll skip a couple unnecessary things here like the dithering and the manual denormal
         // evasion
         nih_debug_assert!((0.0..=2.0).contains(&params.drive));
@@ -69,7 +89,7 @@ impl HardVacuum {
         // AW: We're doing all this here so skew isn't incremented by each stage
         let skew = {
             // AW: skew will be direction/angle
-            let skew = input - self.last_sample;
+            let skew = slew;
             // AW: for skew we want it to go to zero effect again, so we use full range of the sine
             let bridge_rectifier = skew.abs().min(PI).sin();
 
@@ -79,7 +99,6 @@ impl HardVacuum {
             //       and this one has an additional 5 in there.
             skew.signum() * bridge_rectifier * params.aura * input * ALMOST_FRAC_PI_2
         };
-        self.last_sample = input;
 
         // AW: WE MAKE LOUD NOISE! RAWWWK!
         let mut remaining_distortion_stages = if params.drive > 1.0 {
