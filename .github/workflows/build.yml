@@ -21,7 +21,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - { name: ubuntu-18.04,       os: ubuntu-18.04,   cross-target: '' }
+          - { name: ubuntu-20.04,       os: ubuntu-20.04,   cross-target: '' }
           - { name: macos-universal,    os: macos-11,       cross-target: aarch64-apple-darwin }
           - { name: windows,            os: windows-latest, cross-target: '' }
     name: Package plugin binaries
