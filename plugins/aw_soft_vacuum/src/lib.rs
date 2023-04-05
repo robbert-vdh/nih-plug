@@ -192,7 +192,7 @@ impl Plugin for SoftVacuum {
         });
 
         if let Some(oversampler) = self.oversamplers.first() {
-            context.set_latency_samples(oversampler.latency() as u32);
+            context.set_latency_samples(oversampler.latency(OVERSAMPLING_FACTOR));
         }
 
         true
@@ -264,7 +264,7 @@ impl Plugin for SoftVacuum {
                     .iter_mut()
                     .zip(self.hard_vacuum_processors.iter_mut()),
             ) {
-                oversampler.process(block_channel, |upsampled| {
+                oversampler.process(block_channel, OVERSAMPLING_FACTOR, |upsampled| {
                     assert!(upsampled.len() == upsampled_block_len);
 
                     for (sample_idx, sample) in upsampled.iter_mut().enumerate() {

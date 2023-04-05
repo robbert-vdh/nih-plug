@@ -72,12 +72,14 @@ const LANZCOS3_KERNEL_LATENCY: usize = LANCZOS3_UPSAMPLING_KERNEL.len() / 2;
 /// This only handles a single audio channel. Use multiple instances for multichannel audio.
 #[derive(Debug)]
 pub struct Lanczos3Oversampler {
-    /// The state used for each oversampling stage.
+    /// The state used for each oversampling stage. Also contains stages that are not being used, so
+    /// the number of stages can change without allocating. The number of currently active
+    /// stages/the oversampling factor passed to [`process()`][Self::process()] determines how many
+    /// of these are actually used.
     stages: Vec<Lanzcos3Stage>,
 
-    /// The oversampler's latency. Precomputed since the number of stages cannot change at this
-    /// time.
-    latency: u32,
+    /// The oversampler's latency. Precomputed for each possible number of active stages.
+    latencies: Vec<u32>,
 }
 
 /// A single oversampling stage. Contains the ring buffers and current position in that ringbuffer
@@ -110,18 +112,28 @@ struct Lanzcos3Stage {
 }
 
 impl Lanczos3Oversampler {
-    /// Create a new oversampling for the specified oversampling factor, or the 2-logarithm of the
-    /// oversampling amount. 1x oversampling (aka, do nothing) = 0, 2x oversampling = 1, 4x
-    /// oversampling = 3, etc.
-    pub fn new(maximum_block_size: usize, factor: usize) -> Self {
-        let mut stages = Vec::with_capacity(factor);
-        for stage in 0..factor {
+    /// Create a new oversampler that can oversample to up to the specified oversampling factor, or
+    /// the 2-logarithm of the oversampling amount. 1x oversampling (aka, do nothing) = 0, 2x
+    /// oversampling = 1, 4x oversampling = 3, etc. The actual amount of oversampling stages used is
+    /// passed to the `process()` function, and must be set to `max_factor` or lower.
+    pub fn new(maximum_block_size: usize, max_factor: usize) -> Self {
+        let mut stages = Vec::with_capacity(max_factor);
+        for stage in 0..max_factor {
             stages.push(Lanzcos3Stage::new(maximum_block_size, stage))
         }
 
-        let latency = stages.iter().map(|stage| stage.effective_latency()).sum();
+        // Since the number of active oversampling stages is passed to the process function, we also
+        // need to know the effective latencies of all possible oversampling settings in advance.
+        let latencies = stages
+            .iter()
+            .map(|stage| stage.effective_latency())
+            .scan(0, |total_latency, latency| {
+                *total_latency += latency;
+                Some(*total_latency)
+            })
+            .collect();
 
-        Self { stages, latency }
+        Self { stages, latencies }
     }
 
     /// Reset the oversampling filters to their initial states.
@@ -131,20 +143,33 @@ impl Lanczos3Oversampler {
         }
     }
 
-    /// Get the latency in samples. Fractional latency is automatically avoided.
-    pub fn latency(&self) -> u32 {
-        self.latency
-    }
-
-    /// Upsample `block`, process the upsampled version using `f`, and then downsample it again and
-    /// write the results back to `block` with a [`latency()`][Self::latency()] sample delay.
+    /// Get the latency in samples for the given oversampling factor. Fractional latency is
+    /// automatically avoided.
     ///
     /// # Panics
     ///
-    /// Panics if `block`'s length is longer than the maximum block size.
-    pub fn process(&mut self, block: &mut [f32], f: impl FnOnce(&mut [f32])) {
+    /// Panics if `factor > max_factor`.
+    pub fn latency(&self, factor: usize) -> u32 {
+        if factor == 0 {
+            0
+        } else {
+            self.latencies[factor - 1]
+        }
+    }
+
+    /// Upsample `block` using the specified oversampling factor, process the upsampled version
+    /// using `f`, and then downsample it again and write the results back to `block` with a
+    /// [`latency()`][Self::latency()] sample delay.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `factor > max_factor`, or if `block`'s length is longer than the maximum block
+    /// size.
+    pub fn process(&mut self, block: &mut [f32], factor: usize, f: impl FnOnce(&mut [f32])) {
+        assert!(factor <= self.stages.len());
+
         // This is the 1x oversampling case, this should also modify the block to be consistent
-        if self.stages.is_empty() {
+        if factor == 0 {
             f(block);
             return;
         }
@@ -154,29 +179,31 @@ impl Lanczos3Oversampler {
             "The block's size exceeds the maximum block size"
         );
 
-        let upsampled = self.upsample_from(block);
+        let upsampled = self.upsample_from(block, factor);
         f(upsampled);
-        self.downsample_to(block)
+        self.downsample_to(block, factor)
     }
 
-    /// Upsample `block` through all of the oversampling stages. Returns a reference to the
+    /// Upsample `block` through `factor` oversampling stages. Returns a reference to the
     /// oversampled output stored in the last `LancZos3Stage`'s scratch buffer **with the correct
     /// length**. This is a multiple of `block`'s length, which may be shorter than the entire
     /// scratch buffer's length if `block` is shorter than the configured maximum block length.
     ///
     /// # Panics
     ///
-    /// Panics if `block`'s length is longer than the maximum block size, or if the number of
-    /// oversampling stages is zero. This is already checked for in the process function.
-    fn upsample_from(&mut self, block: &[f32]) -> &mut [f32] {
-        assert!(!self.stages.is_empty());
+    /// Panics if `block`'s length is longer than the maximum block size, if the number of
+    /// oversampling is smaller than `factor`, or if `factor` is zero. This is already checked for
+    /// in the process function.
+    fn upsample_from(&mut self, block: &[f32], factor: usize) -> &mut [f32] {
+        assert_ne!(factor, 0);
+        assert!(factor <= self.stages.len());
 
         // The first stage is upsampled from `block`, and everything after that is upsampled from
         // the stage preceeding it
         self.stages[0].upsample_from(block);
 
         let mut previous_upsampled_block_len = block.len() * 2;
-        for to_stage_idx in 1..self.stages.len() {
+        for to_stage_idx in 1..factor {
             // This requires splitting the vector so we can borrow the from-stage immutably and the
             // to-stage mutably at the same time
             let ([.., from], [to, ..]) = self.stages.split_at_mut(to_stage_idx) else { unreachable!() };
@@ -185,26 +212,27 @@ impl Lanczos3Oversampler {
             previous_upsampled_block_len *= 2;
         }
 
-        &mut self.stages.last_mut().unwrap().scratch_buffer[..previous_upsampled_block_len]
+        &mut self.stages[factor - 1].scratch_buffer[..previous_upsampled_block_len]
     }
 
-    /// Downsample starting from the last oversampling stage, writing the results from downsampling
-    /// the first stage to `block`. `block`'s actual length is taken into account to compute the length of
-    /// the oversampled blocks.
+    /// Downsample starting from the `factor`th oversampling stage, writing the results from
+    /// downsampling the first stage to `block`. `block`'s actual length is taken into account to
+    /// compute the length of the oversampled blocks.
     ///
     /// # Panics
     ///
-    /// Panics if `block`'s length is longer than the maximum block size, or if the number of
-    /// oversampling stages is zero. This is already checked for in the process function.
-    fn downsample_to(&mut self, block: &mut [f32]) {
-        assert!(!self.stages.is_empty());
+    /// Panics if `block`'s length is longer than the maximum block size, if the number of
+    /// oversampling is smaller than `factor`, or if `factor` is zero. This is already checked for
+    /// in the process function.
+    fn downsample_to(&mut self, block: &mut [f32], factor: usize) {
+        assert_ne!(factor, 0);
+        assert!(factor <= self.stages.len());
 
         // This is the reverse of `upsample_from`. Starting from the last stage, the oversampling
         // stages are downsampled to the previous stage and then the first stage is downsampled to
         // `block`.
-        let num_stages = self.stages.len();
-        let mut next_downsampled_block_len = block.len() * 2usize.pow(num_stages as u32 - 1);
-        for to_stage_idx in (1..self.stages.len()).rev() {
+        let mut next_downsampled_block_len = block.len() * 2usize.pow(factor as u32 - 1);
+        for to_stage_idx in (1..factor).rev() {
             // This requires splitting the vector so we can borrow the from-stage immutably and the
             // to-stage mutably at the same time
             let ([.., to], [from, ..]) = self.stages.split_at_mut(to_stage_idx) else { unreachable!() };
@@ -498,16 +526,18 @@ mod tests {
 
             let mut oversampler =
                 Lanczos3Oversampler::new(delta_impulse.len(), oversampling_factor);
+
+            let reported_latency = oversampler.latency(oversampling_factor) as usize;
             assert!(
-                delta_impulse.len() > oversampler.latency() as usize,
+                delta_impulse.len() > reported_latency,
                 "The delta impulse array is too small to test the latency at oversampling factor \
                  {oversampling_factor}, this is an error with the test case"
             );
 
-            oversampler.process(&mut delta_impulse, |_| ());
+            oversampler.process(&mut delta_impulse, oversampling_factor, |_| ());
 
             let new_impulse_idx = argmax(delta_impulse);
-            assert_eq!(new_impulse_idx as u32, oversampler.latency());
+            assert_eq!(new_impulse_idx, reported_latency);
 
             // The latency should also not be fractional
             assert!(delta_impulse[new_impulse_idx] > delta_impulse[new_impulse_idx - 1]);
@@ -529,17 +559,19 @@ mod tests {
 
             let mut output = input;
             let mut oversampler = Lanczos3Oversampler::new(output.len(), oversampling_factor);
-            oversampler.process(&mut output, |upsampled| {
+            oversampler.process(&mut output, oversampling_factor, |upsampled| {
                 for sample in upsampled {
                     *sample *= GAIN;
                 }
             });
 
-            let latency = oversampler.latency() as usize;
-            for (input_sample_idx, input_sample) in
-                input.into_iter().enumerate().take(input.len() - latency)
+            let reported_latency = oversampler.latency(oversampling_factor) as usize;
+            for (input_sample_idx, input_sample) in input
+                .into_iter()
+                .enumerate()
+                .take(input.len() - reported_latency)
             {
-                let output_sample_idx = input_sample_idx + latency;
+                let output_sample_idx = input_sample_idx + reported_latency;
                 let output_sample = output[output_sample_idx];
 
                 // There can be quite a big difference between the input and output thanks to the
