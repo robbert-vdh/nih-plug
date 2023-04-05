@@ -22,12 +22,25 @@ use nih_plug::prelude::*;
 mod hard_vacuum;
 mod oversampling;
 
+/// The maximum number of samples to process at a time. Used to create scratch buffers for the
+/// oversampling.
+const MAX_BLOCK_SIZE: usize = 32;
+
+/// The 2-logarithm of the oversampling amount to use. 4x oversampling corresponds to factor 2.
+// FIXME: Set this back to 2
+const OVERSAMPLING_FACTOR: usize = 2;
+const OVERSAMPLING_TIMES: usize = 2usize.pow(OVERSAMPLING_FACTOR as u32);
+
+const MAX_OVERSAMPLED_BLOCK_SIZE: usize = MAX_BLOCK_SIZE * OVERSAMPLING_TIMES;
+
 struct SoftVacuum {
     params: Arc<SoftVacuumParams>,
 
     /// Stores implementations of the Hard Vacuum algorithm for each channel, since each channel
     /// needs to maintain its own state.
     hard_vacuum_processors: Vec<hard_vacuum::HardVacuum>,
+    /// Oversampling for each channel.
+    oversamplers: Vec<oversampling::Lanczos3Oversampler>,
 }
 
 // The parameters are the same as in the original plugin, except that they have different value
@@ -60,17 +73,26 @@ impl Default for SoftVacuumParams {
             // Goes up to 200%, with the second half being nonlinear
             drive: FloatParam::new("Drive", 0.0, FloatRange::Linear { min: 0.0, max: 2.0 })
                 .with_unit("%")
-                .with_smoother(SmoothingStyle::Linear(20.0))
+                .with_smoother(
+                    SmoothingStyle::Linear(20.0)
+                        .for_oversampling_factor(OVERSAMPLING_FACTOR as f32),
+                )
                 .with_value_to_string(formatters::v2s_f32_percentage(0))
                 .with_string_to_value(formatters::s2v_f32_percentage()),
             warmth: FloatParam::new("Warmth", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 })
                 .with_unit("%")
-                .with_smoother(SmoothingStyle::Linear(10.0))
+                .with_smoother(
+                    SmoothingStyle::Linear(10.0)
+                        .for_oversampling_factor(OVERSAMPLING_FACTOR as f32),
+                )
                 .with_value_to_string(formatters::v2s_f32_percentage(0))
                 .with_string_to_value(formatters::s2v_f32_percentage()),
             aura: FloatParam::new("Aura", 0.0, FloatRange::Linear { min: 0.0, max: PI })
                 .with_unit("%")
-                .with_smoother(SmoothingStyle::Linear(10.0))
+                .with_smoother(
+                    SmoothingStyle::Linear(10.0)
+                        .for_oversampling_factor(OVERSAMPLING_FACTOR as f32),
+                )
                 // We're displaying the value as a percentage even though it goes from `[0, pi]`
                 .with_value_to_string({
                     let formatter = formatters::v2s_f32_percentage(0);
@@ -93,12 +115,18 @@ impl Default for SoftVacuumParams {
             )
             .with_unit(" dB")
             // The value does not go down to 0 so we can do logarithmic here
-            .with_smoother(SmoothingStyle::Logarithmic(10.0))
+            .with_smoother(
+                SmoothingStyle::Logarithmic(10.0)
+                    .for_oversampling_factor(OVERSAMPLING_FACTOR as f32),
+            )
             .with_value_to_string(formatters::v2s_f32_gain_to_db(2))
             .with_string_to_value(formatters::s2v_f32_gain_to_db()),
             dry_wet_ratio: FloatParam::new("Mix", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 })
                 .with_unit("%")
-                .with_smoother(SmoothingStyle::Linear(10.0))
+                .with_smoother(
+                    SmoothingStyle::Linear(10.0)
+                        .for_oversampling_factor(OVERSAMPLING_FACTOR as f32),
+                )
                 .with_value_to_string(formatters::v2s_f32_percentage(0))
                 .with_string_to_value(formatters::s2v_f32_percentage()),
         }
@@ -111,6 +139,7 @@ impl Default for SoftVacuum {
             params: Arc::new(SoftVacuumParams::default()),
 
             hard_vacuum_processors: Vec::new(),
+            oversamplers: Vec::new(),
         }
     }
 }
@@ -147,14 +176,24 @@ impl Plugin for SoftVacuum {
         &mut self,
         audio_io_layout: &AudioIOLayout,
         _buffer_config: &BufferConfig,
-        _context: &mut impl InitContext<Self>,
+        context: &mut impl InitContext<Self>,
     ) -> bool {
         let num_channels = audio_io_layout
             .main_output_channels
             .expect("Plugin was initialized without any outputs")
             .get() as usize;
+
         self.hard_vacuum_processors
             .resize_with(num_channels, hard_vacuum::HardVacuum::default);
+        // If the number of stages ever becomes configurable, then this needs to also change the
+        // existinginstances
+        self.oversamplers.resize_with(num_channels, || {
+            oversampling::Lanczos3Oversampler::new(MAX_BLOCK_SIZE, OVERSAMPLING_FACTOR)
+        });
+
+        if let Some(oversampler) = self.oversamplers.first() {
+            context.set_latency_samples(oversampler.latency() as u32);
+        }
 
         true
     }
@@ -162,6 +201,10 @@ impl Plugin for SoftVacuum {
     fn reset(&mut self) {
         for hard_vacuum in &mut self.hard_vacuum_processors {
             hard_vacuum.reset();
+        }
+
+        for oversampler in &mut self.oversamplers {
+            oversampler.reset();
         }
     }
 
@@ -171,25 +214,79 @@ impl Plugin for SoftVacuum {
         _aux: &mut AuxiliaryBuffers,
         _context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
-        // TODO: Parameters
-        // TODO: Dry/wet mixing and output scaling
-        // TODO: Oversampling
-        for channel_samples in buffer.iter_samples() {
-            let output_gain = self.params.output_gain.smoothed.next();
-            let dry_wet_ratio = self.params.dry_wet_ratio.smoothed.next();
-            let hard_vacuum_params = hard_vacuum::Params {
-                drive: self.params.drive.smoothed.next(),
-                warmth: self.params.warmth.smoothed.next(),
-                aura: self.params.aura.smoothed.next(),
-            };
+        // TODO: When the oversampling amount becomes dynamic, then we should update the latency here:
+        // context.set_latency_samples(self.oversampler.latency() as u32);
 
-            for (sample, hard_vacuum) in channel_samples
-                .into_iter()
-                .zip(self.hard_vacuum_processors.iter_mut())
-            {
-                let distorted = hard_vacuum.process(*sample, &hard_vacuum_params);
-                *sample =
-                    (distorted * output_gain * dry_wet_ratio) + (*sample * (1.0 - dry_wet_ratio));
+        // The Hard Vacuum algorithm makes use of slews, and the aura control amplifies this part.
+        // The oversampling rounds out the waveform and reduces those slews. This is a rough
+        // compensation to get the distortion to sound like it normally would. The alternative would
+        // be to upsample the slews independently.
+        // FIXME: Maybe just upsample the slew signal instead, that should be more accurate
+        let slew_oversampling_compensation_factor = (OVERSAMPLING_TIMES - 1) as f32 * 0.7;
+
+        for (_, block) in buffer.iter_blocks(MAX_BLOCK_SIZE) {
+            let block_len = block.samples();
+            let upsampled_block_len = block_len * OVERSAMPLING_TIMES;
+
+            // These are the parameters for the distortion algorithm
+            // TODO: When the oversampling amount becomes dynamic, then the block size here needs to
+            //       change depending on the oversampling amount
+            let mut drive = [0.0; MAX_OVERSAMPLED_BLOCK_SIZE];
+            self.params
+                .drive
+                .smoothed
+                .next_block(&mut drive, upsampled_block_len);
+            let mut warmth = [0.0; MAX_OVERSAMPLED_BLOCK_SIZE];
+            self.params
+                .warmth
+                .smoothed
+                .next_block(&mut warmth, upsampled_block_len);
+            let mut aura = [0.0; MAX_OVERSAMPLED_BLOCK_SIZE];
+            self.params
+                .aura
+                .smoothed
+                .next_block(&mut aura, upsampled_block_len);
+
+            // And the general output mixing
+            let mut output_gain = [0.0; MAX_OVERSAMPLED_BLOCK_SIZE];
+            self.params
+                .output_gain
+                .smoothed
+                .next_block(&mut output_gain, upsampled_block_len);
+            let mut dry_wet_ratio = [0.0; MAX_OVERSAMPLED_BLOCK_SIZE];
+            self.params
+                .dry_wet_ratio
+                .smoothed
+                .next_block(&mut dry_wet_ratio, upsampled_block_len);
+
+            for (block_channel, (oversampler, hard_vacuum)) in block.into_iter().zip(
+                self.oversamplers
+                    .iter_mut()
+                    .zip(self.hard_vacuum_processors.iter_mut()),
+            ) {
+                oversampler.process(block_channel, |upsampled| {
+                    assert!(upsampled.len() == upsampled_block_len);
+
+                    for (sample_idx, sample) in upsampled.iter_mut().enumerate() {
+                        // SAFETY: We already made sure that the blocks are equal in size. We could
+                        //         zip iterators instead but with six iterators that's already a bit
+                        //         too much without a first class way to zip more than two iterators
+                        //         together into a single tuple of iterators.
+                        let hard_vacuum_params = hard_vacuum::Params {
+                            drive: unsafe { *drive.get_unchecked(sample_idx) },
+                            warmth: unsafe { *warmth.get_unchecked(sample_idx) },
+                            aura: unsafe { *aura.get_unchecked(sample_idx) },
+
+                            slew_compensation_factor: slew_oversampling_compensation_factor,
+                        };
+                        let output_gain = unsafe { *output_gain.get_unchecked(sample_idx) };
+                        let dry_wet_ratio = unsafe { *dry_wet_ratio.get_unchecked(sample_idx) };
+
+                        let distorted = hard_vacuum.process(*sample, &hard_vacuum_params);
+                        *sample = (distorted * output_gain * dry_wet_ratio)
+                            + (*sample * (1.0 - dry_wet_ratio));
+                    }
+                });
             }
         }
 

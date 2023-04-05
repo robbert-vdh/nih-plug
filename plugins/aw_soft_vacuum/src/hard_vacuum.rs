@@ -40,6 +40,10 @@ pub struct Params {
     pub warmth: f32,
     /// The 'aura' parameter, should be in the range `[0, pi]`.
     pub aura: f32,
+
+    /// A factor slews should be multiplied with. Set above 1.0 when oversampling to compensate for
+    /// the waveform becoming smoother.
+    pub slew_compensation_factor: f32,
 }
 
 impl HardVacuum {
@@ -68,8 +72,10 @@ impl HardVacuum {
 
         // AW: We're doing all this here so skew isn't incremented by each stage
         let skew = {
+            // NOTE: The `slew_compensation_factor` is an addition to make the algorithm behave more
+            //       consistently when oversampling
             // AW: skew will be direction/angle
-            let skew = input - self.last_sample;
+            let skew = (input - self.last_sample) * params.slew_compensation_factor;
             // AW: for skew we want it to go to zero effect again, so we use full range of the sine
             let bridge_rectifier = skew.abs().min(PI).sin();
 
