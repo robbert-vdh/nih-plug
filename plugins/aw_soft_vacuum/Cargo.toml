@@ -11,3 +11,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 nih_plug = { path = "../../", features = ["assert_process_allocs"] }
+
+[dev-dependencies]
+approx = "0.5.1"

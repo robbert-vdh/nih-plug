@@ -20,6 +20,7 @@ use std::sync::Arc;
 use nih_plug::prelude::*;
 
 mod hard_vacuum;
+mod oversampling;
 
 struct SoftVacuum {
     params: Arc<SoftVacuumParams>,

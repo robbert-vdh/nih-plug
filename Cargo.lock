@@ -352,6 +352,7 @@ checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 name = "aw_soft_vacuum"
 version = "0.1.0"
 dependencies = [
+ "approx 0.5.1",
  "nih_plug",
 ]
 
