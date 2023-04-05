@@ -24,5 +24,5 @@ After installing [Rust](https://rustup.rs/), you can compile Safety Limiter as
 follows:
 
 ```shell
-cargo xtask bundle aw_soft_vacuum --release
+cargo xtask bundle soft_vacuum --release
 ```
