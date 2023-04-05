@@ -33,8 +33,8 @@ const MAX_OVERSAMPLING_FACTOR: usize = 4;
 const MAX_OVERSAMPLING_TIMES: usize = oversampling_factor_to_times(MAX_OVERSAMPLING_FACTOR);
 const MAX_OVERSAMPLED_BLOCK_SIZE: usize = MAX_BLOCK_SIZE * MAX_OVERSAMPLING_TIMES;
 
-/// This corresponds to 4x oversampling.
-const DEFAULT_OVERSAMPLING_FACTOR: usize = 2;
+/// This corresponds to 2x oversampling.
+const DEFAULT_OVERSAMPLING_FACTOR: usize = 1;
 
 struct SoftVacuum {
     params: Arc<SoftVacuumParams>,
