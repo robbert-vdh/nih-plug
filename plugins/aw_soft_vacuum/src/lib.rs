@@ -44,6 +44,33 @@ struct SoftVacuum {
     hard_vacuum_processors: Vec<hard_vacuum::HardVacuum>,
     /// Oversampling for each channel.
     oversamplers: Vec<oversampling::Lanczos3Oversampler>,
+
+    /// Scratch buffers that the smoothed parameters can be rendered to. Allocated on the heap
+    /// because Windows uses tiny stack sizes which may eventually cause problems in some hosts.
+    scratch_buffers: Box<ScratchBuffers>,
+}
+
+struct ScratchBuffers {
+    // These are for the Hard Vacuum parameters
+    drive: [f32; MAX_OVERSAMPLED_BLOCK_SIZE],
+    warmth: [f32; MAX_OVERSAMPLED_BLOCK_SIZE],
+    aura: [f32; MAX_OVERSAMPLED_BLOCK_SIZE],
+
+    // These are for the mix parameters
+    output_gain: [f32; MAX_OVERSAMPLED_BLOCK_SIZE],
+    dry_wet_ratio: [f32; MAX_OVERSAMPLED_BLOCK_SIZE],
+}
+
+impl Default for ScratchBuffers {
+    fn default() -> Self {
+        Self {
+            drive: [0.0; MAX_OVERSAMPLED_BLOCK_SIZE],
+            warmth: [0.0; MAX_OVERSAMPLED_BLOCK_SIZE],
+            aura: [0.0; MAX_OVERSAMPLED_BLOCK_SIZE],
+            output_gain: [0.0; MAX_OVERSAMPLED_BLOCK_SIZE],
+            dry_wet_ratio: [0.0; MAX_OVERSAMPLED_BLOCK_SIZE],
+        }
+    }
 }
 
 // The parameters are the same as in the original plugin, except that they have different value
@@ -180,6 +207,8 @@ impl Default for SoftVacuum {
 
             hard_vacuum_processors: Vec::new(),
             oversamplers: Vec::new(),
+
+            scratch_buffers: Box::default(),
         }
     }
 }
@@ -275,33 +304,33 @@ impl Plugin for SoftVacuum {
             let upsampled_block_len = block_len * oversampling_times;
 
             // These are the parameters for the distortion algorithm
-            let mut drive = [0.0; MAX_OVERSAMPLED_BLOCK_SIZE];
+            let drive = &mut self.scratch_buffers.drive;
             self.params
                 .drive
                 .smoothed
-                .next_block(&mut drive, upsampled_block_len);
-            let mut warmth = [0.0; MAX_OVERSAMPLED_BLOCK_SIZE];
+                .next_block(drive, upsampled_block_len);
+            let warmth = &mut self.scratch_buffers.warmth;
             self.params
                 .warmth
                 .smoothed
-                .next_block(&mut warmth, upsampled_block_len);
-            let mut aura = [0.0; MAX_OVERSAMPLED_BLOCK_SIZE];
+                .next_block(warmth, upsampled_block_len);
+            let aura = &mut self.scratch_buffers.aura;
             self.params
                 .aura
                 .smoothed
-                .next_block(&mut aura, upsampled_block_len);
+                .next_block(aura, upsampled_block_len);
 
             // And the general output mixing
-            let mut output_gain = [0.0; MAX_OVERSAMPLED_BLOCK_SIZE];
+            let output_gain = &mut self.scratch_buffers.output_gain;
             self.params
                 .output_gain
                 .smoothed
-                .next_block(&mut output_gain, upsampled_block_len);
-            let mut dry_wet_ratio = [0.0; MAX_OVERSAMPLED_BLOCK_SIZE];
+                .next_block(output_gain, upsampled_block_len);
+            let dry_wet_ratio = &mut self.scratch_buffers.dry_wet_ratio;
             self.params
                 .dry_wet_ratio
                 .smoothed
-                .next_block(&mut dry_wet_ratio, upsampled_block_len);
+                .next_block(dry_wet_ratio, upsampled_block_len);
 
             for (block_channel, (oversampler, hard_vacuum)) in block.into_iter().zip(
                 self.oversamplers
