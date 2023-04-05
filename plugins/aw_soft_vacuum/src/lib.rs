@@ -121,10 +121,9 @@ impl Default for SoftVacuumParams {
                 "Output Gain",
                 util::db_to_gain(0.0),
                 FloatRange::Skewed {
-                    // This doesn't go down to 0.0 so we can use logarithmic smoothing
-                    min: util::MINUS_INFINITY_GAIN,
+                    min: util::db_to_gain(-40.0),
                     max: util::db_to_gain(0.0),
-                    factor: FloatRange::gain_skew_factor(util::MINUS_INFINITY_DB, 0.0),
+                    factor: FloatRange::gain_skew_factor(-40.0, 0.0),
                 },
             )
             .with_unit(" dB")
