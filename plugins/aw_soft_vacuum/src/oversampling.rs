@@ -184,6 +184,29 @@ impl Lanczos3Oversampler {
         self.downsample_to(block, factor)
     }
 
+    /// An upsample-only version of `process` that returns the upsampled version of the signal that
+    /// would normally be passed to `process`'s callback. Useful for upsampling control signals.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `factor > max_factor`, or if `block`'s length is longer than the maximum block
+    /// size.
+    pub fn upsample_only<'a>(&'a mut self, block: &'a mut [f32], factor: usize) -> &'a mut [f32] {
+        assert!(factor <= self.stages.len());
+
+        // This is the 1x oversampling case, this should also modify the block to be consistent
+        if factor == 0 {
+            return block;
+        }
+
+        assert!(
+            block.len() <= self.stages[0].scratch_buffer.len() / 2,
+            "The block's size exceeds the maximum block size"
+        );
+
+        self.upsample_from(block, factor)
+    }
+
     /// Upsample `block` through `factor` oversampling stages. Returns a reference to the
     /// oversampled output stored in the last `LancZos3Stage`'s scratch buffer **with the correct
     /// length**. This is a multiple of `block`'s length, which may be shorter than the entire
