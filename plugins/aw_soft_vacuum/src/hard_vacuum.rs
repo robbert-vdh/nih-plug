@@ -55,6 +55,7 @@ impl HardVacuum {
     /// multichannel audio.
     ///
     /// Output scaling and dry/wet mixing should be done externally.
+    #[allow(unused)]
     pub fn process(&mut self, input: f32, params: &Params) -> f32 {
         let slew = self.compute_slew(input);
 

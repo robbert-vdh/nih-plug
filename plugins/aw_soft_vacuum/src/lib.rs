@@ -44,6 +44,10 @@ struct SoftVacuum {
     hard_vacuum_processors: Vec<hard_vacuum::HardVacuum>,
     /// Oversampling for each channel.
     oversamplers: Vec<oversampling::Lanczos3Oversampler>,
+    /// Oversampling for each channel's slew control signal. This is upsampled separately to make
+    /// the oversampled algorithm sound similar to the regular, non oversampled version as the slews
+    /// will necessarily be lower in the oversampled version.
+    slew_oversamplers: Vec<oversampling::Lanczos3Oversampler>,
 
     /// Scratch buffers that the smoothed parameters can be rendered to. Allocated on the heap
     /// because Windows uses tiny stack sizes which may eventually cause problems in some hosts.
@@ -207,6 +211,7 @@ impl Default for SoftVacuum {
 
             hard_vacuum_processors: Vec::new(),
             oversamplers: Vec::new(),
+            slew_oversamplers: Vec::new(),
 
             scratch_buffers: Box::default(),
         }
@@ -257,6 +262,9 @@ impl Plugin for SoftVacuum {
         self.oversamplers.resize_with(num_channels, || {
             oversampling::Lanczos3Oversampler::new(MAX_BLOCK_SIZE, MAX_OVERSAMPLING_FACTOR)
         });
+        self.slew_oversamplers.resize_with(num_channels, || {
+            oversampling::Lanczos3Oversampler::new(MAX_BLOCK_SIZE, MAX_OVERSAMPLING_FACTOR)
+        });
 
         if let Some(oversampler) = self.oversamplers.first() {
             context.set_latency_samples(
@@ -273,6 +281,9 @@ impl Plugin for SoftVacuum {
         }
 
         for oversampler in &mut self.oversamplers {
+            oversampler.reset();
+        }
+        for oversampler in &mut self.slew_oversamplers {
             oversampler.reset();
         }
     }
@@ -325,15 +336,32 @@ impl Plugin for SoftVacuum {
                 .smoothed
                 .next_block(dry_wet_ratio, upsampled_block_len);
 
-            for (block_channel, (oversampler, hard_vacuum)) in block.into_iter().zip(
-                self.oversamplers
-                    .iter_mut()
-                    .zip(self.hard_vacuum_processors.iter_mut()),
-            ) {
+            for (block_channel, ((oversampler, slew_oversampler), hard_vacuum)) in
+                block.into_iter().zip(
+                    self.oversamplers
+                        .iter_mut()
+                        .zip(self.slew_oversamplers.iter_mut())
+                        .zip(self.hard_vacuum_processors.iter_mut()),
+                )
+            {
+                // The slew signal is computed and oversampled first. This is then used as a control
+                // signal in the oversampled version of the algorithm so it sounds more similar to
+                // the non-oversampled version. Otherwise the slews are necessarily going to be much
+                // lower.
+                let mut slews = [0.0f32; MAX_BLOCK_SIZE];
+                for (sample, slew) in block_channel.iter().zip(slews.iter_mut()) {
+                    *slew = hard_vacuum.compute_slew(*sample);
+                }
+
+                let upsampled_slews =
+                    slew_oversampler.upsample_only(&mut slews, oversampling_factor);
+
                 oversampler.process(block_channel, oversampling_factor, |upsampled| {
                     assert!(upsampled.len() == upsampled_block_len);
 
-                    for (sample_idx, sample) in upsampled.iter_mut().enumerate() {
+                    for (sample_idx, (sample, slew)) in
+                        upsampled.iter_mut().zip(upsampled_slews).enumerate()
+                    {
                         // SAFETY: We already made sure that the blocks are equal in size. We could
                         //         zip iterators instead but with six iterators that's already a bit
                         //         too much without a first class way to zip more than two iterators
@@ -346,7 +374,8 @@ impl Plugin for SoftVacuum {
                         let output_gain = unsafe { *output_gain.get_unchecked(sample_idx) };
                         let dry_wet_ratio = unsafe { *dry_wet_ratio.get_unchecked(sample_idx) };
 
-                        let distorted = hard_vacuum.process(*sample, &hard_vacuum_params);
+                        let distorted =
+                            hard_vacuum.process_with_slew(*sample, &hard_vacuum_params, *slew);
                         *sample = (distorted * output_gain * dry_wet_ratio)
                             + (*sample * (1.0 - dry_wet_ratio));
                     }
