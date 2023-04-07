@@ -1,10 +1,10 @@
 # Soft Vacuum (Airwindows port)
 
 This is a straightforward port of Airwindows' [Hard
-Vacuum](https://www.airwindows.com/hard-vacuum-vst/) plugin with 4x linear-phase
-oversampling and parameter smoothing, because I like the distortion effect and
-wish it had oversampling. All credit goes to Chris from Airwindows. I just
-wanted to share this in case anyone else finds it useful.
+Vacuum](https://www.airwindows.com/hard-vacuum-vst/) plugin with parameter
+smoothing and up to 16x linear-phase oversampling, because I liked the
+distortion and just wished it had oversampling. All credit goes to Chris from
+Airwindows. I just wanted to share this in case anyone else finds it useful.
 
 ## Download
 
