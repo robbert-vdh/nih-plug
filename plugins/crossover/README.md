@@ -12,7 +12,7 @@ output will not output any audio. To save time, you can save this setup as the
 default preset by right clicking on the device. Any new Crossover instances will
 then already have the additional output chains set up. You can also download
 [this
-preset](https://cdn.discordapp.com/attachments/786996796400336947/1060581719293579344/Crossover_setup.bwpreset),
+preset](https://cdn.discordapp.com/attachments/767397282344599602/1096417371880685669/Crossover_setup.bwpreset),
 load it, and then set it as your default preset for Crossover.
 
 <!-- Screenshots and other binary assets aren't in this repo as that would add bloat to NIH-plug checkouts -->
