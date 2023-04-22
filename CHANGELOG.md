@@ -29,7 +29,7 @@ state is to list breaking changes.
   since the `OversamplingAware` smoothing style contain an
   `Arc<Smoothingstyle>`. It can still be `Clone`d.
 
-### Changes
+### Changed
 
 - The prelude module now also re-exports the `AtomicF32` type since it's needed
   to use the new `Smoothingstyle::OversamplingAware`.
