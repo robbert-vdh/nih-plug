@@ -1,4 +1,5 @@
-//! Traits and structs describing plugins and editors.
+//! Traits and structs describing plugins and editors. This includes extension structs for features
+//! that are specific to one or more plugin-APIs.
 
 use std::sync::Arc;
 
@@ -11,10 +12,11 @@ use crate::editor::Editor;
 use crate::midi::sysex::SysExMessage;
 use crate::midi::MidiConfig;
 use crate::params::Params;
-use crate::wrapper::clap::features::ClapFeature;
 use crate::wrapper::state::PluginState;
+
+pub mod clap;
 #[cfg(feature = "vst3")]
-pub use crate::wrapper::vst3::subcategories::Vst3SubCategory;
+pub mod vst3;
 
 /// A function that can execute a plugin's [`BackgroundTask`][Plugin::BackgroundTask]s. A plugin can
 /// dispatch these tasks from the `initialize()` function, the `process()` function, or the GUI, so
@@ -219,67 +221,6 @@ pub trait Plugin: Default + Send + 'static {
     fn deactivate(&mut self) {}
 }
 
-/// Provides auxiliary metadata needed for a CLAP plugin.
-pub trait ClapPlugin: Plugin {
-    /// A unique ID that identifies this particular plugin. This is usually in reverse domain name
-    /// notation, e.g. `com.manufacturer.plugin-name`.
-    const CLAP_ID: &'static str;
-    /// An optional short description for the plugin.
-    const CLAP_DESCRIPTION: Option<&'static str>;
-    /// The URL to the plugin's manual, if available.
-    const CLAP_MANUAL_URL: Option<&'static str>;
-    /// The URL to the plugin's support page, if available.
-    const CLAP_SUPPORT_URL: Option<&'static str>;
-    /// Keywords describing the plugin. The host may use this to classify the plugin in its plugin
-    /// browser.
-    const CLAP_FEATURES: &'static [ClapFeature];
-
-    /// If set, this informs the host about the plugin's capabilities for polyphonic modulation.
-    const CLAP_POLY_MODULATION_CONFIG: Option<PolyModulationConfig> = None;
-}
-
-/// Provides auxiliary metadata needed for a VST3 plugin.
-#[cfg(feature = "vst3")]
-pub trait Vst3Plugin: Plugin {
-    /// The unique class ID that identifies this particular plugin. You can use the
-    /// `*b"fooofooofooofooo"` syntax for this.
-    ///
-    /// This will be shuffled into a different byte order on Windows for project-compatibility.
-    const VST3_CLASS_ID: [u8; 16];
-    /// One or more subcategories. The host may use these to categorize the plugin. Internally this
-    /// slice will be converted to a string where each character is separated by a pipe character
-    /// (`|`). This string has a limit of 127 characters, and anything longer than that will be
-    /// truncated.
-    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory];
-
-    /// [`VST3_CLASS_ID`][Self::VST3_CLASS_ID`] in the correct order for the current platform so
-    /// projects and presets can be shared between platforms. This should not be overridden.
-    const PLATFORM_VST3_CLASS_ID: [u8; 16] = swap_vst3_uid_byte_order(Self::VST3_CLASS_ID);
-}
-
-#[cfg(all(feature = "vst3", not(target_os = "windows")))]
-const fn swap_vst3_uid_byte_order(uid: [u8; 16]) -> [u8; 16] {
-    uid
-}
-
-#[cfg(all(feature = "vst3", target_os = "windows"))]
-const fn swap_vst3_uid_byte_order(mut uid: [u8; 16]) -> [u8; 16] {
-    // No mutable references in const functions, so we can't use `uid.swap()`
-    let original_uid = uid;
-
-    uid[0] = original_uid[3];
-    uid[1] = original_uid[2];
-    uid[2] = original_uid[1];
-    uid[3] = original_uid[0];
-
-    uid[4] = original_uid[5];
-    uid[5] = original_uid[4];
-    uid[6] = original_uid[7];
-    uid[7] = original_uid[6];
-
-    uid
-}
-
 /// Indicates the current situation after the plugin has processed audio.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProcessStatus {
@@ -294,16 +235,4 @@ pub enum ProcessStatus {
     /// and should thus not be deactivated by the host. This is essentially the same as having an
     /// infinite tail.
     KeepAlive,
-}
-
-/// Configuration for the plugin's polyphonic modulation options, if it supports .
-pub struct PolyModulationConfig {
-    /// The maximum number of voices this plugin will ever use. Call the context's
-    /// `set_current_voice_capacity()` method during initialization or audio processing to set the
-    /// polyphony limit.
-    pub max_voice_capacity: u32,
-    /// If set to `true`, then the host may send note events for the same channel and key, but using
-    /// different voice IDs. Bitwig Studio, for instance, can use this to do voice stacking. After
-    /// enabling this, you should always prioritize using voice IDs to map note events to voices.
-    pub supports_overlapping_voices: bool,
 }

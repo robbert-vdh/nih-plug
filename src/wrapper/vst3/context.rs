@@ -12,7 +12,7 @@ use crate::context::process::{ProcessContext, Transport};
 use crate::context::PluginApi;
 use crate::midi::PluginNoteEvent;
 use crate::params::internals::ParamPtr;
-use crate::plugin::Vst3Plugin;
+use crate::plugin::vst3::Vst3Plugin;
 use crate::wrapper::state::PluginState;
 
 /// An [`InitContext`] implementation for the wrapper.

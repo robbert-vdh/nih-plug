@@ -11,7 +11,7 @@ use crate::context::PluginApi;
 use crate::event_loop::EventLoop;
 use crate::midi::PluginNoteEvent;
 use crate::params::internals::ParamPtr;
-use crate::plugin::ClapPlugin;
+use crate::plugin::clap::ClapPlugin;
 
 /// An [`InitContext`] implementation for the wrapper.
 ///

@@ -4,7 +4,7 @@ use std::ffi::{CStr, CString};
 use std::marker::PhantomData;
 use std::os::raw::c_char;
 
-use crate::plugin::ClapPlugin;
+use crate::plugin::clap::ClapPlugin;
 
 /// A static descriptor for a plugin. This is used in both the descriptor and on the plugin object
 /// itself.

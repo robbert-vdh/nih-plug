@@ -11,7 +11,7 @@ use vst3_sys as vst3_com;
 use super::subcategories::Vst3SubCategory;
 use super::util::u16strlcpy;
 use super::wrapper::Wrapper;
-use crate::plugin::Vst3Plugin;
+use crate::plugin::vst3::Vst3Plugin;
 use crate::wrapper::util::strlcpy;
 
 /// The VST3 SDK version this is roughly based on. The bindings include some VST 3.7 things but not
