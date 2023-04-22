@@ -134,7 +134,6 @@ Scroll down for more information on the underlying plugin framework.
 - Optional sample accurate automation support for VST3 and CLAP that can be
   enabled by setting the `Plugin::SAMPLE_ACCURATE_AUTOMATION` constant to
   `true`.
-- Support for CLAP's polyphonic modulation on a per-parameter basis.
 - Optional support for compressing the human readable JSON state files using
   [Zstandard](https://en.wikipedia.org/wiki/Zstd).
 - Comes with adapters for popular Rust GUI frameworks as well as some basic
@@ -152,6 +151,10 @@ Scroll down for more information on the underlying plugin framework.
     byte buffers in the process function.
 - Support for flexible dynamic buffer configurations, including variable numbers
   of input and output ports.
+- First-class support several more exotic CLAP features:
+  - Both monophonic and polyphonic parameter modulation are supported.
+  - Plugins can declaratively define pages of remote controls that DAWs can bind
+    to hardware controllers.
 - A plugin bundler accessible through the
   `cargo xtask bundle <package> <build_arguments>` command that automatically
   detects which plugin targets your plugin exposes and creates the correct

@@ -22,6 +22,9 @@ use clap_sys::ext::audio_ports::{
 use clap_sys::ext::audio_ports_config::{
     clap_audio_ports_config, clap_plugin_audio_ports_config, CLAP_EXT_AUDIO_PORTS_CONFIG,
 };
+use clap_sys::ext::draft::remote_controls::{
+    clap_plugin_remote_controls, clap_remote_controls_page, CLAP_EXT_REMOTE_CONTROLS,
+};
 use clap_sys::ext::gui::{
     clap_gui_resize_hints, clap_host_gui, clap_plugin_gui, clap_window, CLAP_EXT_GUI,
     CLAP_WINDOW_API_COCOA, CLAP_WINDOW_API_WIN32, CLAP_WINDOW_API_X11,
@@ -86,6 +89,7 @@ use crate::prelude::{
     ProcessMode, ProcessStatus, SysExMessage, TaskExecutor, Transport,
 };
 use crate::util::permit_alloc;
+use crate::wrapper::clap::context::RemoteControlPages;
 use crate::wrapper::clap::util::{read_stream, write_stream};
 use crate::wrapper::state::{self, PluginState};
 use crate::wrapper::util::buffer_management::{BufferManager, ChannelPointers};
@@ -221,6 +225,10 @@ pub struct Wrapper<P: ClapPlugin> {
     output_parameter_events: ArrayQueue<OutputParamEvent>,
 
     host_thread_check: AtomicRefCell<Option<ClapPtr<clap_host_thread_check>>>,
+
+    clap_plugin_remote_controls: clap_plugin_remote_controls,
+    /// The plugin's remote control pages, if it defines any. Filled when initializing the plugin.
+    remote_control_pages: Vec<clap_remote_controls_page>,
 
     clap_plugin_render: clap_plugin_render,
 
@@ -513,6 +521,14 @@ impl<P: ClapPlugin> Wrapper<P> {
             }
         }
 
+        // Support for the remote controls extension
+        let mut remote_control_pages = Vec::new();
+        RemoteControlPages::define_remote_control_pages(
+            &plugin,
+            &mut remote_control_pages,
+            &param_ptr_to_hash,
+        );
+
         let wrapper = Self {
             this: AtomicRefCell::new(Weak::new()),
 
@@ -625,6 +641,12 @@ impl<P: ClapPlugin> Wrapper<P> {
             output_parameter_events: ArrayQueue::new(OUTPUT_EVENT_QUEUE_CAPACITY),
 
             host_thread_check: AtomicRefCell::new(None),
+
+            clap_plugin_remote_controls: clap_plugin_remote_controls {
+                count: Some(Self::ext_remote_controls_count),
+                get: Some(Self::ext_remote_controls_get),
+            },
+            remote_control_pages,
 
             clap_plugin_render: clap_plugin_render {
                 has_hard_realtime_requirement: Some(Self::ext_render_has_hard_realtime_requirement),
@@ -2282,6 +2304,8 @@ impl<P: ClapPlugin> Wrapper<P> {
             &wrapper.clap_plugin_note_ports as *const _ as *const c_void
         } else if id == CLAP_EXT_PARAMS {
             &wrapper.clap_plugin_params as *const _ as *const c_void
+        } else if id == CLAP_EXT_REMOTE_CONTROLS {
+            &wrapper.clap_plugin_remote_controls as *const _ as *const c_void
         } else if id == CLAP_EXT_RENDER {
             &wrapper.clap_plugin_render as *const _ as *const c_void
         } else if id == CLAP_EXT_STATE {
@@ -2994,6 +3018,31 @@ impl<P: ClapPlugin> Wrapper<P> {
 
         if !out.is_null() {
             wrapper.handle_out_events(&*out, 0, 0);
+        }
+    }
+
+    unsafe extern "C" fn ext_remote_controls_count(plugin: *const clap_plugin) -> u32 {
+        check_null_ptr!(0, plugin, (*plugin).plugin_data);
+        let wrapper = &*((*plugin).plugin_data as *const Self);
+
+        wrapper.remote_control_pages.len() as u32
+    }
+
+    unsafe extern "C" fn ext_remote_controls_get(
+        plugin: *const clap_plugin,
+        page_index: u32,
+        page: *mut clap_remote_controls_page,
+    ) -> bool {
+        check_null_ptr!(false, plugin, (*plugin).plugin_data, page);
+        let wrapper = &*((*plugin).plugin_data as *const Self);
+
+        nih_debug_assert!(page_index as usize <= wrapper.remote_control_pages.len());
+        match wrapper.remote_control_pages.get(page_index as usize) {
+            Some(p) => {
+                *page = *p;
+                true
+            }
+            None => false,
         }
     }
 

@@ -12,6 +12,14 @@ state is to list breaking changes.
 
 ## [2023-04-22]
 
+### Added
+
+- CLAP plugins can optionally declare pages of [remote
+  controls](https://github.com/free-audio/clap/blob/main/include/clap/ext/draft/remote-controls.h)
+  so DAWs can more automatically map pages of the plugin's parameters to
+  hardware controllers. This is currently a draft extension, so until the
+  extension is finalized host support may break at any moment.
+
 ### Changed
 
 - The CLAP version has been updated to 1.1.8.
