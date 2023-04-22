@@ -6,6 +6,9 @@ pub mod gui;
 pub mod init;
 pub mod process;
 
+// Contexts for more plugin-API specific features
+pub mod remote_controls;
+
 /// The currently active plugin API. This may be useful to display in an about screen in the
 /// plugin's GUI for debugging purposes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

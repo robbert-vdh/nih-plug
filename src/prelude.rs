@@ -20,6 +20,9 @@ pub use crate::buffer::Buffer;
 pub use crate::context::gui::{AsyncExecutor, GuiContext, ParamSetter};
 pub use crate::context::init::InitContext;
 pub use crate::context::process::{ProcessContext, Transport};
+pub use crate::context::remote_controls::{
+    RemoteControlsContext, RemoteControlsPage, RemoteControlsSection,
+};
 pub use crate::context::PluginApi;
 // This also includes the derive macro
 pub use crate::editor::{Editor, ParentWindowHandle};

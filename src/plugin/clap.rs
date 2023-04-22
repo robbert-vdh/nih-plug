@@ -1,7 +1,8 @@
 use super::Plugin;
-use crate::prelude::ClapFeature;
+use crate::prelude::{ClapFeature, RemoteControlsContext};
 
 /// Provides auxiliary metadata needed for a CLAP plugin.
+#[allow(unused_variables)]
 pub trait ClapPlugin: Plugin {
     /// A unique ID that identifies this particular plugin. This is usually in reverse domain name
     /// notation, e.g. `com.manufacturer.plugin-name`.
@@ -18,6 +19,12 @@ pub trait ClapPlugin: Plugin {
 
     /// If set, this informs the host about the plugin's capabilities for polyphonic modulation.
     const CLAP_POLY_MODULATION_CONFIG: Option<PolyModulationConfig> = None;
+
+    /// This function can be implemented to define plugin-specific [remote control
+    /// pages](https://github.com/free-audio/clap/blob/main/include/clap/ext/draft/remote-controls.h)
+    /// that the host can use to provide better hardware mapping for a plugin. See the linked
+    /// extension for more information.
+    fn remote_controls(&self, context: &mut impl RemoteControlsContext) {}
 }
 
 /// Configuration for the plugin's polyphonic modulation options, if it supports .
