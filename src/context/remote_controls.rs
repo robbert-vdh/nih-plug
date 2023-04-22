@@ -37,6 +37,7 @@ pub trait RemoteControlsPage {
     // Add a reference to one of the plugin's parameters to the page.
     fn add_param(&mut self, param: &impl Param);
 
-    //
+    // Add an empty space on the page. Can be useful for grouping and aligning parameters within a
+    // page.
     fn add_spacer(&mut self);
 }
