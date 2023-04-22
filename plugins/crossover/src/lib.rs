@@ -395,7 +395,7 @@ impl ClapPlugin for Crossover {
 
     fn remote_controls(&self, context: &mut impl RemoteControlsContext) {
         context.add_section("Main", |section| {
-            section.add_page("Main controls", |page| {
+            section.add_page("Main", |page| {
                 page.add_param(&self.params.num_bands);
                 page.add_param(&self.params.crossover_type);
                 page.add_spacer();
