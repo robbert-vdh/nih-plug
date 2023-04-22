@@ -392,6 +392,21 @@ impl ClapPlugin for Crossover {
         ClapFeature::Stereo,
         ClapFeature::Utility,
     ];
+
+    fn remote_controls(&self, context: &mut impl RemoteControlsContext) {
+        context.add_section("Main", |section| {
+            section.add_page("Main controls", |page| {
+                page.add_param(&self.params.num_bands);
+                page.add_param(&self.params.crossover_type);
+                page.add_spacer();
+                page.add_spacer();
+                page.add_param(&self.params.crossover_1_freq);
+                page.add_param(&self.params.crossover_2_freq);
+                page.add_param(&self.params.crossover_3_freq);
+                page.add_param(&self.params.crossover_4_freq);
+            })
+        })
+    }
 }
 
 impl Vst3Plugin for Crossover {
