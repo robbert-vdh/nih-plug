@@ -10,7 +10,7 @@ mod wrapper;
 /// Re-export for the wrapper.
 pub use self::factory::Factory;
 pub use clap_sys::entry::clap_plugin_entry;
-pub use clap_sys::plugin_factory::CLAP_PLUGIN_FACTORY_ID;
+pub use clap_sys::factory::plugin_factory::CLAP_PLUGIN_FACTORY_ID;
 pub use clap_sys::version::CLAP_VERSION;
 pub use lazy_static::lazy_static;
 

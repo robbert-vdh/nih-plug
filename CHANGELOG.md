@@ -14,9 +14,16 @@ state is to list breaking changes.
 
 ### Changed
 
+- The CLAP version has been updated to 1.1.8.
 - The prelude module now also re-exports the following:
   - The `PluginApi` num.
   - The `Transport` struct.
+
+### Fixed
+
+- The upgrade to CLAP 1.1.8 caused NIH-plug to switch from the draft version of
+  the voice info extension to the final version, fixing voice stacking with
+  recent versions of Bitwig.
 
 ## [2023-04-05]
 
