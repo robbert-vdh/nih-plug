@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use super::descriptor::PluginDescriptor;
 use super::wrapper::Wrapper;
-use crate::plugin::clap::ClapPlugin;
+use crate::prelude::ClapPlugin;
 
 /// The plugin's factory. Initialized using a lazy_static from the entry point's `get_factory()`
 /// function. From this point onwards we don't need to generate code with macros anymore.

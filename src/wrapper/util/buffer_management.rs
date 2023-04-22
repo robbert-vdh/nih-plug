@@ -3,8 +3,7 @@
 use std::num::NonZeroU32;
 use std::ptr::NonNull;
 
-use crate::audio_setup::AudioIOLayout;
-use crate::buffer::Buffer;
+use crate::prelude::{AudioIOLayout, Buffer};
 
 /// Buffers created using [`create_buffers`]. At some point the main `Plugin::process()` should
 /// probably also take an argument like this instead of main+aux buffers if we also want to provide

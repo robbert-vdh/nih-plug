@@ -10,6 +10,14 @@ Since there is no stable release yet, the changes are organized per day in
 reverse chronological order. The main purpose of this document in its current
 state is to list breaking changes.
 
+## [2023-04-22]
+
+### Changed
+
+- The prelude module now also re-exports the following:
+  - The `PluginApi` num.
+  - The `Transport` struct.
+
 ## [2023-04-05]
 
 ### Breaking changes

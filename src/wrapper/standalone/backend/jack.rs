@@ -13,11 +13,11 @@ use parking_lot::Mutex;
 
 use super::super::config::WrapperConfig;
 use super::Backend;
-use crate::audio_setup::{AudioIOLayout, AuxiliaryBuffers};
-use crate::buffer::Buffer;
-use crate::context::process::Transport;
-use crate::midi::{MidiConfig, MidiResult, NoteEvent, PluginNoteEvent};
-use crate::plugin::Plugin;
+use crate::midi::MidiResult;
+use crate::prelude::{
+    AudioIOLayout, AuxiliaryBuffers, Buffer, MidiConfig, NoteEvent, Plugin, PluginNoteEvent,
+    Transport,
+};
 use crate::wrapper::util::buffer_management::{BufferManager, ChannelPointers};
 use crate::wrapper::util::{clamp_input_event_timing, clamp_output_event_timing};
 

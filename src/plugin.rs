@@ -3,16 +3,10 @@
 
 use std::sync::Arc;
 
-use crate::audio_setup::{AudioIOLayout, AuxiliaryBuffers, BufferConfig};
-use crate::buffer::Buffer;
-use crate::context::gui::AsyncExecutor;
-use crate::context::init::InitContext;
-use crate::context::process::ProcessContext;
-use crate::editor::Editor;
-use crate::midi::sysex::SysExMessage;
-use crate::midi::MidiConfig;
-use crate::params::Params;
-use crate::wrapper::state::PluginState;
+use crate::prelude::{
+    AsyncExecutor, AudioIOLayout, AuxiliaryBuffers, Buffer, BufferConfig, Editor, InitContext,
+    MidiConfig, Params, PluginState, ProcessContext, SysExMessage,
+};
 
 pub mod clap;
 #[cfg(feature = "vst3")]

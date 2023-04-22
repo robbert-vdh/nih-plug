@@ -7,7 +7,7 @@ use self::backend::Backend;
 use self::config::WrapperConfig;
 use self::wrapper::{Wrapper, WrapperError};
 use super::util::setup_logger;
-use crate::plugin::Plugin;
+use crate::prelude::Plugin;
 
 mod backend;
 mod config;

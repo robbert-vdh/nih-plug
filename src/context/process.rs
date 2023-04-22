@@ -1,8 +1,7 @@
 //! A context passed during the process function.
 
 use super::PluginApi;
-use crate::midi::PluginNoteEvent;
-use crate::plugin::Plugin;
+use crate::prelude::{Plugin, PluginNoteEvent};
 
 /// Contains both context data and callbacks the plugin can use during processing. Most notably this
 /// is how a plugin sends and receives note events, gets transport information, and accesses

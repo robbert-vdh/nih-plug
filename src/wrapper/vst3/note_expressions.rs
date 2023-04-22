@@ -3,8 +3,7 @@
 
 use vst3_sys::vst::{NoteExpressionValueEvent, NoteOnEvent};
 
-use crate::midi::sysex::SysExMessage;
-use crate::midi::NoteEvent;
+use crate::prelude::{NoteEvent, SysExMessage};
 
 type MidiNote = u8;
 type MidiChannel = u8;

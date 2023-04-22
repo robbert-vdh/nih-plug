@@ -4,14 +4,11 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use super::wrapper::{OutputParamEvent, Task, Wrapper};
-use crate::context::gui::GuiContext;
-use crate::context::init::InitContext;
-use crate::context::process::{ProcessContext, Transport};
-use crate::context::PluginApi;
 use crate::event_loop::EventLoop;
-use crate::midi::PluginNoteEvent;
-use crate::params::internals::ParamPtr;
-use crate::plugin::clap::ClapPlugin;
+use crate::prelude::{
+    ClapPlugin, GuiContext, InitContext, ParamPtr, PluginApi, PluginNoteEvent, ProcessContext,
+    Transport,
+};
 
 /// An [`InitContext`] implementation for the wrapper.
 ///

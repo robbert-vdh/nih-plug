@@ -3,7 +3,7 @@
 use midi_consts::channel_event as midi;
 
 use self::sysex::SysExMessage;
-use crate::plugin::Plugin;
+use crate::prelude::Plugin;
 
 pub mod sysex;
 

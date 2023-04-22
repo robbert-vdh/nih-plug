@@ -1,8 +1,7 @@
 use clap::{Parser, ValueEnum};
 use std::num::NonZeroU32;
 
-use crate::audio_setup::AudioIOLayout;
-use crate::plugin::Plugin;
+use crate::prelude::{AudioIOLayout, Plugin};
 
 /// Configuration for a standalone plugin that would normally be provided by the DAW.
 #[derive(Debug, Clone, Parser)]

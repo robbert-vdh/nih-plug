@@ -3,10 +3,7 @@
 use std::sync::Arc;
 
 use super::PluginApi;
-use crate::params::internals::ParamPtr;
-use crate::params::Param;
-use crate::plugin::Plugin;
-use crate::wrapper::state::PluginState;
+use crate::prelude::{Param, ParamPtr, Plugin, PluginState};
 
 /// Callbacks the plugin can make when the user interacts with its GUI such as updating parameter
 /// values. This is passed to the plugin during [`Editor::spawn()`][crate::prelude::Editor::spawn()]. All of

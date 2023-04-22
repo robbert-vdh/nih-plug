@@ -1,6 +1,5 @@
-pub use crate::wrapper::vst3::subcategories::Vst3SubCategory;
-
 use super::Plugin;
+use crate::prelude::Vst3SubCategory;
 
 /// Provides auxiliary metadata needed for a VST3 plugin.
 pub trait Vst3Plugin: Plugin {

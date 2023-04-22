@@ -1,6 +1,4 @@
-use crate::audio_setup::AuxiliaryBuffers;
-use crate::context::process::Transport;
-use crate::midi::PluginNoteEvent;
+use crate::prelude::{AuxiliaryBuffers, PluginNoteEvent, Transport};
 
 mod cpal;
 mod dummy;

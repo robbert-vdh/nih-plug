@@ -2,13 +2,10 @@ use std::sync::Arc;
 
 use super::backend::Backend;
 use super::wrapper::{Task, Wrapper};
-use crate::context::gui::GuiContext;
-use crate::context::init::InitContext;
-use crate::context::process::{ProcessContext, Transport};
-use crate::context::PluginApi;
-use crate::midi::PluginNoteEvent;
-use crate::params::internals::ParamPtr;
-use crate::plugin::Plugin;
+use crate::prelude::{
+    GuiContext, InitContext, ParamPtr, Plugin, PluginApi, PluginNoteEvent, ProcessContext,
+    Transport,
+};
 
 /// An [`InitContext`] implementation for the standalone wrapper.
 pub(crate) struct WrapperInitContext<'a, P: Plugin, B: Backend<P>> {

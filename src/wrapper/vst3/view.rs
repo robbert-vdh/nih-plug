@@ -13,8 +13,8 @@ use vst3_sys::VST3;
 
 use super::inner::{Task, WrapperInner};
 use super::util::{ObjectPtr, VstPtr};
-use crate::editor::{Editor, ParentWindowHandle};
 use crate::plugin::vst3::Vst3Plugin;
+use crate::prelude::{Editor, ParentWindowHandle};
 
 // Alias needed for the VST3 attribute macro
 use vst3_sys as vst3_com;

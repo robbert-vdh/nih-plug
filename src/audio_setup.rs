@@ -2,7 +2,7 @@
 
 use std::num::NonZeroU32;
 
-use crate::buffer::Buffer;
+use crate::prelude::Buffer;
 
 /// A description of a plugin's audio IO configuration. The [`Plugin`][crate::prelude::Plugin]
 /// defines a list of supported audio IO configs, with the first one acting as the default layout.

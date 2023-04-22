@@ -1,7 +1,7 @@
 //! A context passed during plugin initialization.
 
 use super::PluginApi;
-use crate::plugin::Plugin;
+use crate::prelude::Plugin;
 
 /// Callbacks the plugin can make while it is being initialized. This is passed to the plugin during
 /// [`Plugin::initialize()`][crate::plugin::Plugin::initialize()].

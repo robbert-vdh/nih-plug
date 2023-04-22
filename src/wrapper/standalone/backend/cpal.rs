@@ -16,12 +16,11 @@ use std::thread::ScopedJoinHandle;
 
 use super::super::config::WrapperConfig;
 use super::Backend;
-use crate::audio_setup::{AudioIOLayout, AuxiliaryBuffers};
-use crate::buffer::Buffer;
-use crate::context::process::Transport;
-use crate::midi::{MidiConfig, MidiResult, PluginNoteEvent};
-use crate::plugin::Plugin;
-use crate::prelude::NoteEvent;
+use crate::midi::MidiResult;
+use crate::prelude::{
+    AudioIOLayout, AuxiliaryBuffers, Buffer, MidiConfig, NoteEvent, Plugin, PluginNoteEvent,
+    Transport,
+};
 use crate::wrapper::util::buffer_management::{BufferManager, ChannelPointers};
 
 const MIDI_EVENT_QUEUE_CAPACITY: usize = 2048;

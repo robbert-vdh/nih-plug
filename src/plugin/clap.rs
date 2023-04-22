@@ -1,6 +1,5 @@
-use crate::wrapper::clap::features::ClapFeature;
-
 use super::Plugin;
+use crate::prelude::ClapFeature;
 
 /// Provides auxiliary metadata needed for a CLAP plugin.
 pub trait ClapPlugin: Plugin {

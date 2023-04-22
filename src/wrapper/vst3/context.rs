@@ -5,15 +5,12 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use vst3_sys::vst::IComponentHandler;
 
+use crate::prelude::{
+    GuiContext, InitContext, ParamPtr, PluginApi, PluginNoteEvent, PluginState, ProcessContext,
+    Transport, Vst3Plugin,
+};
+
 use super::inner::{Task, WrapperInner};
-use crate::context::gui::GuiContext;
-use crate::context::init::InitContext;
-use crate::context::process::{ProcessContext, Transport};
-use crate::context::PluginApi;
-use crate::midi::PluginNoteEvent;
-use crate::params::internals::ParamPtr;
-use crate::plugin::vst3::Vst3Plugin;
-use crate::wrapper::state::PluginState;
 
 /// An [`InitContext`] implementation for the wrapper.
 ///
