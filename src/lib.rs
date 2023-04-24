@@ -22,6 +22,9 @@
 //!   a call to [`nih_export_vst3!()`] and/or [`nih_export_clap!()`] in your `lib.rs` file to expose
 //!   the plugin functionality. Some of these traits will require you to implement an additional
 //!   trait containing API-specific information for the plugin.
+//!
+//!   Check the `Plugin` trait's documentation for more information on NIH-plug's general structure
+//!   and approach with respect to declarativity.
 //! - NIH-plug comes with a bundler that creates plugin bundles for you based on the exported plugin
 //!   formats and the operating system and architecture you're compiling for. Check out the
 //!   readme for

@@ -17,18 +17,44 @@ pub mod vst3;
 /// they can be deferred for later to avoid blocking realtime contexts.
 pub type TaskExecutor<P> = Box<dyn Fn(<P as Plugin>::BackgroundTask) + Send>;
 
-/// Basic functionality that needs to be implemented by a plugin. The wrappers will use this to
-/// expose the plugin in a particular plugin format.
+/// The main plugin trait covering functionality common across most plugin formats. Most formats
+/// also have another trait with more specific data and functionality that needs to be implemented
+/// before the plugin can be exported to that format. The wrappers will use this to expose the
+/// plugin in a particular plugin format.
+///
+/// NIH-plug is semi-declarative, meaning that most information about a plugin is defined
+/// declaratively but it also doesn't shy away from maintaining state when that is the path of least
+/// resistance. As such, the definitions on this trait fall in one of the following classes:
+///
+/// - `Plugin` objects are stateful. During their lifetime the plugin API wrappers will call the
+///   various lifecycle methods defined below, with the `initialize()`, `reset()`, and `process()`
+///   functions being the most important ones.
+/// - Most of the rest of the trait statically describes the plugin. You will find this done in
+///   three different ways:
+///   - Most of this data, including the supported audio IO layouts, is simple enough that it can be
+///     defined through compile-time constants.
+///   - Some of the data is queried through a method as doing everything at compile time would
+///     impose a lot of restrictions on code structure and meta programming without any real
+///     benefits. In those cases the trait defines a method that is queried once and only once,
+///     immediately after instantiating the `Plugin` through `Plugin::default()`. Examples of these
+///     methods are [`Plugin::params()`], and
+///     [`ClapPlugin::remote_controls()`][clap::ClapPlugin::remote_controls()].
+///   - Some of the data is defined through associated types. Rust currently sadly does not support
+///     default values for associated types, but all of these types can be set to `()` if you wish
+///     to ignore them. Examples of these types are [`Plugin::SysExMessage`] and
+///     [`Plugin::BackgroundTask`].
+/// - Finally, there are some functions that return extension structs and handlers, similar to how
+///   the `params()` function returns a data structure describing the plugin's parameters. Examples
+///   of these are the [`Plugin::editor()`] and [`Plugin::task_executor()`] functions, and they're
+///   also called once and only once after the plugin object has been created. This allows the audio
+///   thread to have exclusive access to the `Plugin` object, and it makes it easier to compose
+///   these extension structs since they're more loosely coupled to a specific `Plugin`
+///   implementation.
 ///
 /// The main thing you need to do is define a `[Params]` struct containing all of your parameters.
 /// See the trait's documentation for more information on how to do that, or check out the examples.
-/// Most of the other functionality is optional and comes with default trait method implementations.
-///
-/// Some notable not yet implemented features include:
-///
-/// - MIDI2 for CLAP, note expressions, polyphonic modulation and MIDI1, and MIDI SysEx are already
-///   supported
-/// - Audio thread thread pools (with host integration in CLAP)
+/// The plugin also needs a `Default` implementation so it can be initialized. Most of the other
+/// functionality is optional and comes with default trait method implementations.
 #[allow(unused_variables)]
 pub trait Plugin: Default + Send + 'static {
     /// The plugin's name.
