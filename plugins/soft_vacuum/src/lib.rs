@@ -239,6 +239,8 @@ impl Plugin for SoftVacuum {
         },
     ];
 
+    const SAMPLE_ACCURATE_AUTOMATION: bool = true;
+
     type SysExMessage = ();
     type BackgroundTask = ();
 
