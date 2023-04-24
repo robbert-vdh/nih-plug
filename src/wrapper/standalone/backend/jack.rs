@@ -204,7 +204,7 @@ impl<P: Plugin> Backend<P> for Jack {
             }
 
             let buffers = unsafe {
-                buffer_manager.create_buffers(num_frames as usize, |buffer_sources| {
+                buffer_manager.create_buffers(0, num_frames as usize, |buffer_sources| {
                     *buffer_sources.main_output_channel_pointers = Some(ChannelPointers {
                         ptrs: NonNull::new(main_output_channel_pointers.get().as_mut_ptr())
                             .unwrap(),

@@ -1229,81 +1229,84 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                     // The buffer manager preallocated buffer slices for all the IO and storage for
                     // any axuiliary inputs.
                     let mut buffer_manager = self.inner.buffer_manager.borrow_mut();
-                    let buffers = buffer_manager.create_buffers(block_len, |buffer_source| {
-                        if data.num_outputs > 0
-                            && !data.outputs.is_null()
-                            && !(*data.outputs).buffers.is_null()
-                            && has_main_output
-                        {
-                            let audio_output = &*data.outputs;
-                            let ptrs = NonNull::new(audio_output.buffers as *mut *mut f32).unwrap();
-                            let num_channels = audio_output.num_channels as usize;
-
-                            *buffer_source.main_output_channel_pointers =
-                                Some(ChannelPointers { ptrs, num_channels });
-                        }
-
-                        if data.num_inputs > 0
-                            && !data.inputs.is_null()
-                            && !(*data.inputs).buffers.is_null()
-                            && has_main_input
-                        {
-                            let audio_input = &*data.inputs;
-                            let ptrs = NonNull::new(audio_input.buffers as *mut *mut f32).unwrap();
-                            let num_channels = audio_input.num_channels as usize;
-
-                            *buffer_source.main_input_channel_pointers =
-                                Some(ChannelPointers { ptrs, num_channels });
-                        }
-
-                        if !data.inputs.is_null() {
-                            for (aux_input_no, aux_input_channel_pointers) in buffer_source
-                                .aux_input_channel_pointers
-                                .iter_mut()
-                                .enumerate()
+                    let buffers =
+                        buffer_manager.create_buffers(block_start, block_len, |buffer_source| {
+                            if data.num_outputs > 0
+                                && !data.outputs.is_null()
+                                && !(*data.outputs).buffers.is_null()
+                                && has_main_output
                             {
-                                let aux_input_idx = aux_input_no + aux_input_start_idx;
-                                if aux_input_idx > data.num_outputs as usize {
-                                    break;
-                                }
+                                let audio_output = &*data.outputs;
+                                let ptrs =
+                                    NonNull::new(audio_output.buffers as *mut *mut f32).unwrap();
+                                let num_channels = audio_output.num_channels as usize;
 
-                                let audio_input = &*data.inputs.add(aux_input_idx);
-                                match NonNull::new(audio_input.buffers as *mut *mut f32) {
-                                    Some(ptrs) => {
-                                        let num_channels = audio_input.num_channels as usize;
+                                *buffer_source.main_output_channel_pointers =
+                                    Some(ChannelPointers { ptrs, num_channels });
+                            }
 
-                                        *aux_input_channel_pointers =
-                                            Some(ChannelPointers { ptrs, num_channels });
+                            if data.num_inputs > 0
+                                && !data.inputs.is_null()
+                                && !(*data.inputs).buffers.is_null()
+                                && has_main_input
+                            {
+                                let audio_input = &*data.inputs;
+                                let ptrs =
+                                    NonNull::new(audio_input.buffers as *mut *mut f32).unwrap();
+                                let num_channels = audio_input.num_channels as usize;
+
+                                *buffer_source.main_input_channel_pointers =
+                                    Some(ChannelPointers { ptrs, num_channels });
+                            }
+
+                            if !data.inputs.is_null() {
+                                for (aux_input_no, aux_input_channel_pointers) in buffer_source
+                                    .aux_input_channel_pointers
+                                    .iter_mut()
+                                    .enumerate()
+                                {
+                                    let aux_input_idx = aux_input_no + aux_input_start_idx;
+                                    if aux_input_idx > data.num_outputs as usize {
+                                        break;
                                     }
-                                    None => continue,
+
+                                    let audio_input = &*data.inputs.add(aux_input_idx);
+                                    match NonNull::new(audio_input.buffers as *mut *mut f32) {
+                                        Some(ptrs) => {
+                                            let num_channels = audio_input.num_channels as usize;
+
+                                            *aux_input_channel_pointers =
+                                                Some(ChannelPointers { ptrs, num_channels });
+                                        }
+                                        None => continue,
+                                    }
                                 }
                             }
-                        }
 
-                        if !data.outputs.is_null() {
-                            for (aux_output_no, aux_output_channel_pointers) in buffer_source
-                                .aux_output_channel_pointers
-                                .iter_mut()
-                                .enumerate()
-                            {
-                                let aux_output_idx = aux_output_no + aux_output_start_idx;
-                                if aux_output_idx > data.num_outputs as usize {
-                                    break;
-                                }
-
-                                let audio_output = &*data.outputs.add(aux_output_idx);
-                                match NonNull::new(audio_output.buffers as *mut *mut f32) {
-                                    Some(ptrs) => {
-                                        let num_channels = audio_output.num_channels as usize;
-
-                                        *aux_output_channel_pointers =
-                                            Some(ChannelPointers { ptrs, num_channels });
+                            if !data.outputs.is_null() {
+                                for (aux_output_no, aux_output_channel_pointers) in buffer_source
+                                    .aux_output_channel_pointers
+                                    .iter_mut()
+                                    .enumerate()
+                                {
+                                    let aux_output_idx = aux_output_no + aux_output_start_idx;
+                                    if aux_output_idx > data.num_outputs as usize {
+                                        break;
                                     }
-                                    None => continue,
+
+                                    let audio_output = &*data.outputs.add(aux_output_idx);
+                                    match NonNull::new(audio_output.buffers as *mut *mut f32) {
+                                        Some(ptrs) => {
+                                            let num_channels = audio_output.num_channels as usize;
+
+                                            *aux_output_channel_pointers =
+                                                Some(ChannelPointers { ptrs, num_channels });
+                                        }
+                                        None => continue,
+                                    }
                                 }
                             }
-                        }
-                    });
+                        });
 
                     // We already checked whether the host has initiated a parameter flush, but in
                     // case it still did something unexpected that we did not catch we'll still try

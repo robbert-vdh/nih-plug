@@ -24,6 +24,11 @@ state is to list breaking changes.
   structure and to more explicitly mention that the non-lifecycle methods are
   called once immediately after creating the plugin object.
 
+### Fixed
+
+- The buffer changes from March 31st broke the sample accurate automation
+  feature. This has now been fixed.
+
 ## [2023-04-22]
 
 ### Added

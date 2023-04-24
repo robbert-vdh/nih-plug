@@ -2020,84 +2020,85 @@ impl<P: ClapPlugin> Wrapper<P> {
                 // TODO: Like with VST3, should we expose some way to access or set the silence/constant
                 //       flags?
                 let mut buffer_manager = wrapper.buffer_manager.borrow_mut();
-                let buffers = buffer_manager.create_buffers(block_len, |buffer_source| {
-                    // Explicitly take plugins with no main output that does have auxiliary outputs
-                    // into account. Shouldn't happen, but if we just start copying audio here then
-                    // that would result in unsoundness.
-                    if process.audio_outputs_count > 0
-                        && !process.audio_outputs.is_null()
-                        && !(*process.audio_outputs).data32.is_null()
-                        && has_main_output
-                    {
-                        let audio_output = &*process.audio_outputs;
-                        let ptrs = NonNull::new(audio_output.data32 as *mut *mut f32).unwrap();
-                        let num_channels = audio_output.channel_count as usize;
-
-                        *buffer_source.main_output_channel_pointers =
-                            Some(ChannelPointers { ptrs, num_channels });
-                    }
-
-                    if process.audio_inputs_count > 0
-                        && !process.audio_inputs.is_null()
-                        && !(*process.audio_inputs).data32.is_null()
-                        && has_main_input
-                    {
-                        let audio_input = &*process.audio_inputs;
-                        let ptrs = NonNull::new(audio_input.data32 as *mut *mut f32).unwrap();
-                        let num_channels = audio_input.channel_count as usize;
-
-                        *buffer_source.main_input_channel_pointers =
-                            Some(ChannelPointers { ptrs, num_channels });
-                    }
-
-                    if !process.audio_inputs.is_null() {
-                        for (aux_input_no, aux_input_channel_pointers) in buffer_source
-                            .aux_input_channel_pointers
-                            .iter_mut()
-                            .enumerate()
+                let buffers =
+                    buffer_manager.create_buffers(block_start, block_len, |buffer_source| {
+                        // Explicitly take plugins with no main output that does have auxiliary
+                        // outputs into account. Shouldn't happen, but if we just start copying
+                        // audio here then that would result in unsoundness.
+                        if process.audio_outputs_count > 0
+                            && !process.audio_outputs.is_null()
+                            && !(*process.audio_outputs).data32.is_null()
+                            && has_main_output
                         {
-                            let aux_input_idx = aux_input_no + aux_input_start_idx;
-                            if aux_input_idx > process.audio_inputs_count as usize {
-                                break;
-                            }
+                            let audio_output = &*process.audio_outputs;
+                            let ptrs = NonNull::new(audio_output.data32 as *mut *mut f32).unwrap();
+                            let num_channels = audio_output.channel_count as usize;
 
-                            let audio_input = &*process.audio_inputs.add(aux_input_idx);
-                            match NonNull::new(audio_input.data32 as *mut *mut f32) {
-                                Some(ptrs) => {
-                                    let num_channels = audio_input.channel_count as usize;
+                            *buffer_source.main_output_channel_pointers =
+                                Some(ChannelPointers { ptrs, num_channels });
+                        }
 
-                                    *aux_input_channel_pointers =
-                                        Some(ChannelPointers { ptrs, num_channels });
+                        if process.audio_inputs_count > 0
+                            && !process.audio_inputs.is_null()
+                            && !(*process.audio_inputs).data32.is_null()
+                            && has_main_input
+                        {
+                            let audio_input = &*process.audio_inputs;
+                            let ptrs = NonNull::new(audio_input.data32 as *mut *mut f32).unwrap();
+                            let num_channels = audio_input.channel_count as usize;
+
+                            *buffer_source.main_input_channel_pointers =
+                                Some(ChannelPointers { ptrs, num_channels });
+                        }
+
+                        if !process.audio_inputs.is_null() {
+                            for (aux_input_no, aux_input_channel_pointers) in buffer_source
+                                .aux_input_channel_pointers
+                                .iter_mut()
+                                .enumerate()
+                            {
+                                let aux_input_idx = aux_input_no + aux_input_start_idx;
+                                if aux_input_idx > process.audio_inputs_count as usize {
+                                    break;
                                 }
-                                None => continue,
+
+                                let audio_input = &*process.audio_inputs.add(aux_input_idx);
+                                match NonNull::new(audio_input.data32 as *mut *mut f32) {
+                                    Some(ptrs) => {
+                                        let num_channels = audio_input.channel_count as usize;
+
+                                        *aux_input_channel_pointers =
+                                            Some(ChannelPointers { ptrs, num_channels });
+                                    }
+                                    None => continue,
+                                }
                             }
                         }
-                    }
 
-                    if !process.audio_outputs.is_null() {
-                        for (aux_output_no, aux_output_channel_pointers) in buffer_source
-                            .aux_output_channel_pointers
-                            .iter_mut()
-                            .enumerate()
-                        {
-                            let aux_output_idx = aux_output_no + aux_output_start_idx;
-                            if aux_output_idx > process.audio_outputs_count as usize {
-                                break;
-                            }
-
-                            let audio_output = &*process.audio_outputs.add(aux_output_idx);
-                            match NonNull::new(audio_output.data32 as *mut *mut f32) {
-                                Some(ptrs) => {
-                                    let num_channels = audio_output.channel_count as usize;
-
-                                    *aux_output_channel_pointers =
-                                        Some(ChannelPointers { ptrs, num_channels });
+                        if !process.audio_outputs.is_null() {
+                            for (aux_output_no, aux_output_channel_pointers) in buffer_source
+                                .aux_output_channel_pointers
+                                .iter_mut()
+                                .enumerate()
+                            {
+                                let aux_output_idx = aux_output_no + aux_output_start_idx;
+                                if aux_output_idx > process.audio_outputs_count as usize {
+                                    break;
                                 }
-                                None => continue,
+
+                                let audio_output = &*process.audio_outputs.add(aux_output_idx);
+                                match NonNull::new(audio_output.data32 as *mut *mut f32) {
+                                    Some(ptrs) => {
+                                        let num_channels = audio_output.channel_count as usize;
+
+                                        *aux_output_channel_pointers =
+                                            Some(ChannelPointers { ptrs, num_channels });
+                                    }
+                                    None => continue,
+                                }
                             }
                         }
-                    }
-                });
+                    });
 
                 // If the host does not provide outputs or if it does not provide the required
                 // number of channels (should not happen, but Ableton Live does this for bypassed

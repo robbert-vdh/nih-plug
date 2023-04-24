@@ -121,7 +121,7 @@ impl<P: Plugin> Backend<P> for Dummy {
             }
 
             let buffers = unsafe {
-                buffer_manager.create_buffers(num_samples, |buffer_sources| {
+                buffer_manager.create_buffers(0, num_samples, |buffer_sources| {
                     *buffer_sources.main_output_channel_pointers = Some(ChannelPointers {
                         ptrs: NonNull::new(main_io_channel_pointers.as_mut_ptr()).unwrap(),
                         num_channels: main_io_channel_pointers.len(),

@@ -825,7 +825,7 @@ impl CpalMidir {
 
             {
                 let buffers = unsafe {
-                    buffer_manager.create_buffers(buffer_size, |buffer_sources| {
+                    buffer_manager.create_buffers(0, buffer_size, |buffer_sources| {
                         *buffer_sources.main_output_channel_pointers = Some(ChannelPointers {
                             ptrs: NonNull::new(main_io_channel_pointers.get().as_mut_ptr())
                                 .unwrap(),

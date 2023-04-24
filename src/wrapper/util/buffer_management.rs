@@ -151,7 +151,9 @@ impl BufferManager {
     /// uninitialized buffer data (aux outputs, and main output channels with no matching input
     /// channel) are filled with zeroes.
     ///
-    /// If any of the output
+    /// `sample_offset` and `num_samples` can be used to slice a set of host channel pointers for
+    /// sample accurate automation. If any of the outputs are missing because the host hasn't
+    /// provided enough channels or outputs, then they will be replaced by empty slices.
     ///
     /// # Panics
     ///
@@ -163,6 +165,7 @@ impl BufferManager {
     /// or write to for the lifetime of the returned [`Buffers`].
     pub unsafe fn create_buffers<'a, 'buffer: 'a>(
         &'a mut self,
+        sample_offset: usize,
         num_samples: usize,
         set_buffer_sources: impl FnOnce(&mut BufferSource),
     ) -> Buffers<'a, 'buffer> {
@@ -192,8 +195,10 @@ impl BufferManager {
                             output_channel_pointers.ptrs.as_ptr().add(channel_idx);
                         assert!(!output_channel_pointer.is_null());
 
-                        *output_slice =
-                            std::slice::from_raw_parts_mut(*output_channel_pointer, num_samples);
+                        *output_slice = std::slice::from_raw_parts_mut(
+                            (*output_channel_pointer).add(sample_offset),
+                            num_samples,
+                        );
                     }
 
                     // If the caller/host should have provided buffer pointers but didn't then we
@@ -229,7 +234,7 @@ impl BufferManager {
                         assert!(!input_channel_pointer.is_null());
 
                         output_slice.copy_from_slice(std::slice::from_raw_parts_mut(
-                            *input_channel_pointer,
+                            (*input_channel_pointer).add(sample_offset),
                             num_samples,
                         ))
                     }
@@ -275,7 +280,7 @@ impl BufferManager {
                         nih_debug_assert!(num_samples <= channel.capacity());
                         channel.resize(num_samples, 0.0);
                         channel.copy_from_slice(std::slice::from_raw_parts_mut(
-                            *input_channel_pointer,
+                            (*input_channel_pointer).add(sample_offset),
                             num_samples,
                         ))
                     }
@@ -334,7 +339,7 @@ impl BufferManager {
                             assert!(!output_channel_pointer.is_null());
 
                             *output_slice = std::slice::from_raw_parts_mut(
-                                *output_channel_pointer,
+                                (*output_channel_pointer).add(sample_offset),
                                 num_samples,
                             );
 
@@ -424,7 +429,7 @@ mod miri {
         // implementation for more information.
         let mut buffer_manager = BufferManager::for_audio_io_layout(BUFFER_SIZE, AUDIO_IO_LAYOUT);
         let buffers = unsafe {
-            buffer_manager.create_buffers(BUFFER_SIZE, |buffer_sources| {
+            buffer_manager.create_buffers(0, BUFFER_SIZE, |buffer_sources| {
                 *buffer_sources.main_output_channel_pointers = Some(ChannelPointers {
                     ptrs: NonNull::new(main_io_channel_pointers.as_mut_ptr()).unwrap(),
                     num_channels: main_io_channel_pointers.len(),
