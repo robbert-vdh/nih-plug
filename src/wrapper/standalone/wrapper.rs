@@ -181,7 +181,7 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
         //       the config itself. Right now clap doesn't support this.
         let audio_io_layout = config.audio_io_layout_or_exit::<P>();
 
-        let plugin = P::default();
+        let mut plugin = P::default();
         let task_executor = Mutex::new(plugin.task_executor());
         let params = plugin.params();
 

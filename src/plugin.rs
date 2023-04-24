@@ -131,25 +131,36 @@ pub trait Plugin: Default + Send + 'static {
     // NOTE: Sadly it's not yet possible to default this and the `async_executor()` function to
     //       `()`: https://github.com/rust-lang/rust/issues/29661
     type BackgroundTask: Send;
-    /// A function that executes the plugin's tasks. Queried once when the plugin instance is
-    /// created. See [`BackgroundTask`][Self::BackgroundTask].
-    fn task_executor(&self) -> TaskExecutor<Self> {
+    /// A function that executes the plugin's tasks. When implementing this you will likely want to
+    /// pattern match on the task type, and then send any resulting data back over a channel or
+    /// triple buffer. See [`BackgroundTask`][Self::BackgroundTask].
+    ///
+    /// Queried only once immediately after the plugin instance is created. This function takes
+    /// `&mut self` to make it easier to move data into the closure.
+    fn task_executor(&mut self) -> TaskExecutor<Self> {
         // In the default implementation we can simply ignore the value
         Box::new(|_| ())
     }
 
     /// The plugin's parameters. The host will update the parameter values before calling
-    /// `process()`. These parameters are identified by strings that should never change when the
-    /// plugin receives an update.
+    /// `process()`. These string parameter IDs parameters should never change as they are used to
+    /// distinguish between parameters.
+    ///
+    /// Queried only once immediately after the plugin instance is created.
     fn params(&self) -> Arc<dyn Params>;
 
-    /// The plugin's editor, if it has one. The actual editor instance is created in
-    /// [`Editor::spawn()`]. A plugin editor likely wants to interact with the plugin's parameters
-    /// and other shared data, so you'll need to move [`Arc`] pointing to any data you want to
-    /// access into the editor. You can later modify the parameters through the
-    /// [`GuiContext`][crate::prelude::GuiContext] and [`ParamSetter`][crate::prelude::ParamSetter] after the editor
-    /// GUI has been created.
-    fn editor(&self, async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
+    /// Returns an extension struct for interacting with the plugin's editor, if it has one. Later
+    /// the host may call [`Editor::spawn()`] to create an editor instance. To read the current
+    /// parameter values, you will need to clone and move the `Arc` containing your `Params` object
+    /// into the editor. You can later modify the parameters through the
+    /// [`GuiContext`][crate::prelude::GuiContext] and [`ParamSetter`][crate::prelude::ParamSetter]
+    /// after the editor GUI has been created. NIH-plug comes with wrappers for several common GUI
+    /// frameworks that may have their own ways of interacting with parameters. See the repo's
+    /// readme for more information.
+    ///
+    /// Queried only once immediately after the plugin instance is created. This function takes
+    /// `&mut self` to make it easier to move data into the `Editor` implementation.
+    fn editor(&mut self, async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
         None
     }
 

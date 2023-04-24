@@ -10,6 +10,20 @@ Since there is no stable release yet, the changes are organized per day in
 reverse chronological order. The main purpose of this document in its current
 state is to list breaking changes.
 
+## [2023-04-24]
+
+### Breaking changes
+
+- `Plugin::editor()` and `Plugin::task_executor()` now take `&mut self` instead
+  of `&self` to make it easier to move data into these functions without
+  involving interior mutability.
+
+### Changed
+
+- The `Plugin` trait's documentation has been updated to better clarify the
+  structure and to more explicitly mention that the non-lifecycle methods are
+  called once immediately after creating the plugin object.
+
 ## [2023-04-22]
 
 ### Added

@@ -188,7 +188,7 @@ pub enum ProcessEvent<P: Plugin> {
 impl<P: Vst3Plugin> WrapperInner<P> {
     #[allow(unused_unsafe)]
     pub fn new() -> Arc<Self> {
-        let plugin = P::default();
+        let mut plugin = P::default();
         let task_executor = Mutex::new(plugin.task_executor());
 
         // This is used to allow the plugin to restore preset data from its editor, see the comment

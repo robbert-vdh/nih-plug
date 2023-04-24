@@ -426,7 +426,7 @@ impl<P: ClapPlugin> MainThreadExecutor<Task<P>> for Wrapper<P> {
 
 impl<P: ClapPlugin> Wrapper<P> {
     pub fn new(host_callback: *const clap_host) -> Arc<Self> {
-        let plugin = P::default();
+        let mut plugin = P::default();
         let task_executor = Mutex::new(plugin.task_executor());
 
         // This is used to allow the plugin to restore preset data from its editor, see the comment
