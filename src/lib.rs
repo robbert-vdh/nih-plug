@@ -31,8 +31,8 @@
 //!   [`nih_plug_xtask`](https://github.com/robbert-vdh/nih-plug/tree/master/nih_plug_xtask) for
 //!   instructions on how to use this within your own project.
 //! - It's also possible to export a standalone application from a plugin using the
-//!   [`nih_export_standalone()`][prelude::nih_export_standalone()] function. Check that function's
-//!   documentation to learn how to do this. This requires enabling the `standalone` crate feature.
+//!   [`nih_export_standalone()`] function. Check that function's documentation to learn how to do
+//!   this. This requires enabling the `standalone` crate feature.
 //! - Everything is described in more detail on the [`Plugin`][prelude::Plugin] trait and everything
 //!   linked from there, but a plugin's general lifecycle involves the following function calls.
 //!
