@@ -26,6 +26,9 @@ state is to list breaking changes.
 
 ### Fixed
 
+- The logger now uses the correct local time offset on Linux instead of
+  defaulting to UTC due to some implementation details of the underlying `time`
+  crate.
 - The buffer changes from March 31st broke the sample accurate automation
   feature. This has now been fixed.
 
