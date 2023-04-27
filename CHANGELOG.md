@@ -10,6 +10,14 @@ Since there is no stable release yet, the changes are organized per day in
 reverse chronological order. The main purpose of this document in its current
 state is to list breaking changes.
 
+## [2023-04-27]
+
+### Changed
+
+- The `v2s_f32_rounded()` formatter now avoids returning negative zero values
+  for roundtripping reasons since -0.0 and 0.0 correspond to the same normalized
+  value.
+
 ## [2023-04-24]
 
 ### Breaking changes

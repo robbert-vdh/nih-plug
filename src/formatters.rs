@@ -13,9 +13,19 @@ use crate::util;
 // TODO: The v2s and s2v naming convention isn't ideal, but at least it's unambiguous. Is there a
 //       better way to name these functions? Should we just split this up into two modules?
 
-/// Round an `f32` value to always have a specific number of decimal digits.
+/// Round an `f32` value to always have a specific number of decimal digits. Avoids returning
+/// negative zero values to make sure string->value->string roundtrips work correctly. Otherwise
+/// `-0.001` rounded to two digits would result in `-0.00`.
 pub fn v2s_f32_rounded(digits: usize) -> Arc<dyn Fn(f32) -> String + Send + Sync> {
-    Arc::new(move |value| format!("{value:.digits$}"))
+    let rounding_multiplier = 10u32.pow(digits as u32) as f32;
+    Arc::new(move |value| {
+        // See above
+        if (value * rounding_multiplier).round() / rounding_multiplier == 0.0 {
+            format!("{:.digits$}", 0.0)
+        } else {
+            format!("{value:.digits$}")
+        }
+    })
 }
 
 /// Format a `[0, 1]` number as a percentage. Does not include the percent sign, you should specify
@@ -323,6 +333,18 @@ pub fn s2v_bool_bypass() -> Arc<dyn Fn(&str) -> Option<bool> + Send + Sync> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The rounding function should never return strings containing negative zero values.
+    #[test]
+    fn v2s_f32_rounded_negative_zero() {
+        let v2s = v2s_f32_rounded(2);
+
+        assert_eq!("0.00", v2s(-0.001));
+
+        // Sanity check
+        assert_eq!("-0.01", v2s(-0.009));
+        assert_eq!("0.01", v2s(0.009));
+    }
 
     // More of these validators could use tests, but this one in particular is tricky and I noticed
     // an issue where it didn't roundtrip correctly
