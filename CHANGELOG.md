@@ -10,6 +10,13 @@ Since there is no stable release yet, the changes are organized per day in
 reverse chronological order. The main purpose of this document in its current
 state is to list breaking changes.
 
+## [2023-04-30]
+
+### Changes
+
+- Added debug assertions to make sure parameter ranges are valid. The minimum
+  value must always be lower than the maximum value and they cannot be equal.
+
 ## [2023-04-27]
 
 ### Changed

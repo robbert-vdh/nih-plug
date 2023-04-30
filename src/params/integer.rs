@@ -249,6 +249,8 @@ impl IntParam {
     /// Build a new [`IntParam`]. Use the other associated functions to modify the behavior of the
     /// parameter.
     pub fn new(name: impl Into<String>, default: i32, range: IntRange) -> Self {
+        range.assert_validity();
+
         Self {
             value: AtomicI32::new(default),
             normalized_value: AtomicF32::new(range.normalize(default)),

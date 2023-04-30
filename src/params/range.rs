@@ -195,6 +195,25 @@ impl FloatRange {
             FloatRange::Reversed(range) => range.snap_to_step(value, step_size),
         }
     }
+
+    /// Emits debug assertions to make sure that range minima are always less than the maxima and
+    /// that they are not equal.
+    pub(super) fn assert_validity(&self) {
+        match self {
+            FloatRange::Linear { min, max }
+            | FloatRange::Skewed { min, max, .. }
+            | FloatRange::SymmetricalSkewed { min, max, .. } => {
+                nih_debug_assert!(
+                    min < max,
+                    "The range minimum ({}) needs to be less than the range maximum ({}) and they \
+                     cannot be equal",
+                    min,
+                    max
+                );
+            }
+            FloatRange::Reversed(range) => range.assert_validity(),
+        }
+    }
 }
 
 impl IntRange {
@@ -247,6 +266,23 @@ impl IntRange {
         match self {
             IntRange::Linear { .. } => *self,
             IntRange::Reversed(range) => range.inner_range(),
+        }
+    }
+
+    /// Emits debug assertions to make sure that range minima are always less than the maxima and
+    /// that they are not equal.
+    pub(super) fn assert_validity(&self) {
+        match self {
+            IntRange::Linear { min, max } => {
+                nih_debug_assert!(
+                    min < max,
+                    "The range minimum ({}) needs to be less than the range maximum ({}) and they \
+                     cannot be equal",
+                    min,
+                    max
+                );
+            }
+            IntRange::Reversed(range) => range.assert_validity(),
         }
     }
 }
