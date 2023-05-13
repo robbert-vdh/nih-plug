@@ -23,7 +23,7 @@ pub trait SysExMessage: Debug + Clone + PartialEq + Send + Sync {
     /// lengths just yet.
     ///
     /// <https://github.com/rust-lang/rust/issues/60551>
-    type Buffer: Default + Borrow<[u8]> + BorrowMut<[u8]>;
+    type Buffer: Borrow<[u8]> + BorrowMut<[u8]>;
 
     /// Read a SysEx message from `buffer` and convert it to this message type if supported. This
     /// covers the full message, see the trait's docstring for more information. `buffer`'s length

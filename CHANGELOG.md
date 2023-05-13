@@ -10,6 +10,13 @@ Since there is no stable release yet, the changes are organized per day in
 reverse chronological order. The main purpose of this document in its current
 state is to list breaking changes.
 
+## [2023-05-13]
+
+### Fixed
+
+- Removed the `Default` bound from the `SysExMessage::Buffer` type. This was a
+  leftover from an older design.
+
 ## [2023-04-30]
 
 ### Changed
