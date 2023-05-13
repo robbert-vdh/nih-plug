@@ -12,7 +12,7 @@ state is to list breaking changes.
 
 ## [2023-04-30]
 
-### Changes
+### Changed
 
 - Added debug assertions to make sure parameter ranges are valid. The minimum
   value must always be lower than the maximum value and they cannot be equal.
