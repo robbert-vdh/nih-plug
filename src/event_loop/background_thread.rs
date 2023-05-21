@@ -77,7 +77,7 @@ where
 // workaround to have a singleton that also works if for whatever reason there arem ultiple `T`
 // and `E`s in a single process (won't happen with normal plugin usage, but sho knwos).
 lazy_static::lazy_static! {
-    static ref HANDLE_MAP: Mutex<anymap::Map<dyn anymap::any::Any + Send + 'static>> =
+    static ref HANDLE_MAP: Mutex<anymap::Map<dyn std::any::Any + Send + 'static>> =
         Mutex::new(anymap::Map::new());
 }
 

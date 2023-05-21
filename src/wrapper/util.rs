@@ -204,7 +204,7 @@ struct ScopedFtz {
 impl ScopedFtz {
     fn enable() -> Self {
         cfg_if::cfg_if! {
-            if #[cfg(target_feature = "sse")] {
+            if #[cfg(all(target_feature = "sse", not(miri)))] {
                 let mode = unsafe { std::arch::x86_64::_MM_GET_FLUSH_ZERO_MODE() };
                 let should_disable_again = mode != std::arch::x86_64::_MM_FLUSH_ZERO_ON;
                 if should_disable_again {
@@ -215,7 +215,7 @@ impl ScopedFtz {
                     should_disable_again,
                     _send_sync_marker: PhantomData,
                 }
-            } else if #[cfg(target_arch = "aarch64")] {
+            } else if #[cfg(all(target_arch = "aarch64", not(miri)))] {
                 // There are no convient intrinsics to change the FTZ settings on AArch64, so this
                 // requires inline assembly:
                 // https://developer.arm.com/documentation/ddi0595/2021-06/AArch64-Registers/FPCR--Floating-point-Control-Register
@@ -243,6 +243,7 @@ impl ScopedFtz {
 
 impl Drop for ScopedFtz {
     fn drop(&mut self) {
+        #[cfg(not(miri))]
         if self.should_disable_again {
             cfg_if::cfg_if! {
                 if #[cfg(target_feature = "sse")] {
