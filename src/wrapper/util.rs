@@ -243,6 +243,7 @@ impl ScopedFtz {
             }
         }
 
+        #[allow(unreachable_code)] // This is only unreachable if on SSE or aarch64
         Self {
             should_disable_again: false,
             _send_sync_marker: PhantomData,
