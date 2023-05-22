@@ -204,19 +204,27 @@ struct ScopedFtz {
 impl ScopedFtz {
     fn enable() -> Self {
         #[cfg(not(miri))]
-        cfg_if::cfg_if! {
-            if #[cfg(target_feature = "sse")] {
+        {
+            #[cfg(target_feature = "sse")]
+            {
                 let mode = unsafe { std::arch::x86_64::_MM_GET_FLUSH_ZERO_MODE() };
                 let should_disable_again = mode != std::arch::x86_64::_MM_FLUSH_ZERO_ON;
                 if should_disable_again {
-                    unsafe { std::arch::x86_64::_MM_SET_FLUSH_ZERO_MODE(std::arch::x86_64::_MM_FLUSH_ZERO_ON) };
+                    unsafe {
+                        std::arch::x86_64::_MM_SET_FLUSH_ZERO_MODE(
+                            std::arch::x86_64::_MM_FLUSH_ZERO_ON,
+                        )
+                    };
                 }
 
                 return Self {
                     should_disable_again,
                     _send_sync_marker: PhantomData,
-                }
-            } else if #[cfg(target_arch = "aarch64")] {
+                };
+            }
+
+            #[cfg(target_arch = "aarch64")]
+            {
                 // There are no convient intrinsics to change the FTZ settings on AArch64, so this
                 // requires inline assembly:
                 // https://developer.arm.com/documentation/ddi0595/2021-06/AArch64-Registers/FPCR--Floating-point-Control-Register
@@ -231,7 +239,7 @@ impl ScopedFtz {
                 return Self {
                     should_disable_again,
                     _send_sync_marker: PhantomData,
-                }
+                };
             }
         }
 
@@ -246,15 +254,21 @@ impl Drop for ScopedFtz {
     fn drop(&mut self) {
         #[cfg(not(miri))]
         if self.should_disable_again {
-            cfg_if::cfg_if! {
-                if #[cfg(target_feature = "sse")] {
-                    unsafe { std::arch::x86_64::_MM_SET_FLUSH_ZERO_MODE(std::arch::x86_64::_MM_FLUSH_ZERO_OFF) };
-                } else if #[cfg(target_arch = "aarch64")] {
-                    let mut fpcr: u64;
-                    unsafe { std::arch::asm!("mrs {}, fpcr", out(reg) fpcr) };
-                    unsafe { std::arch::asm!("msr fpcr, {}", in(reg) fpcr & !AARCH64_FTZ_BIT) };
-                }
-            };
+            #[cfg(target_feature = "sse")]
+            {
+                return unsafe {
+                    std::arch::x86_64::_MM_SET_FLUSH_ZERO_MODE(
+                        std::arch::x86_64::_MM_FLUSH_ZERO_OFF,
+                    )
+                };
+            }
+
+            #[cfg(target_arch = "aarch64")]
+            {
+                let mut fpcr: u64;
+                unsafe { std::arch::asm!("mrs {}, fpcr", out(reg) fpcr) };
+                unsafe { std::arch::asm!("msr fpcr, {}", in(reg) fpcr & !AARCH64_FTZ_BIT) };
+            }
         }
     }
 }
