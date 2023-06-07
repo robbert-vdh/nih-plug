@@ -18,16 +18,17 @@ pub use midi_consts::channel_event::control_change;
 /// <https://github.com/rust-lang/rust/issues/26925>
 pub type PluginNoteEvent<P> = NoteEvent<<P as Plugin>::SysExMessage>;
 
-/// Determines which note events a plugin receives.
+/// Determines which note events a plugin can send and receive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum MidiConfig {
-    /// The plugin will not have a note input port and will thus not receive any not events.
+    /// The plugin will not have a note input or output port and will thus not receive any not
+    /// events.
     None,
     /// The plugin receives note on/off/choke events, pressure, and potentially a couple
     /// standardized expression types depending on the plugin standard and host. If the plugin sets
     /// up configuration for polyphonic modulation (see [`ClapPlugin`][crate::prelude::ClapPlugin])
     /// and assigns polyphonic modulation IDs to some of its parameters, then it will also receive
-    /// polyphonic modulation events.
+    /// polyphonic modulation events. This level is also needed to be able to send SysEx events.
     Basic,
     /// The plugin receives full MIDI CCs as well as pitch bend information. For VST3 plugins this
     /// involves adding 130*16 parameters to bind to the the 128 MIDI CCs, pitch bend, and channel

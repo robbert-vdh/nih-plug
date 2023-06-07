@@ -120,7 +120,9 @@ pub trait Plugin: Default + Send + 'static {
     /// The plugin's SysEx message type if it supports sending or receiving MIDI SysEx messages, or
     /// `()` if it does not. This type can be a struct or enum wrapping around one or more message
     /// types, and the [`SysExMessage`] trait is then used to convert between this type and basic
-    /// byte buffers.
+    /// byte buffers. The [`MIDI_INPUT`][Self::MIDI_INPUT] and [`MIDI_OUTPUT`][Self::MIDI_OUTPUT]
+    /// fields need to be set to [`MidiConfig::Basic`] or above to be able to send and receive
+    /// SysEx.
     type SysExMessage: SysExMessage;
 
     /// A type encoding the different background tasks this plugin wants to run, or `()` if it
