@@ -56,6 +56,10 @@ impl Plugin for SysEx {
 
     const SAMPLE_ACCURATE_AUTOMATION: bool = true;
 
+    // The plugin needs to be have a note port to be able to send SysEx
+    const MIDI_INPUT: MidiConfig = MidiConfig::Basic;
+    const MIDI_OUTPUT: MidiConfig = MidiConfig::Basic;
+
     type SysExMessage = CoolSysExMessage;
     type BackgroundTask = ();
 
