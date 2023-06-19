@@ -111,7 +111,8 @@ pub fn setup_logger() {
 
     let logger_builder = nih_log::LoggerBuilder::new(log_level)
         .filter_module("cosmic_text::buffer")
-        .filter_module("cosmic_text::shape");
+        .filter_module("cosmic_text::shape")
+        .filter_module("selectors::matching");
 
     // Always show the module in debug builds, makes it clearer where messages are coming from and
     // it helps set up filters

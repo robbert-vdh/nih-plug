@@ -68,17 +68,17 @@ pub(crate) fn create(editor_data: Data, editor_state: Arc<ViziaState>) -> Option
         assets::register_noto_sans_light(cx);
         assets::register_noto_sans_thin(cx);
 
-        cx.add_theme(include_str!("editor/theme.css"));
+        cx.add_stylesheet(include_style!("src/editor/theme.css"));
 
         editor_data.clone().build(cx);
-
-        ResizeHandle::new(cx);
 
         VStack::new(cx, |cx| {
             top_bar(cx);
             spectrum_analyzer(cx);
             other_params(cx);
         });
+
+        ResizeHandle::new(cx);
     })
 }
 
@@ -89,6 +89,7 @@ fn top_bar(cx: &mut Context) {
             .font_family(vec![FamilyOwned::Name(String::from(
                 assets::NOTO_SANS_THIN,
             ))])
+            .font_weight(FontWeightKeyword::Thin)
             .font_size(37.0)
             .top(Pixels(2.0))
             .left(Pixels(8.0))
@@ -122,6 +123,7 @@ fn top_bar(cx: &mut Context) {
                 .for_bypass()
                 .left(Pixels(10.0));
         })
+        .width(Auto)
         .child_space(Pixels(10.0))
         .left(Stretch(1.0));
     })
@@ -138,8 +140,7 @@ fn spectrum_analyzer(cx: &mut Context) {
             .font_size(18.0)
             // HACK: Rotating doesn't really work in vizia, but with text wrap disabled this at
             //       least visually does the right thing
-            .text_wrap(false)
-            .rotate(270.0f32)
+            .rotate(Angle::Deg(270.0f32))
             .width(Pixels(LABEL_HEIGHT))
             .height(Pixels(SPECTRUM_ANALYZER_HEIGHT))
             // HACK: The `.space()` on the HStack doesn't seem to work correctly here
@@ -184,9 +185,10 @@ fn spectrum_analyzer(cx: &mut Context) {
                 .height(Pixels(20.0))
                 .child_space(Stretch(1.0));
         })
+        .size(Auto)
         .space(Pixels(10.0))
         .width(Stretch(1.0));
-    });
+    }).height(Auto);
 }
 
 /// The area below the spectrum analyzer that contains all of the other parameters.
@@ -208,23 +210,27 @@ fn other_params(cx: &mut Context) {
                 },
             );
         })
+        .size(Auto)
         .bottom(Pixels(10.0));
 
         HStack::new(cx, move |cx| {
             Label::new(cx, "Frequency Spread").class("param-label");
             ParamSlider::new(cx, Data::params, |params| &params.filter_spread_octaves);
         })
+        .size(Auto)
         .bottom(Pixels(10.0));
 
         HStack::new(cx, move |cx| {
             Label::new(cx, "Spread Style").class("param-label");
             ParamSlider::new(cx, Data::params, |params| &params.filter_spread_style)
                 .set_style(ParamSliderStyle::CurrentStepLabeled { even: true });
-        });
+        })
+        .size(Auto);
     })
     .id("param-sliders")
     .width(Percentage(100.0))
     .top(Pixels(7.0))
+    .height(Auto)
     // This should take up all remaining space
     .bottom(Stretch(1.0))
     .child_space(Stretch(1.0))

@@ -90,8 +90,8 @@ impl View for SpectrumAnalyzer {
         // NOTE: We could do the same thing like in Spectral Compressor and draw part of this
         //       spectrum analyzer as a single mesh but for whatever erason the aliasing/moire
         //       pattern here doesn't look nearly as bad.
-        let line_width = cx.style.dpi_factor as f32 * 1.5;
-        let paint = vg::Paint::color(cx.font_color().cloned().unwrap_or_default().into())
+        let line_width = cx.scale_factor() * 1.5;
+        let paint = vg::Paint::color(cx.font_color().into())
             .with_line_width(line_width);
         let mut path = vg::Path::new();
         for (bin_idx, magnitude) in spectrum.iter().enumerate() {

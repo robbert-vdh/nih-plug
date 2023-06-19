@@ -14,32 +14,11 @@ pub const ROBOTO: &str = "Roboto";
 pub const ROBOTO_BOLD: &str = "Roboto Bold";
 /// The font name for the icon font (Entypo), needs to be registered using [`register_icons()`]
 /// first.
-pub const ICONS: &str = "Entypo";
-/// The font name for the emoji font (Open Sans Eomji), needs to be registered using
-/// [`register_emoji()`] first.
-pub const EMOJI: &str = "OpenSansEmoji";
-/// The font name for the arabic font (Amiri Regular), needs to be registered using
-/// [`register_arabic()`] first.
-pub const ARABIC: &str = "Amiri";
-/// The font name for the material font (Material Icons), needs to be registered using
-/// [`register_material()`] first.
-pub const MATERIAL: &str = "Material Icons";
+pub const ICONS: &str = "tabler-icons";
 
 pub fn register_roboto(cx: &mut Context) {
-    cx.add_fonts_mem(&[fonts::ROBOTO_REGULAR]);
+    cx.add_font_mem(fonts::ROBOTO_REGULAR);
 }
 pub fn register_roboto_bold(cx: &mut Context) {
-    cx.add_fonts_mem(&[fonts::ROBOTO_BOLD]);
-}
-pub fn register_icons(cx: &mut Context) {
-    cx.add_fonts_mem(&[fonts::ENTYPO]);
-}
-pub fn register_emoji(cx: &mut Context) {
-    cx.add_fonts_mem(&[fonts::OPEN_SANS_EMOJI]);
-}
-pub fn register_arabic(cx: &mut Context) {
-    cx.add_fonts_mem(&[fonts::AMIRI_REGULAR]);
-}
-pub fn register_material(cx: &mut Context) {
-    cx.add_fonts_mem(&[fonts::MATERIAL_ICONS_REGULAR]);
+    cx.add_font_mem(fonts::ROBOTO_BOLD);
 }

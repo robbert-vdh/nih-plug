@@ -31,7 +31,7 @@ pub struct SafeModeButton<L: Lens<Target = SafeModeClamper>> {
 
 impl<L: Lens<Target = SafeModeClamper>> SafeModeButton<L> {
     /// Creates a new button bound to the [`SafeModeClamper`].
-    pub fn new<T>(cx: &mut Context, lens: L, label: impl Res<T>) -> Handle<Self>
+    pub fn new<T>(cx: &mut Context, lens: L, label: impl Res<T> + Clone) -> Handle<Self>
     where
         T: ToString,
     {

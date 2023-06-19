@@ -11,19 +11,19 @@ scrollview > vstack > generic-ui {
   child-space: 5px;
 
   /* Our scrollview styling will already add some padding here */
-  child-right: 0;
+  child-right: 0px;
 }
 
 generic-ui .row {
   col-between: 6px;
   layout-type: row;
+  height: auto;
 }
 
 generic-ui .label {
   left: 1s;
   top: 1s;
   bottom: 1s;
-  right: 0;
 }
 
 param-button {
@@ -36,28 +36,28 @@ param-button {
   child-bottom: 1s;
   child-left: 7px;
   background-color: #d0d0d000;
-  transition: background-color 0.1 0;
+  transition: background-color 100ms;
 }
 param-button:hover {
   background-color: #d0d0d080;
-  transition: background-color 0.1 0;
+  transition: background-color 100ms;
 }
 param-button:checked {
   background-color: #d0d0d0;
-  transition: background-color 0.1 0;
+  transition: background-color 100ms;
 }
 
 param-button.bypass {
   background-color: #ffcfcb00;
-  transition: background-color 0.1 0;
+  transition: background-color 100ms;
 }
 param-button.bypass:hover {
   background-color: #ffcfcb20;
-  transition: background-color 0.1 0;
+  transition: background-color 100ms;
 }
 param-button.bypass:checked {
   background-color: #ffcfcb;
-  transition: background-color 0.1 0;
+  transition: background-color 100ms;
 }
 
 param-slider {
@@ -66,18 +66,18 @@ param-slider {
   border-color: #0a0a0a;
   border-width: 1px;
   background-color: transparent;
-  transition: background-color 0.1 0;
+  transition: background-color 100ms;
 }
 
 /* Vizia doesn't support commas in selectors */
 /* Also, WTB Sass */
 param-slider:active {
   background-color: #8080801a;
-  transition: background-color 0.1 0;
+  transition: background-color 100ms;
 }
 param-slider:hover {
   background-color: #8080801a;
-  transition: background-color 0.1 0;
+  transition: background-color 100ms;
 }
 
 param-slider .fill {
@@ -116,7 +116,7 @@ peak-meter .ticks {
 }
 peak-meter .ticks__tick {
   background-color: #0a0a0a;
-  top: 0;
+  top: 0px;
   width: 1px;
   height: 30%;
 }
@@ -126,24 +126,24 @@ peak-meter .ticks__label {
 }
 
 resize-handle {
-  bottom: 0;
+  bottom: 0px;
   color: #696969;
   height: 20px;
   left: 1s;
   opacity: 0.4;
   position-type: self-directed;
-  right: 0;
+  right: 0px;
   top: 1s;
-  transition: opacity 0.1 0;
+  transition: opacity 100ms;
   width: 20px;
   z-index: 1337;
 }
 resize-handle:active {
   opacity: 0.8;
-  transition: opacity 0.1 0;
+  transition: opacity 100ms;
 }
 /* No commas in VIZIA */
 resize-handle:hover {
   opacity: 0.8;
-  transition: opacity 0.1 0;
+  transition: opacity 100ms;
 }

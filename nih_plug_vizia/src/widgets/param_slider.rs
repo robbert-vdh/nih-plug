@@ -464,11 +464,11 @@ impl View for ParamSlider {
             // still won't work.
             WindowEvent::MouseDown(MouseButton::Left)
             | WindowEvent::MouseTripleClick(MouseButton::Left) => {
-                if cx.modifiers.alt() {
+                if cx.modifiers().alt() {
                     // ALt+Click brings up a text entry dialog
                     self.text_input_active = true;
                     cx.set_active(true);
-                } else if cx.modifiers.command() {
+                } else if cx.modifiers().command() {
                     // Ctrl+Click, double click, and right clicks should reset the parameter instead
                     // of initiating a drag operation
                     self.param_base.begin_set_parameter(cx);
@@ -485,16 +485,16 @@ impl View for ParamSlider {
                     // When holding down shift while clicking on a parameter we want to granuarly
                     // edit the parameter without jumping to a new value
                     self.param_base.begin_set_parameter(cx);
-                    if cx.modifiers.shift() {
+                    if cx.modifiers().shift() {
                         self.granular_drag_status = Some(GranularDragStatus {
-                            starting_x_coordinate: cx.mouse.cursorx,
+                            starting_x_coordinate: cx.mouse().cursorx,
                             starting_value: self.param_base.unmodulated_normalized_value(),
                         });
                     } else {
                         self.granular_drag_status = None;
                         self.set_normalized_value_drag(
                             cx,
-                            util::remap_current_entity_x_coordinate(cx, cx.mouse.cursorx),
+                            util::remap_current_entity_x_coordinate(cx, cx.mouse().cursorx),
                         );
                     }
                 }
@@ -529,7 +529,7 @@ impl View for ParamSlider {
                 if self.drag_active {
                     // If shift is being held then the drag should be more granular instead of
                     // absolute
-                    if cx.modifiers.shift() {
+                    if cx.modifiers().shift() {
                         let granular_drag_status =
                             *self
                                 .granular_drag_status
@@ -544,7 +544,7 @@ impl View for ParamSlider {
                             util::remap_current_entity_x_t(cx, granular_drag_status.starting_value);
                         let delta_x = ((*x - granular_drag_status.starting_x_coordinate)
                             * GRANULAR_DRAG_MULTIPLIER)
-                            * cx.style.dpi_factor as f32;
+                            * cx.scale_factor();
 
                         self.set_normalized_value_drag(
                             cx,
@@ -567,7 +567,7 @@ impl View for ParamSlider {
                     self.granular_drag_status = None;
                     self.param_base.set_normalized_value(
                         cx,
-                        util::remap_current_entity_x_coordinate(cx, cx.mouse.cursorx),
+                        util::remap_current_entity_x_coordinate(cx, cx.mouse().cursorx),
                     );
                 }
             }
@@ -577,7 +577,7 @@ impl View for ParamSlider {
                 self.scrolled_lines += scroll_y;
 
                 if self.scrolled_lines.abs() >= 1.0 {
-                    let use_finer_steps = cx.modifiers.shift();
+                    let use_finer_steps = cx.modifiers().shift();
 
                     // Scrolling while dragging needs to be taken into account here
                     if !self.drag_active {

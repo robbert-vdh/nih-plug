@@ -51,7 +51,7 @@ impl Editor for ViziaEditor {
                 // NOTE: vizia's font rendering looks way too dark and thick. Going one font weight
                 //       lower seems to compensate for this.
                 cx.set_default_font(&[assets::NOTO_SANS_LIGHT]);
-                cx.add_theme(include_str!("../assets/theme.css"));
+                cx.add_stylesheet(include_style!("assets/theme.css"));
 
                 // There doesn't seem to be any way to bundle styles with a widget, so we'll always
                 // include the style sheet for our custom widgets at context creation

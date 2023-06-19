@@ -37,8 +37,6 @@ pub(crate) fn create(
         }
         .build(cx);
 
-        ResizeHandle::new(cx);
-
         VStack::new(cx, |cx| {
             Label::new(cx, "Gain GUI")
                 .font_family(vec![FamilyOwned::Name(String::from(
@@ -64,5 +62,7 @@ pub(crate) fn create(
         .row_between(Pixels(0.0))
         .child_left(Stretch(1.0))
         .child_right(Stretch(1.0));
+
+        ResizeHandle::new(cx);
     })
 }

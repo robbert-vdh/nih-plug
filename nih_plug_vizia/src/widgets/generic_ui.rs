@@ -39,7 +39,7 @@ impl GenericUi {
                 Self::draw_widget(cx, params, param_ptr);
             })
             .class("row");
-        })
+        }).height(Auto)
     }
 
     /// Creates a new [`GenericUi`] for all provided parameters using a custom closure that receives
@@ -67,7 +67,7 @@ impl GenericUi {
 
                 make_widget(cx, param_ptr);
             }
-        })
+        }).height(Auto)
     }
 
     /// The standard widget drawing function. This can be used together with `.new_custom()` to only

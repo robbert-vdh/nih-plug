@@ -251,13 +251,14 @@ impl XyPad {
         x_display_value_lens: impl Lens<Target = String>,
         y_display_value_lens: impl Lens<Target = String>,
     ) {
+        const TRANSLATE: f32 = -(HANDLE_WIDTH_PX / 2.0);
         XyPadHandle::new(cx)
             .position_type(PositionType::SelfDirected)
             .top(y_position_lens)
             .left(x_position_lens)
             // TODO: It would be much nicer if this could be set in the
             //       stylesheet, but Vizia doesn't support that right now
-            .translate((-(HANDLE_WIDTH_PX / 2.0), -(HANDLE_WIDTH_PX / 2.0)))
+            .translate((Pixels(TRANSLATE), Pixels(TRANSLATE)))
             .width(Pixels(HANDLE_WIDTH_PX))
             .height(Pixels(HANDLE_WIDTH_PX))
             .hoverable(false);
@@ -282,7 +283,7 @@ impl XyPad {
             // When a new parameter value causes the width of the tooltip to
             // change, we must recompute its position so it stays anchored to
             // the mouse cursor
-            if change_flags.intersects(GeometryChanged::WIDTH_CHANGED) {
+            if change_flags.intersects(GeoChanged::WIDTH_CHANGED) {
                 cx.emit(XyPadEvent::TooltipWidthChanged);
             }
         })
@@ -296,12 +297,13 @@ impl XyPad {
         modulated_x_position_lens: impl Lens<Target = Units>,
         modulated_y_position_lens: impl Lens<Target = Units>,
     ) {
+        const TRANSLATE: f32 = -(HANDLE_WIDTH_PX / 2.0);
         XyPadHandle::new(cx)
             .class("xy-pad__handle--modulated")
             .position_type(PositionType::SelfDirected)
             .top(modulated_y_position_lens)
             .left(modulated_x_position_lens)
-            .translate((-(HANDLE_WIDTH_PX / 2.0), -(HANDLE_WIDTH_PX / 2.0)))
+            .translate((Pixels(TRANSLATE), Pixels(TRANSLATE)))
             .width(Pixels(HANDLE_WIDTH_PX))
             .height(Pixels(HANDLE_WIDTH_PX))
             .hoverable(false);
@@ -370,24 +372,21 @@ impl XyPad {
     /// space there, the tooltip will be pushed to the left or the right of the cursor.
     fn update_tooltip_pos(&mut self, cx: &mut EventContext) {
         let bounds = cx.cache.get_bounds(cx.current());
-        let relative_x = cx.mouse.cursorx - bounds.x;
-        let relative_y = cx.mouse.cursory - bounds.y;
+        let relative_x = cx.mouse().cursorx - bounds.x;
+        let relative_y = cx.mouse().cursory - bounds.y;
 
         // These positions need to take DPI scaling into account
-        let dpi_scale = cx.style.dpi_factor as f32;
+        let dpi_scale = cx.scale_factor();
         let padding = 2.0 * dpi_scale;
 
         // If there's not enough space at the top right, we'll move the tooltip to the
         // bottom and/or the left
         // NOTE: This is hardcoded to find the tooltip. The Binding also counts as a child.
-        let binding_entity = cx
-            .tree
-            .get_last_child(cx.current())
-            .expect("Missing child view in X-Y pad");
-        let tooltip_entity = cx
-            .tree
-            .get_last_child(binding_entity)
-            .expect("Missing child view in X-Y pad binding");
+        let binding_entity = cx.last_child().expect("Missing child view in X-Y pad");
+        let tooltip_entity = cx.with_current(binding_entity, |cx| {
+            cx.last_child()
+                .expect("Missing child view in X-Y pad binding")
+        });
         let tooltip_bounds = cx.cache.get_bounds(tooltip_entity);
         // NOTE: The width can vary drastically depending on the frequency value, so we'll
         //       hardcode a minimum width in this comparison to avoid this from jumping
@@ -463,11 +462,11 @@ impl View for XyPad {
         event.map(|window_event, meta| match window_event {
             WindowEvent::MouseDown(MouseButton::Left)
             | WindowEvent::MouseTripleClick(MouseButton::Left) => {
-                if cx.modifiers.alt() {
+                if cx.modifiers().alt() {
                     // ALt+Click brings up a text entry dialog
                     self.text_input_active = true;
                     cx.set_active(true);
-                } else if cx.modifiers.command() {
+                } else if cx.modifiers().command() {
                     // Ctrl+Click, double click, and right clicks should reset the parameter instead
                     // of initiating a drag operation
                     self.begin_set_parameters(cx);
@@ -483,18 +482,18 @@ impl View for XyPad {
                     // When holding down shift while clicking on the X-Y pad we want to granuarly
                     // edit the parameter without jumping to a new value
                     self.begin_set_parameters(cx);
-                    if cx.modifiers.shift() {
+                    if cx.modifiers().shift() {
                         self.granular_drag_status = Some(GranularDragStatus {
-                            starting_x_coordinate: cx.mouse.cursorx,
+                            starting_x_coordinate: cx.mouse().cursorx,
                             x_starting_value: self.x_param_base.unmodulated_normalized_value(),
-                            starting_y_coordinate: cx.mouse.cursory,
+                            starting_y_coordinate: cx.mouse().cursory,
                             y_starting_value: self.y_param_base.unmodulated_normalized_value(),
                         });
                     } else {
                         self.granular_drag_status = None;
                         self.set_normalized_values_for_mouse_pos(
                             cx,
-                            (cx.mouse.cursorx, cx.mouse.cursory),
+                            (cx.mouse().cursorx, cx.mouse().cursory),
                             false,
                         );
                     }
@@ -532,9 +531,9 @@ impl View for XyPad {
                 self.update_tooltip_pos(cx);
 
                 if self.drag_active {
-                    let dpi_scale = cx.style.dpi_factor as f32;
+                    let dpi_scale = cx.scale_factor();
 
-                    if cx.modifiers.shift() {
+                    if cx.modifiers().shift() {
                         // If shift is being held then the drag should be more granular instead of
                         // absolute
                         // TODO: Mouse warping is really needed here, but it's not exposed right now
@@ -577,13 +576,13 @@ impl View for XyPad {
                         self.set_normalized_values_for_mouse_pos(
                             cx,
                             (start_x + delta_x, start_y + delta_y),
-                            cx.modifiers.alt(),
+                            cx.modifiers().alt(),
                         );
                     } else {
                         // When alt is pressed _while_ dragging, the frequency parameter on the
                         // X-axis snaps to whole notes
                         self.granular_drag_status = None;
-                        self.set_normalized_values_for_mouse_pos(cx, (*x, *y), cx.modifiers.alt());
+                        self.set_normalized_values_for_mouse_pos(cx, (*x, *y), cx.modifiers().alt());
                     }
                 }
             }
@@ -596,8 +595,8 @@ impl View for XyPad {
                     self.granular_drag_status = None;
                     self.set_normalized_values_for_mouse_pos(
                         cx,
-                        (cx.mouse.cursorx, cx.mouse.cursory),
-                        cx.modifiers.alt(),
+                        (cx.mouse().cursorx, cx.mouse().cursory),
+                        cx.modifiers().alt(),
                     );
                 }
             }
@@ -613,7 +612,7 @@ impl View for XyPad {
                     |value| (self.x_renormalize_event)((self.x_renormalize_display)(value));
 
                 if remaining_scroll_x.abs() >= 1.0 {
-                    let use_finer_steps = cx.modifiers.shift();
+                    let use_finer_steps = cx.modifiers().shift();
 
                     // Scrolling while dragging needs to be taken into account here
                     if !self.drag_active {
@@ -646,7 +645,7 @@ impl View for XyPad {
                 }
 
                 if remaining_scroll_y.abs() >= 1.0 {
-                    let use_finer_steps = cx.modifiers.shift();
+                    let use_finer_steps = cx.modifiers().shift();
 
                     // Scrolling while dragging needs to be taken into account here
                     if !self.drag_active {

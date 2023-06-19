@@ -83,7 +83,7 @@ pub(crate) fn create(editor_state: Arc<ViziaState>, editor_data: Data) -> Option
         assets::register_noto_sans_light(cx);
         assets::register_noto_sans_thin(cx);
 
-        cx.add_theme(include_str!("editor/theme.css"));
+        cx.add_stylesheet(include_style!("src/editor/theme.css"));
 
         editor_data.clone().build(cx);
 
@@ -138,11 +138,11 @@ fn main_column(cx: &mut Context) {
                     .top(Stretch(1.0))
                     .bottom(Pixels(4.0))
                     .left(Pixels(2.0));
-            });
+            })
+            .size(Auto);
         })
-        .height(Pixels(30.0))
+        .height(Auto)
         .right(Pixels(17.0))
-        .bottom(Pixels(-5.0))
         .left(Pixels(10.0))
         .top(Pixels(10.0))
         // This contains the editor mode buttom all the way on the left, and the plugin's name all the way on the right
@@ -162,16 +162,15 @@ fn main_column(cx: &mut Context) {
                      use this in a project, make sure to bounce things to audio just in case \
                      they'll sound different later.",
                 )
+                .text_wrap(true)
                 .font_size(11.0)
                 .left(Pixels(15.0))
                 .right(Pixels(8.0))
-                // The column isn't tall enough without this, for some reason
-                .bottom(Pixels(20.0))
                 .width(Stretch(1.0));
             });
         })
         .height(Auto)
-        .width(Stretch(1.0));
+        .width(Auto);
 
         HStack::new(cx, |cx| {
             make_column(cx, "Upwards", |cx| {
@@ -224,10 +223,10 @@ fn main_column(cx: &mut Context) {
             });
         })
         .height(Auto)
-        .width(Stretch(1.0));
+        .width(Auto);
     })
     .width(Pixels(COLLAPSED_GUI_WIDTH as f32))
-    .row_between(Pixels(15.0))
+    .row_between(Pixels(10.0))
     .child_left(Stretch(1.0))
     .child_right(Stretch(1.0));
 }
