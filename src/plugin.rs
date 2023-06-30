@@ -259,7 +259,7 @@ pub trait Plugin: Default + Send + 'static {
 pub enum ProcessStatus {
     /// Something went wrong while processing audio.
     Error(&'static str),
-    /// The plugin has finished processing audio. When the input is silent, the most may suspend the
+    /// The plugin has finished processing audio. When the input is silent, the host may suspend the
     /// plugin to save resources as it sees fit.
     Normal,
     /// The plugin has a (reverb) tail with a specific length in samples.
