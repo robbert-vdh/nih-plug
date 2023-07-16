@@ -27,7 +27,7 @@ pub struct Factory<P: Vst3Plugin> {
 
 impl<P: Vst3Plugin> Factory<P> {
     pub fn new() -> Box<Self> {
-        Self::allocate(PhantomData::default())
+        Self::allocate(PhantomData)
     }
 }
 

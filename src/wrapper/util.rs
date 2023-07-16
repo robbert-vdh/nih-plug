@@ -257,7 +257,7 @@ impl Drop for ScopedFtz {
         if self.should_disable_again {
             #[cfg(target_feature = "sse")]
             {
-                return unsafe {
+                unsafe {
                     std::arch::x86_64::_MM_SET_FLUSH_ZERO_MODE(
                         std::arch::x86_64::_MM_FLUSH_ZERO_OFF,
                     )
