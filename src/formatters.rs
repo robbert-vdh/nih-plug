@@ -79,17 +79,23 @@ pub fn s2v_compression_ratio() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync>
 
 /// Turn an `f32` value from voltage gain to decibels using the semantics described in
 /// [`util::gain_to_db()]. You should use either `" dB"` or `" dBFS"` for the parameter's unit.
-/// `0.0` will be formatted as `-inf`.
+/// `0.0` will be formatted as `-inf`. Avoids returning negative zero values to make sure
+/// string->value->string roundtrips work correctly. Otherwise `-0.001` rounded to two digits
+/// would result in `-0.00`.
 pub fn v2s_f32_gain_to_db(digits: usize) -> Arc<dyn Fn(f32) -> String + Send + Sync> {
+    let rounding_multiplier = 10u32.pow(digits as u32) as f32;
     Arc::new(move |value| {
         if value < util::MINUS_INFINITY_GAIN {
             String::from("-inf")
         } else {
-            // Never print -0.0 since that just looks weird and confusing
             let value_db = util::gain_to_db(value);
-            let value_db = if value_db.abs() < 1e-6 { 0.0 } else { value_db };
 
-            format!("{value_db:.digits$}")
+            // See above
+            if (value_db * rounding_multiplier).round() / rounding_multiplier == 0.0 {
+                format!("{:.digits$}", 0.0)
+            } else {
+                format!("{value_db:.digits$}")
+            }
         }
     })
 }
