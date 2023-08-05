@@ -16,7 +16,7 @@ pub use clap_sys::plugin::{clap_plugin, clap_plugin_descriptor};
 pub use clap_sys::version::CLAP_VERSION;
 pub use lazy_static::lazy_static;
 
-/// Export a CLAP plugin from this library using the provided plugin type.
+/// Export one or more CLAP plugins from this library using the provided plugin types.
 #[macro_export]
 macro_rules! nih_export_clap {
     ($($plugin_ty:ty),+) => {
