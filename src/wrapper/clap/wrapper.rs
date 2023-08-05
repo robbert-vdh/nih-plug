@@ -174,7 +174,7 @@ pub struct Wrapper<P: ClapPlugin> {
     pub clap_plugin: AtomicRefCell<clap_plugin>,
     /// Needs to be boxed because the plugin object is supposed to contain a static reference to
     /// this.
-    _plugin_descriptor: Box<PluginDescriptor<P>>,
+    _plugin_descriptor: Box<PluginDescriptor>,
 
     clap_plugin_audio_ports: clap_plugin_audio_ports,
 
@@ -433,7 +433,8 @@ impl<P: ClapPlugin> Wrapper<P> {
         // on `Self::updated_state_sender`
         let (updated_state_sender, updated_state_receiver) = channel::bounded(0);
 
-        let plugin_descriptor: Box<PluginDescriptor<P>> = Box::default();
+        let plugin_descriptor: Box<PluginDescriptor> =
+            Box::new(PluginDescriptor::for_plugin::<P>());
 
         // We're not allowed to query any extensions until the init function has been called, so we
         // need a bunch of AtomicRefCells instead

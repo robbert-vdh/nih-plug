@@ -10,6 +10,18 @@ Since there is no stable release yet, the changes are organized per day in
 reverse chronological order. The main purpose of this document in its current
 state is to list breaking changes.
 
+## [2023-08-05]
+
+### Breaking changes
+
+- The minimum supported Rust version has been bumped to 1.70 so we can start
+  using `OnceCell` and `OnceLock` to phase out uses of `lazy_static`.
+
+### Added
+
+- `nih_export_clap!()` can now take more than one plugin type argument to allow
+  exporting more than one plugin from a single plugin library.
+
 ## [2023-05-13]
 
 ### Fixed

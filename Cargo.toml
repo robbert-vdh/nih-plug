@@ -2,7 +2,7 @@
 name = "nih_plug"
 version = "0.0.0"
 edition = "2021"
-rust-version = "1.63"
+rust-version = "1.70"
 authors = ["Robbert van der Helm <mail@robbertvanderhelm.nl>"]
 license = "ISC"
 
