@@ -19,12 +19,12 @@ opengl = []
 [dependencies]
 nih_plug = { path = ".." }
 
-baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "eae4033e7d2cc9c31ccaa2794d5d08eedf2f510c" }
+baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "1d9806d5bd92275d0d8142d9c9c90198757b9b25" }
 crossbeam = "0.8"
 # The `egui-default-features` feature enables the default features. This makes
 # it possible to opt out of this if needed.
-egui = { version = "0.19", default-features = false }
-egui-baseview = { git = "https://github.com/BillyDM/egui-baseview.git", rev = "46e21cc11c57c705fb83611389399ec3d2670a44" }
+egui = { version = "0.22", default-features = false }
+egui-baseview = { git = "https://github.com/BillyDM/egui-baseview.git", rev = "27c027c22a83d2eb214074f922ba4115f712e483" }
 lazy_static = "1.4"
 parking_lot = "0.12"
 # To make the state persistable
