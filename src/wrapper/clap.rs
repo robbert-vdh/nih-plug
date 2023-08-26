@@ -102,7 +102,7 @@ macro_rules! nih_export_clap {
                         // Arc does not have a convenient leak function like Box, so this gets a bit awkward
                         // This pointer gets turned into an Arc and its reference count decremented in
                         // [Wrapper::destroy()]
-                        return (*Arc::into_raw(::nih_plug::wrapper::clap::Wrapper::<$plugin_ty>::new(host)))
+                        return (*::std::sync::Arc::into_raw(::nih_plug::wrapper::clap::Wrapper::<$plugin_ty>::new(host)))
                             .clap_plugin
                             .as_ptr();
                     }
