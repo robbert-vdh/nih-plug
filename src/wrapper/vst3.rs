@@ -20,7 +20,7 @@ macro_rules! nih_export_vst3 {
         /// The VST3 plugin factory entry point.
         #[no_mangle]
         pub extern "system" fn GetPluginFactory() -> *mut ::std::ffi::c_void {
-            let factory = ::nih_plug::wrapper::vst3::Factory::<$plugin_ty>::new();
+            let factory = $crate::wrapper::vst3::Factory::<$plugin_ty>::new();
 
             Box::into_raw(factory) as *mut ::std::ffi::c_void
         }
@@ -32,7 +32,7 @@ macro_rules! nih_export_vst3 {
         #[no_mangle]
         #[cfg(all(target_family = "unix", not(target_os = "macos")))]
         pub extern "C" fn ModuleEntry(_lib_handle: *mut ::std::ffi::c_void) -> bool {
-            ::nih_plug::wrapper::setup_logger();
+            $crate::wrapper::setup_logger();
             true
         }
 
@@ -49,7 +49,7 @@ macro_rules! nih_export_vst3 {
         #[no_mangle]
         #[cfg(target_os = "macos")]
         pub extern "C" fn bundleEntry(_lib_handle: *mut ::std::ffi::c_void) -> bool {
-            ::nih_plug::wrapper::setup_logger();
+            $crate::wrapper::setup_logger();
             true
         }
 
@@ -66,7 +66,7 @@ macro_rules! nih_export_vst3 {
         #[no_mangle]
         #[cfg(target_os = "windows")]
         pub extern "system" fn InitDll() -> bool {
-            ::nih_plug::wrapper::setup_logger();
+            $crate::wrapper::setup_logger();
             true
         }
 

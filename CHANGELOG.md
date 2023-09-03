@@ -10,6 +10,13 @@ Since there is no stable release yet, the changes are organized per day in
 reverse chronological order. The main purpose of this document in its current
 state is to list breaking changes.
 
+## [2023-09-03]
+
+### Fixed
+
+- The `nih_export_*!()` macros now use `$crate` to refer to NIH-plug itself,
+  which makes it possible to use the NIH-plug crate under a different name.
+
 ## [2023-08-05]
 
 ### Breaking changes

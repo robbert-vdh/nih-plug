@@ -29,8 +29,8 @@ macro_rules! nih_export_clap {
             // if the types are not public because this is a child module.
             use super::*;
 
-            const CLAP_PLUGIN_FACTORY: ::nih_plug::wrapper::clap::clap_plugin_factory =
-                ::nih_plug::wrapper::clap::clap_plugin_factory {
+            const CLAP_PLUGIN_FACTORY: $crate::wrapper::clap::clap_plugin_factory =
+                $crate::wrapper::clap::clap_plugin_factory {
                     get_plugin_count: Some(get_plugin_count),
                     get_plugin_descriptor: Some(get_plugin_descriptor),
                     create_plugin: Some(create_plugin),
@@ -43,17 +43,17 @@ macro_rules! nih_export_clap {
             // with indices without involving even more macros. We can't initialize this tuple
             // completely statically
             static PLUGIN_DESCRIPTORS: ::std::sync::OnceLock<
-                [::nih_plug::wrapper::clap::PluginDescriptor; PLUGIN_COUNT]
+                [$crate::wrapper::clap::PluginDescriptor; PLUGIN_COUNT]
             > = ::std::sync::OnceLock::new();
 
-            fn plugin_descriptors() -> &'static [::nih_plug::wrapper::clap::PluginDescriptor; PLUGIN_COUNT] {
+            fn plugin_descriptors() -> &'static [$crate::wrapper::clap::PluginDescriptor; PLUGIN_COUNT] {
                 PLUGIN_DESCRIPTORS.get_or_init(|| {
-                    let descriptors = [$(::nih_plug::wrapper::clap::PluginDescriptor::for_plugin::<$plugin_ty>()),+];
+                    let descriptors = [$($crate::wrapper::clap::PluginDescriptor::for_plugin::<$plugin_ty>()),+];
 
                     if cfg!(debug_assertions) {
                         let unique_plugin_ids: std::collections::HashSet<_>
                             = descriptors.iter().map(|d| d.clap_id()).collect();
-                        ::nih_plug::debug::nih_debug_assert_eq!(
+                        $crate::debug::nih_debug_assert_eq!(
                             unique_plugin_ids.len(),
                             descriptors.len(),
                             "Duplicate plugin IDs found in `nih_export_clap!()` call"
@@ -65,15 +65,15 @@ macro_rules! nih_export_clap {
             }
 
             unsafe extern "C" fn get_plugin_count(
-                _factory: *const ::nih_plug::wrapper::clap::clap_plugin_factory,
+                _factory: *const $crate::wrapper::clap::clap_plugin_factory,
             ) -> u32 {
                 plugin_descriptors().len() as u32
             }
 
             unsafe extern "C" fn get_plugin_descriptor (
-                _factory: *const ::nih_plug::wrapper::clap::clap_plugin_factory,
+                _factory: *const $crate::wrapper::clap::clap_plugin_factory,
                 index: u32,
-            ) -> *const ::nih_plug::wrapper::clap::clap_plugin_descriptor  {
+            ) -> *const $crate::wrapper::clap::clap_plugin_descriptor  {
                 match plugin_descriptors().get(index as usize) {
                     Some(descriptor) => descriptor.clap_plugin_descriptor(),
                     None => std::ptr::null()
@@ -81,10 +81,10 @@ macro_rules! nih_export_clap {
             }
 
             unsafe extern "C" fn create_plugin (
-                factory: *const ::nih_plug::wrapper::clap::clap_plugin_factory,
-                host: *const ::nih_plug::wrapper::clap::clap_host,
+                factory: *const $crate::wrapper::clap::clap_plugin_factory,
+                host: *const $crate::wrapper::clap::clap_host,
                 plugin_id: *const ::std::os::raw::c_char,
-            ) -> *const ::nih_plug::wrapper::clap::clap_plugin  {
+            ) -> *const $crate::wrapper::clap::clap_plugin  {
                 if plugin_id.is_null() {
                     return ::std::ptr::null();
                 }
@@ -102,7 +102,7 @@ macro_rules! nih_export_clap {
                         // Arc does not have a convenient leak function like Box, so this gets a bit awkward
                         // This pointer gets turned into an Arc and its reference count decremented in
                         // [Wrapper::destroy()]
-                        return (*::std::sync::Arc::into_raw(::nih_plug::wrapper::clap::Wrapper::<$plugin_ty>::new(host)))
+                        return (*::std::sync::Arc::into_raw($crate::wrapper::clap::Wrapper::<$plugin_ty>::new(host)))
                             .clap_plugin
                             .as_ptr();
                     }
@@ -114,7 +114,7 @@ macro_rules! nih_export_clap {
             }
 
             pub extern "C" fn init(_plugin_path: *const ::std::os::raw::c_char) -> bool {
-                ::nih_plug::wrapper::setup_logger();
+                $crate::wrapper::setup_logger();
                 true
             }
 
@@ -125,7 +125,7 @@ macro_rules! nih_export_clap {
             ) -> *const ::std::ffi::c_void {
                 if !factory_id.is_null()
                     && unsafe { ::std::ffi::CStr::from_ptr(factory_id) }
-                        == ::nih_plug::wrapper::clap::CLAP_PLUGIN_FACTORY_ID
+                        == $crate::wrapper::clap::CLAP_PLUGIN_FACTORY_ID
                 {
                     &CLAP_PLUGIN_FACTORY as *const _ as *const ::std::ffi::c_void
                 } else {
@@ -137,9 +137,9 @@ macro_rules! nih_export_clap {
         /// The CLAP plugin's entry point.
         #[no_mangle]
         #[used]
-        pub static clap_entry: ::nih_plug::wrapper::clap::clap_plugin_entry =
-            ::nih_plug::wrapper::clap::clap_plugin_entry {
-                clap_version: ::nih_plug::wrapper::clap::CLAP_VERSION,
+        pub static clap_entry: $crate::wrapper::clap::clap_plugin_entry =
+            $crate::wrapper::clap::clap_plugin_entry {
+                clap_version: $crate::wrapper::clap::CLAP_VERSION,
                 init: Some(self::clap::init),
                 deinit: Some(self::clap::deinit),
                 get_factory: Some(self::clap::get_factory),
