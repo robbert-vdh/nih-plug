@@ -47,9 +47,7 @@ macro_rules! nih_export_clap {
             // Sneaky way to get the number of expanded elements
             const PLUGIN_COUNT: usize = [$(stringify!($plugin_ty)),+].len();
 
-            // We'll put these plugin descriptors in a tuple since we can't easily associate them
-            // with indices without involving even more macros. We can't initialize this tuple
-            // completely statically
+            // This is a type erased version of the information stored on the plugin types
             static PLUGIN_DESCRIPTORS: OnceLock<[PluginDescriptor; PLUGIN_COUNT]> = OnceLock::new();
 
             fn plugin_descriptors() -> &'static [PluginDescriptor; PLUGIN_COUNT] {

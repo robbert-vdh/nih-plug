@@ -12,6 +12,11 @@ state is to list breaking changes.
 
 ## [2023-09-03]
 
+### Added
+
+- `nih_export_vst3!()` now also supports more than one plugin type argument,
+  just like `nih_export_clap!()`.
+
 ### Fixed
 
 - The `nih_export_*!()` macros now use `$crate` to refer to NIH-plug itself,

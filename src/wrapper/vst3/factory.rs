@@ -1,166 +1,111 @@
-use std::ffi::c_void;
-use std::marker::PhantomData;
-use std::mem;
-use vst3_sys::base::{kInvalidArgument, kResultOk, tresult};
-use vst3_sys::base::{IPluginFactory, IPluginFactory2, IPluginFactory3, IUnknown};
-use vst3_sys::VST3;
+//! Utilities for building a VST3 factory.
+//!
+//! In order to support exporting multiple VST3 plugins from a single library a lot of functionality
+//! had to be moved to the `nih_export_vst3!()` macro. Because working in macro-land can be both
+//! frustrating and error prone, most code that does not specifically depend on all of the exposed
+//! plugin types was moved back to this module so it can be compiled and type checked as normal.
 
-// Alias needed for the VST3 attribute macro
-use vst3_sys as vst3_com;
+use vst3_sys::base::{
+    ClassCardinality, FactoryFlags, PClassInfo, PClassInfo2, PClassInfoW, PFactoryInfo,
+};
 
 use super::subcategories::Vst3SubCategory;
-use super::util::u16strlcpy;
-use super::wrapper::Wrapper;
 use crate::prelude::Vst3Plugin;
 use crate::wrapper::util::strlcpy;
+use crate::wrapper::vst3::util::u16strlcpy;
 
 /// The VST3 SDK version this is roughly based on. The bindings include some VST 3.7 things but not
 /// everything, so we'll play it safe.
-const VST3_SDK_VERSION: &str = "VST 3.6.14";
+pub const VST3_SDK_VERSION: &str = "VST 3.6.14";
 
-#[doc(hidden)]
-#[VST3(implements(IPluginFactory, IPluginFactory2, IPluginFactory3))]
-pub struct Factory<P: Vst3Plugin> {
-    /// The type will be used for constructing plugin instances later.
-    _phantom: PhantomData<P>,
+/// The information queried about a plugin through the `IPluginFactory*` methods. Stored in a
+/// separate struct so it can be type erased and stored in an array.
+#[derive(Debug)]
+pub struct PluginInfo {
+    pub cid: &'static [u8; 16],
+    pub name: &'static str,
+    pub subcategories: String,
+    pub vendor: &'static str,
+    pub version: &'static str,
+
+    // These are used for the factory's own info struct
+    pub url: &'static str,
+    pub email: &'static str,
 }
 
-impl<P: Vst3Plugin> Factory<P> {
-    pub fn new() -> Box<Self> {
-        Self::allocate(PhantomData)
-    }
-}
-
-impl<P: Vst3Plugin> IPluginFactory for Factory<P> {
-    unsafe fn get_factory_info(&self, info: *mut vst3_sys::base::PFactoryInfo) -> tresult {
-        *info = mem::zeroed();
-
-        let info = &mut *info;
-        strlcpy(&mut info.vendor, P::VENDOR);
-        strlcpy(&mut info.url, P::URL);
-        strlcpy(&mut info.email, P::EMAIL);
-        info.flags = vst3_sys::base::FactoryFlags::kUnicode as i32;
-
-        kResultOk
-    }
-
-    unsafe fn count_classes(&self) -> i32 {
-        // We don't do shell plugins, and good of an idea having separated components and edit
-        // controllers in theory is, few software can use it, and doing that would make our simple
-        // microframework a lot less simple
-        1
-    }
-
-    unsafe fn get_class_info(&self, index: i32, info: *mut vst3_sys::base::PClassInfo) -> tresult {
-        if index != 0 {
-            return kInvalidArgument;
+impl PluginInfo {
+    pub fn for_plugin<P: Vst3Plugin>() -> PluginInfo {
+        PluginInfo {
+            cid: &P::PLATFORM_VST3_CLASS_ID,
+            name: P::NAME,
+            subcategories: make_subcategories_string::<P>(),
+            vendor: P::VENDOR,
+            version: P::VERSION,
+            url: P::URL,
+            email: P::EMAIL,
         }
+    }
 
-        *info = mem::zeroed();
+    /// Fill a [`PFactoryInfo`] struct with the information from this library. Used in
+    /// `IPluginFactory`.
+    pub fn create_factory_info(&self) -> PFactoryInfo {
+        let mut info: PFactoryInfo = unsafe { std::mem::zeroed() };
+        strlcpy(&mut info.vendor, self.vendor);
+        strlcpy(&mut info.url, self.url);
+        strlcpy(&mut info.email, self.email);
+        info.flags = FactoryFlags::kUnicode as i32;
 
-        let info = &mut *info;
-        info.cid.data = P::PLATFORM_VST3_CLASS_ID;
-        info.cardinality = vst3_sys::base::ClassCardinality::kManyInstances as i32;
+        info
+    }
+
+    /// Fill a [`PClassInfo`] struct with the information from this library. Used in
+    /// `IPluginFactory`.
+    pub fn create_class_info(&self) -> PClassInfo {
+        let mut info: PClassInfo = unsafe { std::mem::zeroed() };
+        info.cid.data = *self.cid;
+        info.cardinality = ClassCardinality::kManyInstances as i32;
         strlcpy(&mut info.category, "Audio Module Class");
-        strlcpy(&mut info.name, P::NAME);
+        strlcpy(&mut info.name, self.name);
 
-        kResultOk
+        info
     }
 
-    unsafe fn create_instance(
-        &self,
-        cid: *const vst3_sys::IID,
-        iid: *const vst3_sys::IID,
-        obj: *mut *mut vst3_sys::c_void,
-    ) -> tresult {
-        check_null_ptr!(cid, obj);
-
-        if (*cid).data != P::PLATFORM_VST3_CLASS_ID {
-            return kInvalidArgument;
-        }
-
-        let wrapper = Wrapper::<P>::new();
-
-        // 99.999% of the times `iid` will be that of `IComponent`, but the caller is technically
-        // allowed to create an object for any support interface. We don't have a way to check
-        // whether our plugin supports the interface without creating it, but since the odds that a
-        // caller will create an object with an interface we don't support are basically zero this
-        // is not a problem.
-        let result = wrapper.query_interface(iid, obj);
-        if result == kResultOk {
-            // This is a bit awkward now but if the cast succeeds we need to get rid of the
-            // reference from the `wrapper` binding. The VST3 query interface always increments the
-            // reference count and returns an owned reference, so we need to explicitly release the
-            // reference from `wrapper` and leak the `Box` so the wrapper doesn't automatically get
-            // deallocated when this function returns (`Box` is an incorrect choice on vst3-sys'
-            // part, it should have used a `VstPtr` instead).
-            wrapper.release();
-            Box::leak(wrapper);
-        }
-
-        result
-    }
-}
-
-impl<P: Vst3Plugin> IPluginFactory2 for Factory<P> {
-    unsafe fn get_class_info2(
-        &self,
-        index: i32,
-        info: *mut vst3_sys::base::PClassInfo2,
-    ) -> tresult {
-        if index != 0 {
-            return kInvalidArgument;
-        }
-
-        *info = mem::zeroed();
-
-        let info = &mut *info;
-        info.cid.data = P::PLATFORM_VST3_CLASS_ID;
-        info.cardinality = vst3_sys::base::ClassCardinality::kManyInstances as i32;
+    /// Fill a [`PClassInfo2`] struct with the information from this library. Used in
+    /// `IPluginFactory2`.
+    pub fn create_class_info_2(&self) -> PClassInfo2 {
+        let mut info: PClassInfo2 = unsafe { std::mem::zeroed() };
+        info.cid.data = *self.cid;
+        info.cardinality = ClassCardinality::kManyInstances as i32;
         strlcpy(&mut info.category, "Audio Module Class");
-        strlcpy(&mut info.name, P::NAME);
+        strlcpy(&mut info.name, self.name);
         info.class_flags = 1 << 1; // kSimpleModeSupported
-        strlcpy(&mut info.subcategories, &make_subcategories_string::<P>());
-        strlcpy(&mut info.vendor, P::VENDOR);
-        strlcpy(&mut info.version, P::VERSION);
+        strlcpy(&mut info.subcategories, &self.subcategories);
+        strlcpy(&mut info.vendor, self.vendor);
+        strlcpy(&mut info.version, self.version);
         strlcpy(&mut info.sdk_version, VST3_SDK_VERSION);
 
-        kResultOk
+        info
     }
-}
 
-impl<P: Vst3Plugin> IPluginFactory3 for Factory<P> {
-    unsafe fn get_class_info_unicode(
-        &self,
-        index: i32,
-        info: *mut vst3_sys::base::PClassInfoW,
-    ) -> tresult {
-        if index != 0 {
-            return kInvalidArgument;
-        }
-
-        *info = mem::zeroed();
-
-        let info = &mut *info;
-        info.cid.data = P::PLATFORM_VST3_CLASS_ID;
-        info.cardinality = vst3_sys::base::ClassCardinality::kManyInstances as i32;
+    /// Fill a [`PClassInfoW`] struct with the information from this library. Used in
+    /// `IPluginFactory3`.
+    pub fn create_class_info_unicode(&self) -> PClassInfoW {
+        let mut info: PClassInfoW = unsafe { std::mem::zeroed() };
+        info.cid.data = *self.cid;
+        info.cardinality = ClassCardinality::kManyInstances as i32;
         strlcpy(&mut info.category, "Audio Module Class");
-        u16strlcpy(&mut info.name, P::NAME);
+        u16strlcpy(&mut info.name, self.name);
         info.class_flags = 1 << 1; // kSimpleModeSupported
-        strlcpy(&mut info.subcategories, &make_subcategories_string::<P>());
-        u16strlcpy(&mut info.vendor, P::VENDOR);
-        u16strlcpy(&mut info.version, P::VERSION);
+        strlcpy(&mut info.subcategories, &self.subcategories);
+        u16strlcpy(&mut info.vendor, self.vendor);
+        u16strlcpy(&mut info.version, self.version);
         u16strlcpy(&mut info.sdk_version, VST3_SDK_VERSION);
 
-        kResultOk
-    }
-
-    unsafe fn set_host_context(&self, _context: *mut c_void) -> tresult {
-        // We don't need to do anything with this
-        kResultOk
+        info
     }
 }
 
+/// Build a pipe separated subcategories string for a VST3 plugin.
 fn make_subcategories_string<P: Vst3Plugin>() -> String {
     // No idea if any hosts do something with OnlyRT, but it's part of VST3's example categories
     // list. Plugins should not be adding this feature manually
