@@ -173,7 +173,7 @@ impl<'a, P: Param> ParamSlider<'a, P> {
         ui.memory_mut(|mem| mem.data.insert_temp(*DRAG_AMOUNT_MEMORY_ID, amount));
     }
 
-    fn slider_ui(&self, ui: &mut Ui, response: &mut Response) {
+    fn slider_ui(&self, ui: &Ui, response: &mut Response) {
         // Handle user input
         // TODO: Optionally (since it can be annoying) add scrolling behind a builder option
         if response.drag_started() {

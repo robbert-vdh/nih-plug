@@ -425,7 +425,10 @@ impl<P: ClapPlugin> MainThreadExecutor<Task<P>> for Wrapper<P> {
 }
 
 impl<P: ClapPlugin> Wrapper<P> {
-    pub fn new(host_callback: *const clap_host) -> Arc<Self> {
+    /// # Safety
+    ///
+    /// `host_callback` needs to outlive the returned object.
+    pub unsafe fn new(host_callback: *const clap_host) -> Arc<Self> {
         let mut plugin = P::default();
         let task_executor = Mutex::new(plugin.task_executor());
 
@@ -878,6 +881,11 @@ impl<P: ClapPlugin> Wrapper<P> {
     }
 
     /// Handle all incoming events from an event queue. This will clear `self.input_events` first.
+    ///
+    /// # Safety
+    ///
+    /// `in_` must contain only pointers to valid data (Clippy insists on there being a safety
+    /// section here).
     pub unsafe fn handle_in_events(
         &self,
         in_: &clap_input_events,
@@ -909,6 +917,11 @@ impl<P: ClapPlugin> Wrapper<P> {
     /// `(sample_idx, event_idx)` tuple. This allows for splitting the audio buffer into segments
     /// with distinct sample values to enable sample accurate automation without modifications to the
     /// wrapped plugin.
+    ///
+    /// # Safety
+    ///
+    /// `in_` must contain only pointers to valid data (Clippy insists on there being a safety
+    /// section here).
     pub unsafe fn handle_in_events_until(
         &self,
         in_: &clap_input_events,
@@ -966,6 +979,10 @@ impl<P: ClapPlugin> Wrapper<P> {
     /// plugin is not actually processing audio.
     ///
     /// The `total_buffer_len` argument is used to clamp out of bounds events to the buffer's length.
+    ///
+    /// # Safety
+    ///
+    /// `out` must be a valid object (Clippy insists on there being a safety section here).
     pub unsafe fn handle_out_events(
         &self,
         out: &clap_output_events,
@@ -1374,6 +1391,11 @@ impl<P: ClapPlugin> Wrapper<P> {
     ///
     /// If the event was a transport event and the `transport_info` argument is not `None`, then the
     /// pointer will be changed to point to the transport information from this event.
+    ///
+    /// # Safety
+    ///
+    /// `in_` must contain only pointers to valid data (Clippy insists on there being a safety
+    /// section here).
     pub unsafe fn handle_in_event(
         &self,
         event: *const clap_event_header,
