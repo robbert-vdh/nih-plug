@@ -25,16 +25,24 @@ macro_rules! nih_export_clap {
         // macros. So instead we'll generate the implementation ad-hoc inside of this macro.
         #[doc(hidden)]
         mod clap {
+            use $crate::prelude::nih_debug_assert_eq;
+            use $crate::wrapper::setup_logger;
+            use $crate::wrapper::clap::{PluginDescriptor, Wrapper};
+            use $crate::wrapper::clap::{CLAP_PLUGIN_FACTORY_ID, clap_host, clap_plugin, clap_plugin_descriptor, clap_plugin_factory};
+            use ::std::collections::HashSet;
+            use ::std::ffi::{CStr, c_void};
+            use ::std::os::raw::c_char;
+            use ::std::sync::{Arc, OnceLock};
+
             // Because the `$plugin_ty`s are likely defined in the enclosing scope. This works even
             // if the types are not public because this is a child module.
             use super::*;
 
-            const CLAP_PLUGIN_FACTORY: $crate::wrapper::clap::clap_plugin_factory =
-                $crate::wrapper::clap::clap_plugin_factory {
-                    get_plugin_count: Some(get_plugin_count),
-                    get_plugin_descriptor: Some(get_plugin_descriptor),
-                    create_plugin: Some(create_plugin),
-                };
+            const CLAP_PLUGIN_FACTORY: clap_plugin_factory = clap_plugin_factory {
+                get_plugin_count: Some(get_plugin_count),
+                get_plugin_descriptor: Some(get_plugin_descriptor),
+                create_plugin: Some(create_plugin),
+            };
 
             // Sneaky way to get the number of expanded elements
             const PLUGIN_COUNT: usize = [$(stringify!($plugin_ty)),+].len();
@@ -42,18 +50,15 @@ macro_rules! nih_export_clap {
             // We'll put these plugin descriptors in a tuple since we can't easily associate them
             // with indices without involving even more macros. We can't initialize this tuple
             // completely statically
-            static PLUGIN_DESCRIPTORS: ::std::sync::OnceLock<
-                [$crate::wrapper::clap::PluginDescriptor; PLUGIN_COUNT]
-            > = ::std::sync::OnceLock::new();
+            static PLUGIN_DESCRIPTORS: OnceLock<[PluginDescriptor; PLUGIN_COUNT]> = OnceLock::new();
 
-            fn plugin_descriptors() -> &'static [$crate::wrapper::clap::PluginDescriptor; PLUGIN_COUNT] {
+            fn plugin_descriptors() -> &'static [PluginDescriptor; PLUGIN_COUNT] {
                 PLUGIN_DESCRIPTORS.get_or_init(|| {
-                    let descriptors = [$($crate::wrapper::clap::PluginDescriptor::for_plugin::<$plugin_ty>()),+];
+                    let descriptors = [$(PluginDescriptor::for_plugin::<$plugin_ty>()),+];
 
                     if cfg!(debug_assertions) {
-                        let unique_plugin_ids: std::collections::HashSet<_>
-                            = descriptors.iter().map(|d| d.clap_id()).collect();
-                        $crate::debug::nih_debug_assert_eq!(
+                        let unique_plugin_ids: HashSet<_> = descriptors.iter().map(|d| d.clap_id()).collect();
+                        nih_debug_assert_eq!(
                             unique_plugin_ids.len(),
                             descriptors.len(),
                             "Duplicate plugin IDs found in `nih_export_clap!()` call"
@@ -64,31 +69,29 @@ macro_rules! nih_export_clap {
                 })
             }
 
-            unsafe extern "C" fn get_plugin_count(
-                _factory: *const $crate::wrapper::clap::clap_plugin_factory,
-            ) -> u32 {
+            unsafe extern "C" fn get_plugin_count(_factory: *const clap_plugin_factory) -> u32 {
                 plugin_descriptors().len() as u32
             }
 
             unsafe extern "C" fn get_plugin_descriptor (
-                _factory: *const $crate::wrapper::clap::clap_plugin_factory,
+                _factory: *const clap_plugin_factory,
                 index: u32,
-            ) -> *const $crate::wrapper::clap::clap_plugin_descriptor  {
+            ) -> *const clap_plugin_descriptor  {
                 match plugin_descriptors().get(index as usize) {
                     Some(descriptor) => descriptor.clap_plugin_descriptor(),
-                    None => std::ptr::null()
+                    None => ::std::ptr::null()
                 }
             }
 
             unsafe extern "C" fn create_plugin (
-                factory: *const $crate::wrapper::clap::clap_plugin_factory,
-                host: *const $crate::wrapper::clap::clap_host,
-                plugin_id: *const ::std::os::raw::c_char,
-            ) -> *const $crate::wrapper::clap::clap_plugin  {
+                factory: *const clap_plugin_factory,
+                host: *const clap_host,
+                plugin_id: *const c_char,
+            ) -> *const clap_plugin  {
                 if plugin_id.is_null() {
                     return ::std::ptr::null();
                 }
-                let plugin_id_cstr = ::std::ffi::CStr::from_ptr(plugin_id);
+                let plugin_id_cstr = CStr::from_ptr(plugin_id);
 
                 // This isn't great, but we'll just assume that `$plugin_ids` and the descriptors
                 // are in the same order. We also can't directly enumerate over them with an index,
@@ -102,7 +105,7 @@ macro_rules! nih_export_clap {
                         // Arc does not have a convenient leak function like Box, so this gets a bit awkward
                         // This pointer gets turned into an Arc and its reference count decremented in
                         // [Wrapper::destroy()]
-                        return (*::std::sync::Arc::into_raw($crate::wrapper::clap::Wrapper::<$plugin_ty>::new(host)))
+                        return (*Arc::into_raw(Wrapper::<$plugin_ty>::new(host)))
                             .clap_plugin
                             .as_ptr();
                     }
@@ -110,26 +113,21 @@ macro_rules! nih_export_clap {
                     descriptor_idx += 1;
                 })+
 
-                std::ptr::null()
+                ::std::ptr::null()
             }
 
-            pub extern "C" fn init(_plugin_path: *const ::std::os::raw::c_char) -> bool {
-                $crate::wrapper::setup_logger();
+            pub extern "C" fn init(_plugin_path: *const c_char) -> bool {
+                setup_logger();
                 true
             }
 
             pub extern "C" fn deinit() {}
 
-            pub extern "C" fn get_factory(
-                factory_id: *const ::std::os::raw::c_char,
-            ) -> *const ::std::ffi::c_void {
-                if !factory_id.is_null()
-                    && unsafe { ::std::ffi::CStr::from_ptr(factory_id) }
-                        == $crate::wrapper::clap::CLAP_PLUGIN_FACTORY_ID
-                {
-                    &CLAP_PLUGIN_FACTORY as *const _ as *const ::std::ffi::c_void
+            pub extern "C" fn get_factory(factory_id: *const c_char) -> *const c_void {
+                if !factory_id.is_null() && unsafe { CStr::from_ptr(factory_id) } == CLAP_PLUGIN_FACTORY_ID {
+                    &CLAP_PLUGIN_FACTORY as *const _ as *const c_void
                 } else {
-                    std::ptr::null()
+                    ::std::ptr::null()
                 }
             }
         }
