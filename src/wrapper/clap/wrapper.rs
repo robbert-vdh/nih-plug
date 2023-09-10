@@ -101,6 +101,11 @@ use crate::wrapper::util::{
 /// more than this many parameters at a time will cause changes to get lost.
 const OUTPUT_EVENT_QUEUE_CAPACITY: usize = 2048;
 
+/// Used to convert from our `f32` velocity to CLAP's (slightly) differently-calibrated `f64` one.
+const VELOCITY_FACTOR_F32_TO_F64: f64 = 128.0 / 127.0;
+/// Used to convert from CLAP's `f64` velocity to our (slightly) differently-calibrated `f32` one.
+const VELOCITY_FACTOR_F64_TO_F32: f64 = 127.0 / 128.0;
+
 pub struct Wrapper<P: ClapPlugin> {
     /// A reference to this object, upgraded to an `Arc<Self>` for the GUI context.
     this: AtomicRefCell<Weak<Self>>,
@@ -1086,7 +1091,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                         port_index: 0,
                         channel: channel as i16,
                         key: note as i16,
-                        velocity: velocity as f64,
+                        velocity: f64::from(velocity) * VELOCITY_FACTOR_F32_TO_F64,
                     };
 
                     clap_call! { out=>try_push(out, &event.header) }
@@ -1110,7 +1115,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                         port_index: 0,
                         channel: channel as i16,
                         key: note as i16,
-                        velocity: velocity as f64,
+                        velocity: f64::from(velocity) * VELOCITY_FACTOR_F32_TO_F64,
                     };
 
                     clap_call! { out=>try_push(out, &event.header) }
@@ -1496,7 +1501,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                         },
                         channel: event.channel as u8,
                         note: event.key as u8,
-                        velocity: event.velocity as f32,
+                        velocity: (event.velocity * VELOCITY_FACTOR_F64_TO_F32) as f32,
                     });
                 }
             }
@@ -1512,7 +1517,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                         },
                         channel: event.channel as u8,
                         note: event.key as u8,
-                        velocity: event.velocity as f32,
+                        velocity: (event.velocity * VELOCITY_FACTOR_F64_TO_F32) as f32,
                     });
                 }
             }
