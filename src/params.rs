@@ -177,7 +177,7 @@ pub trait Param: Display + Debug + sealed::Sealed {
 
     /// Get the plain, unnormalized value for this parameter after polyphonic modulation has been
     /// applied. This is a convenience method for calling [`preview_plain()`][Self::preview_plain()]
-    /// with `unmodulated_normalized_value() + normalized_offset`.`
+    /// with `unmodulated_normalized_value() + normalized_offset`.
     #[inline]
     fn preview_modulated(&self, normalized_offset: f32) -> Self::Plain {
         self.preview_plain(self.unmodulated_normalized_value() + normalized_offset)

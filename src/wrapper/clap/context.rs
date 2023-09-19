@@ -37,7 +37,7 @@ pub(crate) struct PendingInitContextRequests {
 
 /// A [`ProcessContext`] implementation for the wrapper. This is a separate object so it can hold on
 /// to lock guards for event queues. Otherwise reading these events would require constant
-/// unnecessary atomic operations to lock the uncontested RwLocks.
+/// unnecessary atomic operations to lock the uncontested `RwLock`s.
 pub(crate) struct WrapperProcessContext<'a, P: ClapPlugin> {
     pub(super) wrapper: &'a Wrapper<P>,
     pub(super) input_events_guard: AtomicRefMut<'a, VecDeque<PluginNoteEvent<P>>>,

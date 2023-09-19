@@ -1,4 +1,4 @@
-//! Utilities for saving a [crate::plugin::Plugin]'s state. The actual state object is also exposed
+//! Utilities for saving a [`crate::plugin::Plugin`]'s state. The actual state object is also exposed
 //! to plugins through the [`GuiContext`][crate::prelude::GuiContext].
 
 use anyhow::{Context, Result};

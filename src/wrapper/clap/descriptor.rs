@@ -9,7 +9,7 @@ use crate::prelude::ClapPlugin;
 /// itself.
 ///
 /// This cannot be cloned as [`Self::clap_features_ptrs`] contains pointers to
-/// [Self::clap_features].
+/// [`Self::clap_features`].
 pub struct PluginDescriptor {
     // We need [CString]s for all of `ClapPlugin`'s `&str` fields
     clap_id: CString,

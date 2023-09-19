@@ -65,7 +65,7 @@ pub struct VstPtr<T: vst3_sys::ComInterface + ?Sized> {
     ptr: vst3_sys::VstPtr<T>,
 }
 
-/// The same as [`VstPtr`] with shared semnatics, but for objects we defined ourself since VstPtr
+/// The same as [`VstPtr`] with shared semnatics, but for objects we defined ourself since `VstPtr`
 /// only works for interfaces.
 #[repr(transparent)]
 pub struct ObjectPtr<T: IUnknown> {
