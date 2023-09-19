@@ -114,7 +114,7 @@ impl<P: Vst3Plugin> WrapperView<P> {
         )
     }
 
-    /// Ask the host to resize the view to the size specified by [Editor::size()]. Will return false
+    /// Ask the host to resize the view to the size specified by [`Editor::size()`]. Will return false
     /// if the host doesn't like you. This **needs** to be run from the GUI thread.
     ///
     /// # Safety
