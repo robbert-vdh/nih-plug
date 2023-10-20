@@ -87,7 +87,7 @@ fn top_bar(cx: &mut Context) {
     HStack::new(cx, |cx| {
         Label::new(cx, "Diopser")
             .font_family(vec![FamilyOwned::Name(String::from(
-                assets::NOTO_SANS_THIN,
+                assets::NOTO_SANS,
             ))])
             .font_weight(FontWeightKeyword::Thin)
             .font_size(37.0)

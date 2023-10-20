@@ -114,7 +114,7 @@ fn main_column(cx: &mut Context) {
             HStack::new(cx, |cx| {
                 Label::new(cx, "Spectral Compressor")
                     .font_family(vec![FamilyOwned::Name(String::from(
-                        assets::NOTO_SANS_THIN,
+                        assets::NOTO_SANS,
                     ))])
                     .font_weight(FontWeightKeyword::Thin)
                     .font_size(30.0)
@@ -245,7 +245,7 @@ fn make_column(cx: &mut Context, title: &str, contents: impl FnOnce(&mut Context
     VStack::new(cx, |cx| {
         Label::new(cx, title)
             .font_family(vec![FamilyOwned::Name(String::from(
-                assets::NOTO_SANS_THIN,
+                assets::NOTO_SANS,
             ))])
             .font_weight(FontWeightKeyword::Thin)
             .font_size(23.0)
