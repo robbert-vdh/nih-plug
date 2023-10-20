@@ -116,6 +116,7 @@ fn main_column(cx: &mut Context) {
                     .font_family(vec![FamilyOwned::Name(String::from(
                         assets::NOTO_SANS_THIN,
                     ))])
+                    .font_weight(FontWeightKeyword::Thin)
                     .font_size(30.0)
                     .on_mouse_down(|_, _| {
                         // FIXME: On Windows this blocks, and while this is blocking a timer may
@@ -246,6 +247,7 @@ fn make_column(cx: &mut Context, title: &str, contents: impl FnOnce(&mut Context
             .font_family(vec![FamilyOwned::Name(String::from(
                 assets::NOTO_SANS_THIN,
             ))])
+            .font_weight(FontWeightKeyword::Thin)
             .font_size(23.0)
             .left(Stretch(1.0))
             // This should align nicely with the right edge of the slider

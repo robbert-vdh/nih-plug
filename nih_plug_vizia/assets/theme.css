@@ -5,6 +5,10 @@
   border-color: blue;
 } */
 
+* {
+  font-weight: light;
+}
+
 :root {
   background-color: #fafafa;
   color: #0a0a0a;
