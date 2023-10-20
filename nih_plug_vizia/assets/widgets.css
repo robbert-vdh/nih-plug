@@ -18,6 +18,8 @@ generic-ui .row {
   col-between: 6px;
   layout-type: row;
   height: auto;
+  child-top: 1s;
+  child-bottom: 1s;
 }
 
 generic-ui .label {

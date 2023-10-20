@@ -159,7 +159,7 @@ fn main_column(cx: &mut Context) {
 
                 Label::new(
                     cx,
-                    "Parameter ranges and overal gain staging are still subject to change. If you \
+                    "Parameter ranges and overall gain staging are still subject to change. If you \
                      use this in a project, make sure to bounce things to audio just in case \
                      they'll sound different later.",
                 )
@@ -252,7 +252,7 @@ fn make_column(cx: &mut Context, title: &str, contents: impl FnOnce(&mut Context
             .left(Stretch(1.0))
             // This should align nicely with the right edge of the slider
             .right(Pixels(7.0))
-            .bottom(Pixels(-10.0));
+            .background_color(Color::royalblue());
 
         contents(cx);
     })
