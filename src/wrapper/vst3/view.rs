@@ -293,19 +293,19 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
             let handle = match type_.to_str() {
                 #[cfg(all(target_family = "unix", not(target_os = "macos")))]
                 Ok(type_) if type_ == VST3_PLATFORM_X11_WINDOW => {
-                    let mut handle = raw_window_handle::XcbHandle::empty();
+                    let mut handle = raw_window_handle::XcbWindowHandle::empty();
                     handle.window = parent as usize as u32;
                     RawWindowHandle::Xcb(handle)
                 }
                 #[cfg(target_os = "macos")]
                 Ok(type_) if type_ == VST3_PLATFORM_NSVIEW => {
-                    let mut handle = raw_window_handle::AppKitHandle::empty();
+                    let mut handle = raw_window_handle::AppKitWindowHandle::empty();
                     handle.ns_view = parent;
                     RawWindowHandle::AppKit(handle)
                 }
                 #[cfg(target_os = "windows")]
                 Ok(type_) if type_ == VST3_PLATFORM_HWND => {
-                    let mut handle = raw_window_handle::Win32Handle::empty();
+                    let mut handle = raw_window_handle::Win32WindowHandle::empty();
                     handle.hwnd = parent;
                     RawWindowHandle::Win32(handle)
                 }

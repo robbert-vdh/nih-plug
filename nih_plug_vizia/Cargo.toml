@@ -11,7 +11,7 @@ description = "An adapter to use VIZIA GUIs with NIH-plug"
 nih_plug = { path = ".." }
 nih_plug_assets = { git = "https://github.com/robbert-vdh/nih_plug_assets.git" }
 
-baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "c129b12ead4f5ac02126f559ceb8ce43cc982200" }
+baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "f0639b787bbda506434d3f6b5c91e94ca59904c6" }
 crossbeam = "0.8"
 # To make the state persistable
 serde = { version = "1.0", features = ["derive"] }
@@ -20,5 +20,5 @@ serde = { version = "1.0", features = ["derive"] }
 # are merged into upstream Vizia. This also excludes the `embedded_fonts`
 # feature.
 # vizia = { git = "https://github.com/vizia/vizia", rev = "100502c33621c07be59eb218bab92e5f45b4e0c9", default_features = false, features = ["baseview", "clipboard", "x11"] }
-vizia = { git = "https://github.com/vizia/vizia", branch = "nih-plug", default_features = false, features = ["baseview", "clipboard", "x11"] }
+vizia = { git = "https://github.com/vizia/vizia", default_features = false, features = ["baseview", "clipboard", "x11"] }
 # vizia = { path = "../../vizia", default_features = false, features = ["baseview", "clipboard", "x11"] }

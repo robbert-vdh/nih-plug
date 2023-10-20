@@ -2770,15 +2770,15 @@ impl<P: ClapPlugin> Wrapper<P> {
             if editor_handle.is_none() {
                 let api = CStr::from_ptr(window.api);
                 let handle = if api == CLAP_WINDOW_API_X11 {
-                    let mut handle = raw_window_handle::XcbHandle::empty();
+                    let mut handle = raw_window_handle::XcbWindowHandle::empty();
                     handle.window = window.specific.x11 as u32;
                     RawWindowHandle::Xcb(handle)
                 } else if api == CLAP_WINDOW_API_COCOA {
-                    let mut handle = raw_window_handle::AppKitHandle::empty();
+                    let mut handle = raw_window_handle::AppKitWindowHandle::empty();
                     handle.ns_view = window.specific.cocoa;
                     RawWindowHandle::AppKit(handle)
                 } else if api == CLAP_WINDOW_API_WIN32 {
-                    let mut handle = raw_window_handle::Win32Handle::empty();
+                    let mut handle = raw_window_handle::Win32WindowHandle::empty();
                     handle.hwnd = window.specific.win32;
                     RawWindowHandle::Win32(handle)
                 } else {
