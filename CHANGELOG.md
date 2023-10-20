@@ -10,6 +10,37 @@ Since there is no stable release yet, the changes are organized per day in
 reverse chronological order. The main purpose of this document in its current
 state is to list breaking changes.
 
+## [2023-05-21]
+
+### Fixed
+
+- Fixed null pointers assertions in the low level buffer management code not
+  working correctly.
+
+## [2023-09-03]
+
+### Added
+
+- `nih_export_vst3!()` now also supports more than one plugin type argument,
+  just like `nih_export_clap!()`.
+
+### Fixed
+
+- The `nih_export_*!()` macros now use `$crate` to refer to NIH-plug itself,
+  which makes it possible to use the NIH-plug crate under a different name.
+
+## [2023-08-05]
+
+### Breaking changes
+
+- The minimum supported Rust version has been bumped to 1.70 so we can start
+  using `OnceCell` and `OnceLock` to phase out uses of `lazy_static`.
+
+### Added
+
+- `nih_export_clap!()` can now take more than one plugin type argument to allow
+  exporting more than one plugin from a single plugin library.
+
 ## [2023-05-13]
 
 ### Fixed

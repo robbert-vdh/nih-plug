@@ -357,7 +357,7 @@ impl FloatParam {
         self
     }
 
-    /// Set the distance between steps of a [FloatParam]. Mostly useful for quantizing GUI input. If
+    /// Set the distance between steps of a [`FloatParam`]. Mostly useful for quantizing GUI input. If
     /// this is set and a [`value_to_string`][Self::with_value_to_string()] function is not set,
     /// then this is also used when formatting the parameter. This must be a positive, nonzero
     /// number.

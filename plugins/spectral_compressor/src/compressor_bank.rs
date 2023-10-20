@@ -675,7 +675,7 @@ impl CompressorBank {
     /// Set the sidechain frequency spectrum magnitudes just before a [`process()`][Self::process()]
     /// call. These will be multiplied with the existing compressor thresholds and knee values to
     /// get the effective values for use with sidechaining.
-    pub fn process_sidechain(&mut self, sc_buffer: &mut [Complex32], channel_idx: usize) {
+    pub fn process_sidechain(&mut self, sc_buffer: &[Complex32], channel_idx: usize) {
         nih_debug_assert_eq!(sc_buffer.len(), self.ln_freqs.len());
 
         self.update_sidechain_spectra(sc_buffer, channel_idx);
@@ -684,7 +684,7 @@ impl CompressorBank {
     /// Update the envelope followers based on the bin magnitudes.
     fn update_envelopes(
         &mut self,
-        buffer: &mut [Complex32],
+        buffer: &[Complex32],
         channel_idx: usize,
         params: &SpectralCompressorParams,
         overlap_times: usize,
@@ -815,7 +815,7 @@ impl CompressorBank {
     }
 
     /// Update the spectral data using the sidechain input
-    fn update_sidechain_spectra(&mut self, sc_buffer: &mut [Complex32], channel_idx: usize) {
+    fn update_sidechain_spectra(&mut self, sc_buffer: &[Complex32], channel_idx: usize) {
         nih_debug_assert!(channel_idx < self.sidechain_spectrum_magnitudes.len());
 
         for (bin, magnitude) in sc_buffer

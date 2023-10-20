@@ -11,7 +11,7 @@ pub use midi_consts::channel_event::control_change;
 
 /// A plugin-specific note event type.
 ///
-/// The reason why this is defined like this instead of parameterizing `NoteEvent` with `P`` is
+/// The reason why this is defined like this instead of parameterizing `NoteEvent` with `P` is
 /// because deriving trait bounds requires all of the plugin's generic parameters to implement those
 /// traits. And we can't require `P` to implement things like `Clone`.
 ///

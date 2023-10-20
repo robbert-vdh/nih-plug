@@ -1,7 +1,6 @@
 use clap_sys::plugin::clap_plugin_descriptor;
 use clap_sys::version::CLAP_VERSION;
 use std::ffi::{CStr, CString};
-use std::marker::PhantomData;
 use std::os::raw::c_char;
 
 use crate::prelude::ClapPlugin;
@@ -10,8 +9,8 @@ use crate::prelude::ClapPlugin;
 /// itself.
 ///
 /// This cannot be cloned as [`Self::clap_features_ptrs`] contains pointers to
-/// [Self::clap_features].
-pub struct PluginDescriptor<P: ClapPlugin> {
+/// [`Self::clap_features`].
+pub struct PluginDescriptor {
     // We need [CString]s for all of `ClapPlugin`'s `&str` fields
     clap_id: CString,
     name: CString,
@@ -29,13 +28,14 @@ pub struct PluginDescriptor<P: ClapPlugin> {
     /// descriptor upfront. We also need to initialize the `CString` fields above first before we
     /// can initialize this plugin descriptor.
     plugin_descriptor: Option<clap_plugin_descriptor>,
-
-    /// The plugin's type.
-    _phantom: PhantomData<P>,
 }
 
-impl<P: ClapPlugin> Default for PluginDescriptor<P> {
-    fn default() -> Self {
+unsafe impl Send for PluginDescriptor {}
+unsafe impl Sync for PluginDescriptor {}
+
+impl PluginDescriptor {
+    /// Construct the plugin descriptor for a specific CLAP plugin.
+    pub fn for_plugin<P: ClapPlugin>() -> Self {
         let mut descriptor = Self {
             clap_id: CString::new(P::CLAP_ID).expect("`CLAP_ID` contained null bytes"),
             name: CString::new(P::NAME).expect("`NAME` contained null bytes"),
@@ -59,8 +59,6 @@ impl<P: ClapPlugin> Default for PluginDescriptor<P> {
             // descriptor
             clap_features_ptrs: Vec::new(),
             plugin_descriptor: None,
-
-            _phantom: PhantomData,
         };
 
         // The keyword list is an environ-like list of char pointers terminated by a null pointer.
@@ -101,12 +99,7 @@ impl<P: ClapPlugin> Default for PluginDescriptor<P> {
 
         descriptor
     }
-}
 
-unsafe impl<P: ClapPlugin> Send for PluginDescriptor<P> {}
-unsafe impl<P: ClapPlugin> Sync for PluginDescriptor<P> {}
-
-impl<P: ClapPlugin> PluginDescriptor<P> {
     pub fn clap_plugin_descriptor(&self) -> &clap_plugin_descriptor {
         self.plugin_descriptor.as_ref().unwrap()
     }

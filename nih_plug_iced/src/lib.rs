@@ -95,7 +95,9 @@ use crossbeam::channel;
 use nih_plug::params::persist::PersistentField;
 use nih_plug::prelude::{Editor, GuiContext};
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
+// This doesn't need to be re-export but otherwise the compiler complains about
+// `hidden_glob_reexports`
+pub use std::fmt::Debug;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 

@@ -47,7 +47,7 @@ use vst3_sys as vst3_com;
     IProcessContextRequirements,
     IUnitInfo
 ))]
-pub(crate) struct Wrapper<P: Vst3Plugin> {
+pub struct Wrapper<P: Vst3Plugin> {
     inner: Arc<WrapperInner<P>>,
 }
 
