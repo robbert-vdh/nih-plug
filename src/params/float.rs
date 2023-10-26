@@ -300,6 +300,12 @@ impl FloatParam {
         self.modulated_plain_value()
     }
 
+    /// The range of valid plain values for this parameter.
+    #[inline]
+    pub fn range(&self) -> FloatRange {
+        self.range
+    }
+
     /// Enable polyphonic modulation for this parameter. The ID is used to uniquely identify this
     /// parameter in [`NoteEvent::PolyModulation`][crate::prelude::NoteEvent::PolyModulation]
     /// events, and must thus be unique between _all_ polyphonically modulatable parameters. See the
