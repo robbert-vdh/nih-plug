@@ -64,7 +64,6 @@ use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::{self, SendTimeoutError};
 use crossbeam::queue::ArrayQueue;
 use parking_lot::Mutex;
-use raw_window_handle::RawWindowHandle;
 use std::any::Any;
 use std::borrow::Borrow;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -2769,28 +2768,27 @@ impl<P: ClapPlugin> Wrapper<P> {
             let mut editor_handle = wrapper.editor_handle.lock();
             if editor_handle.is_none() {
                 let api = CStr::from_ptr(window.api);
-                let handle = if api == CLAP_WINDOW_API_X11 {
-                    let mut handle = raw_window_handle::XcbHandle::empty();
-                    handle.window = window.specific.x11 as u32;
-                    RawWindowHandle::Xcb(handle)
+                let parent_handle = if api == CLAP_WINDOW_API_X11 {
+                    ParentWindowHandle::X11Window(window.specific.x11 as u32)
                 } else if api == CLAP_WINDOW_API_COCOA {
-                    let mut handle = raw_window_handle::AppKitHandle::empty();
-                    handle.ns_view = window.specific.cocoa;
-                    RawWindowHandle::AppKit(handle)
+                    ParentWindowHandle::AppKitNsView(window.specific.cocoa)
                 } else if api == CLAP_WINDOW_API_WIN32 {
-                    let mut handle = raw_window_handle::Win32Handle::empty();
-                    handle.hwnd = window.specific.win32;
-                    RawWindowHandle::Win32(handle)
+                    ParentWindowHandle::AppKitNsView(window.specific.win32)
                 } else {
                     nih_debug_assert_failure!("Host passed an invalid API");
                     return false;
                 };
 
                 // This extension is only exposed when we have an editor
-                *editor_handle = Some(wrapper.editor.borrow().as_ref().unwrap().lock().spawn(
-                    ParentWindowHandle { handle },
-                    wrapper.clone().make_gui_context(),
-                ));
+                *editor_handle = Some(
+                    wrapper
+                        .editor
+                        .borrow()
+                        .as_ref()
+                        .unwrap()
+                        .lock()
+                        .spawn(parent_handle, wrapper.clone().make_gui_context()),
+                );
 
                 true
             } else {

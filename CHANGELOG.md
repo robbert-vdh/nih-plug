@@ -19,6 +19,16 @@ state is to list breaking changes.
   may require small changes before they behave the same again. A summary of the
   most important changes can be found in Vizia PR
   [#291](https://github.com/vizia/vizia/pull/291).
+- The `raw_window_handle` version used by NIH-plug has been updated to version
+  0.5.x.
+
+### Changed
+
+- `ParentWindowHandle` has changed to be a sum type of different parent window
+  handle types, similar to `RawWindowHandle`. This makes it easier to use GUI
+  libraries that link against a different version of `raw_window_handle` than
+  the one used by NIH-plug itself by simply wrapping around
+  `ParentWindowHandle`.
 
 ## [2023-12-30]
 

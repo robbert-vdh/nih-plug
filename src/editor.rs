@@ -2,6 +2,7 @@
 
 use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
 use std::any::Any;
+use std::ffi::c_void;
 use std::sync::Arc;
 
 use crate::prelude::GuiContext;
@@ -75,13 +76,38 @@ pub trait Editor: Send {
     // TODO: Host->Plugin resizing
 }
 
-/// A raw window handle for platform and GUI framework agnostic editors.
-pub struct ParentWindowHandle {
-    pub handle: RawWindowHandle,
+/// A raw window handle for platform and GUI framework agnostic editors. This implements
+/// [`HasRawWindowHandle`] so it can be used directly with GUI libraries that use the same
+/// [`raw_window_handle`] version. If the library links against a different version of
+/// `raw_window_handle`, then you'll need to wrap around this type and implement the trait yourself.
+#[derive(Debug, Clone, Copy)]
+pub enum ParentWindowHandle {
+    /// The ID of the host's parent window. Used with X11.
+    X11Window(u32),
+    /// A handle to the host's parent window. Used only on macOS.
+    AppKitNsView(*mut c_void),
+    /// A handle to the host's parent window. Used only on Windows.
+    Win32Hwnd(*mut c_void),
 }
 
 unsafe impl HasRawWindowHandle for ParentWindowHandle {
     fn raw_window_handle(&self) -> RawWindowHandle {
-        self.handle
+        match *self {
+            ParentWindowHandle::X11Window(window) => {
+                let mut handle = raw_window_handle::XcbWindowHandle::empty();
+                handle.window = window;
+                RawWindowHandle::Xcb(handle)
+            }
+            ParentWindowHandle::AppKitNsView(ns_view) => {
+                let mut handle = raw_window_handle::AppKitWindowHandle::empty();
+                handle.ns_view = ns_view;
+                RawWindowHandle::AppKit(handle)
+            }
+            ParentWindowHandle::Win32Hwnd(hwnd) => {
+                let mut handle = raw_window_handle::Win32WindowHandle::empty();
+                handle.hwnd = hwnd;
+                RawWindowHandle::Win32(handle)
+            }
+        }
     }
 }

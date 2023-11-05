@@ -345,16 +345,27 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
                         gl_config: None,
                     },
                     move |window| {
+                        let parent_handle = match window.raw_window_handle() {
+                            raw_window_handle::RawWindowHandle::Xlib(handle) => {
+                                ParentWindowHandle::X11Window(handle.window as u32)
+                            }
+                            raw_window_handle::RawWindowHandle::Xcb(handle) => {
+                                ParentWindowHandle::X11Window(handle.window)
+                            }
+                            raw_window_handle::RawWindowHandle::AppKit(handle) => {
+                                ParentWindowHandle::AppKitNsView(handle.ns_view)
+                            }
+                            raw_window_handle::RawWindowHandle::Win32(handle) => {
+                                ParentWindowHandle::Win32Hwnd(handle.hwnd)
+                            }
+                            handle => unimplemented!("Unsupported window handle: {handle:?}"),
+                        };
+
                         // TODO: This spawn function should be able to fail and return an error, but
                         //       baseview does not support this yet. Once this is added, we should
                         //       immediately close the parent window when this happens so the loop
                         //       can exit.
-                        let editor_handle = editor.lock().spawn(
-                            ParentWindowHandle {
-                                handle: window.raw_window_handle(),
-                            },
-                            context,
-                        );
+                        let editor_handle = editor.lock().spawn(parent_handle, context);
 
                         WrapperWindowHandler {
                             _editor_handle: editor_handle,

@@ -1,6 +1,5 @@
 use atomic_float::AtomicF32;
 use parking_lot::{Mutex, RwLock};
-use raw_window_handle::RawWindowHandle;
 use std::any::Any;
 use std::ffi::{c_void, CStr};
 use std::mem;
@@ -290,35 +289,25 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
         let mut editor_handle = self.editor_handle.write();
         if editor_handle.is_none() {
             let type_ = CStr::from_ptr(type_);
-            let handle = match type_.to_str() {
-                #[cfg(all(target_family = "unix", not(target_os = "macos")))]
+            let parent_handle = match type_.to_str() {
                 Ok(type_) if type_ == VST3_PLATFORM_X11_WINDOW => {
-                    let mut handle = raw_window_handle::XcbHandle::empty();
-                    handle.window = parent as usize as u32;
-                    RawWindowHandle::Xcb(handle)
+                    ParentWindowHandle::X11Window(parent as usize as u32)
                 }
-                #[cfg(target_os = "macos")]
                 Ok(type_) if type_ == VST3_PLATFORM_NSVIEW => {
-                    let mut handle = raw_window_handle::AppKitHandle::empty();
-                    handle.ns_view = parent;
-                    RawWindowHandle::AppKit(handle)
+                    ParentWindowHandle::AppKitNsView(parent)
                 }
-                #[cfg(target_os = "windows")]
-                Ok(type_) if type_ == VST3_PLATFORM_HWND => {
-                    let mut handle = raw_window_handle::Win32Handle::empty();
-                    handle.hwnd = parent;
-                    RawWindowHandle::Win32(handle)
-                }
+                Ok(type_) if type_ == VST3_PLATFORM_HWND => ParentWindowHandle::Win32Hwnd(parent),
                 _ => {
                     nih_debug_assert_failure!("Unknown window handle type: {:?}", type_);
                     return kInvalidArgument;
                 }
             };
 
-            *editor_handle = Some(self.editor.lock().spawn(
-                ParentWindowHandle { handle },
-                self.inner.clone().make_gui_context(),
-            ));
+            *editor_handle = Some(
+                self.editor
+                    .lock()
+                    .spawn(parent_handle, self.inner.clone().make_gui_context()),
+            );
             *self.inner.plug_view.write() = Some(ObjectPtr::from(self));
 
             kResultOk
