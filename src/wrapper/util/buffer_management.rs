@@ -191,7 +191,6 @@ impl BufferManager {
                         .enumerate()
                         .take(output_channel_pointers.num_channels)
                     {
-                        assert!(!output_channel_pointers.ptrs.as_ptr().is_null());
                         let output_channel_pointer =
                             output_channel_pointers.ptrs.as_ptr().add(channel_idx);
 
@@ -229,7 +228,6 @@ impl BufferManager {
                         .enumerate()
                         .take(input_channel_pointers.num_channels)
                     {
-                        assert!(!input_channel_pointers.ptrs.as_ptr().is_null());
                         let input_channel_pointer =
                             input_channel_pointers.ptrs.as_ptr().add(channel_idx);
 
@@ -273,7 +271,6 @@ impl BufferManager {
                         .enumerate()
                         .take(input_channel_pointers.num_channels)
                     {
-                        assert!(!input_channel_pointers.ptrs.as_ptr().is_null());
                         let input_channel_pointer =
                             input_channel_pointers.ptrs.as_ptr().add(channel_idx);
 
@@ -334,7 +331,6 @@ impl BufferManager {
                             .enumerate()
                             .take(output_channel_pointers.num_channels)
                         {
-                            assert!(!output_channel_pointers.ptrs.as_ptr().is_null());
                             let output_channel_pointer =
                                 output_channel_pointers.ptrs.as_ptr().add(channel_idx);
 
