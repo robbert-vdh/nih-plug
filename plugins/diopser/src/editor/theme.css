@@ -16,15 +16,15 @@
 /* The safe mode button reuses the param-button element's style with a different class */
 param-button.safe-mode {
   background-color: #fff28000;
-  transition: background-color 0.1 0;
+  transition: background-color 100ms;
 }
 param-button.safe-mode:hover {
   background-color: #fff28020;
-  transition: background-color 0.1 0;
+  transition: background-color 100ms;
 }
 param-button.safe-mode:checked {
   background-color: #fff280;
-  transition: background-color 0.1 0;
+  transition: background-color 100ms;
 }
 
 #automation-precision {
@@ -42,7 +42,7 @@ xy-pad {
 
 xy-pad .xy-pad__tooltip {
   opacity: 0;
-  transition: opacity 0.1 0;
+  transition: opacity 100ms;
 
   background-color: #e5e5e5;
   border-color: #0a0a0a;
@@ -57,7 +57,7 @@ xy-pad .xy-pad__tooltip {
 
 xy-pad:hover .xy-pad__tooltip {
   opacity: 1;
-  transition: opacity 0.1 0;
+  transition: opacity 100ms;
 }
 
 /* This is a textbox, we want it to somewhat resemble the tooltip */

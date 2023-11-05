@@ -11,14 +11,14 @@
   font-weight: light;
 }
 
-scrollview > vstack {
+scrollview scroll_content {
   /* Normally the scroll bar overlaps with the content, so we'll add a little offset to prevent that */
   child-right: 15px;
 }
 scrollview scrollbar {
   background-color: #dadada;
-  border-radius: 0;
-  child-space: 0;
+  border-radius: 0px;
+  child-space: 0px;
 }
 scrollview scrollbar.horizontal {
   right: 10px;
@@ -29,12 +29,12 @@ scrollview scrollbar.vertical {
 }
 scrollview scrollbar .thumb {
   background-color: #5d5d5d;
-  border-radius: 0;
+  border-radius: 0px;
   min-width: 10px;
   min-height: 10px;
-  transition: background-color 0.1 0;
+  transition: background-color 100ms;
 }
 scrollview scrollbar .thumb:hover {
   background-color: #808080;
-  transition: background-color 0.1 0;
+  transition: background-color 100ms;
 }
