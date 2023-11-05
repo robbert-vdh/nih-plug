@@ -19,6 +19,10 @@ opengl = []
 [dependencies]
 nih_plug = { path = ".." }
 
+# The currently targeted version of baseview uses a different version of
+# `raw_window_handle` than NIH-plug, so we need to manually convert between them
+raw-window-handle = "0.4"
+
 baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "1d9806d5bd92275d0d8142d9c9c90198757b9b25" }
 crossbeam = "0.8"
 # The `egui-default-features` feature enables the default features. This makes

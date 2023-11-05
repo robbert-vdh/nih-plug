@@ -2919,6 +2919,7 @@ dependencies = [
  "lazy_static",
  "nih_plug",
  "parking_lot 0.12.1",
+ "raw-window-handle 0.4.3",
  "serde",
 ]
 

@@ -7,6 +7,7 @@ use egui::Context;
 use egui_baseview::EguiWindow;
 use nih_plug::prelude::{Editor, GuiContext, ParamSetter, ParentWindowHandle};
 use parking_lot::RwLock;
+use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
@@ -28,6 +29,32 @@ pub(crate) struct EguiEditor<T> {
     pub(crate) scaling_factor: AtomicCell<Option<f32>>,
 }
 
+/// This version of `baseview` uses a different version of `raw_window_handle than NIH-plug, so we
+/// need to adapt it ourselves.
+struct ParentWindowHandleAdapter(nih_plug::editor::ParentWindowHandle);
+
+unsafe impl HasRawWindowHandle for ParentWindowHandleAdapter {
+    fn raw_window_handle(&self) -> RawWindowHandle {
+        match self.0 {
+            ParentWindowHandle::X11Window(window) => {
+                let mut handle = raw_window_handle::XcbHandle::empty();
+                handle.window = window;
+                RawWindowHandle::Xcb(handle)
+            }
+            ParentWindowHandle::AppKitNsView(ns_view) => {
+                let mut handle = raw_window_handle::AppKitHandle::empty();
+                handle.ns_view = ns_view;
+                RawWindowHandle::AppKit(handle)
+            }
+            ParentWindowHandle::Win32Hwnd(hwnd) => {
+                let mut handle = raw_window_handle::Win32Handle::empty();
+                handle.hwnd = hwnd;
+                RawWindowHandle::Win32(handle)
+            }
+        }
+    }
+}
+
 impl<T> Editor for EguiEditor<T>
 where
     T: 'static + Send + Sync,
@@ -44,7 +71,7 @@ where
         let (unscaled_width, unscaled_height) = self.egui_state.size();
         let scaling_factor = self.scaling_factor.load();
         let window = EguiWindow::open_parented(
-            &parent,
+            &ParentWindowHandleAdapter(parent),
             WindowOpenOptions {
                 title: String::from("egui window"),
                 // Baseview should be doing the DPI scaling for us
