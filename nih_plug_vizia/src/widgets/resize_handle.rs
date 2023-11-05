@@ -202,7 +202,31 @@ fn intersects_triangle(bounds: BoundingBox, (x, y): (f32, f32)) -> bool {
     // let (v2x, v2y) = (p3x - p2x, p3y - p2y);
     // let (v3x, v3y) = (p1x - p3x, p1y - p3y);
 
-    ((x - p1x) * v1y) - ((y - p1y) * v1x) <= 0.0
-    // && ((x - p2x) * v2y) - ((y - p2y) * v2x) <= 0.0
-    // && ((x - p3x) * v3y) - ((y - p3y) * v3x) <= 0.0
+    ((x - p1x) * v1y) - ((y - p1y) * v1x) >= 0.0
+    // && ((x - p2x) * v2y) - ((y - p2y) * v2x) >= 0.0
+    // && ((x - p3x) * v3y) - ((y - p3y) * v3x) >= 0.0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn triangle_intersection() {
+        let bbox = BoundingBox {
+            x: 10.0,
+            y: 10.0,
+            w: 10.0,
+            h: 10.0,
+        };
+
+        assert!(!intersects_triangle(bbox, (10.0, 10.0)));
+        assert!(intersects_triangle(bbox, (20.0, 10.0)));
+        assert!(intersects_triangle(bbox, (10.0, 20.0)));
+        assert!(intersects_triangle(bbox, (20.0, 20.0)));
+
+        assert!(intersects_triangle(bbox, (15.0, 15.0)));
+        assert!(!intersects_triangle(bbox, (14.9, 15.0)));
+        assert!(!intersects_triangle(bbox, (15.0, 14.9)));
+    }
 }
