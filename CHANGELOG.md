@@ -10,6 +10,16 @@ Since there is no stable release yet, the changes are organized per day in
 reverse chronological order. The main purpose of this document in its current
 state is to list breaking changes.
 
+## [Unreleased]
+
+### Breaking changes
+
+- `nih_plug_vizia` has been updated to the latest Vizia version. Vizia's styling
+  system has changed a lot since the last update, so plugin GUIs and stylesheets
+  may require small changes before they behave the same again. A summary of the
+  most important changes can be found in Vizia PR
+  [#291](https://github.com/vizia/vizia/pull/291).
+
 ## [2023-12-30]
 
 ### Added
