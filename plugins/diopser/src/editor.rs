@@ -15,7 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use atomic_float::AtomicF32;
-use nih_plug::nih_debug_assert_failure;
+use nih_plug::debug::*;
 use nih_plug::prelude::{Editor, Plugin};
 use nih_plug_vizia::vizia::prelude::*;
 use nih_plug_vizia::widgets::*;
@@ -68,7 +68,9 @@ pub(crate) fn create(editor_data: Data, editor_state: Arc<ViziaState>) -> Option
         assets::register_noto_sans_light(cx);
         assets::register_noto_sans_thin(cx);
 
-        cx.add_theme(include_str!("editor/theme.css"));
+        if let Err(err) = cx.add_stylesheet(include_style!("src/editor/theme.css")) {
+            nih_error!("Failed to load stylesheet: {err:?}")
+        }
 
         editor_data.clone().build(cx);
 
@@ -86,9 +88,8 @@ pub(crate) fn create(editor_data: Data, editor_state: Arc<ViziaState>) -> Option
 fn top_bar(cx: &mut Context) {
     HStack::new(cx, |cx| {
         Label::new(cx, "Diopser")
-            .font_family(vec![FamilyOwned::Name(String::from(
-                assets::NOTO_SANS_THIN,
-            ))])
+            .font_family(vec![FamilyOwned::Name(String::from(assets::NOTO_SANS))])
+            .font_weight(FontWeightKeyword::Thin)
             .font_size(37.0)
             .top(Pixels(2.0))
             .left(Pixels(8.0))

@@ -51,9 +51,8 @@ pub(crate) fn create(
 
         VStack::new(cx, |cx| {
             Label::new(cx, "Crisp")
-                .font_family(vec![FamilyOwned::Name(String::from(
-                    assets::NOTO_SANS_THIN,
-                ))])
+                .font_family(vec![FamilyOwned::Name(String::from(assets::NOTO_SANS))])
+                .font_weight(FontWeightKeyword::Thin)
                 .font_size(30.0)
                 .height(Pixels(50.0))
                 .child_top(Stretch(1.0))

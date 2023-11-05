@@ -2,6 +2,7 @@
 
 use baseview::{WindowHandle, WindowScalePolicy};
 use crossbeam::atomic::AtomicCell;
+use nih_plug::debug::*;
 use nih_plug::prelude::{Editor, GuiContext, ParentWindowHandle};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -48,10 +49,10 @@ impl Editor for ViziaEditor {
         let mut application = Application::new(move |cx| {
             // Set some default styles to match the iced integration
             if theming >= ViziaTheming::Custom {
-                // NOTE: vizia's font rendering looks way too dark and thick. Going one font weight
-                //       lower seems to compensate for this.
-                cx.set_default_font(&[assets::NOTO_SANS_LIGHT]);
-                cx.add_theme(include_str!("../assets/theme.css"));
+                cx.set_default_font(&[assets::NOTO_SANS]);
+                if let Err(err) = cx.add_stylesheet(include_style!("assets/theme.css")) {
+                    nih_error!("Failed to load stylesheet: {err:?}")
+                }
 
                 // There doesn't seem to be any way to bundle styles with a widget, so we'll always
                 // include the style sheet for our custom widgets at context creation

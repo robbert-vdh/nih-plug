@@ -18,7 +18,10 @@ state is to list breaking changes.
   system has changed a lot since the last update, so plugin GUIs and stylesheets
   may require small changes before they behave the same again. A summary of the
   most important changes can be found in Vizia PR
-  [#291](https://github.com/vizia/vizia/pull/291).
+  [#291](https://github.com/vizia/vizia/pull/291). Notably, font handling and
+  choosing between different variations of the same font (e.g. `Noto Sans`
+  versus `Noto Sans Light` versus `Noto Sans Light Italic`) works very
+  differently now.
 - The `raw_window_handle` version used by NIH-plug has been updated to version
   0.5.x.
 

@@ -4,6 +4,11 @@
   background-color: #fafafa;
   color: #0a0a0a;
   font-size: 15;
+  /*
+   * NOTE: vizia's font rendering looks way too dark and thick. Going one font
+   *       weight lower seems to compensate for this.
+   */
+  font-weight: light;
 }
 
 scrollview > vstack {

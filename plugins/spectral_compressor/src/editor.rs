@@ -83,7 +83,9 @@ pub(crate) fn create(editor_state: Arc<ViziaState>, editor_data: Data) -> Option
         assets::register_noto_sans_light(cx);
         assets::register_noto_sans_thin(cx);
 
-        cx.add_theme(include_str!("editor/theme.css"));
+        if let Err(err) = cx.add_stylesheet(include_style!("src/editor/theme.css")) {
+            nih_error!("Failed to load stylesheet: {err:?}")
+        }
 
         editor_data.clone().build(cx);
 
@@ -113,9 +115,8 @@ fn main_column(cx: &mut Context) {
 
             HStack::new(cx, |cx| {
                 Label::new(cx, "Spectral Compressor")
-                    .font_family(vec![FamilyOwned::Name(String::from(
-                        assets::NOTO_SANS_THIN,
-                    ))])
+                    .font_family(vec![FamilyOwned::Name(String::from(assets::NOTO_SANS))])
+                    .font_weight(FontWeightKeyword::Thin)
                     .font_size(30.0)
                     .on_mouse_down(|_, _| {
                         // FIXME: On Windows this blocks, and while this is blocking a timer may
@@ -244,9 +245,8 @@ fn analyzer_column(cx: &mut Context) {
 fn make_column(cx: &mut Context, title: &str, contents: impl FnOnce(&mut Context)) {
     VStack::new(cx, |cx| {
         Label::new(cx, title)
-            .font_family(vec![FamilyOwned::Name(String::from(
-                assets::NOTO_SANS_THIN,
-            ))])
+            .font_family(vec![FamilyOwned::Name(String::from(assets::NOTO_SANS))])
+            .font_weight(FontWeightKeyword::Thin)
             .font_size(23.0)
             .left(Stretch(1.0))
             // This should align nicely with the right edge of the slider
