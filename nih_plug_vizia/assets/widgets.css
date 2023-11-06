@@ -94,6 +94,8 @@ param-slider .value-entry {
   /* Vizia doesn't support the unset value */
   background-color: transparent;
   border-width: 0px;
+  child-left: 1s;
+  child-right: 1s;
 }
 param-slider .value-entry .caret {
   background-color: #0a0a0a;

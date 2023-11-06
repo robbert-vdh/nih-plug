@@ -342,26 +342,29 @@ impl View for RestrictedParamSlider {
                         .set_normalized_value(cx, self.param_base.default_normalized_value());
                     self.param_base.end_set_parameter(cx);
                 } else {
-                    self.drag_active = true;
-                    cx.capture();
-                    // NOTE: Otherwise we don't get key up events
-                    cx.focus();
-                    cx.set_active(true);
+                    if !self.text_input_active {
+                        self.drag_active = true;
+                        cx.capture();
+                        // NOTE: Otherwise we don't get key up events
+                        cx.focus();
+                        cx.set_active(true);
+    
+                        // When holding down shift while clicking on a parameter we want to granularly
+                        // edit the parameter without jumping to a new value
+                        self.param_base.begin_set_parameter(cx);
+                        if cx.modifiers().shift() {
+                            self.granular_drag_status = Some(GranularDragStatus {
+                                starting_x_coordinate: cx.mouse().cursorx,
+                                starting_value: self.param_base.unmodulated_normalized_value(),
+                            });
+                        } else {
+                            self.granular_drag_status = None;
+                            self.set_normalized_value_drag(
+                                cx,
+                                util::remap_current_entity_x_coordinate(cx, cx.mouse().cursorx),
+                            );
+                        }
 
-                    // When holding down shift while clicking on a parameter we want to granuarly
-                    // edit the parameter without jumping to a new value
-                    self.param_base.begin_set_parameter(cx);
-                    if cx.modifiers().shift() {
-                        self.granular_drag_status = Some(GranularDragStatus {
-                            starting_x_coordinate: cx.mouse().cursorx,
-                            starting_value: self.param_base.unmodulated_normalized_value(),
-                        });
-                    } else {
-                        self.granular_drag_status = None;
-                        self.set_normalized_value_drag(
-                            cx,
-                            util::remap_current_entity_x_coordinate(cx, cx.mouse().cursorx),
-                        );
                     }
                 }
 
