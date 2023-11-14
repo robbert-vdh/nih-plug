@@ -11,7 +11,7 @@
   font-weight: light;
 }
 
-scrollview scroll_content {
+scrollview > scroll_content {
   /* Normally the scroll bar overlaps with the content, so we'll add a little offset to prevent that */
   child-right: 15px;
 }

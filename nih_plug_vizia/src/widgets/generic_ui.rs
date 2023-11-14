@@ -30,9 +30,8 @@ impl GenericUi {
         Ps: Params + 'static,
     {
         // Basic styling is done in the `theme.css` style sheet
-        Self::new_custom(cx, params.clone(), move |cx, param_ptr| {
-            let params = params.clone();
-            HStack::new(cx, move |cx| {
+        Self::new_custom(cx, params, move |cx, param_ptr| {
+            HStack::new(cx, |cx| {
                 // Align this on the right
                 Label::new(cx, unsafe { param_ptr.name() }).class("label");
 

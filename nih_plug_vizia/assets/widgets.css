@@ -4,10 +4,12 @@
 generic-ui {
   child-space: 10px;
   col-between: 5px;
+  /* Otherwise it doesn't interact correctly with scrollview */
+  height: auto;
   layout-type: column;
   row-between: 5px;
 }
-scrollview > vstack > generic-ui {
+scrollview > scroll_content > generic-ui {
   child-space: 5px;
 
   /* Our scrollview styling will already add some padding here */
@@ -16,6 +18,7 @@ scrollview > vstack > generic-ui {
 
 generic-ui .row {
   col-between: 6px;
+  height: auto;
   layout-type: row;
 }
 
@@ -23,7 +26,6 @@ generic-ui .label {
   left: 1s;
   top: 1s;
   bottom: 1s;
-  right: 0px;
 }
 
 param-button {
@@ -69,12 +71,7 @@ param-slider {
   transition: background-color 100ms;
 }
 
-/* Vizia doesn't support commas in selectors */
-/* Also, WTB Sass */
-param-slider:active {
-  background-color: #8080801a;
-  transition: background-color 100ms;
-}
+param-slider:active,
 param-slider:hover {
   background-color: #8080801a;
   transition: background-color 100ms;
@@ -139,11 +136,7 @@ resize-handle {
   width: 20px;
   z-index: 1337;
 }
-resize-handle:active {
-  opacity: 0.8;
-  transition: opacity 100ms;
-}
-/* No commas in VIZIA */
+resize-handle:active,
 resize-handle:hover {
   opacity: 0.8;
   transition: opacity 100ms;
