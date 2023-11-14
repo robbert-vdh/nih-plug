@@ -229,7 +229,9 @@ impl Lanczos3Oversampler {
         for to_stage_idx in 1..factor {
             // This requires splitting the vector so we can borrow the from-stage immutably and the
             // to-stage mutably at the same time
-            let ([.., from], [to, ..]) = self.stages.split_at_mut(to_stage_idx) else { unreachable!() };
+            let ([.., from], [to, ..]) = self.stages.split_at_mut(to_stage_idx) else {
+                unreachable!()
+            };
 
             to.upsample_from(&from.scratch_buffer[..previous_upsampled_block_len]);
             previous_upsampled_block_len *= 2;
@@ -258,7 +260,9 @@ impl Lanczos3Oversampler {
         for to_stage_idx in (1..factor).rev() {
             // This requires splitting the vector so we can borrow the from-stage immutably and the
             // to-stage mutably at the same time
-            let ([.., to], [from, ..]) = self.stages.split_at_mut(to_stage_idx) else { unreachable!() };
+            let ([.., to], [from, ..]) = self.stages.split_at_mut(to_stage_idx) else {
+                unreachable!()
+            };
 
             from.downsample_to(&mut to.scratch_buffer[..next_downsampled_block_len]);
             next_downsampled_block_len /= 2;
