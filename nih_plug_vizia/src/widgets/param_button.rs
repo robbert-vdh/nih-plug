@@ -39,7 +39,7 @@ impl ParamButton {
         FMap: Fn(&Params) -> &P + Copy + 'static,
     {
         Self {
-            param_base: ParamWidgetBase::new(cx, params.clone(), params_to_param),
+            param_base: ParamWidgetBase::new(cx, params, params_to_param),
 
             use_scroll_wheel: true,
             label_override: None,
@@ -48,7 +48,7 @@ impl ParamButton {
         }
         .build(
             cx,
-            ParamWidgetBase::build_view(params.clone(), params_to_param, move |cx, param_data| {
+            ParamWidgetBase::build_view(params, params_to_param, move |cx, param_data| {
                 Binding::new(cx, Self::label_override, move |cx, label_override| {
                     match label_override.get(cx) {
                         Some(label_override) => Label::new(cx, &label_override),
