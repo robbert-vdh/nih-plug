@@ -278,7 +278,7 @@ impl IntParam {
     pub fn value(&self) -> i32 {
         self.modulated_plain_value()
     }
-   
+
     /// The range of valid plain values for this parameter.
     #[inline]
     pub fn range(&self) -> IntRange {
