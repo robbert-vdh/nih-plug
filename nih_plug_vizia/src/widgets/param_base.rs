@@ -42,12 +42,17 @@ where
     FMap: Fn(&Params) -> &P + Copy + 'static,
 {
     fn clone(&self) -> Self {
-        Self {
-            param: self.param,
-            params: self.params.clone(),
-            params_to_param: self.params_to_param,
-        }
+        *self
     }
+}
+
+impl<L, Params, P, FMap> Copy for ParamWidgetData<L, Params, P, FMap>
+where
+    L: Lens<Target = Params> + Copy,
+    Params: 'static,
+    P: Param + 'static,
+    FMap: Fn(&Params) -> &P + Copy + 'static,
+{
 }
 
 impl<L, Params, P, FMap> ParamWidgetData<L, Params, P, FMap>
@@ -72,7 +77,7 @@ where
     {
         let params_to_param = self.params_to_param;
 
-        self.params.clone().map(move |params| {
+        self.params.map(move |params| {
             let param = params_to_param(params);
             f(param)
         })
@@ -136,7 +141,6 @@ impl ParamWidgetBase {
         //         outlive the editor
         let param: &P = unsafe {
             &*params
-                .clone()
                 .map(move |params| params_to_param(params) as *const P)
                 .get(cx)
         };
