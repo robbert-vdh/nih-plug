@@ -83,8 +83,11 @@ xy-pad .xy-pad__value-entry .selection {
 xy-pad__handle {
   background-color: #e5e5e5;
   border-color: #0a0a0a;
-  border-width: 1px;
   border-radius: 50%;
+  border-width: 1px;
+  height: 20px;
+  translate: -50% -50%;
+  width: 20px;
 }
 .xy-pad__handle--modulated {
   background-color: #a4eafc69;
