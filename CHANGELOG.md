@@ -18,10 +18,15 @@ state is to list breaking changes.
   system has changed a lot since the last update, so plugin GUIs and stylesheets
   may require small changes before they behave the same again. A summary of the
   most important changes can be found in Vizia PR
-  [#291](https://github.com/vizia/vizia/pull/291). Notably, font handling and
-  choosing between different variations of the same font (e.g. `Noto Sans`
-  versus `Noto Sans Light` versus `Noto Sans Light Italic`) works very
-  differently now.
+  [#291](https://github.com/vizia/vizia/pull/291). Some notable breaking changes
+  include:
+
+  - Font handling and choosing between different variations of the same font
+    (e.g. `Noto Sans` versus `Noto Sans Light` versus `Noto Sans Light Italic`)
+    works very differently now.
+  - `ResizeHandle` now needs to be the last element in a GUI because of changes
+    to Vizia's event targetting mechanism.
+
 - The `raw_window_handle` version used by NIH-plug has been updated to version
   0.5.x.
 

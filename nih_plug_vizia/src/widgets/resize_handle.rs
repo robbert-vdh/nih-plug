@@ -1,10 +1,12 @@
 //! A resize handle for uniformly scaling a plugin GUI.
 
-use vizia::cache::BoundingBox;
 use vizia::prelude::*;
 use vizia::vg;
 
 /// A resize handle placed at the bottom right of the window that lets you resize the window.
+///
+/// Needs to be the last element in the GUI because of how event targetting in Vizia works right
+/// now.
 pub struct ResizeHandle {
     /// Will be set to `true` if we're dragging the parameter. Resetting the parameter or entering a
     /// text value should not initiate a drag.
@@ -15,7 +17,7 @@ pub struct ResizeHandle {
     start_scale_factor: f64,
     /// The DPI factor when we started dragging, includes both the HiDPI scaling and the user
     /// scaling factor. This is kept track of separately to avoid accumulating rounding errors.
-    start_dpi_factor: f64,
+    start_dpi_factor: f32,
     /// The cursor position in physical screen pixels when the drag started.
     start_physical_coordinates: (f32, f32),
 }
@@ -47,17 +49,17 @@ impl View for ResizeHandle {
                 // triangle
                 if intersects_triangle(
                     cx.cache.get_bounds(cx.current()),
-                    (cx.mouse.cursorx, cx.mouse.cursory),
+                    (cx.mouse().cursorx, cx.mouse().cursory),
                 ) {
                     cx.capture();
                     cx.set_active(true);
 
                     self.drag_active = true;
                     self.start_scale_factor = cx.user_scale_factor();
-                    self.start_dpi_factor = cx.style.dpi_factor;
+                    self.start_dpi_factor = cx.scale_factor();
                     self.start_physical_coordinates = (
-                        cx.mouse.cursorx * cx.style.dpi_factor as f32,
-                        cx.mouse.cursory * cx.style.dpi_factor as f32,
+                        cx.mouse().cursorx * self.start_dpi_factor,
+                        cx.mouse().cursory * self.start_dpi_factor,
                     );
 
                     meta.consume();
@@ -86,10 +88,8 @@ impl View for ResizeHandle {
                     // to the same absoltue screen spotion.
                     // TODO: This may start doing fun things when the window grows so large that it
                     //       gets pushed upwards or leftwards
-                    let (compensated_physical_x, compensated_physical_y) = (
-                        x * self.start_dpi_factor as f32,
-                        y * self.start_dpi_factor as f32,
-                    );
+                    let (compensated_physical_x, compensated_physical_y) =
+                        (x * self.start_dpi_factor, y * self.start_dpi_factor);
                     let (start_physical_x, start_physical_y) = self.start_physical_coordinates;
                     let new_scale_factor = (self.start_scale_factor
                         * (compensated_physical_x / start_physical_x)
@@ -116,19 +116,14 @@ impl View for ResizeHandle {
             return;
         }
 
-        let background_color = cx.background_color().copied().unwrap_or_default();
-        let border_color = cx.border_color().copied().unwrap_or_default();
+        let background_color = cx.background_color();
+        let border_color = cx.border_color();
         let opacity = cx.opacity();
         let mut background_color: vg::Color = background_color.into();
         background_color.set_alphaf(background_color.a * opacity);
         let mut border_color: vg::Color = border_color.into();
         border_color.set_alphaf(border_color.a * opacity);
-
-        let border_width = match cx.border_width().unwrap_or_default() {
-            Units::Pixels(val) => val,
-            Units::Percentage(val) => bounds.w.min(bounds.h) * (val / 100.0),
-            _ => 0.0,
-        };
+        let border_width = cx.border_width();
 
         let mut path = vg::Path::new();
         let x = bounds.x + border_width / 2.0;
@@ -144,12 +139,12 @@ impl View for ResizeHandle {
 
         // Fill with background color
         let paint = vg::Paint::color(background_color);
-        canvas.fill_path(&mut path, &paint);
+        canvas.fill_path(&path, &paint);
 
         // Borders are only supported to make debugging easier
         let mut paint = vg::Paint::color(border_color);
         paint.set_line_width(border_width);
-        canvas.stroke_path(&mut path, &paint);
+        canvas.stroke_path(&path, &paint);
 
         // We'll draw a simple triangle, since we're going flat everywhere anyways and that style
         // tends to not look too tacky
@@ -179,10 +174,10 @@ impl View for ResizeHandle {
         // path.move_to(x + (w / 3.0 * 1.5), y + h);
         // path.close();
 
-        let mut color: vg::Color = cx.font_color().copied().unwrap_or(Color::white()).into();
+        let mut color: vg::Color = cx.font_color().into();
         color.set_alphaf(color.a * opacity);
         let paint = vg::Paint::color(color);
-        canvas.fill_path(&mut path, &paint);
+        canvas.fill_path(&path, &paint);
     }
 }
 

@@ -89,8 +89,6 @@ pub(crate) fn create(editor_state: Arc<ViziaState>, editor_data: Data) -> Option
 
         editor_data.clone().build(cx);
 
-        ResizeHandle::new(cx);
-
         HStack::new(cx, |cx| {
             main_column(cx);
 
@@ -102,6 +100,8 @@ pub(crate) fn create(editor_state: Arc<ViziaState>, editor_data: Data) -> Option
                 }
             });
         });
+
+        ResizeHandle::new(cx);
     })
 }
 

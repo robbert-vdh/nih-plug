@@ -74,13 +74,13 @@ pub(crate) fn create(editor_data: Data, editor_state: Arc<ViziaState>) -> Option
 
         editor_data.clone().build(cx);
 
-        ResizeHandle::new(cx);
-
         VStack::new(cx, |cx| {
             top_bar(cx);
             spectrum_analyzer(cx);
             other_params(cx);
         });
+
+        ResizeHandle::new(cx);
     })
 }
 
