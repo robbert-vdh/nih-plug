@@ -138,85 +138,68 @@ impl XyPad {
             cx,
             // We need to create lenses for both the x-parameter's values and the y-parameter's
             // values
-            ParamWidgetBase::build_view(
-                params,
-                params_to_x_param,
-                move |cx, x_param_data| {
-                    ParamWidgetBase::view(
+            ParamWidgetBase::build_view(params, params_to_x_param, move |cx, x_param_data| {
+                ParamWidgetBase::view(cx, params, params_to_y_param, move |cx, y_param_data| {
+                    // The x-parameter's range is clamped when safe mode is enabled
+                    let x_position_lens = {
+                        let x_renormalize_display = x_renormalize_display.clone();
+                        x_param_data.make_lens(move |param| {
+                            Percentage(
+                                x_renormalize_display(param.unmodulated_normalized_value()) * 100.0,
+                            )
+                        })
+                    };
+                    let y_position_lens = y_param_data.make_lens(|param| {
+                        // NOTE: The y-axis increments downards, and we want high values at
+                        //       the top and low values at the bottom
+                        Percentage((1.0 - param.unmodulated_normalized_value()) * 100.0)
+                    });
+
+                    // Another handle is drawn below the regular handle to show the
+                    // modualted value
+                    let modulated_x_position_lens = x_param_data.make_lens(move |param| {
+                        Percentage(
+                            x_renormalize_display(param.modulated_normalized_value()) * 100.0,
+                        )
+                    });
+                    let modulated_y_position_lens = y_param_data.make_lens(|param| {
+                        Percentage((1.0 - param.modulated_normalized_value()) * 100.0)
+                    });
+
+                    // Can't use `.to_string()` here as that would include the modulation.
+                    let x_display_value_lens = x_param_data.make_lens(|param| {
+                        param.normalized_value_to_string(param.unmodulated_normalized_value(), true)
+                    });
+                    let y_display_value_lens = y_param_data.make_lens(|param| {
+                        param.normalized_value_to_string(param.unmodulated_normalized_value(), true)
+                    });
+
+                    // When the X-Y pad gets Alt+clicked, we'll replace it with a text input
+                    // box for the frequency parameter
+                    Binding::new(
                         cx,
-                        params,
-                        params_to_y_param,
-                        move |cx, y_param_data| {
-                            // The x-parameter's range is clamped when safe mode is enabled
-                            let x_position_lens = {
-                                let x_renormalize_display = x_renormalize_display.clone();
-                                x_param_data.make_lens(move |param| {
-                                    Percentage(
-                                        x_renormalize_display(param.unmodulated_normalized_value())
-                                            * 100.0,
-                                    )
-                                })
-                            };
-                            let y_position_lens = y_param_data.make_lens(|param| {
-                                // NOTE: The y-axis increments downards, and we want high values at
-                                //       the top and low values at the bottom
-                                Percentage((1.0 - param.unmodulated_normalized_value()) * 100.0)
-                            });
-
-                            // Another handle is drawn below the regular handle to show the
-                            // modualted value
-                            let modulated_x_position_lens = x_param_data.make_lens(move |param| {
-                                Percentage(
-                                    x_renormalize_display(param.modulated_normalized_value())
-                                        * 100.0,
-                                )
-                            });
-                            let modulated_y_position_lens = y_param_data.make_lens(|param| {
-                                Percentage((1.0 - param.modulated_normalized_value()) * 100.0)
-                            });
-
-                            // Can't use `.to_string()` here as that would include the modulation.
-                            let x_display_value_lens = x_param_data.make_lens(|param| {
-                                param.normalized_value_to_string(
-                                    param.unmodulated_normalized_value(),
-                                    true,
-                                )
-                            });
-                            let y_display_value_lens = y_param_data.make_lens(|param| {
-                                param.normalized_value_to_string(
-                                    param.unmodulated_normalized_value(),
-                                    true,
-                                )
-                            });
-
-                            // When the X-Y pad gets Alt+clicked, we'll replace it with a text input
-                            // box for the frequency parameter
-                            Binding::new(
-                                cx,
-                                XyPad::text_input_active,
-                                move |cx, text_input_active| {
-                                    if text_input_active.get(cx) {
-                                        Self::text_input_view(cx, x_display_value_lens);
-                                    } else {
-                                        Self::xy_pad_modulation_handle_view(
-                                            cx,
-                                            modulated_x_position_lens,
-                                            modulated_y_position_lens,
-                                        );
-                                        Self::xy_pad_handle_view(
-                                            cx,
-                                            x_position_lens,
-                                            y_position_lens,
-                                            x_display_value_lens,
-                                            y_display_value_lens,
-                                        );
-                                    }
-                                },
-                            );
+                        XyPad::text_input_active,
+                        move |cx, text_input_active| {
+                            if text_input_active.get(cx) {
+                                Self::text_input_view(cx, x_display_value_lens);
+                            } else {
+                                Self::xy_pad_modulation_handle_view(
+                                    cx,
+                                    modulated_x_position_lens,
+                                    modulated_y_position_lens,
+                                );
+                                Self::xy_pad_handle_view(
+                                    cx,
+                                    x_position_lens,
+                                    y_position_lens,
+                                    x_display_value_lens,
+                                    y_display_value_lens,
+                                );
+                            }
                         },
                     );
-                },
-            ),
+                });
+            }),
         )
     }
 
@@ -257,7 +240,7 @@ impl XyPad {
         // pad. Its position is set to the mouse coordinate in the event
         // handler. If there's enough space, the tooltip is drawn at the top
         // right of the mouse cursor.
-        VStack::new(cx, move |cx| {
+        VStack::new(cx, |cx| {
             // The X-parameter is the 'important' one, so we'll display that at
             // the bottom since it's closer to the mouse cursor. We'll also
             // hardcode the `Q: ` prefix for now to make it a bit clearer and to

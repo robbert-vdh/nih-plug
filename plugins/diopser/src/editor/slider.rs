@@ -91,7 +91,7 @@ impl RestrictedParamSlider {
     {
         // See the original `ParamSlider` implementation for more details.
         Self {
-            param_base: ParamWidgetBase::new(cx, params.clone(), params_to_param),
+            param_base: ParamWidgetBase::new(cx, params, params_to_param),
 
             renormalize_display: Box::new(renormalize_display.clone()),
             renormalize_event: Box::new(renormalize_event),
@@ -146,15 +146,9 @@ impl RestrictedParamSlider {
                     RestrictedParamSlider::text_input_active,
                     move |cx, text_input_active| {
                         if text_input_active.get(cx) {
-                            Self::text_input_view(cx, display_value_lens.clone());
+                            Self::text_input_view(cx, display_value_lens);
                         } else {
-                            // All of this data needs to be moved into the `ZStack` closure, and
-                            // the `Map` lens combinator isn't `Copy`
-                            let fill_start_delta_lens = fill_start_delta_lens.clone();
-                            let modulation_start_delta_lens = modulation_start_delta_lens.clone();
-                            let display_value_lens = display_value_lens.clone();
-
-                            ZStack::new(cx, move |cx| {
+                            ZStack::new(cx, |cx| {
                                 Self::slider_fill_view(
                                     cx,
                                     fill_start_delta_lens,
@@ -204,11 +198,7 @@ impl RestrictedParamSlider {
         Element::new(cx)
             .class("fill")
             .height(Stretch(1.0))
-            .left(
-                fill_start_delta_lens
-                    .clone()
-                    .map(|(start_t, _)| Percentage(start_t * 100.0)),
-            )
+            .left(fill_start_delta_lens.map(|(start_t, _)| Percentage(start_t * 100.0)))
             .width(fill_start_delta_lens.map(|(_, delta)| Percentage(delta * 100.0)))
             // Hovering is handled on the param slider as a whole, this
             // should not affect that
@@ -221,18 +211,10 @@ impl RestrictedParamSlider {
             .class("fill")
             .class("fill--modulation")
             .height(Stretch(1.0))
-            .visibility(
-                modulation_start_delta_lens
-                    .clone()
-                    .map(|(_, delta)| *delta != 0.0),
-            )
+            .visibility(modulation_start_delta_lens.map(|(_, delta)| *delta != 0.0))
             // Widths cannot be negative, so we need to compensate the start
             // position if the width does happen to be negative
-            .width(
-                modulation_start_delta_lens
-                    .clone()
-                    .map(|(_, delta)| Percentage(delta.abs() * 100.0)),
-            )
+            .width(modulation_start_delta_lens.map(|(_, delta)| Percentage(delta.abs() * 100.0)))
             .left(modulation_start_delta_lens.map(|(start_t, delta)| {
                 if *delta < 0.0 {
                     Percentage((start_t + delta) * 100.0)
@@ -330,11 +312,11 @@ impl View for RestrictedParamSlider {
             // still won't work.
             WindowEvent::MouseDown(MouseButton::Left)
             | WindowEvent::MouseTripleClick(MouseButton::Left) => {
-                if cx.modifiers.alt() {
+                if cx.modifiers().alt() {
                     // ALt+Click brings up a text entry dialog
                     self.text_input_active = true;
                     cx.set_active(true);
-                } else if cx.modifiers.command() {
+                } else if cx.modifiers().command() {
                     // Ctrl+Click, double click, and right clicks should reset the parameter instead
                     // of initiating a drag operation
                     self.param_base.begin_set_parameter(cx);
@@ -351,16 +333,16 @@ impl View for RestrictedParamSlider {
                     // When holding down shift while clicking on a parameter we want to granuarly
                     // edit the parameter without jumping to a new value
                     self.param_base.begin_set_parameter(cx);
-                    if cx.modifiers.shift() {
+                    if cx.modifiers().shift() {
                         self.granular_drag_status = Some(GranularDragStatus {
-                            starting_x_coordinate: cx.mouse.cursorx,
+                            starting_x_coordinate: cx.mouse().cursorx,
                             starting_value: self.param_base.unmodulated_normalized_value(),
                         });
                     } else {
                         self.granular_drag_status = None;
                         self.set_normalized_value_drag(
                             cx,
-                            util::remap_current_entity_x_coordinate(cx, cx.mouse.cursorx),
+                            util::remap_current_entity_x_coordinate(cx, cx.mouse().cursorx),
                         );
                     }
                 }
@@ -395,7 +377,7 @@ impl View for RestrictedParamSlider {
                 if self.drag_active {
                     // If shift is being held then the drag should be more granular instead of
                     // absolute
-                    if cx.modifiers.shift() {
+                    if cx.modifiers().shift() {
                         let granular_drag_status =
                             *self
                                 .granular_drag_status
@@ -413,7 +395,7 @@ impl View for RestrictedParamSlider {
                         );
                         let delta_x = (*x - granular_drag_status.starting_x_coordinate)
                             * GRANULAR_DRAG_MULTIPLIER
-                            * cx.style.dpi_factor as f32;
+                            * cx.scale_factor();
 
                         self.set_normalized_value_drag(
                             cx,
@@ -436,7 +418,7 @@ impl View for RestrictedParamSlider {
                     self.granular_drag_status = None;
                     self.param_base.set_normalized_value(
                         cx,
-                        util::remap_current_entity_x_coordinate(cx, cx.mouse.cursorx),
+                        util::remap_current_entity_x_coordinate(cx, cx.mouse().cursorx),
                     );
                 }
             }
@@ -450,7 +432,7 @@ impl View for RestrictedParamSlider {
                     |value| (self.renormalize_event)((self.renormalize_display)(value));
 
                 if self.scrolled_lines.abs() >= 1.0 {
-                    let use_finer_steps = cx.modifiers.shift();
+                    let use_finer_steps = cx.modifiers().shift();
 
                     // Scrolling while dragging needs to be taken into account here
                     if !self.drag_active {

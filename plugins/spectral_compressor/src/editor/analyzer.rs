@@ -101,7 +101,7 @@ impl View for Analyzer {
         // TODO: Display the frequency range below the graph
 
         // Draw the border last
-        let border_width = match cx.border_width().unwrap_or_default() {
+        let border_width = match cx.border_width() {
             Units::Pixels(val) => val,
             Units::Percentage(val) => bounds.w.min(bounds.h) * (val / 100.0),
             _ => 0.0,
@@ -122,7 +122,7 @@ impl View for Analyzer {
         }
 
         let paint = vg::Paint::color(border_color).with_line_width(border_width);
-        canvas.stroke_path(&mut path, &paint);
+        canvas.stroke_path(&path, &paint);
     }
 }
 
@@ -144,8 +144,8 @@ fn draw_spectrum(
 ) {
     let bounds = cx.bounds();
 
-    let line_width = cx.style.dpi_factor as f32 * 1.5;
-    let text_color: vg::Color = cx.font_color().cloned().unwrap_or_default().into();
+    let line_width = cx.scale_factor() * 1.5;
+    let text_color: vg::Color = cx.font_color().into();
     // This is used to draw the individual bars
     let bars_paint = vg::Paint::color(text_color).with_line_width(line_width);
     // And this color is used to draw the mesh part of the spectrum. We'll create a gradient paint
@@ -265,7 +265,7 @@ fn draw_spectrum(
 fn draw_threshold_curve(cx: &mut DrawContext, canvas: &mut Canvas, analyzer_data: &AnalyzerData) {
     let bounds = cx.bounds();
 
-    let line_width = cx.style.dpi_factor as f32 * 3.0;
+    let line_width = cx.scale_factor() * 3.0;
     let downwards_paint =
         vg::Paint::color(DOWNWARDS_THRESHOLD_CURVE_COLOR).with_line_width(line_width);
     let upwards_paint = vg::Paint::color(UPWARDS_THRESHOLD_CURVE_COLOR).with_line_width(line_width);
@@ -301,7 +301,7 @@ fn draw_threshold_curve(cx: &mut DrawContext, canvas: &mut Canvas, analyzer_data
         // This does a way better job at cutting off the tops and bottoms of the graph than we could do
         // by hand
         canvas.scissor(bounds.x, bounds.y, bounds.w, bounds.h);
-        canvas.stroke_path(&mut path, &paint);
+        canvas.stroke_path(&path, &paint);
         canvas.reset_scissor();
     };
 
@@ -374,6 +374,6 @@ fn draw_gain_reduction(
 
     canvas
         .global_composite_blend_func(vg::BlendFactor::DstAlpha, vg::BlendFactor::OneMinusDstColor);
-    canvas.fill_path(&mut path, &paint);
+    canvas.fill_path(&path, &paint);
     canvas.global_composite_blend_func(vg::BlendFactor::One, vg::BlendFactor::OneMinusSrcAlpha);
 }

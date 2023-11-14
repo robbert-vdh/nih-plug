@@ -31,15 +31,15 @@ pub struct SafeModeButton<L: Lens<Target = SafeModeClamper>> {
 
 impl<L: Lens<Target = SafeModeClamper>> SafeModeButton<L> {
     /// Creates a new button bound to the [`SafeModeClamper`].
-    pub fn new<T>(cx: &mut Context, lens: L, label: impl Res<T>) -> Handle<Self>
+    pub fn new<T>(cx: &mut Context, lens: L, label: impl Res<T> + Clone) -> Handle<Self>
     where
         T: ToString,
     {
         Self {
-            lens: lens.clone(),
+            lens,
             scrolled_lines: 0.0,
         }
-        .build(cx, move |cx| {
+        .build(cx, |cx| {
             Label::new(cx, label).hoverable(false);
         })
         .checked(lens.map(|v| v.status()))

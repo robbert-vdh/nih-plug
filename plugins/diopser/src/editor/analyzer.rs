@@ -90,9 +90,8 @@ impl View for SpectrumAnalyzer {
         // NOTE: We could do the same thing like in Spectral Compressor and draw part of this
         //       spectrum analyzer as a single mesh but for whatever erason the aliasing/moire
         //       pattern here doesn't look nearly as bad.
-        let line_width = cx.style.dpi_factor as f32 * 1.5;
-        let paint = vg::Paint::color(cx.font_color().cloned().unwrap_or_default().into())
-            .with_line_width(line_width);
+        let line_width = cx.scale_factor() * 1.5;
+        let paint = vg::Paint::color(cx.font_color().into()).with_line_width(line_width);
         let mut path = vg::Path::new();
         for (bin_idx, magnitude) in spectrum.iter().enumerate() {
             // We'll match up the bin's x-coordinate with the filter frequency parameter
@@ -117,6 +116,6 @@ impl View for SpectrumAnalyzer {
             path.line_to(bounds.x + (bounds.w * t), bounds.y + bounds.h);
         }
 
-        canvas.stroke_path(&mut path, &paint);
+        canvas.stroke_path(&path, &paint);
     }
 }
