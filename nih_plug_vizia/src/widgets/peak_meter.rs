@@ -49,7 +49,7 @@ impl PeakMeter {
             // current moment in time by mutating some values captured into the mapping closure.
             let held_peak_value_db = Cell::new(f32::MIN);
             let last_held_peak_value: Cell<Option<Instant>> = Cell::new(None);
-            let peak_dbfs = level_dbfs.clone().map(move |level| -> f32 {
+            let peak_dbfs = level_dbfs.map(move |level| -> f32 {
                 match hold_time {
                     Some(hold_time) => {
                         let mut peak_level = held_peak_value_db.get();
@@ -97,9 +97,8 @@ impl PeakMeter {
                         }
 
                         let font_size = {
-                            let current = cx.current();
-                            let draw_cx = DrawContext::new(cx);
-                            draw_cx.font_size(current) * draw_cx.style.dpi_factor as f32
+                            let event_cx = EventContext::new(cx);
+                            event_cx.font_size() * event_cx.scale_factor()
                         };
                         let label = if first_tick {
                             Label::new(cx, "-inf")
@@ -157,19 +156,14 @@ where
 
         // TODO: It would be cool to allow the text color property to control the gradient here. For
         //       now we'll only support basic background colors and borders.
-        let background_color = cx.background_color().cloned().unwrap_or_default();
-        let border_color = cx.border_color().cloned().unwrap_or_default();
+        let background_color = cx.background_color();
+        let border_color = cx.border_color();
         let opacity = cx.opacity();
         let mut background_color: vg::Color = background_color.into();
         background_color.set_alphaf(background_color.a * opacity);
         let mut border_color: vg::Color = border_color.into();
         border_color.set_alphaf(border_color.a * opacity);
-
-        let border_width = match cx.border_width().unwrap_or_default() {
-            Units::Pixels(val) => val,
-            Units::Percentage(val) => bounds.w.min(bounds.h) * (val / 100.0),
-            _ => 0.0,
-        };
+        let border_width = cx.border_width();
 
         let mut path = vg::Path::new();
         {
@@ -187,7 +181,7 @@ where
 
         // Fill with background color
         let paint = vg::Paint::color(background_color);
-        canvas.fill_path(&mut path, &paint);
+        canvas.fill_path(&path, &paint);
 
         // And now for the fun stuff. We'll try to not overlap the border, but we'll draw that last
         // just in case.
@@ -222,7 +216,7 @@ where
                 opacity,
             ));
             paint.set_line_width(TICK_WIDTH * dpi_scale);
-            canvas.stroke_path(&mut path, &paint);
+            canvas.stroke_path(&path, &paint);
         }
 
         // Draw the hold peak value if the hold time option has been set
@@ -241,12 +235,12 @@ where
 
             let mut paint = vg::Paint::color(vg::Color::rgbaf(0.3, 0.3, 0.3, opacity));
             paint.set_line_width(TICK_WIDTH * dpi_scale);
-            canvas.stroke_path(&mut path, &paint);
+            canvas.stroke_path(&path, &paint);
         }
 
         // Draw border last
         let mut paint = vg::Paint::color(border_color);
         paint.set_line_width(border_width);
-        canvas.stroke_path(&mut path, &paint);
+        canvas.stroke_path(&path, &paint);
     }
 }
