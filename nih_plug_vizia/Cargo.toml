@@ -12,7 +12,7 @@ nih_plug = { path = ".." }
 nih_plug_assets = { git = "https://github.com/robbert-vdh/nih_plug_assets.git" }
 
 baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "f0639b787bbda506434d3f6b5c91e94ca59904c6" }
-vizia = { git = "https://github.com/vizia/vizia.git", rev = "eec3b85c24be87eabd95eef00795ab89ff6100fa", default_features = false, features = ["baseview", "clipboard", "x11"] }
+vizia = { git = "https://github.com/vizia/vizia.git", rev = "f3574758ad80bb70392812b075614cccc7489c7c", default_features = false, features = ["baseview", "clipboard", "x11"] }
 
 crossbeam = "0.8"
 # To make the state persistable

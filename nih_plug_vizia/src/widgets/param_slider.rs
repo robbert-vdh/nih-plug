@@ -100,7 +100,7 @@ impl ParamSlider {
         // default value lies somewhere in the middle and the parameter is continuous. Otherwise
         // this approach looks a bit jarring.
         Self {
-            param_base: ParamWidgetBase::new(cx, params.clone(), params_to_param),
+            param_base: ParamWidgetBase::new(cx, params, params_to_param),
 
             text_input_active: false,
             drag_active: false,
@@ -117,9 +117,6 @@ impl ParamSlider {
                 Binding::new(cx, ParamSlider::style, move |cx, style| {
                     let style = style.get(cx);
 
-                    // Needs to be moved into the below closures, and it can't be `Copy`
-                    let param_data = param_data.clone();
-
                     // Can't use `.to_string()` here as that would include the modulation.
                     let unmodulated_normalized_value_lens =
                         param_data.make_lens(|param| param.unmodulated_normalized_value());
@@ -130,16 +127,14 @@ impl ParamSlider {
                     // The resulting tuple `(start_t, delta)` corresponds to the start and the
                     // signed width of the bar. `start_t` is in `[0, 1]`, and `delta` is in
                     // `[-1, 1]`.
-                    let fill_start_delta_lens = {
-                        let param_data = param_data.clone();
+                    let fill_start_delta_lens =
                         unmodulated_normalized_value_lens.map(move |current_value| {
                             Self::compute_fill_start_delta(
                                 style,
                                 param_data.param(),
                                 *current_value,
                             )
-                        })
-                    };
+                        });
 
                     // If the parameter is being modulated by the host (this only works for CLAP
                     // plugins with hosts that support this), then this is the difference
@@ -150,13 +145,10 @@ impl ParamSlider {
                     });
 
                     // This is used to draw labels for `CurrentStepLabeled`
-                    let make_preview_value_lens = {
-                        let param_data = param_data.clone();
-                        move |normalized_value| {
-                            param_data.make_lens(move |param| {
-                                param.normalized_value_to_string(normalized_value, true)
-                            })
-                        }
+                    let make_preview_value_lens = move |normalized_value| {
+                        param_data.make_lens(move |param| {
+                            param.normalized_value_to_string(normalized_value, true)
+                        })
                     };
 
                     // Only draw the text input widget when it gets focussed. Otherwise, overlay the
@@ -168,18 +160,9 @@ impl ParamSlider {
                         ParamSlider::text_input_active,
                         move |cx, text_input_active| {
                             if text_input_active.get(cx) {
-                                Self::text_input_view(cx, display_value_lens.clone());
+                                Self::text_input_view(cx, display_value_lens);
                             } else {
-                                // All of this data needs to be moved into the `ZStack` closure, and
-                                // the `Map` lens combinator isn't `Copy`
-                                let param_data = param_data.clone();
-                                let fill_start_delta_lens = fill_start_delta_lens.clone();
-                                let modulation_start_delta_lens =
-                                    modulation_start_delta_lens.clone();
-                                let display_value_lens = display_value_lens.clone();
-                                let make_preview_value_lens = make_preview_value_lens.clone();
-
-                                ZStack::new(cx, move |cx| {
+                                ZStack::new(cx, |cx| {
                                     Self::slider_fill_view(
                                         cx,
                                         fill_start_delta_lens,
@@ -214,6 +197,9 @@ impl ParamSlider {
                     cx.emit(ParamSliderEvent::CancelTextInput);
                 }
             })
+            .on_cancel(|cx| {
+                cx.emit(ParamSliderEvent::CancelTextInput);
+            })
             .on_build(|cx| {
                 cx.emit(TextEvent::StartEdit);
                 cx.emit(TextEvent::SelectAll);
@@ -237,11 +223,7 @@ impl ParamSlider {
         Element::new(cx)
             .class("fill")
             .height(Stretch(1.0))
-            .left(
-                fill_start_delta_lens
-                    .clone()
-                    .map(|(start_t, _)| Percentage(start_t * 100.0)),
-            )
+            .left(fill_start_delta_lens.map(|(start_t, _)| Percentage(start_t * 100.0)))
             .width(fill_start_delta_lens.map(|(_, delta)| Percentage(delta * 100.0)))
             // Hovering is handled on the param slider as a whole, this
             // should not affect that
@@ -254,18 +236,10 @@ impl ParamSlider {
             .class("fill")
             .class("fill--modulation")
             .height(Stretch(1.0))
-            .visibility(
-                modulation_start_delta_lens
-                    .clone()
-                    .map(|(_, delta)| *delta != 0.0),
-            )
+            .visibility(modulation_start_delta_lens.map(|(_, delta)| *delta != 0.0))
             // Widths cannot be negative, so we need to compensate the start
             // position if the width does happen to be negative
-            .width(
-                modulation_start_delta_lens
-                    .clone()
-                    .map(|(_, delta)| Percentage(delta.abs() * 100.0)),
-            )
+            .width(modulation_start_delta_lens.map(|(_, delta)| Percentage(delta.abs() * 100.0)))
             .left(modulation_start_delta_lens.map(|(start_t, delta)| {
                 if *delta < 0.0 {
                     Percentage((start_t + delta) * 100.0)
@@ -320,7 +294,7 @@ impl ParamSlider {
                     // current display value (before modulation) is used.
                     match label_override_lens.get(cx) {
                         Some(label_override) => Label::new(cx, &label_override),
-                        None => Label::new(cx, display_value_lens.clone()),
+                        None => Label::new(cx, display_value_lens),
                     }
                     .class("value")
                     .class("value--single")
@@ -464,18 +438,21 @@ impl View for ParamSlider {
             // still won't work.
             WindowEvent::MouseDown(MouseButton::Left)
             | WindowEvent::MouseTripleClick(MouseButton::Left) => {
-                if cx.modifiers.alt() {
+                if cx.modifiers().alt() {
                     // ALt+Click brings up a text entry dialog
                     self.text_input_active = true;
                     cx.set_active(true);
-                } else if cx.modifiers.command() {
+                } else if cx.modifiers().command() {
                     // Ctrl+Click, double click, and right clicks should reset the parameter instead
                     // of initiating a drag operation
                     self.param_base.begin_set_parameter(cx);
                     self.param_base
                         .set_normalized_value(cx, self.param_base.default_normalized_value());
                     self.param_base.end_set_parameter(cx);
-                } else {
+                } else if !self.text_input_active {
+                    // The `!self.text_input_active` check shouldn't be needed, but the textbox does
+                    // not consume the mouse down event. So clicking on the textbox to move the
+                    // cursor would also change the slider.
                     self.drag_active = true;
                     cx.capture();
                     // NOTE: Otherwise we don't get key up events
@@ -485,16 +462,16 @@ impl View for ParamSlider {
                     // When holding down shift while clicking on a parameter we want to granuarly
                     // edit the parameter without jumping to a new value
                     self.param_base.begin_set_parameter(cx);
-                    if cx.modifiers.shift() {
+                    if cx.modifiers().shift() {
                         self.granular_drag_status = Some(GranularDragStatus {
-                            starting_x_coordinate: cx.mouse.cursorx,
+                            starting_x_coordinate: cx.mouse().cursorx,
                             starting_value: self.param_base.unmodulated_normalized_value(),
                         });
                     } else {
                         self.granular_drag_status = None;
                         self.set_normalized_value_drag(
                             cx,
-                            util::remap_current_entity_x_coordinate(cx, cx.mouse.cursorx),
+                            util::remap_current_entity_x_coordinate(cx, cx.mouse().cursorx),
                         );
                     }
                 }
@@ -529,7 +506,7 @@ impl View for ParamSlider {
                 if self.drag_active {
                     // If shift is being held then the drag should be more granular instead of
                     // absolute
-                    if cx.modifiers.shift() {
+                    if cx.modifiers().shift() {
                         let granular_drag_status =
                             *self
                                 .granular_drag_status
@@ -544,7 +521,7 @@ impl View for ParamSlider {
                             util::remap_current_entity_x_t(cx, granular_drag_status.starting_value);
                         let delta_x = ((*x - granular_drag_status.starting_x_coordinate)
                             * GRANULAR_DRAG_MULTIPLIER)
-                            * cx.style.dpi_factor as f32;
+                            * cx.scale_factor();
 
                         self.set_normalized_value_drag(
                             cx,
@@ -567,7 +544,7 @@ impl View for ParamSlider {
                     self.granular_drag_status = None;
                     self.param_base.set_normalized_value(
                         cx,
-                        util::remap_current_entity_x_coordinate(cx, cx.mouse.cursorx),
+                        util::remap_current_entity_x_coordinate(cx, cx.mouse().cursorx),
                     );
                 }
             }
@@ -577,7 +554,7 @@ impl View for ParamSlider {
                 self.scrolled_lines += scroll_y;
 
                 if self.scrolled_lines.abs() >= 1.0 {
-                    let use_finer_steps = cx.modifiers.shift();
+                    let use_finer_steps = cx.modifiers().shift();
 
                     // Scrolling while dragging needs to be taken into account here
                     if !self.drag_active {
