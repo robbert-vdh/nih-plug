@@ -82,7 +82,7 @@ macro_rules! nih_export_clap {
             }
 
             unsafe extern "C" fn create_plugin (
-                factory: *const clap_plugin_factory,
+                _factory: *const clap_plugin_factory,
                 host: *const clap_host,
                 plugin_id: *const c_char,
             ) -> *const clap_plugin  {

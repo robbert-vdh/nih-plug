@@ -59,7 +59,7 @@ macro_rules! nih_export_vst3 {
 
                     if cfg!(debug_assertions) {
                         let unique_cids: HashSet<[u8; 16]> = plugin_infos.iter().map(|d| *d.cid).collect();
-                        nih_debug_assert_eq!(
+                        $crate::nih_debug_assert_eq!(
                             unique_cids.len(),
                             plugin_infos.len(),
                             "Duplicate VST3 class IDs found in `nih_export_vst3!()` call"
