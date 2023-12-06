@@ -60,7 +60,7 @@ nih_plug = { path = ".." }
 nih_plug_assets = { git = "https://github.com/robbert-vdh/nih_plug_assets.git" }
 
 atomic_refcell = "0.1"
-baseview = { git = "https://github.com/RustAudio/baseview.git" }
+baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "1d9806d5bd92275d0d8142d9c9c90198757b9b25" }
 crossbeam = "0.8"
 # Upstream doesn't work with the current iced version, this branch also contains
 # additional features

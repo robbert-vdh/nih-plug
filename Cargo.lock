@@ -2602,7 +2602,7 @@ name = "nih_plug_iced"
 version = "0.0.0"
 dependencies = [
  "atomic_refcell",
- "baseview 0.1.0 (git+https://github.com/RustAudio/baseview.git)",
+ "baseview 0.1.0 (git+https://github.com/RustAudio/baseview.git?rev=1d9806d5bd92275d0d8142d9c9c90198757b9b25)",
  "crossbeam",
  "iced_baseview",
  "nih_plug",
