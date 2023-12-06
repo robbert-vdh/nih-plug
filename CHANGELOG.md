@@ -10,6 +10,12 @@ Since there is no stable release yet, the changes are organized per day in
 reverse chronological order. The main purpose of this document in its current
 state is to list breaking changes.
 
+## [2023-12-06]
+
+### Fixed
+
+- `nih_export_vst3!()` no longer requires `nih_debug_assert` to be in scope.
+
 ## [2023-11-05]
 
 ### Changed
