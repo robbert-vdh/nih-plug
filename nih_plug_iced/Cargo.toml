@@ -60,10 +60,10 @@ nih_plug = { path = ".." }
 nih_plug_assets = { git = "https://github.com/robbert-vdh/nih_plug_assets.git" }
 
 atomic_refcell = "0.1"
-baseview = { git = "https://github.com/RustAudio/baseview.git" }
+baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "1d9806d5bd92275d0d8142d9c9c90198757b9b25", features = ["opengl"]  }
 crossbeam = "0.8"
 # Upstream doesn't work with the current iced version, this branch also contains
 # additional features
-iced_baseview = { git = "https://github.com/robbert-vdh/iced_baseview.git", branch = "feature/update-baseview", default_features = false }
+iced_baseview = { git = "https://github.com/robbert-vdh/iced_baseview.git", rev = "df3a852a15cf0e9fcc8d2b32f5718e56780beaf3", default_features = false }
 # To make the state persistable
 serde = { version = "1.0", features = ["derive"] }
