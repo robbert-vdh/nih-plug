@@ -95,8 +95,9 @@ impl View for ResizeHandle {
                         * (compensated_physical_x / start_physical_x)
                             .max(compensated_physical_y / start_physical_y)
                             as f64)
-                        // Prevent approaching zero here because uh
-                        .max(0.25);
+                        // Vizia rounds borders to integer pixels, and at <0.5 scaling one pixel
+                        // borders will simply disappear
+                        .max(0.5);
 
                     // If this is different then the window will automatically be resized at the end
                     // of the frame

@@ -40,6 +40,9 @@ state is to list breaking changes.
 - `nih_debug_assert*!()` failures are now promoted to a warning instead of a
   debug message. This makes the non-fatal debug assertion failures easier to
   spot.
+- The minimum scale factor in `nih_plug_vizia` has changed from 0.25 to 0.5.
+  Vizia rounds things to single pixels, and below 0.5 scaling single pixel
+  borders would disappear when not using a HiDPI setup.
 
 ### Fixed
 
