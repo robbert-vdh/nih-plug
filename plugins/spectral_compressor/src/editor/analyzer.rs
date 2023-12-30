@@ -101,12 +101,8 @@ impl View for Analyzer {
         // TODO: Display the frequency range below the graph
 
         // Draw the border last
-        let border_width = match cx.border_width() {
-            Units::Pixels(val) => val,
-            Units::Percentage(val) => bounds.w.min(bounds.h) * (val / 100.0),
-            _ => 0.0,
-        };
-        let border_color: vg::Color = cx.border_color().cloned().unwrap_or_default().into();
+        let border_width = cx.border_width();
+        let border_color: vg::Color = cx.border_color().into();
 
         let mut path = vg::Path::new();
         {
@@ -206,7 +202,7 @@ fn draw_spectrum(
 
         previous_physical_x_coord = physical_x_coord;
     }
-    canvas.stroke_path(&mut bars_path, &bars_paint);
+    canvas.stroke_path(&bars_path, &bars_paint);
 
     // The mesh path starts at the bottom left, follows the top envelope of the spectrum analyzer,
     // and ends in the bottom right
@@ -249,7 +245,7 @@ fn draw_spectrum(
         0.0,
         previous_physical_x_coord,
         0.0,
-        &[
+        [
             (0.0, lighter_text_color),
             (0.707, text_color),
             (1.0, text_color),
@@ -257,7 +253,7 @@ fn draw_spectrum(
     )
     // NOTE:  This is very important, otherwise this looks all kinds of gnarly
     .with_anti_alias(false);
-    canvas.fill_path(&mut mesh_path, &mesh_paint);
+    canvas.fill_path(&mesh_path, &mesh_paint);
 }
 
 /// Overlays the threshold curve over the spectrum analyzer. If either the upwards or downwards
