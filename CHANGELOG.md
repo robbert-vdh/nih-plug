@@ -10,6 +10,13 @@ Since there is no stable release yet, the changes are organized per day in
 reverse chronological order. The main purpose of this document in its current
 state is to list breaking changes.
 
+## [2023-12-30]
+
+### Added
+
+- Added initial RISC-V support to `nih_plug_xtask`.
+  ([#95](https://github.com/robbert-vdh/nih-plug/pull/95)).
+
 ## [2023-12-06]
 
 ### Fixed
