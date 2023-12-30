@@ -41,6 +41,10 @@ state is to list breaking changes.
   debug message. This makes the non-fatal debug assertion failures easier to
   spot.
 
+### Fixed
+
+- Various `baseview` dependencies now have their versions pinned.
+
 ## [2023-12-30]
 
 ### Added

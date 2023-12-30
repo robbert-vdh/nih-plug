@@ -4049,7 +4049,7 @@ dependencies = [
 [[package]]
 name = "selectors"
 version = "0.23.0"
-source = "git+https://github.com/vizia/vizia.git?rev=c9ff4015e4de4b7de470fe6a3d43e27aee156162#c9ff4015e4de4b7de470fe6a3d43e27aee156162"
+source = "git+https://github.com/robbert-vdh/vizia.git?tag=patched-2023-12-30#0a4af1999d24f866d8e274a7810c4b61eea95a91"
 dependencies = [
  "bitflags 1.3.2",
  "cssparser",
@@ -4762,7 +4762,7 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 [[package]]
 name = "vizia"
 version = "0.1.0"
-source = "git+https://github.com/vizia/vizia.git?rev=c9ff4015e4de4b7de470fe6a3d43e27aee156162#c9ff4015e4de4b7de470fe6a3d43e27aee156162"
+source = "git+https://github.com/robbert-vdh/vizia.git?tag=patched-2023-12-30#0a4af1999d24f866d8e274a7810c4b61eea95a91"
 dependencies = [
  "vizia_baseview",
  "vizia_core",
@@ -4772,7 +4772,7 @@ dependencies = [
 [[package]]
 name = "vizia_baseview"
 version = "0.1.0"
-source = "git+https://github.com/vizia/vizia.git?rev=c9ff4015e4de4b7de470fe6a3d43e27aee156162#c9ff4015e4de4b7de470fe6a3d43e27aee156162"
+source = "git+https://github.com/robbert-vdh/vizia.git?tag=patched-2023-12-30#0a4af1999d24f866d8e274a7810c4b61eea95a91"
 dependencies = [
  "baseview 0.1.0 (git+https://github.com/RustAudio/baseview.git?rev=2c1b1a7b0fef1a29a5150a6a8f6fef6a0cbab8c4)",
  "femtovg",
@@ -4786,7 +4786,7 @@ dependencies = [
 [[package]]
 name = "vizia_core"
 version = "0.1.0"
-source = "git+https://github.com/vizia/vizia.git?rev=c9ff4015e4de4b7de470fe6a3d43e27aee156162#c9ff4015e4de4b7de470fe6a3d43e27aee156162"
+source = "git+https://github.com/robbert-vdh/vizia.git?tag=patched-2023-12-30#0a4af1999d24f866d8e274a7810c4b61eea95a91"
 dependencies = [
  "accesskit",
  "bitflags 2.4.1",
@@ -4817,7 +4817,7 @@ dependencies = [
 [[package]]
 name = "vizia_derive"
 version = "0.1.0"
-source = "git+https://github.com/vizia/vizia.git?rev=c9ff4015e4de4b7de470fe6a3d43e27aee156162#c9ff4015e4de4b7de470fe6a3d43e27aee156162"
+source = "git+https://github.com/robbert-vdh/vizia.git?tag=patched-2023-12-30#0a4af1999d24f866d8e274a7810c4b61eea95a91"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4827,12 +4827,12 @@ dependencies = [
 [[package]]
 name = "vizia_id"
 version = "0.1.0"
-source = "git+https://github.com/vizia/vizia.git?rev=c9ff4015e4de4b7de470fe6a3d43e27aee156162#c9ff4015e4de4b7de470fe6a3d43e27aee156162"
+source = "git+https://github.com/robbert-vdh/vizia.git?tag=patched-2023-12-30#0a4af1999d24f866d8e274a7810c4b61eea95a91"
 
 [[package]]
 name = "vizia_input"
 version = "0.1.0"
-source = "git+https://github.com/vizia/vizia.git?rev=c9ff4015e4de4b7de470fe6a3d43e27aee156162#c9ff4015e4de4b7de470fe6a3d43e27aee156162"
+source = "git+https://github.com/robbert-vdh/vizia.git?tag=patched-2023-12-30#0a4af1999d24f866d8e274a7810c4b61eea95a91"
 dependencies = [
  "bitflags 1.3.2",
  "keyboard-types",
@@ -4842,7 +4842,7 @@ dependencies = [
 [[package]]
 name = "vizia_storage"
 version = "0.1.0"
-source = "git+https://github.com/vizia/vizia.git?rev=c9ff4015e4de4b7de470fe6a3d43e27aee156162#c9ff4015e4de4b7de470fe6a3d43e27aee156162"
+source = "git+https://github.com/robbert-vdh/vizia.git?tag=patched-2023-12-30#0a4af1999d24f866d8e274a7810c4b61eea95a91"
 dependencies = [
  "morphorm",
  "vizia_id",
@@ -4851,7 +4851,7 @@ dependencies = [
 [[package]]
 name = "vizia_style"
 version = "0.1.0"
-source = "git+https://github.com/vizia/vizia.git?rev=c9ff4015e4de4b7de470fe6a3d43e27aee156162#c9ff4015e4de4b7de470fe6a3d43e27aee156162"
+source = "git+https://github.com/robbert-vdh/vizia.git?tag=patched-2023-12-30#0a4af1999d24f866d8e274a7810c4b61eea95a91"
 dependencies = [
  "bitflags 2.4.1",
  "cssparser",
@@ -4864,7 +4864,7 @@ dependencies = [
 [[package]]
 name = "vizia_window"
 version = "0.1.0"
-source = "git+https://github.com/vizia/vizia.git?rev=c9ff4015e4de4b7de470fe6a3d43e27aee156162#c9ff4015e4de4b7de470fe6a3d43e27aee156162"
+source = "git+https://github.com/robbert-vdh/vizia.git?tag=patched-2023-12-30#0a4af1999d24f866d8e274a7810c4b61eea95a91"
 dependencies = [
  "accesskit",
  "morphorm",
@@ -4875,7 +4875,7 @@ dependencies = [
 [[package]]
 name = "vizia_winit"
 version = "0.1.0"
-source = "git+https://github.com/vizia/vizia.git?rev=c9ff4015e4de4b7de470fe6a3d43e27aee156162#c9ff4015e4de4b7de470fe6a3d43e27aee156162"
+source = "git+https://github.com/robbert-vdh/vizia.git?tag=patched-2023-12-30#0a4af1999d24f866d8e274a7810c4b61eea95a91"
 dependencies = [
  "accesskit",
  "accesskit_winit",
