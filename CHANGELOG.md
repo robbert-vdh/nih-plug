@@ -10,7 +10,7 @@ Since there is no stable release yet, the changes are organized per day in
 reverse chronological order. The main purpose of this document in its current
 state is to list breaking changes.
 
-## [Unreleased]
+## [2023-12-30]
 
 ### Breaking changes
 
@@ -30,6 +30,11 @@ state is to list breaking changes.
 - The `raw_window_handle` version used by NIH-plug has been updated to version
   0.5.x.
 
+### Added
+
+- Added initial RISC-V support to `nih_plug_xtask`.
+  ([#95](https://github.com/robbert-vdh/nih-plug/pull/95)).
+
 ### Changed
 
 - `ParentWindowHandle` has changed to be a sum type of different parent window
@@ -47,13 +52,6 @@ state is to list breaking changes.
 ### Fixed
 
 - Various `baseview` dependencies now have their versions pinned.
-
-## [2023-12-30]
-
-### Added
-
-- Added initial RISC-V support to `nih_plug_xtask`.
-  ([#95](https://github.com/robbert-vdh/nih-plug/pull/95)).
 
 ## [2023-12-06]
 
