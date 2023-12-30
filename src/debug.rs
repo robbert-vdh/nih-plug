@@ -94,7 +94,7 @@ macro_rules! nih_debug_assert {
         if cfg!(test) {
            debug_assert!($cond);
         } else if cfg!(debug_assertions) && !$cond {
-            $crate::util::permit_alloc(|| $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($cond))));
+            $crate::util::permit_alloc(|| $crate::log::warn!(concat!("Debug assertion failed: ", stringify!($cond))));
         }
     );
     ($cond:expr, $format:expr $(, $($args:tt)*)?) => (
@@ -102,7 +102,7 @@ macro_rules! nih_debug_assert {
         if cfg!(test) {
            debug_assert!($cond, $format, $($($args)*)?);
         } else if cfg!(debug_assertions) && !$cond {
-            $crate::util::permit_alloc(|| $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($cond), ", ", $format), $($($args)*)?));
+            $crate::util::permit_alloc(|| $crate::log::warn!(concat!("Debug assertion failed: ", stringify!($cond), ", ", $format), $($($args)*)?));
         }
     );
 }
@@ -117,14 +117,14 @@ macro_rules! nih_debug_assert_failure {
         if cfg!(test) {
            debug_assert!(false, "Debug assertion failed");
         } else if cfg!(debug_assertions) {
-            $crate::util::permit_alloc(|| $crate::log::debug!("Debug assertion failed"));
+            $crate::util::permit_alloc(|| $crate::log::warn!("Debug assertion failed"));
         }
     );
     ($format:expr $(, $($args:tt)*)?) => (
         if cfg!(test) {
            debug_assert!(false, concat!("Debug assertion failed: ", $format), $($($args)*)?);
         } else if cfg!(debug_assertions) {
-            $crate::util::permit_alloc(|| $crate::log::debug!(concat!("Debug assertion failed: ", $format), $($($args)*)?));
+            $crate::util::permit_alloc(|| $crate::log::warn!(concat!("Debug assertion failed: ", $format), $($($args)*)?));
         }
     );
 }
@@ -140,7 +140,7 @@ macro_rules! nih_debug_assert_eq {
         if cfg!(test) {
            debug_assert_eq!($left, $right);
         } else if cfg!(debug_assertions) && $left != $right {
-            $crate::util::permit_alloc(|| $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($left), " != ", stringify!($right))));
+            $crate::util::permit_alloc(|| $crate::log::warn!(concat!("Debug assertion failed: ", stringify!($left), " != ", stringify!($right))));
         }
     );
     ($left:expr, $right:expr, $format:expr $(, $($args:tt)*)?) => (
@@ -148,7 +148,7 @@ macro_rules! nih_debug_assert_eq {
         if cfg!(test) {
            debug_assert_eq!($left, $right, $format, $($($args)*)?);
         } else if cfg!(debug_assertions) && $left != $right {
-            $crate::util::permit_alloc(|| $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($left), " != ", stringify!($right), ", ", $format), $($($args)*)?));
+            $crate::util::permit_alloc(|| $crate::log::warn!(concat!("Debug assertion failed: ", stringify!($left), " != ", stringify!($right), ", ", $format), $($($args)*)?));
         }
     );
 }
@@ -164,7 +164,7 @@ macro_rules! nih_debug_assert_ne {
         if cfg!(test) {
            debug_assert_ne!($left, $right);
         } else if cfg!(debug_assertions) && $left == $right {
-            $crate::util::permit_alloc(|| $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($left), " == ", stringify!($right))));
+            $crate::util::permit_alloc(|| $crate::log::warn!(concat!("Debug assertion failed: ", stringify!($left), " == ", stringify!($right))));
         }
     );
     ($left:expr, $right:expr, $format:expr $(, $($args:tt)*)?) => (
@@ -172,7 +172,7 @@ macro_rules! nih_debug_assert_ne {
         if cfg!(test) {
            debug_assert_ne!($left, $right, $format, $($($args)*)?);
         } else if cfg!(debug_assertions) && $left == $right  {
-            $crate::util::permit_alloc(|| $crate::log::debug!(concat!("Debug assertion failed: ", stringify!($left), " == ", stringify!($right), ", ", $format), $($($args)*)?));
+            $crate::util::permit_alloc(|| $crate::log::warn!(concat!("Debug assertion failed: ", stringify!($left), " == ", stringify!($right), ", ", $format), $($($args)*)?));
         }
     );
 }

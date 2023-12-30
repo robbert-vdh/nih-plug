@@ -37,6 +37,9 @@ state is to list breaking changes.
   libraries that link against a different version of `raw_window_handle` than
   the one used by NIH-plug itself by simply wrapping around
   `ParentWindowHandle`.
+- `nih_debug_assert*!()` failures are now promoted to a warning instead of a
+  debug message. This makes the non-fatal debug assertion failures easier to
+  spot.
 
 ## [2023-12-30]
 
