@@ -2773,7 +2773,7 @@ impl<P: ClapPlugin> Wrapper<P> {
                 } else if api == CLAP_WINDOW_API_COCOA {
                     ParentWindowHandle::AppKitNsView(window.specific.cocoa)
                 } else if api == CLAP_WINDOW_API_WIN32 {
-                    ParentWindowHandle::AppKitNsView(window.specific.win32)
+                    ParentWindowHandle::Win32Hwnd(window.specific.win32)
                 } else {
                     nih_debug_assert_failure!("Host passed an invalid API");
                     return false;
