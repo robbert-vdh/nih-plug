@@ -823,9 +823,12 @@ impl CpalMidir {
                 }
             }
 
+            let sample_count = data.len() / num_output_channels;
+            assert!(sample_count <= buffer_size);
+
             {
                 let buffers = unsafe {
-                    buffer_manager.create_buffers(0, buffer_size, |buffer_sources| {
+                    buffer_manager.create_buffers(0, sample_count, |buffer_sources| {
                         *buffer_sources.main_output_channel_pointers = Some(ChannelPointers {
                             ptrs: NonNull::new(main_io_channel_pointers.get().as_mut_ptr())
                                 .unwrap(),
@@ -893,11 +896,14 @@ impl CpalMidir {
 
             // The buffer's samples need to be written to `data` in an interlaced format
             // SAFETY: Dropping `buffers` allows us to borrow `main_io_storage` again
-            for (output_sample, buffer_sample) in data
-                .iter_mut()
-                .zip(main_io_storage.iter().flat_map(|channels| channels.iter()))
-            {
-                *output_sample = T::from_sample(*buffer_sample);
+            for (ch, buffer) in main_io_storage.iter().enumerate() {
+                for (sample, output_sample) in buffer[0..sample_count]
+                    .iter()
+                    .skip(ch)
+                    .zip(data.iter_mut().step_by(num_output_channels))
+                {
+                    *output_sample = T::from_sample(*sample);
+                }
             }
 
             if let Some(output_event_rb_producer) = &mut output_event_rb_producer {
