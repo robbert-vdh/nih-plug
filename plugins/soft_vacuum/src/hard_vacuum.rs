@@ -1,5 +1,5 @@
 // Soft Vacuum: Airwindows Hard Vacuum port with oversampling
-// Copyright (C) 2023 Robbert van der Helm
+// Copyright (C) 2023-2024 Robbert van der Helm
 // Copyright (c) 2018 Chris Johnson
 //
 // This program is free software: you can redistribute it and/or modify
