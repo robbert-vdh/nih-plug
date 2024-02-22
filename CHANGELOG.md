@@ -10,6 +10,12 @@ Since there is no stable release yet, the changes are organized per day in
 reverse chronological order. The main purpose of this document in its current
 state is to list breaking changes.
 
+## [2024-02-22]
+
+### Breaking changes
+
+- `nih_plug_egui` has been updated from egui 0.22.0 to using egui 0.26.1.
+
 ## [2023-12-30]
 
 ### Breaking changes
