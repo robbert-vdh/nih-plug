@@ -38,7 +38,7 @@ pub struct ParamSlider<'a, P: Param> {
     slider_width: Option<f32>,
 
     /// Will be set in the `ui()` function so we can request keyboard input focus on Alt+click.
-    keyboard_focus_id: Option<egui_baseview::egui::Id>,
+    keyboard_focus_id: Option<egui::Id>,
 }
 
 impl<'a, P: Param> ParamSlider<'a, P> {
