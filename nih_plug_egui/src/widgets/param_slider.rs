@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use egui::{vec2, Key, Response, Sense, Stroke, TextEdit, TextStyle, Ui, Vec2, Widget, WidgetText};
+use egui_baseview::egui::{
+    self, emath, vec2, Key, Response, Sense, Stroke, TextEdit, TextStyle, Ui, Vec2, Widget,
+    WidgetText,
+};
 use lazy_static::lazy_static;
 use nih_plug::prelude::{Param, ParamSetter};
 use parking_lot::Mutex;
@@ -35,7 +38,7 @@ pub struct ParamSlider<'a, P: Param> {
     slider_width: Option<f32>,
 
     /// Will be set in the `ui()` function so we can request keyboard input focus on Alt+click.
-    keyboard_focus_id: Option<egui::Id>,
+    keyboard_focus_id: Option<egui_baseview::egui::Id>,
 }
 
 impl<'a, P: Param> ParamSlider<'a, P> {
@@ -199,8 +202,7 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                 response.mark_changed();
             } else {
                 let proportion =
-                    egui::emath::remap_clamp(click_pos.x, response.rect.x_range(), 0.0..=1.0)
-                        as f64;
+                    emath::remap_clamp(click_pos.x, response.rect.x_range(), 0.0..=1.0) as f64;
                 self.set_normalized_value(proportion as f32);
                 response.mark_changed();
                 Self::set_drag_amount_memory(ui, 0.0);
@@ -301,7 +303,12 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                     .layout()
                     .align_size_within_rect(text.size(), response.rect.shrink2(padding))
                     .min;
-                text.paint_with_visuals(ui.painter(), text_pos, &visuals);
+
+                ui.painter().add(egui::epaint::TextShape::new(
+                    text_pos,
+                    text,
+                    visuals.fg_stroke.color,
+                ));
             }
         }
     }

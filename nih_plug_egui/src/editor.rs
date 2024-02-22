@@ -3,7 +3,7 @@
 use baseview::gl::GlConfig;
 use baseview::{Size, WindowHandle, WindowOpenOptions, WindowScalePolicy};
 use crossbeam::atomic::AtomicCell;
-use egui::Context;
+use egui_baseview::egui::Context;
 use egui_baseview::EguiWindow;
 use nih_plug::prelude::{Editor, GuiContext, ParamSetter, ParentWindowHandle};
 use parking_lot::RwLock;
@@ -37,17 +37,17 @@ unsafe impl HasRawWindowHandle for ParentWindowHandleAdapter {
     fn raw_window_handle(&self) -> RawWindowHandle {
         match self.0 {
             ParentWindowHandle::X11Window(window) => {
-                let mut handle = raw_window_handle::XcbHandle::empty();
+                let mut handle = raw_window_handle::XcbWindowHandle::empty();
                 handle.window = window;
                 RawWindowHandle::Xcb(handle)
             }
             ParentWindowHandle::AppKitNsView(ns_view) => {
-                let mut handle = raw_window_handle::AppKitHandle::empty();
+                let mut handle = raw_window_handle::AppKitWindowHandle::empty();
                 handle.ns_view = ns_view;
                 RawWindowHandle::AppKit(handle)
             }
             ParentWindowHandle::Win32Hwnd(hwnd) => {
-                let mut handle = raw_window_handle::Win32Handle::empty();
+                let mut handle = raw_window_handle::Win32WindowHandle::empty();
                 handle.hwnd = hwnd;
                 RawWindowHandle::Win32(handle)
             }
