@@ -142,3 +142,6 @@ strip = "symbols"
 inherits = "release"
 debug = true
 strip = "none"
+
+[toolchain]
+channel = "nightly"

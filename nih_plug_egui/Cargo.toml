@@ -8,27 +8,19 @@ license = "ISC"
 description = "An adapter to use egui GUIs with NIH-plug"
 
 [features]
-default = ["egui-default-features", "opengl"]
-
-# Use egui's default features
-egui-default-features = ["egui/default"]
+default = ["opengl", "default_fonts"]
 # `nih_plug_egui` always uses OpenGL since egui's wgpu backend is still unstable
 # depending on the platform
-opengl = []
+opengl = ["egui-baseview/opengl"]
+default_fonts = ["egui-baseview/default_fonts"]
+rayon = ["egui-baseview/rayon"]
 
 [dependencies]
 nih_plug = { path = ".." }
-
-# The currently targeted version of baseview uses a different version of
-# `raw_window_handle` than NIH-plug, so we need to manually convert between them
-raw-window-handle = "0.4"
-
-baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "1d9806d5bd92275d0d8142d9c9c90198757b9b25" }
+raw-window-handle = "0.5"
+baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "2c1b1a7b0fef1a29a5150a6a8f6fef6a0cbab8c4" }
 crossbeam = "0.8"
-# The `egui-default-features` feature enables the default features. This makes
-# it possible to opt out of this if needed.
-egui = { version = "0.22", default-features = false }
-egui-baseview = { git = "https://github.com/BillyDM/egui-baseview.git", rev = "27c027c22a83d2eb214074f922ba4115f712e483" }
+egui-baseview = { git = "https://github.com/BillyDM/egui-baseview.git", rev = "1fe7e1d0081ab29474b0a5cdc567f60a3219b20d", default-features = false }
 lazy_static = "1.4"
 parking_lot = "0.12"
 # To make the state persistable
