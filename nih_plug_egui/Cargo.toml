@@ -20,7 +20,7 @@ nih_plug = { path = ".." }
 raw-window-handle = "0.5"
 baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "2c1b1a7b0fef1a29a5150a6a8f6fef6a0cbab8c4" }
 crossbeam = "0.8"
-egui-baseview = { git = "https://github.com/BillyDM/egui-baseview.git", rev = "1fe7e1d0081ab29474b0a5cdc567f60a3219b20d", default-features = false }
+egui-baseview = { git = "https://github.com/BillyDM/egui-baseview.git", rev = "bd3c50d0b6de8d5cf526a9b9d089a2a2c0249900", default-features = false }
 lazy_static = "1.4"
 parking_lot = "0.12"
 # To make the state persistable
