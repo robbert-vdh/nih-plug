@@ -1,6 +1,6 @@
 //! Utilities for creating these widgets.
 
-use crate::Rectangle;
+use crate::core::Rectangle;
 
 /// Remap a `[0, 1]` value to an x-coordinate within this rectangle. The value will be clamped to
 /// `[0, 1]` if it isn't already in that range.

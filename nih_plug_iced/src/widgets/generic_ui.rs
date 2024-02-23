@@ -2,6 +2,9 @@
 //! list of sliders and labels.
 
 use atomic_refcell::AtomicRefCell;
+use baseview::{Event, Point};
+use iced_baseview::Renderer;
+use crate::{widget::{self, scrollable::Alignment, Row, Scrollable, Space, Text}};
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::marker::PhantomData;
@@ -10,12 +13,7 @@ use std::sync::Arc;
 use nih_plug::prelude::{Param, ParamFlags, ParamPtr, Params};
 
 use super::{ParamMessage, ParamSlider};
-use crate::backend::Renderer;
-use crate::text::Renderer as TextRenderer;
-use crate::{
-    alignment, event, layout, renderer, widget, Alignment, Clipboard, Element, Event, Layout,
-    Length, Point, Rectangle, Row, Scrollable, Shell, Space, Text, Widget,
-};
+use crate::core::{alignment, event, layout, renderer, Clipboard, Element, Layout, Length, Rectangle, Shell, Widget};
 
 /// A widget that can be used to create a generic UI with. This is used in conjuction with empty
 /// structs to emulate existential types.
@@ -27,7 +25,7 @@ pub trait ParamWidget {
     fn into_widget_element<'a, P: Param>(
         param: &'a P,
         state: &'a mut Self::State,
-    ) -> Element<'a, ParamMessage>;
+    ) -> Element<'a, ParamMessage, Renderer>;
 
     /// The same as [`into_widget_element()`][Self::into_widget_element()], but for a `ParamPtr`.
     ///
@@ -37,7 +35,7 @@ pub trait ParamWidget {
     unsafe fn into_widget_element_raw<'a>(
         param: &ParamPtr,
         state: &'a mut Self::State,
-    ) -> Element<'a, ParamMessage> {
+    ) -> Element<'a, ParamMessage, Renderer> {
         match param {
             ParamPtr::FloatParam(p) => Self::into_widget_element(&**p, state),
             ParamPtr::IntParam(p) => Self::into_widget_element(&**p, state),
@@ -133,16 +131,15 @@ where
 
     /// Create a temporary [`Scrollable`]. This needs to be created on demand because it needs to
     /// mutably borrow the `Scrollable`'s widget state.
-    fn with_scrollable_widget<T, R, F>(
+    fn with_scrollable_widget<T, F>(
         &'a self,
         scrollable_state: &'a mut widget::scrollable::State,
         widget_state: &'a mut HashMap<ParamPtr, W::State>,
-        renderer: R,
+        renderer: &Renderer,
         f: F,
     ) -> T
     where
-        F: FnOnce(Scrollable<'a, ParamMessage>, R) -> T,
-        R: Borrow<Renderer>,
+        F: FnOnce(Scrollable<'a, ParamMessage>, &Renderer) -> T
     {
         let text_size = renderer.borrow().default_size();
         let spacing = (text_size as f32 * 0.2).round() as u16;
@@ -233,10 +230,12 @@ where
 
     fn draw(
         &self,
+        state: &iced_baseview::core::widget::Tree,
         renderer: &mut Renderer,
+        theme: &<Renderer as renderer::Renderer>::Theme,
         style: &renderer::Style,
         layout: Layout<'_>,
-        cursor_position: Point,
+        cursor: iced_baseview::core::mouse::Cursor,
         viewport: &Rectangle,
     ) {
         let mut scrollable_state = self.state.scrollable_state.borrow_mut();
@@ -246,19 +245,21 @@ where
             &mut widget_state,
             renderer,
             |scrollable, renderer| {
-                scrollable.draw(renderer, style, layout, cursor_position, viewport)
+                scrollable.draw(todo!(), renderer, style, todo!(), layout, cursor_position, viewport)
             },
         )
     }
 
     fn on_event(
         &mut self,
-        event: Event,
-        layout: Layout<'_>,
-        cursor_position: Point,
-        renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
-        shell: &mut Shell<'_, ParamMessage>,
+        _state: &mut iced_baseview::core::widget::Tree,
+        _event: event::Event,
+        _layout: Layout<'_>,
+        _cursor: iced_baseview::core::mouse::Cursor,
+        _renderer: &Renderer,
+        _clipboard: &mut dyn Clipboard,
+        _shell: &mut Shell<'_, ParamMessage>,
+        _viewport: &Rectangle,
     ) -> event::Status {
         let mut scrollable_state = self.state.scrollable_state.borrow_mut();
         let mut widget_state = self.state.widget_state.borrow_mut();
@@ -267,10 +268,51 @@ where
             &mut widget_state,
             renderer,
             |mut scrollable, _| {
-                scrollable.on_event(event, layout, cursor_position, renderer, clipboard, shell)
+                scrollable.on_event(todo!(), event, layout, cursor_position, renderer, clipboard, shell, todo!())
             },
         )
     }
+
+    // fn draw(
+    //     &self,
+    //     renderer: &mut Renderer,
+    //     style: &mut renderer::Style,
+    //     layout: Layout<'_>,
+    //     cursor_position: Point,
+    //     viewport: &Rectangle,
+    // ) {
+    //     let mut scrollable_state = self.state.scrollable_state.borrow_mut();
+    //     let mut widget_state = self.state.widget_state.borrow_mut();
+    //     self.with_scrollable_widget(
+    //         &mut scrollable_state,
+    //         &mut widget_state,
+    //         renderer,
+    //         |scrollable, renderer| {
+    //             scrollable.draw(todo!(), renderer, style, todo!(), layout, cursor_position, viewport)
+    //         },
+    //     )
+    // }
+
+    // fn on_event(
+    //     &mut self,
+    //     event: Event,
+    //     layout: Layout<'_>,
+    //     cursor_position: Point,
+    //     renderer: &Renderer,
+    //     clipboard: &mut dyn Clipboard,
+    //     shell: &mut Shell<'_, ParamMessage>,
+    // ) -> event::Status {
+    //     let mut scrollable_state = self.state.scrollable_state.borrow_mut();
+    //     let mut widget_state = self.state.widget_state.borrow_mut();
+    //     self.with_scrollable_widget(
+    //         &mut scrollable_state,
+    //         &mut widget_state,
+    //         renderer,
+    //         |mut scrollable, _| {
+    //             scrollable.on_event(todo!(), event, layout, cursor_position, renderer, clipboard, shell, todo!())
+    //         },
+    //     )
+    // }
 }
 
 impl ParamWidget for GenericSlider {
@@ -279,7 +321,7 @@ impl ParamWidget for GenericSlider {
     fn into_widget_element<'a, P: Param>(
         param: &'a P,
         state: &'a mut Self::State,
-    ) -> Element<'a, ParamMessage> {
+    ) -> Element<'a, ParamMessage, Renderer> {
         ParamSlider::new(state, param).into()
     }
 }
@@ -289,7 +331,7 @@ impl<'a, W: ParamWidget> GenericUi<'a, W> {
     /// variant on your own message type that wraps around [`ParamMessage`] so you can forward those
     /// messages to
     /// [`IcedEditor::handle_param_message()`][crate::IcedEditor::handle_param_message()].
-    pub fn map<Message, F>(self, f: F) -> Element<'a, Message>
+    pub fn map<Message, F>(self, f: F) -> Element<'a, Message, Renderer>
     where
         Message: 'static,
         F: Fn(ParamMessage) -> Message + 'static,
@@ -298,7 +340,7 @@ impl<'a, W: ParamWidget> GenericUi<'a, W> {
     }
 }
 
-impl<'a, W> From<GenericUi<'a, W>> for Element<'a, ParamMessage>
+impl<'a, W> From<GenericUi<'a, W>> for Element<'a, ParamMessage, Renderer>
 where
     W: ParamWidget,
 {

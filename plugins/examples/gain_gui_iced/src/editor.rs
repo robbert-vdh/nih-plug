@@ -1,5 +1,7 @@
 use atomic_float::AtomicF32;
 use nih_plug::prelude::{util, Editor, GuiContext};
+use nih_plug_iced::assets::noto_sans_fonts_data;
+use nih_plug_iced::style::Theme;
 use nih_plug_iced::widgets as nih_widgets;
 use nih_plug_iced::*;
 use std::sync::Arc;
@@ -17,7 +19,7 @@ pub(crate) fn create(
     peak_meter: Arc<AtomicF32>,
     editor_state: Arc<IcedState>,
 ) -> Option<Box<dyn Editor>> {
-    create_iced_editor::<GainEditor>(editor_state, (params, peak_meter))
+    create_iced_editor::<GainEditor>(editor_state, (params, peak_meter), noto_sans_fonts_data().into())
 }
 
 struct GainEditor {
@@ -39,7 +41,8 @@ enum Message {
 impl IcedEditor for GainEditor {
     type Executor = executor::Default;
     type Message = Message;
-    type InitializationFlags = (Arc<GainParams>, Arc<AtomicF32>);
+    type InitializationFlags = (Arc<GainParams>, Arc<AtomicF32>);    
+    type Theme = Theme;
 
     fn new(
         (params, peak_meter): Self::InitializationFlags,

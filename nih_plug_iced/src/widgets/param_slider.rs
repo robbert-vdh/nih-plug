@@ -1,16 +1,18 @@
 //! A slider that integrates with NIH-plug's [`Param`] types.
 
-use atomic_refcell::AtomicRefCell;
+use iced_baseview::widget::text_input;
+use iced_baseview::widget::text_input::Id;
+use iced_baseview::widget::TextInput;
 use nih_plug::prelude::Param;
 use std::borrow::Borrow;
 
-use crate::backend::widget;
-use crate::backend::Renderer;
-use crate::renderer::Renderer as GraphicsRenderer;
-use crate::text::Renderer as TextRenderer;
-use crate::{
+use iced_baseview::Renderer;
+use crate::core::widget;
+use crate::core::renderer::Renderer as GraphicsRenderer;
+use crate::core::text::Renderer as TextRenderer;
+use crate::core::{
     alignment, event, keyboard, layout, mouse, renderer, text, touch, Background, Clipboard, Color,
-    Element, Event, Font, Layout, Length, Point, Rectangle, Shell, Size, TextInput, Vector, Widget,
+    Element, Event, Font, Layout, Length, Point, Rectangle, Shell, Size, Vector, Widget,
 };
 
 use super::util;
@@ -34,12 +36,12 @@ pub struct ParamSlider<'a, P: Param> {
 
     height: Length,
     width: Length,
-    text_size: Option<u16>,
+    text_size: Option<f32>,
     font: Font,
 }
 
 /// State for a [`ParamSlider`].
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct State {
     keyboard_modifiers: keyboard::Modifiers,
     /// Will be set to `true` if we're dragging the parameter. Resetting the parameter or entering a
@@ -51,11 +53,22 @@ pub struct State {
     /// Track clicks for double clicks.
     last_click: Option<mouse::Click>,
 
-    /// State for the text input overlay that will be shown when this widget is alt+clicked.
-    text_input_state: AtomicRefCell<widget::text_input::State>,
+    // /// State for the text input overlay that will be shown when this widget is alt+clicked.
+    // text_input_state: AtomicRefCell<crate::widget::text_input::State>,
     /// The text that's currently in the text input. If this is set to `None`, then the text input
     /// is not visible.
     text_input_value: Option<String>,
+
+    text_input_id: Id,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self { 
+            text_input_id: Id::unique(),
+            ..Default::default()
+        }
+    }
 }
 
 /// An internal message for intercep- I mean handling output from the embedded [`TextInpu`] widget.
@@ -70,29 +83,40 @@ enum TextInputMessage {
 /// The default text input style with the border removed.
 struct TextInputStyle;
 
-impl widget::text_input::StyleSheet for TextInputStyle {
-    fn active(&self) -> widget::text_input::Style {
-        widget::text_input::Style {
+impl crate::widget::text_input::StyleSheet for TextInputStyle {
+    type Style = ();
+
+    fn disabled_color(&self, style: &Self::Style) -> Color {
+        todo!()
+    }
+
+    fn disabled(&self, style: &Self::Style) -> iced_baseview::widget::text_input::Appearance {
+        todo!()
+    }
+
+    fn active(&self, style: &Self::Style) -> iced_baseview::widget::text_input::Appearance {
+        iced_baseview::widget::text_input::Appearance {
             background: Background::Color(Color::TRANSPARENT),
-            border_radius: 0.0,
+            border_radius: 0.0.into(),
             border_width: 0.0,
             border_color: Color::TRANSPARENT,
+            icon_color: Color::TRANSPARENT,
         }
     }
 
-    fn focused(&self) -> widget::text_input::Style {
-        self.active()
+    fn focused(&self, style: &Self::Style) -> iced_baseview::widget::text_input::Appearance {
+        self.active(style)
     }
 
-    fn placeholder_color(&self) -> Color {
+    fn placeholder_color(&self, style: &Self::Style) -> Color {
         Color::from_rgb(0.7, 0.7, 0.7)
     }
 
-    fn value_color(&self) -> Color {
+    fn value_color(&self, style: &Self::Style) -> Color {
         Color::from_rgb(0.3, 0.3, 0.3)
     }
 
-    fn selection_color(&self) -> Color {
+    fn selection_color(&self, style: &Self::Style) -> Color {
         Color::from_rgb(0.8, 0.8, 1.0)
     }
 }
@@ -105,8 +129,8 @@ impl<'a, P: Param> ParamSlider<'a, P> {
 
             param,
 
-            width: Length::Units(180),
-            height: Length::Units(30),
+            width: Length::Fixed(180.0),
+            height: Length::Fixed(30.0),
             text_size: None,
             font: <Renderer as TextRenderer>::Font::default(),
         }
@@ -125,7 +149,7 @@ impl<'a, P: Param> ParamSlider<'a, P> {
     }
 
     /// Sets the text size of the [`ParamSlider`].
-    pub fn text_size(mut self, size: u16) -> Self {
+    pub fn text_size(mut self, size: f32) -> Self {
         self.text_size = Some(size);
         self
     }
@@ -143,25 +167,24 @@ impl<'a, P: Param> ParamSlider<'a, P> {
         F: FnOnce(TextInput<'_, TextInputMessage>, Layout, R) -> T,
         R: Borrow<Renderer>,
     {
-        let mut text_input_state = self.state.text_input_state.borrow_mut();
-        text_input_state.focus();
+        // let mut text_input_state = self.state.text_input_state.borrow_mut();
+        // text_input_state.focus();
 
         let text_size = self
             .text_size
             .unwrap_or_else(|| renderer.borrow().default_size());
         let text_width = renderer
             .borrow()
-            .measure_width(current_value, text_size, self.font);
+            .measure_width(current_value, text_size, self.font, Default::default());
         let text_input = TextInput::new(
-            &mut text_input_state,
             "",
             current_value,
-            TextInputMessage::Value,
         )
+        .id(self.state.text_input_id)
         .font(self.font)
         .size(text_size)
-        .width(Length::Units(text_width.ceil() as u16))
-        .style(TextInputStyle)
+        .width(Length::Fixed(text_width))
+        // .style(TextInputStyle)
         .on_submit(TextInputMessage::Submit);
 
         // Make sure to not draw over the borders, and center the text
@@ -220,14 +243,148 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
         layout::Node::new(size)
     }
 
+    fn draw(
+        &self,
+        _state: &widget::Tree,
+        renderer: &mut Renderer,
+        _theme: &<Renderer as GraphicsRenderer>::Theme,
+        style: &renderer::Style,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        _viewport: &Rectangle,
+    ) {
+        let bounds = layout.bounds();
+        // I'm sure there's some philosophical meaning behind this
+        let bounds_without_borders = Rectangle {
+            x: bounds.x + BORDER_WIDTH,
+            y: bounds.y + BORDER_WIDTH,
+            width: bounds.width - (BORDER_WIDTH * 2.0),
+            height: bounds.height - (BORDER_WIDTH * 2.0),
+        };
+        let is_mouse_over = if let Some(cursor_position) = cursor.position() {
+            bounds.contains(cursor_position)
+        } else {
+            false
+        };
+
+        // The bar itself, show a different background color when the value is being edited or when
+        // the mouse is hovering over it to indicate that it's interactive
+        let background_color =
+            if is_mouse_over || self.state.drag_active || self.state.text_input_value.is_some() {
+                Color::new(0.5, 0.5, 0.5, 0.1)
+            } else {
+                Color::TRANSPARENT
+            };
+
+        renderer.fill_quad(
+            renderer::Quad {
+                bounds,
+                border_color: Color::BLACK,
+                border_width: BORDER_WIDTH,
+                border_radius: 0.0.into(),
+            },
+            background_color,
+        );
+
+        // Only draw the text input widget when it gets focussed. Otherwise, overlay the label with
+        // the slider.
+        if let Some(current_value) = &self.state.text_input_value {
+            self.with_text_input(
+                layout,
+                renderer,
+                current_value,
+                |text_input, layout, renderer| {
+                    text_input.draw(
+                        todo!(),
+                        renderer,
+                        todo!(),
+                        layout,
+                        cursor,
+                        None
+                    )
+                },
+            )
+        } else {
+            // We'll visualize the difference between the current value and the default value if the
+            // default value lies somewhere in the middle and the parameter is continuous. Otherwise
+            // this appraoch looks a bit jarring.
+            let current_value = self.param.modulated_normalized_value();
+            let default_value = self.param.default_normalized_value();
+            let fill_start_x = util::remap_rect_x_t(
+                &bounds_without_borders,
+                if self.param.step_count().is_none() && (0.45..=0.55).contains(&default_value) {
+                    default_value
+                } else {
+                    0.0
+                },
+            );
+            let fill_end_x = util::remap_rect_x_t(&bounds_without_borders, current_value);
+
+            let fill_color = Color::from_rgb8(196, 196, 196);
+            let fill_rect = Rectangle {
+                x: fill_start_x.min(fill_end_x),
+                width: (fill_end_x - fill_start_x).abs(),
+                ..bounds_without_borders
+            };
+            renderer.fill_quad(
+                renderer::Quad {
+                    bounds: fill_rect,
+                    border_color: Color::TRANSPARENT,
+                    border_width: 0.0,
+                    border_radius: 0.0.into(),
+                },
+                fill_color,
+            );
+
+            // To make it more readable (and because it looks cool), the parts that overlap with the
+            // fill rect will be rendered in white while the rest will be rendered in black.
+            let display_value = self.param.to_string();
+            let text_size = self.text_size.unwrap_or_else(|| renderer.default_size()) as f32;
+            let text_bounds = Rectangle {
+                x: bounds.center_x(),
+                y: bounds.center_y(),
+                ..bounds
+            };
+            renderer.fill_text(text::Text {
+                content: &display_value,
+                font: self.font,
+                size: text_size,
+                bounds: text_bounds,
+                color: style.text_color,
+                horizontal_alignment: alignment::Horizontal::Center,
+                vertical_alignment: alignment::Vertical::Center,
+                line_height: text::LineHeight::Relative(1.0),
+                shaping: Default::default(),
+            });
+
+            // This will clip to the filled area
+            renderer.with_layer(fill_rect, |renderer| {
+                let filled_text_color = Color::from_rgb8(80, 80, 80);
+                renderer.fill_text(text::Text {
+                    content: &display_value,
+                    font: self.font,
+                    size: text_size,
+                    bounds: text_bounds,
+                    color: filled_text_color,
+                    horizontal_alignment: alignment::Horizontal::Center,
+                    vertical_alignment: alignment::Vertical::Center,
+                    line_height: text::LineHeight::Relative(1.0),
+                    shaping: Default::default(),
+                });
+            });
+        }
+    }
+
     fn on_event(
         &mut self,
+        state: &mut widget::Tree,
         event: Event,
         layout: Layout<'_>,
-        cursor_position: Point,
+        cursor: mouse::Cursor,
         renderer: &Renderer,
         clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, ParamMessage>,
+        _viewport: &Rectangle,
     ) -> event::Status {
         // The pressence of a value in `self.state.text_input_value` indicates that the field should
         // be focussed. The field handles defocussing by itself
@@ -245,19 +402,21 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
                 current_value,
                 |mut text_input, layout, renderer| {
                     text_input.on_event(
+                        todo!(),
                         event,
                         layout,
-                        cursor_position,
+                        cursor,
                         renderer,
                         clipboard,
                         &mut text_input_shell,
+                        todo!(),
                     )
                 },
             );
 
             // Pressing escape will unfocus the text field, so we should propagate that change in
             // our own model
-            if self.state.text_input_state.borrow().is_focused() {
+            if state.text_input_state.borrow().is_focused() {
                 for message in messages {
                     match message {
                         TextInputMessage::Value(s) => self.state.text_input_value = Some(s),
@@ -302,48 +461,51 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
         match event {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
             | Event::Touch(touch::Event::FingerPressed { .. }) => {
-                if bounds.contains(cursor_position) {
-                    let click = mouse::Click::new(cursor_position, self.state.last_click);
-                    self.state.last_click = Some(click);
-                    if self.state.keyboard_modifiers.alt() {
-                        // Alt+click should not start a drag, instead it should show the text entry
-                        // widget
-                        self.state.drag_active = false;
+                if let Some(cursor_position) = cursor.position() {
+                    if bounds.contains(cursor_position) {
+                        let click = mouse::Click::new(cursor_position, self.state.last_click);
+                        self.state.last_click = Some(click);
+                        if self.state.keyboard_modifiers.alt() {
+                            // Alt+click should not start a drag, instead it should show the text entry
+                            // widget
+                            self.state.drag_active = false;
+    
+                            // Changing the parameter happens in the TextInput event handler above
+                            self.state.text_input_value = Some(self.param.to_string());
 
-                        // Changing the parameter happens in the TextInput event handler above
-                        let mut text_input_state = self.state.text_input_state.borrow_mut();
-                        self.state.text_input_value = Some(self.param.to_string());
-                        text_input_state.move_cursor_to_end();
-                        text_input_state.select_all();
-                    } else if self.state.keyboard_modifiers.command()
-                        || matches!(click.kind(), mouse::click::Kind::Double)
-                    {
-                        // Likewise resetting a parameter should not let you immediately drag it to a new value
-                        self.state.drag_active = false;
-
-                        shell.publish(ParamMessage::BeginSetParameter(self.param.as_ptr()));
-                        self.set_normalized_value(shell, self.param.default_normalized_value());
-                        shell.publish(ParamMessage::EndSetParameter(self.param.as_ptr()));
-                    } else if self.state.keyboard_modifiers.shift() {
-                        shell.publish(ParamMessage::BeginSetParameter(self.param.as_ptr()));
-                        self.state.drag_active = true;
-
-                        // When holding down shift while clicking on a parameter we want to
-                        // granuarly edit the parameter without jumping to a new value
-                        self.state.granular_drag_start_x_value =
-                            Some((cursor_position.x, self.param.modulated_normalized_value()));
-                    } else {
-                        shell.publish(ParamMessage::BeginSetParameter(self.param.as_ptr()));
-                        self.state.drag_active = true;
-
-                        self.set_normalized_value(
-                            shell,
-                            util::remap_rect_x_coordinate(&bounds, cursor_position.x),
-                        );
-                        self.state.granular_drag_start_x_value = None;
+                            // TODO!!!! send these commands somehow
+                            text_input::move_cursor_to_end(self.state.text_input_id);
+                            text_input::select_all(self.state.text_input_id);
+                        } else if self.state.keyboard_modifiers.command()
+                            || matches!(click.kind(), mouse::click::Kind::Double)
+                        {
+                            // Likewise resetting a parameter should not let you immediately drag it to a new value
+                            self.state.drag_active = false;
+    
+                            shell.publish(ParamMessage::BeginSetParameter(self.param.as_ptr()));
+                            self.set_normalized_value(shell, self.param.default_normalized_value());
+                            shell.publish(ParamMessage::EndSetParameter(self.param.as_ptr()));
+                        } else if self.state.keyboard_modifiers.shift() {
+                            shell.publish(ParamMessage::BeginSetParameter(self.param.as_ptr()));
+                            self.state.drag_active = true;
+    
+                            // When holding down shift while clicking on a parameter we want to
+                            // granuarly edit the parameter without jumping to a new value
+                            self.state.granular_drag_start_x_value =
+                                Some((cursor_position.x, self.param.modulated_normalized_value()));
+                        } else {
+                            shell.publish(ParamMessage::BeginSetParameter(self.param.as_ptr()));
+                            self.state.drag_active = true;
+    
+                            self.set_normalized_value(
+                                shell,
+                                util::remap_rect_x_coordinate(&bounds, cursor_position.x),
+                            );
+                            self.state.granular_drag_start_x_value = None;
+                        }
+    
+                        return event::Status::Captured;
                     }
-
-                    return event::Status::Captured;
                 }
             }
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
@@ -362,29 +524,31 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
                 if self.state.drag_active {
                     // If shift is being held then the drag should be more granular instead of
                     // absolute
-                    if self.state.keyboard_modifiers.shift() {
-                        let (drag_start_x, drag_start_value) = *self
-                            .state
-                            .granular_drag_start_x_value
-                            .get_or_insert_with(|| {
-                                (cursor_position.x, self.param.modulated_normalized_value())
-                            });
-
-                        self.set_normalized_value(
-                            shell,
-                            util::remap_rect_x_coordinate(
-                                &bounds,
-                                util::remap_rect_x_t(&bounds, drag_start_value)
-                                    + (cursor_position.x - drag_start_x) * GRANULAR_DRAG_MULTIPLIER,
-                            ),
-                        );
-                    } else {
-                        self.state.granular_drag_start_x_value = None;
-
-                        self.set_normalized_value(
-                            shell,
-                            util::remap_rect_x_coordinate(&bounds, cursor_position.x),
-                        );
+                    if let Some(cursor_position) = cursor.position() {
+                        if self.state.keyboard_modifiers.shift() {
+                            let (drag_start_x, drag_start_value) = *self
+                                .state
+                                .granular_drag_start_x_value
+                                .get_or_insert_with(|| {
+                                    (cursor_position.x, self.param.modulated_normalized_value())
+                                });
+    
+                            self.set_normalized_value(
+                                shell,
+                                util::remap_rect_x_coordinate(
+                                    &bounds,
+                                    util::remap_rect_x_t(&bounds, drag_start_value)
+                                        + (cursor_position.x - drag_start_x) * GRANULAR_DRAG_MULTIPLIER,
+                                ),
+                            );
+                        } else {
+                            self.state.granular_drag_start_x_value = None;
+    
+                            self.set_normalized_value(
+                                shell,
+                                util::remap_rect_x_coordinate(&bounds, cursor_position.x),
+                            );
+                        }
                     }
 
                     return event::Status::Captured;
@@ -401,10 +565,12 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
                 {
                     self.state.granular_drag_start_x_value = None;
 
-                    self.set_normalized_value(
-                        shell,
-                        util::remap_rect_x_coordinate(&bounds, cursor_position.x),
-                    );
+                    if let Some(cursor_position) = cursor.position() {
+                        self.set_normalized_value(
+                            shell,
+                            util::remap_rect_x_coordinate(&bounds, cursor_position.x),
+                        );
+                    }
                 }
 
                 return event::Status::Captured;
@@ -415,137 +581,35 @@ impl<'a, P: Param> Widget<ParamMessage, Renderer> for ParamSlider<'a, P> {
         event::Status::Ignored
     }
 
+
     fn mouse_interaction(
         &self,
-        layout: Layout<'_>,
-        cursor_position: Point,
+        _state: &widget::Tree,
+        _layout: Layout<'_>,
+        _cursor: mouse::Cursor,
         _viewport: &Rectangle,
         _renderer: &Renderer,
     ) -> mouse::Interaction {
-        let bounds = layout.bounds();
-        let is_mouse_over = bounds.contains(cursor_position);
-
-        if is_mouse_over {
-            mouse::Interaction::Pointer
-        } else {
-            mouse::Interaction::default()
-        }
+        mouse::Interaction::Idle
     }
 
-    fn draw(
-        &self,
-        renderer: &mut Renderer,
-        style: &renderer::Style,
-        layout: Layout<'_>,
-        cursor_position: Point,
-        _viewport: &Rectangle,
-    ) {
-        let bounds = layout.bounds();
-        // I'm sure there's some philosophical meaning behind this
-        let bounds_without_borders = Rectangle {
-            x: bounds.x + BORDER_WIDTH,
-            y: bounds.y + BORDER_WIDTH,
-            width: bounds.width - (BORDER_WIDTH * 2.0),
-            height: bounds.height - (BORDER_WIDTH * 2.0),
-        };
-        let is_mouse_over = bounds.contains(cursor_position);
+    // fn mouse_interaction(
+    //     &self,
+    //     layout: Layout<'_>,
+    //     cursor_position: Point,
+    //     _viewport: &Rectangle,
+    //     _renderer: &Renderer,
+    // ) -> mouse::Interaction {
+    //     let bounds = layout.bounds();
+    //     let is_mouse_over = bounds.contains(cursor_position);
 
-        // The bar itself, show a different background color when the value is being edited or when
-        // the mouse is hovering over it to indicate that it's interactive
-        let background_color =
-            if is_mouse_over || self.state.drag_active || self.state.text_input_value.is_some() {
-                Color::new(0.5, 0.5, 0.5, 0.1)
-            } else {
-                Color::TRANSPARENT
-            };
+    //     if is_mouse_over {
+    //         mouse::Interaction::Pointer
+    //     } else {
+    //         mouse::Interaction::default()
+    //     }
+    // }
 
-        renderer.fill_quad(
-            renderer::Quad {
-                bounds,
-                border_color: Color::BLACK,
-                border_width: BORDER_WIDTH,
-                border_radius: 0.0,
-            },
-            background_color,
-        );
-
-        // Only draw the text input widget when it gets focussed. Otherwise, overlay the label with
-        // the slider.
-        if let Some(current_value) = &self.state.text_input_value {
-            self.with_text_input(
-                layout,
-                renderer,
-                current_value,
-                |text_input, layout, renderer| {
-                    text_input.draw(renderer, layout, cursor_position, None)
-                },
-            )
-        } else {
-            // We'll visualize the difference between the current value and the default value if the
-            // default value lies somewhere in the middle and the parameter is continuous. Otherwise
-            // this appraoch looks a bit jarring.
-            let current_value = self.param.modulated_normalized_value();
-            let default_value = self.param.default_normalized_value();
-            let fill_start_x = util::remap_rect_x_t(
-                &bounds_without_borders,
-                if self.param.step_count().is_none() && (0.45..=0.55).contains(&default_value) {
-                    default_value
-                } else {
-                    0.0
-                },
-            );
-            let fill_end_x = util::remap_rect_x_t(&bounds_without_borders, current_value);
-
-            let fill_color = Color::from_rgb8(196, 196, 196);
-            let fill_rect = Rectangle {
-                x: fill_start_x.min(fill_end_x),
-                width: (fill_end_x - fill_start_x).abs(),
-                ..bounds_without_borders
-            };
-            renderer.fill_quad(
-                renderer::Quad {
-                    bounds: fill_rect,
-                    border_color: Color::TRANSPARENT,
-                    border_width: 0.0,
-                    border_radius: 0.0,
-                },
-                fill_color,
-            );
-
-            // To make it more readable (and because it looks cool), the parts that overlap with the
-            // fill rect will be rendered in white while the rest will be rendered in black.
-            let display_value = self.param.to_string();
-            let text_size = self.text_size.unwrap_or_else(|| renderer.default_size()) as f32;
-            let text_bounds = Rectangle {
-                x: bounds.center_x(),
-                y: bounds.center_y(),
-                ..bounds
-            };
-            renderer.fill_text(text::Text {
-                content: &display_value,
-                font: self.font,
-                size: text_size,
-                bounds: text_bounds,
-                color: style.text_color,
-                horizontal_alignment: alignment::Horizontal::Center,
-                vertical_alignment: alignment::Vertical::Center,
-            });
-
-            // This will clip to the filled area
-            renderer.with_layer(fill_rect, |renderer| {
-                let filled_text_color = Color::from_rgb8(80, 80, 80);
-                renderer.fill_text(text::Text {
-                    content: &display_value,
-                    font: self.font,
-                    size: text_size,
-                    bounds: text_bounds,
-                    color: filled_text_color,
-                    horizontal_alignment: alignment::Horizontal::Center,
-                    vertical_alignment: alignment::Vertical::Center,
-                });
-            });
-        }
-    }
 }
 
 impl<'a, P: Param> ParamSlider<'a, P> {
@@ -553,7 +617,7 @@ impl<'a, P: Param> ParamSlider<'a, P> {
     /// variant on your own message type that wraps around [`ParamMessage`] so you can forward those
     /// messages to
     /// [`IcedEditor::handle_param_message()`][crate::IcedEditor::handle_param_message()].
-    pub fn map<Message, F>(self, f: F) -> Element<'a, Message>
+    pub fn map<Message, F>(self, f: F) -> Element<'a, Message, Renderer>
     where
         Message: 'static,
         F: Fn(ParamMessage) -> Message + 'static,
@@ -562,7 +626,7 @@ impl<'a, P: Param> ParamSlider<'a, P> {
     }
 }
 
-impl<'a, P: Param> From<ParamSlider<'a, P>> for Element<'a, ParamMessage> {
+impl<'a, P: Param> From<ParamSlider<'a, P>> for Element<'a, ParamMessage, Renderer> {
     fn from(widget: ParamSlider<'a, P>) -> Self {
         Element::new(widget)
     }
