@@ -10,6 +10,12 @@ Since there is no stable release yet, the changes are organized per day in
 reverse chronological order. The main purpose of this document in its current
 state is to list breaking changes.
 
+## [2024-02-23]
+
+### Fixed
+
+- Fixed `nih_plug_egui` panicking due to cursor icons not yet being implemented in baseview for MacOS and Windows.
+
 ## [2024-02-22]
 
 ### Breaking changes
