@@ -56,7 +56,7 @@ async-std = ["iced_baseview/async-std"]
 smol = ["iced_baseview/smol"]
 
 [dependencies]
-nih_plug = { path = ".." }
+nih_plug = { path = "..", default-features = false }
 nih_plug_assets = { git = "https://github.com/robbert-vdh/nih_plug_assets.git" }
 
 # The currently targeted version of baseview uses a different version of

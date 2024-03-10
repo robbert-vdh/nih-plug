@@ -16,7 +16,7 @@ default_fonts = ["egui-baseview/default_fonts"]
 rayon = ["egui-baseview/rayon"]
 
 [dependencies]
-nih_plug = { path = ".." }
+nih_plug = { path = "..", default-features = false }
 raw-window-handle = "0.5"
 baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "2c1b1a7b0fef1a29a5150a6a8f6fef6a0cbab8c4" }
 crossbeam = "0.8"
