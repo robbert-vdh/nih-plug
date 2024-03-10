@@ -54,8 +54,9 @@ jobs:
         uses: dtolnay/rust-toolchain@nightly
       - name: Run the tests
         # Don't use --all-features as that will enable a whole bunch of
-        # conflicting iced features
-        run: cargo test --workspace --features "simd,standalone,zstd"
+        # conflicting iced features. `--locked` ensures that the lockfile is up
+        # to date. We only really need this in one of the builds.
+        run: cargo test --locked --workspace --features "simd,standalone,zstd"
 
   # This makes sure that NIH-plug can be compiled without VST3 support
   build-without-vst3:
