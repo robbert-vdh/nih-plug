@@ -11,6 +11,7 @@ description = "A simple but modern API-agnostic audio plugin framework"
 repository = "https://github.com/robbert-vdh/nih-plug"
 
 [workspace]
+resolver = "2"
 members = [
   "nih_plug_derive",
   "nih_plug_egui",
