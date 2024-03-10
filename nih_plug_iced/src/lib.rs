@@ -89,12 +89,20 @@
 //! }
 //! ```
 
-use baseview::WindowScalePolicy;
+use ::baseview::WindowScalePolicy;
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel;
+use iced_baseview::core::{Color, Element, Font};
+use iced_baseview::futures::{Executor, Subscription};
+use iced_baseview::graphics::Antialiasing;
+use iced_baseview::runtime::Command;
+use iced_baseview::style::application::StyleSheet;
+use iced_baseview::widget::renderer::Settings as RendererSettings;
+use iced_baseview::window::WindowSubs;
 use nih_plug::params::persist::PersistentField;
 use nih_plug::prelude::{Editor, GuiContext};
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 // This doesn't need to be re-export but otherwise the compiler complains about
 // `hidden_glob_reexports`
 pub use std::fmt::Debug;
@@ -126,6 +134,7 @@ mod wrapper;
 pub fn create_iced_editor<E: IcedEditor>(
     iced_state: Arc<IcedState>,
     initialization_flags: E::InitializationFlags,
+    fonts: Vec<Cow<'static, [u8]>>,
 ) -> Option<Box<dyn Editor>> {
     // We need some way to communicate parameter changes to the `IcedEditor` since parameter updates
     // come from outside of the editor's reactive model. This contains only capacity to store only
@@ -147,6 +156,7 @@ pub fn create_iced_editor<E: IcedEditor>(
 
         parameter_updates_sender,
         parameter_updates_receiver: Arc::new(parameter_updates_receiver),
+        fonts,
     }))
 }
 
@@ -162,6 +172,8 @@ pub trait IcedEditor: 'static + Send + Sync + Sized {
     type Message: 'static + Clone + Debug + Send;
     /// See [`Application::Flags`].
     type InitializationFlags: 'static + Clone + Send + Sync;
+    /// See [`Application::Theme`]
+    type Theme: Default + StyleSheet;
 
     /// See [`Application::new`]. This also receivs the GUI context in addition to the flags.
     fn new(
@@ -179,7 +191,6 @@ pub trait IcedEditor: 'static + Send + Sync + Sized {
     /// [`handle_param_message()`][Self::handle_param_message()] to handle the parameter update.
     fn update(
         &mut self,
-        window: &mut WindowQueue,
         message: Self::Message,
     ) -> Command<Self::Message>;
 
@@ -192,11 +203,19 @@ pub trait IcedEditor: 'static + Send + Sync + Sized {
     }
 
     /// See [`Application::view`].
-    fn view(&mut self) -> Element<'_, Self::Message>;
+    fn view(&self) -> Element<'_, Self::Message, Renderer<Self::Theme>>;
 
     /// See [`Application::background_color`].
     fn background_color(&self) -> Color {
         Color::WHITE
+    }
+
+    fn theme(&self) -> Self::Theme {
+        Self::Theme::default()
+    }
+
+    fn title(&self) -> String {
+        "nih_plug plugin".to_owned()
     }
 
     /// See [`Application::scale_policy`].
@@ -207,16 +226,13 @@ pub trait IcedEditor: 'static + Send + Sync + Sized {
     }
 
     /// See [`Application::renderer_settings`].
-    fn renderer_settings() -> iced_baseview::backend::settings::Settings {
-        iced_baseview::backend::settings::Settings {
+    fn renderer_settings() -> RendererSettings {
+        RendererSettings {
             // Enable some anti-aliasing by default. Since GUIs are likely very simple and most of
             // the work will be on the CPU anyways this should not affect performance much.
-            antialiasing: Some(iced_baseview::backend::settings::Antialiasing::MSAAx4),
-            // Use Noto Sans as the default font as that renders a bit more cleanly than the default
-            // Lato font. This crate also contains other weights and versions of this font you can
-            // use for individual widgets.
-            default_font: Some(crate::assets::fonts::NOTO_SANS_REGULAR),
-            ..iced_baseview::backend::settings::Settings::default()
+            antialiasing: Some(Antialiasing::MSAAx4),
+            default_font: Font::DEFAULT,
+            ..RendererSettings::default()
         }
     }
 

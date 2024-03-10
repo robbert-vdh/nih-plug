@@ -5,11 +5,11 @@ use std::marker::PhantomData;
 use std::time::Duration;
 use std::time::Instant;
 
-use crate::backend::Renderer;
-use crate::renderer::Renderer as GraphicsRenderer;
-use crate::text::Renderer as TextRenderer;
-use crate::{
-    alignment, layout, renderer, text, Background, Color, Element, Font, Layout, Length, Point,
+use iced_baseview::Renderer;
+use crate::core::renderer::Renderer as GraphicsRenderer;
+use crate::core::text::Renderer as TextRenderer;
+use crate::core::{
+    alignment, layout, renderer, text, Background, Color, Element, Font, Layout, Length, 
     Rectangle, Size, Widget,
 };
 
@@ -61,8 +61,8 @@ impl<'a, Message> PeakMeter<'a, Message> {
 
             hold_time: None,
 
-            width: Length::Units(180),
-            height: Length::Units(30),
+            width: Length::Fixed(180.0),
+            height: Length::Fixed(30.0),
             text_size: None,
             font: <Renderer as TextRenderer>::Font::default(),
 
@@ -122,10 +122,12 @@ where
 
     fn draw(
         &self,
+        _state: &iced_baseview::core::widget::Tree,
         renderer: &mut Renderer,
+        _theme: &<Renderer as GraphicsRenderer>::Theme,
         style: &renderer::Style,
         layout: Layout<'_>,
-        _cursor_position: Point,
+        _cursor: iced_baseview::core::mouse::Cursor,
         _viewport: &Rectangle,
     ) {
         let bounds = layout.bounds();
@@ -181,7 +183,7 @@ where
             renderer.fill_quad(
                 renderer::Quad {
                     bounds: tick_bounds,
-                    border_radius: 0.0,
+                    border_radius: 0.0.into(),
                     border_width: 0.0,
                     border_color: Color::TRANSPARENT,
                 },
@@ -211,7 +213,7 @@ where
                         width: TICK_WIDTH,
                         height: bar_bounds.height - (BORDER_WIDTH * 2.0),
                     },
-                    border_radius: 0.0,
+                    border_radius: 0.0.into(),
                     border_width: 0.0,
                     border_color: Color::TRANSPARENT,
                 },
@@ -223,7 +225,7 @@ where
         renderer.fill_quad(
             renderer::Quad {
                 bounds: bar_bounds,
-                border_radius: 0.0,
+                border_radius: 0.0.into(),
                 border_width: BORDER_WIDTH,
                 border_color: Color::BLACK,
             },
@@ -242,7 +244,7 @@ where
                         width: TICK_WIDTH,
                         height: ticks_bounds.height * 0.3,
                     },
-                    border_radius: 0.0,
+                    border_radius: 0.0.into(),
                     border_width: 0.0,
                     border_color: Color::TRANSPARENT,
                 },
@@ -266,12 +268,14 @@ where
                 color: style.text_color,
                 horizontal_alignment: alignment::Horizontal::Center,
                 vertical_alignment: alignment::Vertical::Top,
+                line_height: Default::default(),
+                shaping: Default::default(),
             });
         }
 
         // Every proper graph needs a unit label
         let zero_db_x_coordinate = db_to_x_coord(0.0);
-        let zero_db_text_width = renderer.measure_width("0", text_size, self.font);
+        let zero_db_text_width = renderer.measure_width("0", text_size.into(), self.font, Default::default());
         renderer.fill_text(text::Text {
             // The spacing looks a bit off if we start with a space here so we'll add a little
             // offset to the x-coordinate instead
@@ -286,11 +290,13 @@ where
             color: style.text_color,
             horizontal_alignment: alignment::Horizontal::Left,
             vertical_alignment: alignment::Vertical::Top,
+            line_height: Default::default(),
+            shaping: Default::default(),
         });
     }
 }
 
-impl<'a, Message> From<PeakMeter<'a, Message>> for Element<'a, Message>
+impl<'a, Message> From<PeakMeter<'a, Message>> for Element<'a, Message, Renderer>
 where
     Message: 'a + Clone,
 {

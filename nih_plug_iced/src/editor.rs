@@ -1,20 +1,23 @@
 //! And [`Editor`] implementation for iced.
 
-use baseview::{WindowOpenOptions, WindowScalePolicy};
+use ::baseview::{WindowOpenOptions, WindowScalePolicy};
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel;
-pub use iced_baseview::*;
+use iced_baseview::settings::IcedBaseviewSettings;
 use nih_plug::prelude::{Editor, GuiContext, ParentWindowHandle};
 use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
-use std::sync::atomic::Ordering;
+use std::{borrow::Cow, sync::atomic::Ordering};
 use std::sync::Arc;
 
 use crate::{wrapper, IcedEditor, IcedState, ParameterUpdate};
+
+pub use iced_baseview::*;
 
 /// An [`Editor`] implementation that renders an iced [`Application`].
 pub(crate) struct IcedEditorWrapper<E: IcedEditor> {
     pub(crate) iced_state: Arc<IcedState>,
     pub(crate) initialization_flags: E::InitializationFlags,
+    pub(crate) fonts: Vec<Cow<'static, [u8]>>,
 
     /// The scaling factor reported by the host, if any. On macOS this will never be set and we
     /// should use the system scaling factor instead.
@@ -33,17 +36,17 @@ unsafe impl HasRawWindowHandle for ParentWindowHandleAdapter {
     fn raw_window_handle(&self) -> RawWindowHandle {
         match self.0 {
             ParentWindowHandle::X11Window(window) => {
-                let mut handle = raw_window_handle::XcbHandle::empty();
+                let mut handle = raw_window_handle::XcbWindowHandle::empty();
                 handle.window = window;
                 RawWindowHandle::Xcb(handle)
             }
             ParentWindowHandle::AppKitNsView(ns_view) => {
-                let mut handle = raw_window_handle::AppKitHandle::empty();
+                let mut handle = raw_window_handle::AppKitWindowHandle::empty();
                 handle.ns_view = ns_view;
                 RawWindowHandle::AppKit(handle)
             }
             ParentWindowHandle::Win32Hwnd(hwnd) => {
-                let mut handle = raw_window_handle::Win32Handle::empty();
+                let mut handle = raw_window_handle::Win32WindowHandle::empty();
                 handle.hwnd = hwnd;
                 RawWindowHandle::Win32(handle)
             }
@@ -62,7 +65,7 @@ impl<E: IcedEditor> Editor for IcedEditorWrapper<E> {
 
         // TODO: iced_baseview does not have gracefuly error handling for context creation failures.
         //       This will panic if the context could not be created.
-        let window = IcedWindow::<wrapper::IcedEditorWrapperApplication<E>>::open_parented(
+        let window = iced_baseview::open_parented::<wrapper::IcedEditorWrapperApplication<E>, _>(
             &ParentWindowHandleAdapter(parent),
             Settings {
                 window: WindowOpenOptions {
@@ -96,8 +99,8 @@ impl<E: IcedEditor> Editor for IcedEditorWrapper<E> {
                     // FIXME: Rust analyzer always thinks baseview/opengl is enabled even if we
                     //        don't explicitly enable it, so you'd get a compile error if this line
                     //        is missing
-                    #[cfg(not(feature = "opengl"))]
-                    gl_config: None,
+                    // #[cfg(not(feature = "opengl"))]
+                    // gl_config: None,
                 },
                 iced_baseview: IcedBaseviewSettings {
                     ignore_non_modifier_keys: false,
@@ -109,6 +112,7 @@ impl<E: IcedEditor> Editor for IcedEditorWrapper<E> {
                     self.parameter_updates_receiver.clone(),
                     self.initialization_flags.clone(),
                 ),
+                fonts: self.fonts.clone(),
             },
         );
 
@@ -154,7 +158,7 @@ impl<E: IcedEditor> Editor for IcedEditorWrapper<E> {
 /// The window handle used for [`IcedEditorWrapper`].
 struct IcedEditorHandle<Message: 'static + Send> {
     iced_state: Arc<IcedState>,
-    window: iced_baseview::WindowHandle<Message>,
+    window: iced_baseview::window::WindowHandle<Message>,
 }
 
 /// The window handle enum stored within 'WindowHandle' contains raw pointers. Is there a way around
