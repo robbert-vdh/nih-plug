@@ -1479,7 +1479,7 @@ dependencies = [
 [[package]]
 name = "egui-baseview"
 version = "0.2.0"
-source = "git+https://github.com/BillyDM/egui-baseview.git?rev=1fe7e1d0081ab29474b0a5cdc567f60a3219b20d#1fe7e1d0081ab29474b0a5cdc567f60a3219b20d"
+source = "git+https://github.com/BillyDM/egui-baseview.git?rev=bd3c50d0b6de8d5cf526a9b9d089a2a2c0249900#bd3c50d0b6de8d5cf526a9b9d089a2a2c0249900"
 dependencies = [
  "baseview 0.1.0 (git+https://github.com/RustAudio/baseview.git?rev=2c1b1a7b0fef1a29a5150a6a8f6fef6a0cbab8c4)",
  "copypasta 0.10.0",
