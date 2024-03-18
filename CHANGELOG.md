@@ -10,6 +10,14 @@ Since there is no stable release yet, the changes are organized per day in
 reverse chronological order. The main purpose of this document in its current
 state is to list breaking changes.
 
+## [2024-03-18]
+
+### Changed
+
+- (Keyboard) input events sent by the host through VST3's `IPlugView` interface
+  are now explicitly ignored. This may allow a couple more keyboard events to
+  reach through to plugin windows in hosts that use these.
+
 ## [2024-02-23]
 
 ### Fixed

@@ -5,7 +5,7 @@ use std::ffi::{c_void, CStr};
 use std::mem;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use vst3_sys::base::{kInvalidArgument, kResultFalse, kResultOk, tresult, TBool};
+use vst3_sys::base::{kInvalidArgument, kNotImplemented, kResultFalse, kResultOk, tresult, TBool};
 use vst3_sys::gui::{IPlugFrame, IPlugView, IPlugViewContentScaleSupport, ViewRect};
 use vst3_sys::utils::SharedVstPtr;
 use vst3_sys::VST3;
@@ -337,7 +337,7 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
     unsafe fn on_wheel(&self, _distance: f32) -> tresult {
         // We'll let the plugin use the OS' input mechanisms because not all DAWs (or very few
         // actually) implement these functions
-        kResultOk
+        kNotImplemented
     }
 
     unsafe fn on_key_down(
@@ -346,7 +346,7 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
         _key_code: i16,
         _modifiers: i16,
     ) -> tresult {
-        kResultOk
+        kNotImplemented
     }
 
     unsafe fn on_key_up(
@@ -355,7 +355,7 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
         _key_code: i16,
         _modifiers: i16,
     ) -> tresult {
-        kResultOk
+        kNotImplemented
     }
 
     unsafe fn get_size(&self, size: *mut ViewRect) -> tresult {
@@ -398,7 +398,7 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
     }
 
     unsafe fn on_focus(&self, _state: TBool) -> tresult {
-        kResultOk
+        kNotImplemented
     }
 
     unsafe fn set_frame(&self, frame: *mut c_void) -> tresult {
