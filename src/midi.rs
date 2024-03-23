@@ -419,11 +419,11 @@ impl<S: SysExMessage> NoteEvent<S> {
     pub fn from_midi(timing: u32, midi_data: &[u8]) -> Result<Self, u8> {
         let status_byte = midi_data.first().copied().unwrap_or_default();
         let event_type = status_byte & midi::EVENT_TYPE_MASK;
+        let channel = status_byte & midi::MIDI_CHANNEL_MASK;
 
         if midi_data.len() >= 3 {
             // TODO: Maybe add special handling for 14-bit CCs and RPN messages at some
             //       point, right now the plugin has to figure it out for itself
-            let channel = status_byte & midi::MIDI_CHANNEL_MASK;
             match event_type {
                 // You thought this was a note on? Think again! This is a cleverly disguised note off
                 // event straight from the 80s when Baud rate was still a limiting factor!
@@ -464,13 +464,6 @@ impl<S: SysExMessage> NoteEvent<S> {
                         pressure: midi_data[2] as f32 / 127.0,
                     });
                 }
-                midi::CHANNEL_KEY_PRESSURE => {
-                    return Ok(NoteEvent::MidiChannelPressure {
-                        timing,
-                        channel,
-                        pressure: midi_data[1] as f32 / 127.0,
-                    });
-                }
                 midi::PITCH_BEND_CHANGE => {
                     return Ok(NoteEvent::MidiPitchBend {
                         timing,
@@ -485,6 +478,18 @@ impl<S: SysExMessage> NoteEvent<S> {
                         channel,
                         cc: midi_data[1],
                         value: midi_data[2] as f32 / 127.0,
+                    });
+                }
+                _ => (),
+            }
+        }
+        if midi_data.len() >= 2 {
+            match event_type {
+                midi::CHANNEL_KEY_PRESSURE => {
+                    return Ok(NoteEvent::MidiChannelPressure {
+                        timing,
+                        channel,
+                        pressure: midi_data[1] as f32 / 127.0,
                     });
                 }
                 midi::PROGRAM_CHANGE => {
