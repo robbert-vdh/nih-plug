@@ -10,6 +10,13 @@ Since there is no stable release yet, the changes are organized per day in
 reverse chronological order. The main purpose of this document in its current
 state is to list breaking changes.
 
+## [2024-03-23]
+
+### Added
+
+- `nih_plug_xtask` now detects and uses non-standard `target` directory
+  locations if overridden through Cargo's settings.
+
 ## [2024-03-18]
 
 ### Changed
