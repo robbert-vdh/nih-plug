@@ -10,6 +10,13 @@ Since there is no stable release yet, the changes are organized per day in
 reverse chronological order. The main purpose of this document in its current
 state is to list breaking changes.
 
+## [2024-05-04]
+
+### Fixed
+
+- Fixed a soundness issue in the buffer management where in-place input/output
+  buffers may not have been recognized properly before.
+
 ## [2024-03-23]
 
 ### Added
