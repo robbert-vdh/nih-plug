@@ -12,6 +12,10 @@ state is to list breaking changes.
 
 ## [2024-05-05]
 
+### Breaking changes
+
+- `nih_plug_egui` has been updated from egui 0.26.1 to egui 0.27.2.
+
 ### Changed
 
 - Two byte slices are now accepted in `NoteEvent::from_midi()` if the event
