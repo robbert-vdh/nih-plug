@@ -23,6 +23,8 @@ state is to list breaking changes.
 
 ### Fixed
 
+- Fixed a race condition in the VST3 GUI event loop on Linux. This could cause
+  panics with certain versions of Carla.
 - The CPAL backend now correctly handles situations where it receives fewer
   samples than configured.
 - Fixed the handling of multichannel audio in the CPAL backend.
