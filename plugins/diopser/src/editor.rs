@@ -101,7 +101,7 @@ fn top_bar(cx: &mut Context) {
                     // Try to open the Diopser plugin's page when clicking on the title. If this
                     // fails then that's not a problem
                     let result = open::that(Diopser::URL);
-                    if cfg!(debug) && result.is_err() {
+                    if cfg!(debug_assertions) && result.is_err() {
                         nih_debug_assert_failure!("Failed to open web browser: {:?}", result);
                     }
                 }
