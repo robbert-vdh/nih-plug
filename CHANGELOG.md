@@ -15,6 +15,9 @@ state is to list breaking changes.
 ### Breaking changes
 
 - `nih_plug_egui` has been updated from egui 0.26.1 to egui 0.27.2.
+- `nih_plug_vizia` has been updated to the latest version with some a additional
+  patches. This includes a workaround for the problem where opening multiple
+  instances of a plugin's GUI on Windows or macOS would result in crashes.
 
 ### Changed
 
