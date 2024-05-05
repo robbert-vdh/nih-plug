@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 /// A test tone generator that can either generate a sine wave based on the plugin's parameters or
 /// based on the current MIDI input.
-struct Sine {
+pub struct Sine {
     params: Arc<SineParams>,
     sample_rate: f32,
 
