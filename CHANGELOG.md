@@ -10,6 +10,14 @@ Since there is no stable release yet, the changes are organized per day in
 reverse chronological order. The main purpose of this document in its current
 state is to list breaking changes.
 
+## [2024-05-05]
+
+### Fixed
+
+- The CPAL backend now correctly handles situations where it receives fewer
+  samples than configured.
+- Fixed the handling of multichannel audio in the CPAL backend.
+
 ## [2024-05-04]
 
 ### Fixed

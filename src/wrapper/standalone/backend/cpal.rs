@@ -702,6 +702,8 @@ impl CpalMidir {
             .main_input_channels
             .map(NonZeroU32::get)
             .unwrap_or(0) as usize;
+        // This may contain excess unused space at the end if we get fewer samples than configured
+        // from CPAL
         let mut main_io_storage = vec![vec![0.0f32; buffer_size]; num_output_channels];
 
         // This backend does not support auxiliary inputs and outputs, so in order to have the same
@@ -824,10 +826,16 @@ impl CpalMidir {
             }
 
             {
-                let sample_count = data.len() / num_output_channels;
-                assert!(sample_count <= buffer_size);
+                // Even though we told CPAL that we wanted `buffer_size` samples, it may still give
+                // us fewer. If we receive more than what we configured, then this will panic.
+                let actual_sample_count = data.len() / num_output_channels;
+                assert!(
+                    actual_sample_count <= buffer_size,
+                    "Received {actual_sample_count} samples, while the configured buffer size is \
+                     {buffer_size}"
+                );
                 let buffers = unsafe {
-                    buffer_manager.create_buffers(0, sample_count, |buffer_sources| {
+                    buffer_manager.create_buffers(0, actual_sample_count, |buffer_sources| {
                         *buffer_sources.main_output_channel_pointers = Some(ChannelPointers {
                             ptrs: NonNull::new(main_io_channel_pointers.get().as_mut_ptr())
                                 .unwrap(),
