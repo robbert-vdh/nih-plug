@@ -12,6 +12,11 @@ state is to list breaking changes.
 
 ## [2024-05-05]
 
+### Changed
+
+- Two byte slices are now accepted in `NoteEvent::from_midi()` if the event
+  doesn't use the third byte.
+
 ### Fixed
 
 - The CPAL backend now correctly handles situations where it receives fewer
