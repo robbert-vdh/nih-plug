@@ -37,7 +37,7 @@ impl Editor for ViziaEditor {
         &self,
         parent: ParentWindowHandle,
         context: Arc<dyn GuiContext>,
-    ) -> Box<dyn std::any::Any + Send> {
+    ) -> Box<dyn std::any::Any> {
         let app = self.app.clone();
         let vizia_state = self.vizia_state.clone();
         let theming = self.theming;
@@ -164,10 +164,6 @@ struct ViziaEditorHandle {
     vizia_state: Arc<ViziaState>,
     window: WindowHandle,
 }
-
-/// The window handle enum stored within 'WindowHandle' contains raw pointers. Is there a way around
-/// having this requirement?
-unsafe impl Send for ViziaEditorHandle {}
 
 impl Drop for ViziaEditorHandle {
     fn drop(&mut self) {

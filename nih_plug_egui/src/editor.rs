@@ -63,7 +63,7 @@ where
         &self,
         parent: ParentWindowHandle,
         context: Arc<dyn GuiContext>,
-    ) -> Box<dyn std::any::Any + Send> {
+    ) -> Box<dyn std::any::Any> {
         let build = self.build.clone();
         let update = self.update.clone();
         let state = self.user_state.clone();
@@ -152,10 +152,6 @@ struct EguiEditorHandle {
     egui_state: Arc<EguiState>,
     window: WindowHandle,
 }
-
-/// The window handle enum stored within 'WindowHandle' contains raw pointers. Is there a way around
-/// having this requirement?
-unsafe impl Send for EguiEditorHandle {}
 
 impl Drop for EguiEditorHandle {
     fn drop(&mut self) {
