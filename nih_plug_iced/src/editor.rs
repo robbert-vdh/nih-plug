@@ -56,7 +56,7 @@ impl<E: IcedEditor> Editor for IcedEditorWrapper<E> {
         &self,
         parent: ParentWindowHandle,
         context: Arc<dyn GuiContext>,
-    ) -> Box<dyn std::any::Any + Send> {
+    ) -> Box<dyn std::any::Any> {
         let (unscaled_width, unscaled_height) = self.iced_state.size();
         let scaling_factor = self.scaling_factor.load();
 
@@ -156,10 +156,6 @@ struct IcedEditorHandle<Message: 'static + Send> {
     iced_state: Arc<IcedState>,
     window: iced_baseview::WindowHandle<Message>,
 }
-
-/// The window handle enum stored within 'WindowHandle' contains raw pointers. Is there a way around
-/// having this requirement?
-unsafe impl<Message: Send> Send for IcedEditorHandle<Message> {}
 
 impl<Message: Send> Drop for IcedEditorHandle<Message> {
     fn drop(&mut self) {
