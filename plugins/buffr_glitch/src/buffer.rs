@@ -158,8 +158,8 @@ impl RingBuffer {
 
             // Note there is no messing with buffer size when buffer isn't ready yet.
             let shorter_buffer = self.precise_mode
-                & self.buffer_status == BufferStatus::Ready
-                & self.buffer_phase < 0.0;
+                && self.buffer_status == BufferStatus::Ready
+                && self.buffer_phase < 0.0;
             let buffer_len = self.audio_buffers[0].len() - (if shorter_buffer { 1 } else { 0 });
 
             if self.next_sample_pos == buffer_len {
