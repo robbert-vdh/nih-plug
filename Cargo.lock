@@ -1439,7 +1439,7 @@ dependencies = [
  "atomic_float",
  "nih_plug",
  "nih_plug_vizia",
- "open",
+ "open 3.2.0",
  "realfft",
  "semver",
  "triple_buffer",
@@ -1548,7 +1548,7 @@ dependencies = [
 [[package]]
 name = "egui-baseview"
 version = "0.2.0"
-source = "git+https://github.com/BillyDM/egui-baseview.git?rev=68c4d0e8e5c1c702a888a245f4ac50eddfdfcaed#68c4d0e8e5c1c702a888a245f4ac50eddfdfcaed"
+source = "git+https://github.com/BillyDM/egui-baseview.git?rev=87a6cbead6cf89ca27c2f0448e480e901cc2754d#87a6cbead6cf89ca27c2f0448e480e901cc2754d"
 dependencies = [
  "baseview 0.1.0 (git+https://github.com/RustAudio/baseview.git?rev=45465c5f46abed6c6ce370fffde5edc8e4cd5aa3)",
  "copypasta 0.10.1",
@@ -1556,6 +1556,7 @@ dependencies = [
  "egui_glow",
  "keyboard-types",
  "log",
+ "open 5.1.4",
  "raw-window-handle 0.5.2",
 ]
 
@@ -2545,6 +2546,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "is-docker"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "928bae27f42bc99b60d9ac7334e3a21d10ad8f1835a4e12ec3ec0464765ed1b3"
+dependencies = [
+ "once_cell",
+]
+
+[[package]]
+name = "is-wsl"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "173609498df190136aa7dea1a91db051746d339e18476eed5ca40521f02d7aa5"
+dependencies = [
+ "is-docker",
+ "once_cell",
+]
+
+[[package]]
 name = "is_terminal_polyfill"
 version = "1.70.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3418,6 +3438,17 @@ checksum = "2078c0039e6a54a0c42c28faa984e115fb4c2d5bf2208f77d1961002df8576f8"
 dependencies = [
  "pathdiff",
  "windows-sys 0.42.0",
+]
+
+[[package]]
+name = "open"
+version = "5.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b5ca541f22b1c46d4bb9801014f234758ab4297e7870b904b6a8415b980a7388"
+dependencies = [
+ "is-wsl",
+ "libc",
+ "pathdiff",
 ]
 
 [[package]]
@@ -4506,7 +4537,7 @@ dependencies = [
  "crossbeam",
  "nih_plug",
  "nih_plug_vizia",
- "open",
+ "open 3.2.0",
  "realfft",
  "serde",
  "triple_buffer",

@@ -1,6 +1,10 @@
 //! An [`Editor`] implementation for egui.
 
+use crate::egui::Vec2;
+use crate::egui::ViewportCommand;
+use crate::EguiState;
 use baseview::gl::GlConfig;
+use baseview::PhySize;
 use baseview::{Size, WindowHandle, WindowOpenOptions, WindowScalePolicy};
 use crossbeam::atomic::AtomicCell;
 use egui_baseview::egui::Context;
@@ -10,8 +14,6 @@ use parking_lot::RwLock;
 use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-
-use crate::EguiState;
 
 /// An [`Editor`] implementation that calls an egui draw loop.
 pub(crate) struct EguiEditor<T> {
@@ -67,6 +69,7 @@ where
         let build = self.build.clone();
         let update = self.update.clone();
         let state = self.user_state.clone();
+        let egui_state = self.egui_state.clone();
 
         let (unscaled_width, unscaled_height) = self.egui_state.size();
         let scaling_factor = self.scaling_factor.load();
@@ -100,8 +103,24 @@ where
             },
             state,
             move |egui_ctx, _queue, state| build(egui_ctx, &mut state.write()),
-            move |egui_ctx, _queue, state| {
+            move |egui_ctx, queue, state| {
                 let setter = ParamSetter::new(context.as_ref());
+
+                // If the window was requested to resize
+                if let Some(new_size) = egui_state.requested_size.swap(None) {
+                    // Ask the plugin host to resize to self.size()
+                    if context.request_resize() {
+                        // Resize the content of egui window
+                        queue.resize(PhySize::new(new_size.0, new_size.1));
+                        egui_ctx.send_viewport_cmd(ViewportCommand::InnerSize(Vec2::new(
+                            new_size.0 as f32,
+                            new_size.1 as f32,
+                        )));
+
+                        // Update the state
+                        egui_state.size.store(new_size);
+                    }
+                }
 
                 // For now, just always redraw. Most plugin GUIs have meters, and those almost always
                 // need a redraw. Later we can try to be a bit more sophisticated about this. Without
@@ -119,8 +138,16 @@ where
         })
     }
 
+    /// Size of the editor window
     fn size(&self) -> (u32, u32) {
-        self.egui_state.size()
+        let new_size = self.egui_state.requested_size.load();
+        // This method will be used to ask the host for new size.
+        // If the editor is currently being resized and new size hasn't been consumed and set yet, return new requested size.
+        if let Some(new_size) = new_size {
+            new_size
+        } else {
+            self.egui_state.size()
+        }
     }
 
     fn set_scale_factor(&self, factor: f32) -> bool {
