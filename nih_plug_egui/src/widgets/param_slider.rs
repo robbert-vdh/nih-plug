@@ -4,8 +4,8 @@ use egui_baseview::egui::{
     self, emath, vec2, Key, Response, Sense, Stroke, TextEdit, TextStyle, Ui, Vec2, Widget,
     WidgetText,
 };
-use lazy_static::lazy_static;
 use nih_plug::prelude::{Param, ParamSetter};
+use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 
 use super::util;
@@ -14,11 +14,10 @@ use super::util;
 /// noramlized parameter.
 const GRANULAR_DRAG_MULTIPLIER: f32 = 0.0015;
 
-lazy_static! {
-    static ref DRAG_NORMALIZED_START_VALUE_MEMORY_ID: egui::Id = egui::Id::new((file!(), 0));
-    static ref DRAG_AMOUNT_MEMORY_ID: egui::Id = egui::Id::new((file!(), 1));
-    static ref VALUE_ENTRY_MEMORY_ID: egui::Id = egui::Id::new((file!(), 2));
-}
+static DRAG_NORMALIZED_START_VALUE_MEMORY_ID: Lazy<egui::Id> =
+    Lazy::new(|| egui::Id::new((file!(), 0)));
+static DRAG_AMOUNT_MEMORY_ID: Lazy<egui::Id> = Lazy::new(|| egui::Id::new((file!(), 1)));
+static VALUE_ENTRY_MEMORY_ID: Lazy<egui::Id> = Lazy::new(|| egui::Id::new((file!(), 2)));
 
 /// A slider widget similar to [`egui::widgets::Slider`] that knows about NIH-plug parameters ranges
 /// and can get values for it. The slider supports double click and control click to reset,

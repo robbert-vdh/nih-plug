@@ -5,6 +5,7 @@
 
 use anymap::Entry;
 use crossbeam::channel;
+use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use std::sync::{Arc, Weak};
 use std::thread::{self, JoinHandle};
@@ -71,12 +72,10 @@ where
 }
 
 // Rust does not allow us to use the `T` and `E` type variable in statics, so this is a
-// workaround to have a singleton that also works if for whatever reason there arem ultiple `T`
-// and `E`s in a single process (won't happen with normal plugin usage, but sho knwos).
-lazy_static::lazy_static! {
-    static ref HANDLE_MAP: Mutex<anymap::Map<dyn std::any::Any + Send>> =
-        Mutex::new(anymap::Map::new());
-}
+// workaround to have a singleton that also works if for whatever reason there are multiple `T`
+// and `E`s in a single process (won't happen with normal plugin usage, but who knows?).
+static HANDLE_MAP: Lazy<Mutex<anymap::Map<dyn std::any::Any + Send>>> =
+    Lazy::new(|| Mutex::new(anymap::Map::new()));
 
 impl<T: Send + 'static, E: MainThreadExecutor<T> + 'static> WorkerThread<T, E> {
     fn spawn() -> Self {

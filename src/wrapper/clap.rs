@@ -14,7 +14,6 @@ pub use clap_sys::factory::plugin_factory::{clap_plugin_factory, CLAP_PLUGIN_FAC
 pub use clap_sys::host::clap_host;
 pub use clap_sys::plugin::{clap_plugin, clap_plugin_descriptor};
 pub use clap_sys::version::CLAP_VERSION;
-pub use lazy_static::lazy_static;
 
 /// Export one or more CLAP plugins from this library using the provided plugin types.
 #[macro_export]

@@ -39,7 +39,7 @@ pub fn v2s_f32_percentage(digits: usize) -> Arc<dyn Fn(f32) -> String + Send + S
 pub fn s2v_f32_percentage() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> {
     Arc::new(|string| {
         string
-            .trim_end_matches(&[' ', '%'])
+            .trim_end_matches([' ', '%'])
             .parse()
             .ok()
             .map(|x: f32| x / 100.0)
@@ -104,7 +104,7 @@ pub fn v2s_f32_gain_to_db(digits: usize) -> Arc<dyn Fn(f32) -> String + Send + S
 /// Used in conjunction with [`v2s_f32_gain_to_db()`]. `-inf dB` will be parsed to 0.0.
 pub fn s2v_f32_gain_to_db() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> {
     Arc::new(|string| {
-        let string = string.trim_end_matches(&[' ', 'd', 'D', 'b', 'B', 'f', 'F', 's', 'S']);
+        let string = string.trim_end_matches([' ', 'd', 'D', 'b', 'B', 'f', 'F', 's', 'S']);
         // NOTE: The above line strips the `f`, so checked for `-inf` here will always return false
         if string.eq_ignore_ascii_case("-in") {
             Some(0.0)
@@ -131,7 +131,7 @@ pub fn s2v_f32_panning() -> Arc<dyn Fn(&str) -> Option<f32> + Send + Sync> {
     Arc::new(|string| {
         let string = string.trim();
         let cleaned_string = string
-            .trim_end_matches(&[' ', 'l', 'L', 'c', 'C', 'r', 'R'])
+            .trim_end_matches([' ', 'l', 'L', 'c', 'C', 'r', 'R'])
             .parse()
             .ok();
         match string.chars().last()?.to_uppercase().next()? {

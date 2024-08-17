@@ -217,7 +217,7 @@ impl<'slice, 'sample> Block<'slice, 'sample> {
     }
 
     /// Get a SIMD vector containing the channel data for a specific sample in this block. If `LANES
-    /// > channels.len()` then this will be padded with zeroes. If `LANES < channels.len()` then
+    /// \> channels.len()` then this will be padded with zeroes. If `LANES < channels.len()` then
     /// this won't contain all values.
     ///
     /// Returns a `None` value if `sample_index` is out of bounds.
