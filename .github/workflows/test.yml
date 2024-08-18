@@ -15,7 +15,7 @@ jobs:
   test:
     strategy:
       matrix:
-        os: [ubuntu-20.04, macos-11, windows-latest]
+        os: [ubuntu-20.04, macos-12, windows-latest]
     name: Build and test all components
     runs-on: ${{ matrix.os }}
     steps:

@@ -22,7 +22,7 @@ jobs:
       matrix:
         include:
           - { name: ubuntu-20.04,       os: ubuntu-20.04,   cross-target: '' }
-          - { name: macos-universal,    os: macos-11,       cross-target: aarch64-apple-darwin }
+          - { name: macos-universal,    os: macos-12,       cross-target: aarch64-apple-darwin }
           - { name: windows,            os: windows-latest, cross-target: '' }
     name: Package plugin binaries
     runs-on: ${{ matrix.os }}
