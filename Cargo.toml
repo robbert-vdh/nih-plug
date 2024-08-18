@@ -2,7 +2,7 @@
 name = "nih_plug"
 version = "0.0.0"
 edition = "2021"
-rust-version = "1.70"
+rust-version = "1.80"
 authors = ["Robbert van der Helm <mail@robbertvanderhelm.nl>"]
 license = "ISC"
 
@@ -85,7 +85,6 @@ cfg-if = "1.0"
 # This supports CLAP 1.1.8
 clap-sys = {  git = "https://github.com/robbert-vdh/clap-sys.git", branch = "feature/cstr-macro" }
 crossbeam = "0.8"
-lazy_static = "1.4"
 log = { version = "0.4", features = ["std", "release_max_level_info"] }
 midi-consts = "0.1"
 nih_log = "0.3.1"

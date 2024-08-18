@@ -10,6 +10,13 @@ Since there is no stable release yet, the changes are organized per day in
 reverse chronological order. The main purpose of this document in its current
 state is to list breaking changes.
 
+## [2024-08-18]
+
+### Breaking changes
+
+- The minimum supported Rust version has been bumped to 1.80 to replace the last
+  uses of `lazy_static` with `std::sync::LazyLock`.
+
 ## [2024-05-05]
 
 ### Breaking changes
