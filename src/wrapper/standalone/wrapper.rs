@@ -342,7 +342,7 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
                             height: height as f64,
                         },
                         scale: scaling_policy,
-                        gl_config: None,
+                        // gl_config: None,
                     },
                     move |window| {
                         let parent_handle = match window.raw_window_handle() {
