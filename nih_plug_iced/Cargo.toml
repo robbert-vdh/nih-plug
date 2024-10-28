@@ -34,7 +34,7 @@ svg = ["iced_baseview/svg"]
 canvas = ["iced_baseview/canvas"]
 
 [dependencies]
-nih_plug = { path = "..", default-features = false }
+nih_plug = { path = "..", default_features = false }
 nih_plug_assets = { git = "https://github.com/robbert-vdh/nih_plug_assets.git" }
 
 # The currently targeted version of baseview uses a different version of
@@ -44,7 +44,7 @@ raw-window-handle = "0.5"
 atomic_refcell = "0.1"
 baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "579130ecb4f9f315ae52190af42f0ea46aeaa4a2" }
 crossbeam = "0.8"
-# This targets iced 0.10
+# This targets iced 0.13
 iced_baseview = { git = "https://github.com/BillyDM/iced_baseview.git", rev = "a0842a8205c852127981e27de6342cf2e665562f", default_features = false }
 futures-util = "0.3"
 

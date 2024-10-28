@@ -1,4 +1,3 @@
-use nih_plug::nih_log;
 use nih_plug::prelude::Param;
 use std::borrow::Borrow;
 
@@ -151,8 +150,6 @@ impl<'a, P: Param> ParamSlider<'a, P> {
             wrapping: Default::default(),
         })
         .min_width();
-
-        nih_log!("with_text_input() - {} {}", current_value, text_width);
 
         let text_input = text_input("", current_value)
             .id(state.text_input_id.clone())
