@@ -20,10 +20,7 @@ const GRANULAR_DRAG_MULTIPLIER: f32 = 0.1;
 /// The thickness of this widget's borders.
 const BORDER_WIDTH: f32 = 1.0;
 
-pub struct ParamSlider<'a, P>
-where
-    P: Param,
-{
+pub struct ParamSlider<'a, P: Param> {
     param: &'a P,
 
     width: Length,
@@ -84,10 +81,7 @@ enum TextInputMessage {
     Submit,
 }
 
-impl<'a, P> ParamSlider<'a, P>
-where
-    P: Param,
-{
+impl<'a, P> ParamSlider<'a, P: Param> {
     pub const DEFAULT_WIDTH: Length = Length::Fixed(180.0);
     pub const DEFAULT_HEIGHT: Length = Length::Fixed(30.0);
 
