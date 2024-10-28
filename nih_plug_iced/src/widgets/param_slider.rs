@@ -65,17 +65,6 @@ impl Default for State {
     }
 }
 
-/// The possible UI status of a [`ParamSlider`]. Enables drawing of different styles for each status.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Status {
-    /// The [`ParamSlider`] can be interacted with.
-    Active,
-    /// The [`ParamSlider`] is being hovered.
-    Hovered,
-    /// The [`ParamSlider`] is being dragged.
-    Dragged,
-}
-
 /// An internal message for intercep- I mean handling output from the embedded [`TextInput`] widget.
 #[derive(Debug, Clone)]
 enum TextInputMessage {
@@ -85,7 +74,7 @@ enum TextInputMessage {
     Submit,
 }
 
-impl<'a, P> ParamSlider<'a, P: Param> {
+impl<'a, P: Param> ParamSlider<'a, P> {
     pub const DEFAULT_WIDTH: Length = Length::Fixed(180.0);
     pub const DEFAULT_HEIGHT: Length = Length::Fixed(30.0);
 
