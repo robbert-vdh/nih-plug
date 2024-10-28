@@ -1,14 +1,13 @@
 //! A super simple peak meter widget.
 
 use crossbeam::atomic::AtomicCell;
-use iced_baseview as iced;
 use std::marker::PhantomData;
 use std::time::Duration;
 use std::time::Instant;
 
-use iced::core::text::{self, Paragraph, Renderer as TextRenderer};
-use iced::core::widget::tree::{self, Tree};
-use iced::core::{
+use crate::core::text::{self, Paragraph, Renderer as TextRenderer};
+use crate::core::widget::tree::{self, Tree};
+use crate::core::{
     alignment, layout, mouse, padding, renderer, Background, Border, Color, Element, Font, Layout,
     Length, Pixels, Point, Rectangle, Size, Widget,
 };
@@ -101,7 +100,7 @@ impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer> for PeakMeter<Me
 where
     Message: Clone,
     Renderer: TextRenderer,
-    Renderer::Font: From<iced::Font>,
+    Renderer::Font: From<crate::Font>,
 {
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<State>()
@@ -337,7 +336,7 @@ impl<'a, Theme, Message, Renderer> From<PeakMeter<Message>>
 where
     Message: Clone + 'a,
     Renderer: TextRenderer + 'a,
-    Renderer::Font: From<iced::Font>,
+    Renderer::Font: From<crate::Font>,
 {
     fn from(widget: PeakMeter<Message>) -> Self {
         Element::new(widget)

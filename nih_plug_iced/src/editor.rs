@@ -57,30 +57,6 @@ impl<E: IcedEditor> Editor for IcedEditorWrapper<E> {
                     scale: scaling_factor
                         .map(|factor| WindowScalePolicy::ScaleFactor(factor as f64))
                         .unwrap_or(WindowScalePolicy::SystemScaleFactor),
-
-                    #[cfg(feature = "opengl")]
-                    gl_config: Some(baseview::gl::GlConfig {
-                        // FIXME: glow_glyph forgot to add an `#extension`, so this won't work under
-                        //        OpenGL 3.2 at the moment. With that change applied this should work on
-                        //        OpenGL 3.2/macOS.
-                        version: (3, 3),
-                        red_bits: 8,
-                        blue_bits: 8,
-                        green_bits: 8,
-                        alpha_bits: 8,
-                        depth_bits: 24,
-                        stencil_bits: 8,
-                        samples: None,
-                        srgb: true,
-                        double_buffer: true,
-                        vsync: true,
-                        ..Default::default()
-                    }),
-                    // FIXME: Rust analyzer always thinks baseview/opengl is enabled even if we
-                    //        don't explicitly enable it, so you'd get a compile error if this line
-                    //        is missing
-                    // #[cfg(not(feature = "opengl"))]
-                    // gl_config: None,
                 },
                 iced_baseview: IcedBaseviewSettings {
                     ignore_non_modifier_keys: false,

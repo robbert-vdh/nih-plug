@@ -1,13 +1,12 @@
 //! A simple generic UI widget that renders all parameters in a [`Params`] object as a scrollable
 //! list of sliders and labels.
 
+use crate::core::widget::{Id, Operation, Tree};
 use crate::core::{
-    alignment, event, layout, renderer, text, widget::Id, widget::Operation, widget::Tree,
-    Clipboard, Element, Layout, Length, Rectangle, Shell, Widget,
+    alignment, event, layout, renderer, text, Clipboard, Element, Layout, Length, Rectangle, Shell,
+    Size, Widget,
 };
-use crate::widget::{self, row, scrollable, Column, Scrollable};
-use iced_baseview::widget::Space;
-use iced_baseview::Size;
+use crate::widget::{self, row, scrollable, Column, Scrollable, Space};
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -303,7 +302,7 @@ fn is_hidden(param_ptr: &ParamPtr) -> bool {
 
 impl<Theme, Renderer> ParamWidget<Theme, Renderer> for GenericSlider
 where
-    Theme: super::param_slider::Catalog + widget::text_input::Catalog,
+    Theme: widget::text_input::Catalog,
     Renderer: text::Renderer,
     Renderer::Font: From<crate::Font>,
 {
