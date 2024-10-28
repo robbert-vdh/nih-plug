@@ -3,7 +3,13 @@
 
 use crossbeam::channel;
 use futures_util::FutureExt;
-use iced_baseview::{baseview::WindowScalePolicy, core::Element, futures::{subscription, Subscription}, runtime::Command, widget::renderer::Settings, window::WindowSubs, Renderer};
+use iced_baseview::{
+    baseview::WindowScalePolicy,
+    core::Element,
+    futures::{subscription, Subscription},
+    window::WindowSubs,
+    Renderer, Task,
+};
 use nih_plug::prelude::GuiContext;
 use std::sync::Arc;
 
@@ -28,7 +34,7 @@ pub enum Message<E: IcedEditor> {
     ParameterUpdate,
 }
 
-impl <E: IcedEditor> Message<E> {
+impl<E: IcedEditor> Message<E> {
     fn into_editor_message(self) -> Option<E::Message> {
         if let Message::EditorMessage(message) = self {
             Some(message)
@@ -68,30 +74,26 @@ impl<E: IcedEditor> iced_baseview::Application for IcedEditorWrapperApplication<
 
     fn new(
         (context, parameter_updates_receiver, flags): Self::Flags,
-    ) -> (Self, Command<Self::Message>) {
-        let (editor, command) = E::new(flags, context);
+    ) -> (Self, Task<Self::Message>) {
+        let (editor, task) = E::new(flags, context);
 
         (
             Self {
                 editor,
                 parameter_updates_receiver,
             },
-            command.map(Message::EditorMessage),
+            task.map(Message::EditorMessage),
         )
     }
 
     #[inline]
-    fn update(
-        &mut self,
-        message: Self::Message,
-    ) -> Command<Self::Message> {
+    fn update(&mut self, message: Self::Message) -> Task<Self::Message> {
         match message {
-            Message::EditorMessage(message) => self
-                .editor
-                .update(message)
-                .map(Message::EditorMessage),
+            Message::EditorMessage(message) => {
+                self.editor.update(message).map(Message::EditorMessage)
+            }
             // This message only exists to force a redraw
-            Message::ParameterUpdate => Command::none(),
+            Message::ParameterUpdate => Task::none(),
         }
     }
 
@@ -106,15 +108,11 @@ impl<E: IcedEditor> iced_baseview::Application for IcedEditorWrapperApplication<
         let mut editor_window_subs: WindowSubs<E::Message> = WindowSubs {
             on_frame: Some(Arc::new(move || {
                 let cb = on_frame.clone();
-                cb.and_then(|cb| {
-                    cb().and_then(|m| m.into_editor_message())
-                })
+                cb.and_then(|cb| cb().and_then(|m| m.into_editor_message()))
             })),
             on_window_will_close: Some(Arc::new(move || {
                 let cb = on_window_will_close.clone();
-                cb.and_then(|cb| {
-                    cb().and_then(|m| m.into_editor_message())
-                })
+                cb.and_then(|cb| cb().and_then(|m| m.into_editor_message()))
             })),
         };
 
@@ -123,17 +121,24 @@ impl<E: IcedEditor> iced_baseview::Application for IcedEditorWrapperApplication<
             // into a stream that doesn't require consuming that receiver (which wouldn't work in
             // this case since the subscriptions function gets called repeatedly). So we'll just use
             // a crossbeam queue and this unfold instead.
-            subscription::unfold(
+            Subscription::run_with_id(
                 "parameter updates",
-                self.parameter_updates_receiver.clone(),
-                |parameter_updates_receiver| match parameter_updates_receiver.try_recv() {
-                    Ok(_) => futures_util::future::ready((
-                        Message::ParameterUpdate,
-                        parameter_updates_receiver,
-                    ))
-                    .boxed(),
-                    Err(_) => futures_util::future::pending().boxed(),
-                },
+                futures_util::stream::unfold(
+                    self.parameter_updates_receiver.clone(),
+                    |parameter_updates_receiver| match parameter_updates_receiver.try_recv() {
+                        Ok(_) => futures_util::future::ready(Some((
+                            Message::ParameterUpdate,
+                            parameter_updates_receiver,
+                        )))
+                        .boxed(),
+                        Err(channel::TryRecvError::Empty) => {
+                            futures_util::future::pending().boxed()
+                        }
+                        Err(channel::TryRecvError::Disconnected) => {
+                            futures_util::future::ready(None).boxed()
+                        }
+                    },
+                ),
             ),
             self.editor
                 .subscription(&mut editor_window_subs)
@@ -142,33 +147,25 @@ impl<E: IcedEditor> iced_baseview::Application for IcedEditorWrapperApplication<
 
         if let Some(message) = editor_window_subs.on_frame.as_ref() {
             let message = Arc::clone(message);
-            window_subs.on_frame = Some(Arc::new(move || {
-                message().map(Message::EditorMessage)
-            }));
+            window_subs.on_frame = Some(Arc::new(move || message().map(Message::EditorMessage)));
         }
         if let Some(message) = editor_window_subs.on_window_will_close.as_ref() {
             let message = Arc::clone(message);
-            window_subs.on_window_will_close = Some(Arc::new(move || {
-                message().map(Message::EditorMessage)
-            }));
+            window_subs.on_window_will_close =
+                Some(Arc::new(move || message().map(Message::EditorMessage)));
         }
 
         subscription
     }
 
     #[inline]
-    fn view(&self) -> Element<'_, Self::Message, Renderer<Self::Theme>> {
+    fn view(&self) -> Element<'_, Self::Message, Self::Theme, Renderer> {
         self.editor.view().map(Message::EditorMessage)
     }
 
     #[inline]
     fn scale_policy(&self) -> WindowScalePolicy {
         WindowScalePolicy::SystemScaleFactor
-    }
-
-    #[inline]
-    fn renderer_settings() -> Settings {
-        E::renderer_settings()
     }
 
     fn title(&self) -> String {

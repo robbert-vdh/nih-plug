@@ -42,10 +42,10 @@ nih_plug_assets = { git = "https://github.com/robbert-vdh/nih_plug_assets.git" }
 raw-window-handle = "0.5"
 
 atomic_refcell = "0.1"
-baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "fdb43ea" }
+baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "579130ecb4f9f315ae52190af42f0ea46aeaa4a2" }
 crossbeam = "0.8"
 # This targets iced 0.10
-iced_baseview = { git = "https://github.com/BillyDM/iced_baseview.git", rev = "4feacc03bc1135023f73167093aea953a858a7c2", default_features = false }
+iced_baseview = { git = "https://github.com/BillyDM/iced_baseview.git", rev = "a0842a8205c852127981e27de6342cf2e665562f", default_features = false }
 futures-util = "0.3"
 
 # To make the state persistable
