@@ -5,7 +5,7 @@ use std::ffi::{c_void, CStr};
 use std::mem;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use vst3_sys::base::{kInvalidArgument, kResultFalse, kResultOk, tresult, TBool};
+use vst3_sys::base::{kInvalidArgument, kNotImplemented, kResultFalse, kResultOk, tresult, TBool};
 use vst3_sys::gui::{IPlugFrame, IPlugView, IPlugViewContentScaleSupport, ViewRect};
 use vst3_sys::utils::SharedVstPtr;
 use vst3_sys::VST3;
@@ -225,12 +225,8 @@ impl<P: Vst3Plugin> RunLoopEventHandler<P> {
         self.tasks.push(task)?;
 
         // We need to use a Unix domain socket to let the host know to call our event handler. In
-        // theory eventfd would be more suitable here, but Ardour does not support that.
-        // XXX: This can technically lead to a race condition if the host is currently calling
-        //      `on_fd_is_set()` on another thread and the task has already been popped and executed
-        //      and this value has not yet been written to the socket. Doing it the other way around
-        //      gets you the other situation where the event handler could be run without the task
-        //      being posted yet. In practice this won't cause any issues however.
+        // theory eventfd would be more suitable here, but Ardour does not support that. This is
+        // read again in `Self::on_fd_is_set()`.
         let notify_value = 1i8;
         const NOTIFY_VALUE_SIZE: usize = std::mem::size_of::<i8>();
         assert_eq!(
@@ -337,7 +333,7 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
     unsafe fn on_wheel(&self, _distance: f32) -> tresult {
         // We'll let the plugin use the OS' input mechanisms because not all DAWs (or very few
         // actually) implement these functions
-        kResultOk
+        kNotImplemented
     }
 
     unsafe fn on_key_down(
@@ -346,7 +342,7 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
         _key_code: i16,
         _modifiers: i16,
     ) -> tresult {
-        kResultOk
+        kNotImplemented
     }
 
     unsafe fn on_key_up(
@@ -355,7 +351,7 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
         _key_code: i16,
         _modifiers: i16,
     ) -> tresult {
-        kResultOk
+        kNotImplemented
     }
 
     unsafe fn get_size(&self, size: *mut ViewRect) -> tresult {
@@ -398,7 +394,7 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
     }
 
     unsafe fn on_focus(&self, _state: TBool) -> tresult {
-        kResultOk
+        kNotImplemented
     }
 
     unsafe fn set_frame(&self, frame: *mut c_void) -> tresult {
@@ -472,21 +468,34 @@ impl<P: Vst3Plugin> IPlugViewContentScaleSupport for WrapperView<P> {
 #[cfg(target_os = "linux")]
 impl<P: Vst3Plugin> IEventHandler for RunLoopEventHandler<P> {
     unsafe fn on_fd_is_set(&self, _fd: FileDescriptor) {
+        // There should be a one-to-one correlation to bytes being written to `self.socket_read_fd`
+        // and events being pushed to `self.tasks`, but because the process of pushing a task and
+        // notifying this thread through the socket is not atomic we can't reliably just read a byte
+        // from this socket for every task we process. For instance, if `Self::post_task()` gets
+        // called while this loop is already running, it could happen that we pop and execute the
+        // task before the byte gets written to the socket. To avoid this, we'll clear the socket
+        // upfront, and then execute the tasks afterwards. If this situation does happen, then the
+        // worst thing that can happen is that this function is called a second time while
+        // `self.tasks()` is already empty.
+        let mut notify_value = [0; 32];
+        loop {
+            let read_result = libc::read(
+                self.socket_read_fd,
+                &mut notify_value as *mut _ as *mut c_void,
+                std::mem::size_of_val(&notify_value),
+            );
+
+            // If after the first loop the socket contains no more data, then the `read()` call will
+            // return -1 and `errno` will have been set to `EAGAIN`
+            if read_result <= 0 {
+                break;
+            }
+        }
+
         // This gets called from the host's UI thread because we wrote some bytes to the Unix domain
         // socket. We'll read that data from the socket again just to make REAPER happy.
         while let Some(task) = self.tasks.pop() {
             self.inner.execute(task, true);
-
-            let mut notify_value = 1i8;
-            const NOTIFY_VALUE_SIZE: usize = std::mem::size_of::<i8>();
-            assert_eq!(
-                libc::read(
-                    self.socket_read_fd,
-                    &mut notify_value as *mut _ as *mut c_void,
-                    NOTIFY_VALUE_SIZE
-                ),
-                NOTIFY_VALUE_SIZE as isize
-            );
         }
     }
 }

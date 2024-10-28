@@ -12,7 +12,7 @@ description = "A simple gain plugin with an vizia GUI"
 crate-type = ["cdylib", "lib"]
 
 [dependencies]
-nih_plug = { path = "../../../", features = ["assert_process_allocs", "standalone"] }
+nih_plug = { path = "../../../", features = ["standalone"] }
 nih_plug_vizia = { path = "../../../nih_plug_vizia" }
 
 atomic_float = "0.1"

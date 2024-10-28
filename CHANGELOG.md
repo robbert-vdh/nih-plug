@@ -10,6 +10,63 @@ Since there is no stable release yet, the changes are organized per day in
 reverse chronological order. The main purpose of this document in its current
 state is to list breaking changes.
 
+## [2024-08-18]
+
+### Breaking changes
+
+- The minimum supported Rust version has been bumped to 1.80 to replace the last
+  uses of `lazy_static` with `std::sync::LazyLock`.
+
+## [2024-05-05]
+
+### Breaking changes
+
+- `nih_plug_egui` has been updated from egui 0.26.1 to egui 0.27.2.
+- `nih_plug_vizia` has been updated to the latest version with some a additional
+  patches. This includes a workaround for the problem where opening multiple
+  instances of a plugin's GUI on Windows or macOS would result in crashes.
+
+### Changed
+
+- Two byte slices are now accepted in `NoteEvent::from_midi()` if the event
+  doesn't use the third byte.
+
+### Fixed
+
+- Fixed a race condition in the VST3 GUI event loop on Linux. This could cause
+  panics with certain versions of Carla.
+- The CPAL backend now correctly handles situations where it receives fewer
+  samples than configured.
+- Fixed the handling of multichannel audio in the CPAL backend.
+
+## [2024-05-04]
+
+### Fixed
+
+- Fixed a soundness issue in the buffer management where in-place input/output
+  buffers may not have been recognized properly before.
+
+## [2024-03-23]
+
+### Added
+
+- `nih_plug_xtask` now detects and uses non-standard `target` directory
+  locations if overridden through Cargo's settings.
+
+## [2024-03-18]
+
+### Changed
+
+- (Keyboard) input events sent by the host through VST3's `IPlugView` interface
+  are now explicitly ignored. This may allow a couple more keyboard events to
+  reach through to plugin windows in hosts that use these.
+
+## [2024-02-23]
+
+### Fixed
+
+- Fixed `nih_plug_egui` panicking due to cursor icons not yet being implemented in baseview for MacOS and Windows.
+
 ## [2024-02-22]
 
 ### Breaking changes

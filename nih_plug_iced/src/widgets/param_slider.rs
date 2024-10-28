@@ -20,6 +20,10 @@ const GRANULAR_DRAG_MULTIPLIER: f32 = 0.1;
 /// The thickness of this widget's borders.
 const BORDER_WIDTH: f32 = 1.0;
 
+/// A slider that integrates with NIH-plug's [`Param`] types.
+///
+/// TODO: There are currently no styling options at all
+/// TODO: Handle scrolling for steps (and shift+scroll for smaller steps?)
 pub struct ParamSlider<'a, P: Param> {
     param: &'a P,
 

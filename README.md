@@ -11,9 +11,8 @@ keeping the amount of magic to minimum and making it easy to experiment with
 different approaches to things. See the [current features](#current-features)
 section for more information on the project's current status.
 
-Come join us on the [Rust Audio Discord](https://discord.gg/ykxU3rt4Cb), check
-out the [documentation](https://nih-plug.robbertvanderhelm.nl/), or use the
-[cookiecutter template](https://github.com/robbert-vdh/nih-plug-template) to
+Check out the [documentation](https://nih-plug.robbertvanderhelm.nl/), or use
+the [cookiecutter template](https://github.com/robbert-vdh/nih-plug-template) to
 quickly get started with NIH-plug.
 
 ### Table of contents

@@ -51,6 +51,7 @@ unsafe impl Sync for BufferManager {}
 
 /// Host data that the plugin's [`Buffer`]s should be created from. Leave these fields as `None`
 /// values
+#[derive(Debug)]
 pub struct BufferSource<'a> {
     pub main_input_channel_pointers: &'a mut Option<ChannelPointers>,
     pub main_output_channel_pointers: &'a mut Option<ChannelPointers>,
@@ -219,25 +220,28 @@ impl BufferManager {
             self.main_input_channel_pointers,
             self.main_output_channel_pointers,
         ) {
-            // If the host processes the main IO out of place then the inputs need to be copied to
-            // the output buffers. Otherwise the input should already be there.
-            if input_channel_pointers.ptrs != output_channel_pointers.ptrs {
-                self.main_buffer.set_slices(num_samples, |output_slices| {
-                    for (channel_idx, output_slice) in output_slices
-                        .iter_mut()
-                        .enumerate()
-                        .take(input_channel_pointers.num_channels)
-                    {
-                        let input_channel_pointer =
-                            input_channel_pointers.ptrs.as_ptr().add(channel_idx);
+            self.main_buffer.set_slices(num_samples, |output_slices| {
+                for (channel_idx, output_slice) in output_slices
+                    .iter_mut()
+                    .enumerate()
+                    .take(input_channel_pointers.num_channels)
+                {
+                    let input_channel_pointer =
+                        *input_channel_pointers.ptrs.as_ptr().add(channel_idx);
+                    debug_assert!(channel_idx < output_channel_pointers.num_channels);
+                    let output_channel_pointer =
+                        *output_channel_pointers.ptrs.as_ptr().add(channel_idx);
 
+                    // If the host processes the main IO out of place then the inputs need to be
+                    // copied to the output buffers. Otherwise the input should already be there.
+                    if input_channel_pointer != output_channel_pointer {
                         output_slice.copy_from_slice(std::slice::from_raw_parts_mut(
-                            (*input_channel_pointer).add(sample_offset),
+                            input_channel_pointer.add(sample_offset),
                             num_samples,
                         ))
                     }
-                });
-            }
+                }
+            });
 
             // Any excess channels will need to be filled with zeroes since they'd otherwise point
             // to whatever was left in the buffer
