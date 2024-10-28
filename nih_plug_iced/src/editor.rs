@@ -5,7 +5,6 @@ use crossbeam::atomic::AtomicCell;
 use crossbeam::channel;
 use iced_baseview::settings::IcedBaseviewSettings;
 use nih_plug::prelude::{Editor, GuiContext, ParentWindowHandle};
-use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
 use std::sync::Arc;
 use std::{borrow::Cow, sync::atomic::Ordering};
 
