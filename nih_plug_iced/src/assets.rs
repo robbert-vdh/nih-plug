@@ -17,7 +17,7 @@ pub const NOTO_SANS_BOLD: Font = Font::with_name("Noto Sans Bold");
 pub const NOTO_SANS_BOLD_ITALIC: Font = Font::with_name("Noto Sans Bold Italic");
 
 /// Useful for initializing the Settings, like this:
-/// ```rust
+/// ```rust,ignore
 ///    Settings {
 ///        ...
 ///        fonts: noto_sans_fonts_data().into_iter().collect(),

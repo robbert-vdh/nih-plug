@@ -1,7 +1,7 @@
 use atomic_float::AtomicF32;
 use nih_plug::prelude::{util, Editor, GuiContext};
 use nih_plug_iced::assets::noto_sans_fonts_data;
-use nih_plug_iced::widget::{column, text, Column, Space, Text};
+use nih_plug_iced::widget::{column, text, Space};
 use nih_plug_iced::widgets as nih_widgets;
 use nih_plug_iced::*;
 use std::sync::Arc;

@@ -4,10 +4,7 @@
 use crossbeam::channel;
 use futures_util::FutureExt;
 use iced_baseview::{
-    baseview::WindowScalePolicy,
-    core::Element,
-    futures::{subscription, Subscription},
-    window::WindowSubs,
+    baseview::WindowScalePolicy, core::Element, futures::Subscription, window::WindowSubs,
     Renderer, Task,
 };
 use nih_plug::prelude::GuiContext;
