@@ -1,20 +1,22 @@
 //! And [`Editor`] implementation for iced.
 
-use baseview::{WindowOpenOptions, WindowScalePolicy};
+use ::baseview::{WindowOpenOptions, WindowScalePolicy};
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel;
-pub use iced_baseview::*;
+use iced_baseview::settings::IcedBaseviewSettings;
 use nih_plug::prelude::{Editor, GuiContext, ParentWindowHandle};
-use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::{borrow::Cow, sync::atomic::Ordering};
 
 use crate::{wrapper, IcedEditor, IcedState, ParameterUpdate};
+
+pub use iced_baseview::*;
 
 /// An [`Editor`] implementation that renders an iced [`Application`].
 pub(crate) struct IcedEditorWrapper<E: IcedEditor> {
     pub(crate) iced_state: Arc<IcedState>,
     pub(crate) initialization_flags: E::InitializationFlags,
+    pub(crate) fonts: Vec<Cow<'static, [u8]>>,
 
     /// The scaling factor reported by the host, if any. On macOS this will never be set and we
     /// should use the system scaling factor instead.
@@ -23,32 +25,6 @@ pub(crate) struct IcedEditorWrapper<E: IcedEditor> {
     /// A subscription for sending messages about parameter updates to the `IcedEditor`.
     pub(crate) parameter_updates_sender: channel::Sender<ParameterUpdate>,
     pub(crate) parameter_updates_receiver: Arc<channel::Receiver<ParameterUpdate>>,
-}
-
-/// This version of `baseview` uses a different version of `raw_window_handle than NIH-plug, so we
-/// need to adapt it ourselves.
-struct ParentWindowHandleAdapter(nih_plug::editor::ParentWindowHandle);
-
-unsafe impl HasRawWindowHandle for ParentWindowHandleAdapter {
-    fn raw_window_handle(&self) -> RawWindowHandle {
-        match self.0 {
-            ParentWindowHandle::X11Window(window) => {
-                let mut handle = raw_window_handle::XcbHandle::empty();
-                handle.window = window;
-                RawWindowHandle::Xcb(handle)
-            }
-            ParentWindowHandle::AppKitNsView(ns_view) => {
-                let mut handle = raw_window_handle::AppKitHandle::empty();
-                handle.ns_view = ns_view;
-                RawWindowHandle::AppKit(handle)
-            }
-            ParentWindowHandle::Win32Hwnd(hwnd) => {
-                let mut handle = raw_window_handle::Win32Handle::empty();
-                handle.hwnd = hwnd;
-                RawWindowHandle::Win32(handle)
-            }
-        }
-    }
 }
 
 impl<E: IcedEditor> Editor for IcedEditorWrapper<E> {
@@ -62,8 +38,14 @@ impl<E: IcedEditor> Editor for IcedEditorWrapper<E> {
 
         // TODO: iced_baseview does not have gracefuly error handling for context creation failures.
         //       This will panic if the context could not be created.
-        let window = IcedWindow::<wrapper::IcedEditorWrapperApplication<E>>::open_parented(
-            &ParentWindowHandleAdapter(parent),
+        let window = iced_baseview::open_parented::<wrapper::IcedEditorWrapperApplication<E>, _>(
+            &parent,
+            // We use this wrapper to be able to pass the GUI context to the editor
+            (
+                context,
+                self.parameter_updates_receiver.clone(),
+                self.initialization_flags.clone(),
+            ),
             Settings {
                 window: WindowOpenOptions {
                     title: String::from("iced window"),
@@ -74,41 +56,13 @@ impl<E: IcedEditor> Editor for IcedEditorWrapper<E> {
                     scale: scaling_factor
                         .map(|factor| WindowScalePolicy::ScaleFactor(factor as f64))
                         .unwrap_or(WindowScalePolicy::SystemScaleFactor),
-
-                    #[cfg(feature = "opengl")]
-                    gl_config: Some(baseview::gl::GlConfig {
-                        // FIXME: glow_glyph forgot to add an `#extension`, so this won't work under
-                        //        OpenGL 3.2 at the moment. With that change applied this should work on
-                        //        OpenGL 3.2/macOS.
-                        version: (3, 3),
-                        red_bits: 8,
-                        blue_bits: 8,
-                        green_bits: 8,
-                        alpha_bits: 8,
-                        depth_bits: 24,
-                        stencil_bits: 8,
-                        samples: None,
-                        srgb: true,
-                        double_buffer: true,
-                        vsync: true,
-                        ..Default::default()
-                    }),
-                    // FIXME: Rust analyzer always thinks baseview/opengl is enabled even if we
-                    //        don't explicitly enable it, so you'd get a compile error if this line
-                    //        is missing
-                    #[cfg(not(feature = "opengl"))]
-                    gl_config: None,
                 },
                 iced_baseview: IcedBaseviewSettings {
                     ignore_non_modifier_keys: false,
                     always_redraw: true,
                 },
-                // We use this wrapper to be able to pass the GUI context to the editor
-                flags: (
-                    context,
-                    self.parameter_updates_receiver.clone(),
-                    self.initialization_flags.clone(),
-                ),
+                fonts: self.fonts.clone(),
+                ..Default::default()
             },
         );
 
@@ -154,7 +108,7 @@ impl<E: IcedEditor> Editor for IcedEditorWrapper<E> {
 /// The window handle used for [`IcedEditorWrapper`].
 struct IcedEditorHandle<Message: 'static + Send> {
     iced_state: Arc<IcedState>,
-    window: iced_baseview::WindowHandle<Message>,
+    window: iced_baseview::window::WindowHandle<Message>,
 }
 
 /// The window handle enum stored within 'WindowHandle' contains raw pointers. Is there a way around

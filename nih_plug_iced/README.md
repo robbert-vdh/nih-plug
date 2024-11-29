@@ -9,7 +9,7 @@ configurations. To use wgpu instead, include the crate with the following
 options:
 
 ```toml
-nih_plug_iced = { git = "https://github.com/robbert-vdh/nih-plug.git", default-features = false, features = ["wgpu"] }
+nih_plug_iced = { git = "https://github.com/robbert-vdh/nih-plug.git", default_features = false, features = ["wgpu"] }
 ```
 
 Iced has many more optional features. Check the `Cargo.toml` file for more
