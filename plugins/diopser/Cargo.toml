@@ -19,7 +19,7 @@ simd = ["nih_plug/simd"]
 nih_plug = { path = "../../", features = ["assert_process_allocs"] }
 nih_plug_vizia = { path = "../../nih_plug_vizia" }
 
-atomic_float = "0.1"
+atomic_float = "1.0.0"
 semver = "1.0.14"
 
 # For the GUI
