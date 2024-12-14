@@ -325,7 +325,7 @@ impl Editor for CustomGlEditor {
     }
 }
 
-/// The window handle used for [`EguiEditor`].
+/// The window handle used for [`CustomGlEditor`].
 struct CustomGlEditorHandle {
     state: Arc<CustomGlEditorState>,
     window: WindowHandle,

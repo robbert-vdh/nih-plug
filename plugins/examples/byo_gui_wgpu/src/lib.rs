@@ -368,7 +368,7 @@ impl Editor for CustomWgpuEditor {
     }
 }
 
-/// The window handle used for [`EguiEditor`].
+/// The window handle used for [`CustomWgpuEditor`].
 struct CustomWgpuEditorHandle {
     state: Arc<CustomWgpuEditorState>,
     window: WindowHandle,

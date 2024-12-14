@@ -249,7 +249,7 @@ impl Editor for CustomSoftbufferEditor {
     }
 }
 
-/// The window handle used for [`EguiEditor`].
+/// The window handle used for [`CustomSoftbufferEditor`].
 struct CustomSoftbufferEditorHandle {
     state: Arc<CustomSoftbufferEditorState>,
     window: WindowHandle,
