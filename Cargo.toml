@@ -22,6 +22,9 @@ members = [
   "cargo_nih_plug",
   "xtask",
 
+  "plugins/examples/byo_gui_gl",
+  "plugins/examples/byo_gui_softbuffer",
+  "plugins/examples/byo_gui_wgpu",
   "plugins/examples/gain",
   "plugins/examples/gain_gui_egui",
   "plugins/examples/gain_gui_iced",
