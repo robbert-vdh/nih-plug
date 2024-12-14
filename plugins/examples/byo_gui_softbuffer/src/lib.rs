@@ -202,6 +202,10 @@ impl Editor for CustomSoftbufferEditor {
                 scale: scaling_factor
                     .map(|factor| WindowScalePolicy::ScaleFactor(factor as f64))
                     .unwrap_or(WindowScalePolicy::SystemScaleFactor),
+
+                // NOTE: The OpenGL feature in baseview is not needed here, but rust-analyzer gets
+                // confused when some crates do use it and others don't.
+                gl_config: None,
             },
             move |window: &mut baseview::Window<'_>| -> CustomSoftbufferWindow {
                 CustomSoftbufferWindow::new(
