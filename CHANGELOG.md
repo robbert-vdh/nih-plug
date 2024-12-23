@@ -10,6 +10,13 @@ Since there is no stable release yet, the changes are organized per day in
 reverse chronological order. The main purpose of this document in its current
 state is to list breaking changes.
 
+## [2024-12-23]
+
+### Added
+
+- `nih_plug_vizia`'s `ParamSlider` has a new style that always shows the offset
+  relative to the center of the slider.
+
 ## [2024-08-18]
 
 ### Breaking changes
