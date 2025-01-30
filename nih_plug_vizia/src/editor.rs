@@ -9,7 +9,7 @@ use std::sync::Arc;
 use vizia::context::backend::TextConfig;
 use vizia::prelude::*;
 
-use crate::widgets::RawParamEvent;
+use crate::widgets::{GuiContextEvent, RawParamEvent};
 use crate::{assets, widgets, ViziaState, ViziaTheming};
 
 /// An [`Editor`] implementation that calls an vizia draw loop.
@@ -30,6 +30,7 @@ pub(crate) struct ViziaEditor {
     /// to compute a property in an event handler. Like when positioning an element based on the
     /// display value's width.
     pub(crate) emit_parameters_changed_event: Arc<AtomicBool>,
+    pub(crate) emit_resize: Arc<AtomicCell<Option<f64>>>,
 }
 
 impl Editor for ViziaEditor {
@@ -94,6 +95,7 @@ impl Editor for ViziaEditor {
         })
         .on_idle({
             let emit_parameters_changed_event = self.emit_parameters_changed_event.clone();
+            let emit_resize = self.emit_resize.clone();
             move |cx| {
                 if emit_parameters_changed_event
                     .compare_exchange(true, false, Ordering::AcqRel, Ordering::Relaxed)
@@ -103,6 +105,17 @@ impl Editor for ViziaEditor {
                         Event::new(RawParamEvent::ParametersChanged)
                             .propagate(Propagation::Subtree),
                     );
+                }
+
+                match emit_resize.load() {
+                    Some(v) => {
+                        emit_resize.store(None);
+                        cx.emit_custom(
+                            Event::new(GuiContextEvent::ChangeSystemScaleFactor(v))
+                                .propagate(Propagation::Subtree),
+                        );
+                    }
+                    None => {}
                 }
             }
         });
@@ -129,14 +142,17 @@ impl Editor for ViziaEditor {
     fn set_scale_factor(&self, factor: f32) -> bool {
         // If the editor is currently open then the host must not change the current HiDPI scale as
         // we don't have a way to handle that. Ableton Live does this.
-        if self.vizia_state.is_open() {
-            return false;
-        }
+
+        self.emit_resize.store(Some(factor as f64));
+
+        // if self.vizia_state.is_open() {
+        //     return false;
+        // }
 
         // We're making things a bit more complicated by having both a system scale factor, which is
         // used for HiDPI and also known to the host, and a user scale factor that the user can use
         // to arbitrarily resize the GUI
-        self.scaling_factor.store(Some(factor));
+        // self.scaling_factor.store(Some(factor));
         true
     }
 

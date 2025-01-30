@@ -60,9 +60,14 @@ where
         #[cfg(target_os = "macos")]
         scaling_factor: AtomicCell::new(None),
         #[cfg(not(target_os = "macos"))]
-        scaling_factor: AtomicCell::new(Some(1.0)),
+        scaling_factor: AtomicCell::new(Some(1_f32)),
 
         emit_parameters_changed_event: Arc::new(AtomicBool::new(false)),
+        #[cfg(target_os = "macos")]
+        emit_resize: Arc::new(AtomicCell::new(None)),
+
+        #[cfg(not(target_os = "macos"))]
+        emit_resize: Arc::new(AtomicCell::new(Some(1_f64))),
     }))
 }
 
@@ -95,6 +100,10 @@ pub struct ViziaState {
     /// This can be used to allow GUIs to be scaled uniformly.
     #[serde(with = "nih_plug::params::persist::serialize_atomic_cell")]
     scale_factor: AtomicCell<f64>,
+
+    #[serde(with = "nih_plug::params::persist::serialize_atomic_cell")]
+    system_scale_factor: AtomicCell<f64>,
+
     /// Whether the editor's window is currently open.
     #[serde(skip)]
     open: AtomicBool,
@@ -112,6 +121,7 @@ impl Debug for ViziaState {
         f.debug_struct("ViziaState")
             .field("size_fn", &format!("<fn> ({}, {})", width, height))
             .field("scale_factor", &self.scale_factor)
+            .field("system_scale_factor", &self.system_scale_factor)
             .field("open", &self.open)
             .finish()
     }
@@ -139,6 +149,7 @@ impl ViziaState {
         Arc::new(ViziaState {
             size_fn: Box::new(size_fn),
             scale_factor: AtomicCell::new(1.0),
+            system_scale_factor: AtomicCell::new(1_f64),
             open: AtomicBool::new(false),
         })
     }
@@ -153,6 +164,7 @@ impl ViziaState {
         Arc::new(ViziaState {
             size_fn: Box::new(size_fn),
             scale_factor: AtomicCell::new(default_scale_factor),
+            system_scale_factor: AtomicCell::new(1_f64),
             open: AtomicBool::new(false),
         })
     }
@@ -162,10 +174,11 @@ impl ViziaState {
     pub fn scaled_logical_size(&self) -> (u32, u32) {
         let (logical_width, logical_height) = self.inner_logical_size();
         let scale_factor = self.scale_factor.load();
+        let system_scale_factor = self.system_scale_factor.load();
 
         (
-            (logical_width as f64 * scale_factor).round() as u32,
-            (logical_height as f64 * scale_factor).round() as u32,
+            (logical_width as f64 * scale_factor * system_scale_factor).round() as u32,
+            (logical_height as f64 * scale_factor * system_scale_factor).round() as u32,
         )
     }
 
@@ -179,6 +192,11 @@ impl ViziaState {
     /// can be changed by changing `cx.user_scale_factor`.
     pub fn user_scale_factor(&self) -> f64 {
         self.scale_factor.load()
+    }
+
+    /// Get the DPI related scaling factor of the GUI. Used for compatiblility with ableton and waveform
+    pub fn system_scale_factor(&self) -> f64 {
+        self.system_scale_factor.load()
     }
 
     /// Whether the GUI is currently visible.

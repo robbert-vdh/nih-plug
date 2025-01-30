@@ -106,6 +106,7 @@ pub enum GuiContextEvent {
     /// }
     /// ```
     Resize,
+    ChangeSystemScaleFactor(f64),
 }
 
 /// Handles parameter updates for VIZIA GUIs. Registered in
@@ -150,6 +151,13 @@ impl Model for WindowModel {
             GuiContextEvent::Resize => {
                 // This will trigger a `WindowEvent::GeometryChanged`, which in turn causes the
                 // handler below this to be fired
+                let (width, height) = self.vizia_state.inner_logical_size();
+                cx.set_window_size(WindowSize { width, height });
+
+                meta.consume();
+            }
+            GuiContextEvent::ChangeSystemScaleFactor(v) => {
+                self.vizia_state.system_scale_factor.store(*v);
                 let (width, height) = self.vizia_state.inner_logical_size();
                 cx.set_window_size(WindowSize { width, height });
 
