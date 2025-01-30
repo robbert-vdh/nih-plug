@@ -7,6 +7,12 @@ license = "ISC"
 
 description = "An adapter to use VIZIA GUIs with NIH-plug"
 
+[features]
+# default = ["debug"]
+default = []
+
+debug = []
+
 [dependencies]
 nih_plug = { path = "..", default-features = false }
 nih_plug_assets = { git = "https://github.com/robbert-vdh/nih_plug_assets.git" }

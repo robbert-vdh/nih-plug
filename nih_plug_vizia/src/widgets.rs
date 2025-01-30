@@ -21,6 +21,11 @@ mod peak_meter;
 mod resize_handle;
 pub mod util;
 
+#[cfg(feature = "debug")]
+mod debug_label;
+#[cfg(feature = "debug")]
+pub use debug_label::DebugLabel;
+
 pub use generic_ui::GenericUi;
 pub use param_button::{ParamButton, ParamButtonExt};
 pub use param_slider::{ParamSlider, ParamSliderExt, ParamSliderStyle};

@@ -4,6 +4,7 @@
 #![allow(clippy::type_complexity)]
 
 use crossbeam::atomic::AtomicCell;
+
 use nih_plug::params::persist::PersistentField;
 use nih_plug::prelude::{Editor, GuiContext};
 use serde::{Deserialize, Serialize};
@@ -14,6 +15,9 @@ use vizia::prelude::*;
 
 // Re-export for convenience
 pub use vizia;
+
+#[cfg(feature = "debug")]
+use editor::DebugMessage;
 
 pub mod assets;
 mod editor;
@@ -66,8 +70,10 @@ where
         #[cfg(target_os = "macos")]
         emit_resize: Arc::new(AtomicCell::new(None)),
 
-        #[cfg(not(target_os = "macos"))]
-        emit_resize: Arc::new(AtomicCell::new(Some(1_f64))),
+        #[cfg(feature = "debug")]
+        emit_debug: Arc::new(AtomicCell::new(Some(DebugMessage::Other(
+            "Initiated editor",
+        )))),
     }))
 }
 

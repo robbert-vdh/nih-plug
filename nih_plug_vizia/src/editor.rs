@@ -30,7 +30,18 @@ pub(crate) struct ViziaEditor {
     /// to compute a property in an event handler. Like when positioning an element based on the
     /// display value's width.
     pub(crate) emit_parameters_changed_event: Arc<AtomicBool>,
-    pub(crate) emit_resize: Arc<AtomicCell<Option<f64>>>,
+
+    #[cfg(feature = "debug")]
+    pub(crate) emit_debug: Arc<AtomicCell<Option<DebugMessage>>>,
+}
+
+#[cfg(feature = "debug")]
+#[derive(Clone, Copy, Debug)]
+pub enum DebugMessage {
+    RequestedSize(u32, u32),
+    ChangedScaleFactor(f32),
+    SpawnedApp,
+    Other(&'static str),
 }
 
 impl Editor for ViziaEditor {
@@ -95,7 +106,9 @@ impl Editor for ViziaEditor {
         })
         .on_idle({
             let emit_parameters_changed_event = self.emit_parameters_changed_event.clone();
-            let emit_resize = self.emit_resize.clone();
+            #[cfg(feature = "debug")]
+            let emit_debug = self.emit_debug.clone();
+
             move |cx| {
                 if emit_parameters_changed_event
                     .compare_exchange(true, false, Ordering::AcqRel, Ordering::Relaxed)
@@ -107,13 +120,12 @@ impl Editor for ViziaEditor {
                     );
                 }
 
-                match emit_resize.load() {
+                #[cfg(feature = "debug")]
+                match emit_debug.load() {
                     Some(v) => {
-                        emit_resize.store(None);
-                        cx.emit_custom(
-                            Event::new(GuiContextEvent::ChangeSystemScaleFactor(v))
-                                .propagate(Propagation::Subtree),
-                        );
+                        emit_debug.store(None);
+                        // nih_log!("Emitted: {v:?}");
+                        cx.emit_custom(Event::new(v).propagate(Propagation::Subtree))
                     }
                     None => {}
                 }
@@ -128,6 +140,10 @@ impl Editor for ViziaEditor {
         let window = application.open_parented(&parent);
 
         self.vizia_state.open.store(true, Ordering::Release);
+
+        #[cfg(feature = "debug")]
+        self.emit_debug.store(Some(DebugMessage::SpawnedApp));
+
         Box::new(ViziaEditorHandle {
             vizia_state: self.vizia_state.clone(),
             window,
@@ -136,23 +152,32 @@ impl Editor for ViziaEditor {
 
     fn size(&self) -> (u32, u32) {
         // This includes the user scale factor if set, but not any HiDPI scaling
+        #[cfg(feature = "debug")]
+        {
+            let size = self.vizia_state.scaled_logical_size();
+            self.emit_debug
+                .store(Some(DebugMessage::RequestedSize(size.0, size.1)));
+            size
+        }
+        #[cfg(not(feature = "debug"))]
         self.vizia_state.scaled_logical_size()
     }
 
     fn set_scale_factor(&self, factor: f32) -> bool {
         // If the editor is currently open then the host must not change the current HiDPI scale as
         // we don't have a way to handle that. Ableton Live does this.
+        #[cfg(feature = "debug")]
+        self.emit_debug
+            .store(Some(DebugMessage::ChangedScaleFactor(factor)));
 
-        self.emit_resize.store(Some(factor as f64));
-
-        // if self.vizia_state.is_open() {
-        //     return false;
-        // }
+        if self.vizia_state.is_open() {
+            return false;
+        }
 
         // We're making things a bit more complicated by having both a system scale factor, which is
         // used for HiDPI and also known to the host, and a user scale factor that the user can use
         // to arbitrarily resize the GUI
-        // self.scaling_factor.store(Some(factor));
+        self.scaling_factor.store(Some(factor));
         true
     }
 
