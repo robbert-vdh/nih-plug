@@ -18,9 +18,9 @@ rayon = ["egui-baseview/rayon"]
 [dependencies]
 nih_plug = { path = "..", default-features = false }
 raw-window-handle = "0.5"
-baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "45465c5f46abed6c6ce370fffde5edc8e4cd5aa3" }
+baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "9a0b42c09d712777b2edb4c5e0cb6baf21e988f0", features = ['opengl'] }
 crossbeam = "0.8"
-egui-baseview = { git = "https://github.com/BillyDM/egui-baseview.git", rev = "68c4d0e8e5c1c702a888a245f4ac50eddfdfcaed", default-features = false }
+egui-baseview = { git = "https://github.com/BillyDM/egui-baseview.git", reg = "ec70c3fe6b2f070dcacbc22924431edbe24bd1c0", default-features = false, features = ['opengl'] }
 parking_lot = "0.12"
 # To make the state persistable
 serde = { version = "1.0", features = ["derive"] }
