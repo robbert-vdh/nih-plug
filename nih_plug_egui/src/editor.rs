@@ -101,6 +101,7 @@ where
                     ..Default::default()
                 }),
             },
+            Default::default(),
             state,
             move |egui_ctx, _queue, state| build(egui_ctx, &mut state.write()),
             move |egui_ctx, queue, state| {
