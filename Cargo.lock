@@ -257,10 +257,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b3d1d046238990b9cf5bcde22a3fb3584ee5cf65fb2765f454ed428c7a0063da"
 
 [[package]]
-name = "anymap"
-version = "1.0.0-beta.2"
+name = "anymap3"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f1f8f5a6f3d50d89e3797d7593a50f96bb2aaa20ca0cc7be1fb673232c91d72"
+checksum = "170433209e817da6aae2c51aa0dd443009a613425dd041ebfb2492d1c4c11a25"
 
 [[package]]
 name = "approx"
@@ -3039,7 +3039,7 @@ name = "nih_plug"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "anymap",
+ "anymap3",
  "approx 0.5.1",
  "assert_no_alloc",
  "atomic_float",

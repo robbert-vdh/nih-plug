@@ -3,7 +3,7 @@
 //!
 //! This is essentially a slimmed down version of the `LinuxEventLoop`.
 
-use anymap::Entry;
+use anymap3::Entry;
 use crossbeam::channel;
 use parking_lot::Mutex;
 use std::sync::{Arc, LazyLock, Weak};
@@ -73,8 +73,8 @@ where
 // Rust does not allow us to use the `T` and `E` type variable in statics, so this is a
 // workaround to have a singleton that also works if for whatever reason there arem ultiple `T`
 // and `E`s in a single process (won't happen with normal plugin usage, but sho knwos).
-static HANDLE_MAP: LazyLock<Mutex<anymap::Map<dyn std::any::Any + Send>>> =
-    LazyLock::new(|| Mutex::new(anymap::Map::new()));
+static HANDLE_MAP: LazyLock<Mutex<anymap3::Map<dyn std::any::Any + Send>>> =
+    LazyLock::new(|| Mutex::new(anymap3::Map::new()));
 
 impl<T: Send + 'static, E: MainThreadExecutor<T> + 'static> WorkerThread<T, E> {
     fn spawn() -> Self {
