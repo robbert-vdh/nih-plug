@@ -71,8 +71,8 @@ where
 }
 
 // Rust does not allow us to use the `T` and `E` type variable in statics, so this is a
-// workaround to have a singleton that also works if for whatever reason there arem ultiple `T`
-// and `E`s in a single process (won't happen with normal plugin usage, but sho knwos).
+// workaround to have a singleton that also works if for whatever reason there are multiple `T`
+// and `E`s in a single process (won't happen with normal plugin usage, but who knows).
 static HANDLE_MAP: LazyLock<Mutex<anymap3::Map<dyn std::any::Any + Send>>> =
     LazyLock::new(|| Mutex::new(anymap3::Map::new()));
 
