@@ -44,7 +44,7 @@ members = [
 ]
 
 [features]
-default = ["vst3"]
+default = ["vst3", "global_logger"]
 
 # Enabling this feature will cause the plugin to terminate when allocations
 # occur in the processing function during debug builds. Keep in mind that panics
@@ -71,6 +71,9 @@ zstd = ["dep:zstd"]
 
 # Only relevant when generating docs, adds the `doc_auto_cfg` nightly feature
 docs = []
+
+# Enables installation of the global logger. Disable to bring your own solution.
+global_logger = []
 
 [dependencies]
 nih_plug_derive = { path = "nih_plug_derive" }

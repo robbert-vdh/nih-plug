@@ -102,30 +102,33 @@ pub fn clamp_output_event_timing(timing: u32, total_buffer_len: u32) -> u32 {
 /// - A file path, in which case the output gets appended to the end of that file which will be
 ///   created if necessary.
 pub fn setup_logger() {
-    let log_level = if cfg!(debug_assertions) {
-        log::LevelFilter::Trace
-    } else {
-        log::LevelFilter::Info
-    };
+    #[cfg(feature = "global_logger")]
+    {
+        let log_level = if cfg!(debug_assertions) {
+            log::LevelFilter::Trace
+        } else {
+            log::LevelFilter::Info
+        };
 
-    let logger_builder = nih_log::LoggerBuilder::new(log_level)
-        .filter_module("cosmic_text::buffer")
-        .filter_module("cosmic_text::shape")
-        .filter_module("selectors::matching");
+        let logger_builder = nih_log::LoggerBuilder::new(log_level)
+            .filter_module("cosmic_text::buffer")
+            .filter_module("cosmic_text::shape")
+            .filter_module("selectors::matching");
 
-    // Always show the module in debug builds, makes it clearer where messages are coming from and
-    // it helps set up filters
-    #[cfg(debug_assertions)]
-    let logger_builder = logger_builder.always_show_module_path();
+        // Always show the module in debug builds, makes it clearer where messages are coming from and
+        // it helps set up filters
+        #[cfg(debug_assertions)]
+        let logger_builder = logger_builder.always_show_module_path();
 
-    // In release builds there are some more logging messages from libraries that are not relevant
-    // to the end user that can be filtered out
-    #[cfg(not(debug_assertions))]
-    let logger_builder = logger_builder.filter_module("cosmic_text::font::system::std");
+        // In release builds there are some more logging messages from libraries that are not relevant
+        // to the end user that can be filtered out
+        #[cfg(not(debug_assertions))]
+        let logger_builder = logger_builder.filter_module("cosmic_text::font::system::std");
 
-    let logger_set = logger_builder.build_global().is_ok();
-    if logger_set {
-        log_panics();
+        let logger_set = logger_builder.build_global().is_ok();
+        if logger_set {
+            log_panics();
+        }
     }
 }
 
