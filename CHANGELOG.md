@@ -18,6 +18,10 @@ state is to list breaking changes.
   that the remote controls exposed through `ClapPlugin::remote_controls()` now
   use the non-draft extension.
 
+### Fixed
+
+- Fixed a warning about future name clashes when compiling `nih_plug`.
+
 ## [2024-12-23]
 
 ### Added
