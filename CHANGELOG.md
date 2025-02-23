@@ -10,6 +10,14 @@ Since there is no stable release yet, the changes are organized per day in
 reverse chronological order. The main purpose of this document in its current
 state is to list breaking changes.
 
+## [2024-02-23]
+
+### Changed
+
+- The CLAP bindings were updated to 1.2.2. The only noticeable difference is
+  that the remote controls exposed through `ClapPlugin::remote_controls()` now
+  use the non-draft extension.
+
 ## [2024-12-23]
 
 ### Added
