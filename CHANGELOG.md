@@ -12,6 +12,15 @@ state is to list breaking changes.
 
 ## [2024-02-23]
 
+### Breaking changes
+
+- `nih_plug_egui` now uses egui 0.31.
+
+### Added
+
+- `nih_plug_egui` has a new `ResizableWindow` widget that can be used to resize
+  the plugin's editor.
+
 ### Changed
 
 - The CLAP bindings were updated to 1.2.2. The only noticeable difference is
