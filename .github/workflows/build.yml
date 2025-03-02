@@ -22,9 +22,9 @@ jobs:
     strategy:
       matrix:
         include:
-          - { name: ubuntu-22.04,       os: ubuntu-22.04,   cross-target: '' }
-          - { name: macos-universal,    os: macos-latest,   cross-target: aarch64-apple-darwin }
-          - { name: windows,            os: windows-latest, cross-target: '' }
+          - { name: ubuntu-22.04,    os: ubuntu-22.04,   cross-target: '' }
+          - { name: macos-universal, os: macos-latest,   cross-target: x86_64-apple-darwin }
+          - { name: windows,         os: windows-latest, cross-target: '' }
     name: Package plugin binaries
     runs-on: ${{ matrix.os }}
     steps:
