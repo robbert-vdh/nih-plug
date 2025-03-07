@@ -384,11 +384,17 @@ impl<T: Enum + PartialEq + 'static> EnumParam<T> {
     /// is the parameter's new value. This should not do anything expensive as it may be called
     /// multiple times in rapid succession, and it can be run from both the GUI and the audio
     /// thread.
+    #[inline]
     pub fn with_callback(mut self, callback: Arc<dyn Fn(T) + Send + Sync>) -> Self {
-        self.inner.inner = self.inner.inner.with_callback(Arc::new(move |value| {
+        self.set_callback(callback);
+        self
+    }
+
+    /// Run a callback whenever this parameter's value changes. See [`EnumParam::with_callback`].
+    pub fn set_callback(&mut self, callback: Arc<dyn Fn(T) + Send + Sync>) {
+        self.inner.inner.set_callback(Arc::new(move |value| {
             callback(T::from_index(value as usize))
         }));
-        self
     }
 
     /// Mark the parameter as non-automatable. This means that the parameter cannot be changed from
