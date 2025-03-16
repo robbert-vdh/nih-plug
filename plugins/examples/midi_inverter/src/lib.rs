@@ -1,7 +1,7 @@
 use nih_plug::prelude::*;
 use std::sync::Arc;
 
-/// A plugin that inverts all MIDI note numbers, channels, CCs, velocitires, pressures, and
+/// A plugin that inverts all MIDI note numbers, channels, CCs, velocities, pressures, and
 /// everything else you don't want to be inverted.
 struct MidiInverter {
     params: Arc<MidiInverterParams>,
