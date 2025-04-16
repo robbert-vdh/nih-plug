@@ -65,7 +65,7 @@ impl CustomWgpuWindow {
         let width = (unscaled_width as f64 * scaling_factor as f64).round() as u32;
         let height = (unscaled_height as f64 * scaling_factor as f64).round() as u32;
 
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::default());
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
 
         let surface = unsafe { instance.create_surface_unsafe(target) }.unwrap();
 
@@ -88,8 +88,8 @@ impl CustomWgpuWindow {
                     required_limits: wgpu::Limits::downlevel_webgl2_defaults()
                         .using_resolution(adapter.limits()),
                     memory_hints: wgpu::MemoryHints::MemoryUsage,
+                    ..Default::default()
                 },
-                None,
             )
             .await
             .expect("Failed to create device");
