@@ -478,8 +478,7 @@ fn baseview_window_to_surface_target(window: &baseview::Window<'_>) -> wgpu::Sur
                     NonZeroIsize::new(handle.hwnd as isize).unwrap(),
                 );
 
-                raw_handle.hinstance =
-                    raw_handle.hinstance = NonZeroIsize::new(handle.hinstance as isize);
+                raw_handle.hinstance = NonZeroIsize::new(handle.hinstance as isize);
 
                 raw_window_handle_06::RawWindowHandle::Win32(raw_handle)
             }
