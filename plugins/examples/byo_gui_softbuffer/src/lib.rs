@@ -81,8 +81,10 @@ impl baseview::WindowHandler for CustomSoftbufferWindow {
                 let red = x % 255;
                 let green = y % 255;
                 let blue = (x * y) % 255;
+                let alpha = 255;
+
                 let index = y as usize * self.physical_width as usize + x as usize;
-                buffer[index] = blue | (green << 8) | (red << 16);
+                buffer[index] = blue | (green << 8) | (red << 16) | (alpha << 24);
             }
         }
 
