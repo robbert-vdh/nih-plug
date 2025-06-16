@@ -10,6 +10,34 @@ Since there is no stable release yet, the changes are organized per day in
 reverse chronological order. The main purpose of this document in its current
 state is to list breaking changes.
 
+## [2024-02-23]
+
+### Breaking changes
+
+- `nih_plug_egui` now uses egui 0.31.
+
+### Added
+
+- `nih_plug_egui` has a new `ResizableWindow` widget that can be used to resize
+  the plugin's editor.
+
+### Changed
+
+- The CLAP bindings were updated to 1.2.2. The only noticeable difference is
+  that the remote controls exposed through `ClapPlugin::remote_controls()` now
+  use the non-draft extension.
+
+### Fixed
+
+- Fixed a warning about future name clashes when compiling `nih_plug`.
+
+## [2024-12-23]
+
+### Added
+
+- `nih_plug_vizia`'s `ParamSlider` has a new style that always shows the offset
+  relative to the center of the slider.
+
 ## [2024-08-18]
 
 ### Breaking changes
