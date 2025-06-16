@@ -8,10 +8,10 @@ license = "ISC"
 description = "A simple gain plugin with an iced GUI"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "lib"]
 
 [dependencies]
 nih_plug = { path = "../../../", features = ["assert_process_allocs"] }
-nih_plug_iced = { path = "../../../nih_plug_iced" }
+nih_plug_iced = { path = "../../../nih_plug_iced", features = ["wgpu"] }
 
 atomic_float = "0.1"

@@ -1,5 +1,7 @@
 use atomic_float::AtomicF32;
 use nih_plug::prelude::{util, Editor, GuiContext};
+use nih_plug_iced::assets::noto_sans_fonts_data;
+use nih_plug_iced::widget::{column, text, Space};
 use nih_plug_iced::widgets as nih_widgets;
 use nih_plug_iced::*;
 use std::sync::Arc;
@@ -17,7 +19,11 @@ pub(crate) fn create(
     peak_meter: Arc<AtomicF32>,
     editor_state: Arc<IcedState>,
 ) -> Option<Box<dyn Editor>> {
-    create_iced_editor::<GainEditor>(editor_state, (params, peak_meter))
+    create_iced_editor::<GainEditor>(
+        editor_state,
+        (params, peak_meter),
+        noto_sans_fonts_data().into(),
+    )
 }
 
 struct GainEditor {
@@ -25,9 +31,6 @@ struct GainEditor {
     context: Arc<dyn GuiContext>,
 
     peak_meter: Arc<AtomicF32>,
-
-    gain_slider_state: nih_widgets::param_slider::State,
-    peak_meter_state: nih_widgets::peak_meter::State,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -40,72 +43,57 @@ impl IcedEditor for GainEditor {
     type Executor = executor::Default;
     type Message = Message;
     type InitializationFlags = (Arc<GainParams>, Arc<AtomicF32>);
+    type Theme = Theme;
 
     fn new(
         (params, peak_meter): Self::InitializationFlags,
         context: Arc<dyn GuiContext>,
-    ) -> (Self, Command<Self::Message>) {
+    ) -> (Self, Task<Self::Message>) {
         let editor = GainEditor {
             params,
             context,
 
             peak_meter,
-
-            gain_slider_state: Default::default(),
-            peak_meter_state: Default::default(),
         };
 
-        (editor, Command::none())
+        (editor, Task::none())
     }
 
     fn context(&self) -> &dyn GuiContext {
         self.context.as_ref()
     }
 
-    fn update(
-        &mut self,
-        _window: &mut WindowQueue,
-        message: Self::Message,
-    ) -> Command<Self::Message> {
+    fn update(&mut self, message: Self::Message) -> Task<Self::Message> {
         match message {
             Message::ParamUpdate(message) => self.handle_param_message(message),
         }
 
-        Command::none()
+        Task::none()
     }
 
-    fn view(&mut self) -> Element<'_, Self::Message> {
-        Column::new()
-            .align_items(Alignment::Center)
-            .push(
-                Text::new("Gain GUI")
-                    .font(assets::NOTO_SANS_LIGHT)
-                    .size(40)
-                    .height(50.into())
-                    .width(Length::Fill)
-                    .horizontal_alignment(alignment::Horizontal::Center)
-                    .vertical_alignment(alignment::Vertical::Bottom),
-            )
-            .push(
-                Text::new("Gain")
-                    .height(20.into())
-                    .width(Length::Fill)
-                    .horizontal_alignment(alignment::Horizontal::Center)
-                    .vertical_alignment(alignment::Vertical::Center),
-            )
-            .push(
-                nih_widgets::ParamSlider::new(&mut self.gain_slider_state, &self.params.gain)
-                    .map(Message::ParamUpdate),
-            )
-            .push(Space::with_height(10.into()))
-            .push(
-                nih_widgets::PeakMeter::new(
-                    &mut self.peak_meter_state,
-                    util::gain_to_db(self.peak_meter.load(std::sync::atomic::Ordering::Relaxed)),
-                )
-                .hold_time(Duration::from_millis(600)),
-            )
-            .into()
+    fn view(&self) -> Element<'_, Self::Message> {
+        let title = text("Gain GUI")
+            .font(assets::NOTO_SANS_LIGHT)
+            .size(40)
+            .height(50)
+            .width(Length::Fill)
+            .align_x(alignment::Horizontal::Center)
+            .align_y(alignment::Vertical::Bottom);
+
+        let text = text("Gain").height(20).width(Length::Fill).center();
+
+        column![
+            title,
+            text,
+            nih_widgets::ParamSlider::new(&self.params.gain).map(Message::ParamUpdate),
+            Space::with_height(10),
+            nih_widgets::PeakMeter::new(util::gain_to_db(
+                self.peak_meter.load(std::sync::atomic::Ordering::Relaxed),
+            ))
+            .hold_time(Duration::from_millis(600))
+        ]
+        .align_x(alignment::Horizontal::Center)
+        .into()
     }
 
     fn background_color(&self) -> nih_plug_iced::Color {
