@@ -202,6 +202,11 @@ examples.
   [egui](plugins/examples/gain_gui_egui),
   [iced](plugins/examples/gain_gui_iced), and
   [VIZIA](plugins/examples/gain_gui_vizia).
+
+  There are also examples for making custom GUIs with
+  [OpenGL](plugins/examples/byo_gui_gl), [wgpu](plugins/examples/byo_gui_wgpu),
+  and [softbuffer](plugins/examples/byo_gui_softbuffer).
+
 - [**midi_inverter**](plugins/examples/midi_inverter) takes note/MIDI events and
   flips around the note, channel, expression, pressure, and CC values. This
   example demonstrates how to receive and output those events.
