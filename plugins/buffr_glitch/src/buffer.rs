@@ -38,6 +38,14 @@ pub struct RingBuffer {
     crossfade_length: usize,
     /// See [`BufferStatus`].
     buffer_status: BufferStatus,
+
+    /// Whether to use the classic behavior or more precise one with longer and shorter buffers.
+    precise_mode: bool,
+    /// The 'phase' of picking between a longer and a shorter buffer. The longer buffer is used if
+    /// phase is nonnegative, the shorter buffer is used otherwise.
+    buffer_phase: f32,
+    /// The difference between the true note period and the shorter buffer size, in samples.
+    period_delta: f32,
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -93,7 +101,9 @@ impl RingBuffer {
     pub fn prepare_playback(&mut self, frequency: f32, crossfade_ms: f32) {
         nih_debug_assert!(frequency > 0.0);
         nih_debug_assert!(crossfade_ms >= 0.0);
-        let note_period_samples = (frequency.recip() * self.sample_rate).ceil() as usize;
+
+        let note_true_period_samples = frequency.recip() * self.sample_rate;
+        let note_period_samples = note_true_period_samples.ceil() as usize;
 
         // This buffer doesn't need to be cleared since the data is not read until the entire buffer
         // has been recorded to
@@ -108,6 +118,12 @@ impl RingBuffer {
         self.crossfade_length =
             ((crossfade_ms * self.sample_rate).ceil() as usize).min(note_period_samples);
         self.buffer_status = BufferStatus::Recording;
+
+        // When precise mode is on, buffers might occasionally loop shorter by one sample;
+        // `buffer_phase` and `period_delta` keep track of when.
+        self.buffer_phase = 0.0f32;
+        // TODO: Might end up useful to set delta that is too close to zero to an exact zero.
+        self.period_delta = note_true_period_samples - note_true_period_samples.floor();
     }
 
     /// Read or write a sample from or to the ring buffer, and return the output. On the first loop
@@ -140,8 +156,23 @@ impl RingBuffer {
         if channel_idx == self.audio_buffers.len() - 1 {
             self.next_sample_pos += 1;
 
-            if self.next_sample_pos == self.audio_buffers[0].len() {
+            // Note there is no messing with buffer size when buffer isn't ready yet.
+            let shorter_buffer = self.precise_mode
+                && self.buffer_status == BufferStatus::Ready
+                && self.buffer_phase < 0.0;
+            let buffer_len = self.audio_buffers[0].len() - (if shorter_buffer { 1 } else { 0 });
+
+            if self.next_sample_pos == buffer_len {
                 self.next_sample_pos = 0;
+
+                if self.precise_mode {
+                    // In the rare case when the period is an exact integer, delta is zero and
+                    // the exact buffer size is used always, buffer_phase also being always zero.
+                    if self.buffer_phase > 0.0 {
+                        self.buffer_phase -= 1.0f32;
+                    }
+                    self.buffer_phase += self.period_delta;
+                }
 
                 self.buffer_status = match self.buffer_status {
                     BufferStatus::Recording if self.crossfade_length > 0 => {
