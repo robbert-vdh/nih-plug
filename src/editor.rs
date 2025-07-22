@@ -45,6 +45,16 @@ pub trait Editor: Send {
     /// scaling factor to get the actual physical screen pixels.
     fn size(&self) -> (u32, u32);
 
+    /// Set the size of the editor in pixels. This size must be in _logical pixels_, i.e. the size
+    /// before being multiplied by the DPI scaling factor to get the actual physical screen pixels.
+    /// This function should return `true` if the size was successfully set, and `false` if the editor
+    /// rejected the size change.
+    fn set_size(&self, _width: u32, _height: u32) -> bool { false }
+
+    /// Returns whether the editor can be resized. If this returns `false`, then the host will not
+    /// show a resize handle on the editor window.
+    fn can_resize(&self) -> bool { false }
+
     /// Set the DPI scaling factor, if supported. The plugin APIs don't make any guarantees on when
     /// this is called, but for now just assume it will be the first function that gets called
     /// before creating the editor. If this is set, then any windows created by this editor should
@@ -73,7 +83,6 @@ pub trait Editor: Send {
     //       and API agnostic, add a way to ask the GuiContext if the wrapper already provides a
     //       tick function. If it does not, then the Editor implementation must handle this by
     //       itself. This would also need an associated `PREFERRED_FRAME_RATE` constant.
-    // TODO: Host->Plugin resizing
 }
 
 /// A raw window handle for platform and GUI framework agnostic editors. This implements
