@@ -207,14 +207,25 @@ impl ScopedFtz {
         {
             #[cfg(target_feature = "sse")]
             {
-                let mode = unsafe { std::arch::x86_64::_MM_GET_FLUSH_ZERO_MODE() };
-                let should_disable_again = mode != std::arch::x86_64::_MM_FLUSH_ZERO_ON;
+                const X86_FTZ_BIT: u32 = 1 << 15;
+                let mut mxcsr: u32 = 0;
+                unsafe {
+                    std::arch::asm!(
+                        "stmxcsr [{p}]",
+                        p = in(reg) &mut mxcsr,
+                        options(nostack, preserves_flags),
+                    );
+                }
+                let should_disable_again = (mxcsr & X86_FTZ_BIT) == 0;
                 if should_disable_again {
+                    let new_mxcsr = mxcsr | X86_FTZ_BIT;
                     unsafe {
-                        std::arch::x86_64::_MM_SET_FLUSH_ZERO_MODE(
-                            std::arch::x86_64::_MM_FLUSH_ZERO_ON,
-                        )
-                    };
+                        std::arch::asm!(
+                            "ldmxcsr [{p}]",
+                            p = in(reg) &new_mxcsr,
+                            options(nostack, preserves_flags),
+                        );
+                    }
                 }
 
                 return Self {
@@ -257,11 +268,21 @@ impl Drop for ScopedFtz {
         if self.should_disable_again {
             #[cfg(target_feature = "sse")]
             {
+                const X86_FTZ_BIT: u32 = 1 << 15;
+                let mut mxcsr: u32 = 0;
                 unsafe {
-                    std::arch::x86_64::_MM_SET_FLUSH_ZERO_MODE(
-                        std::arch::x86_64::_MM_FLUSH_ZERO_OFF,
-                    )
-                };
+                    std::arch::asm!(
+                        "stmxcsr [{p}]",
+                        p = in(reg) &mut mxcsr,
+                        options(nostack, preserves_flags),
+                    );
+                    let new_mxcsr = mxcsr & !X86_FTZ_BIT;
+                    std::arch::asm!(
+                        "ldmxcsr [{p}]",
+                        p = in(reg) &new_mxcsr,
+                        options(nostack, preserves_flags),
+                    );
+                }
             }
 
             #[cfg(target_arch = "aarch64")]
