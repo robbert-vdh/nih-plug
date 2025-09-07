@@ -10,6 +10,15 @@ pub(crate) mod buffer_management;
 pub(crate) mod context_checks;
 
 /// The bit that controls flush-to-zero behavior for denormals in 32 and 64-bit floating point
+/// numbers on x86 family architectures. Rust 1.75 deprecated the built in functions for controlling
+/// these registers. As listed in section 10.2.3.3 (Flush-To-Zero), bit 15 of the MXCSR register
+/// controls the FTZ behavior.
+///
+/// <https://cdrdv2-public.intel.com/843823/252046-sdm-change-document-1.pdf>
+#[cfg(target_feature = "sse")]
+const SSE_FTZ_BIT: u32 = 1 << 15;
+
+/// The bit that controls flush-to-zero behavior for denormals in 32 and 64-bit floating point
 /// numbers on AArch64.
 ///
 /// <https://developer.arm.com/documentation/ddi0595/2021-06/AArch64-Registers/FPCR--Floating-point-Control-Register>
@@ -207,25 +216,16 @@ impl ScopedFtz {
         {
             #[cfg(target_feature = "sse")]
             {
-                const X86_FTZ_BIT: u32 = 1 << 15;
+                // Rust 1.75 deprecated `_mm_setcsr()` and `_MM_SET_FLUSH_ZERO_MODE()`, so this now
+                // requires inline assembly. See sections 10.2.3 (MXCSR Control and Status Register)
+                // and 10.2.3.3 (Flush-To-Zero) from this document for more details:
+                //
+                // <https://cdrdv2-public.intel.com/843823/252046-sdm-change-document-1.pdf>
                 let mut mxcsr: u32 = 0;
-                unsafe {
-                    std::arch::asm!(
-                        "stmxcsr [{p}]",
-                        p = in(reg) &mut mxcsr,
-                        options(nostack, preserves_flags),
-                    );
-                }
-                let should_disable_again = (mxcsr & X86_FTZ_BIT) == 0;
+                unsafe { std::arch::asm!("stmxcsr [{}]", in(reg) &mut mxcsr) };
+                let should_disable_again = mxcsr & SSE_FTZ_BIT == 0;
                 if should_disable_again {
-                    let new_mxcsr = mxcsr | X86_FTZ_BIT;
-                    unsafe {
-                        std::arch::asm!(
-                            "ldmxcsr [{p}]",
-                            p = in(reg) &new_mxcsr,
-                            options(nostack, preserves_flags),
-                        );
-                    }
+                    unsafe { std::arch::asm!("ldmxcsr [{}]", in(reg) &(mxcsr | SSE_FTZ_BIT)) };
                 }
 
                 return Self {
@@ -268,21 +268,9 @@ impl Drop for ScopedFtz {
         if self.should_disable_again {
             #[cfg(target_feature = "sse")]
             {
-                const X86_FTZ_BIT: u32 = 1 << 15;
                 let mut mxcsr: u32 = 0;
-                unsafe {
-                    std::arch::asm!(
-                        "stmxcsr [{p}]",
-                        p = in(reg) &mut mxcsr,
-                        options(nostack, preserves_flags),
-                    );
-                    let new_mxcsr = mxcsr & !X86_FTZ_BIT;
-                    std::arch::asm!(
-                        "ldmxcsr [{p}]",
-                        p = in(reg) &new_mxcsr,
-                        options(nostack, preserves_flags),
-                    );
-                }
+                unsafe { std::arch::asm!("stmxcsr [{}]", in(reg) &mut mxcsr) };
+                unsafe { std::arch::asm!("ldmxcsr [{}]", in(reg) &(mxcsr & !SSE_FTZ_BIT)) };
             }
 
             #[cfg(target_arch = "aarch64")]
