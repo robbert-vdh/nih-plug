@@ -5,12 +5,11 @@ use std::marker::PhantomData;
 use std::time::Duration;
 use std::time::Instant;
 
-use crate::backend::Renderer;
-use crate::renderer::Renderer as GraphicsRenderer;
-use crate::text::Renderer as TextRenderer;
-use crate::{
-    alignment, layout, renderer, text, Background, Color, Element, Font, Layout, Length, Point,
-    Rectangle, Size, Widget,
+use crate::core::text::{self, Paragraph, Renderer as TextRenderer};
+use crate::core::widget::tree::{self, Tree};
+use crate::core::{
+    alignment, layout, mouse, padding, renderer, Background, Border, Color, Element, Font, Layout,
+    Length, Pixels, Point, Rectangle, Size, Widget,
 };
 
 /// The thickness of this widget's borders.
@@ -22,9 +21,7 @@ const TICK_WIDTH: f32 = 1.0;
 ///
 /// TODO: There are currently no styling options at all
 /// TODO: Vertical peak meter, this is just a proof of concept to fit the gain GUI example.
-pub struct PeakMeter<'a, Message> {
-    state: &'a mut State,
-
+pub struct PeakMeter<Message> {
     /// The current measured value in decibel.
     current_value_db: f32,
 
@@ -33,8 +30,8 @@ pub struct PeakMeter<'a, Message> {
 
     height: Length,
     width: Length,
-    text_size: Option<u16>,
-    font: Font,
+    text_size: Option<Pixels>,
+    font: Option<Font>,
 
     /// We don't emit any messages, but iced requires us to define some message type anyways.
     _phantom: PhantomData<Message>,
@@ -42,29 +39,27 @@ pub struct PeakMeter<'a, Message> {
 
 /// State for a [`PeakMeter`].
 #[derive(Debug, Default)]
-pub struct State {
+struct State {
     /// The last peak value in decibel.
     held_peak_value_db: AtomicCell<f32>,
     /// When the last peak value was hit.
     last_held_peak_value: AtomicCell<Option<Instant>>,
 }
 
-impl<'a, Message> PeakMeter<'a, Message> {
+impl<Message> PeakMeter<Message> {
     /// Creates a new [`PeakMeter`] using the current measurement in decibel. This measurement can
     /// already have some form of smoothing applied to it. This peak slider widget can draw the last
     /// hold value for you.
-    pub fn new(state: &'a mut State, value_db: f32) -> Self {
+    pub fn new(value_db: f32) -> Self {
         Self {
-            state,
-
             current_value_db: value_db,
 
             hold_time: None,
 
-            width: Length::Units(180),
-            height: Length::Units(30),
+            width: Length::Fixed(180.0),
+            height: Length::Fixed(30.0),
             text_size: None,
-            font: <Renderer as TextRenderer>::Font::default(),
+            font: None,
 
             _phantom: PhantomData,
         }
@@ -77,71 +72,72 @@ impl<'a, Message> PeakMeter<'a, Message> {
     }
 
     /// Sets the width of the [`PeakMeter`].
-    pub fn width(mut self, width: Length) -> Self {
-        self.width = width;
+    pub fn width(mut self, width: impl Into<Length>) -> Self {
+        self.width = width.into();
         self
     }
 
     /// Sets the height of the [`PeakMeter`].
-    pub fn height(mut self, height: Length) -> Self {
-        self.height = height;
+    pub fn height(mut self, height: impl Into<Length>) -> Self {
+        self.height = height.into();
         self
     }
 
     /// Sets the text size of the [`PeakMeter`]'s ticks bar.
-    pub fn text_size(mut self, size: u16) -> Self {
-        self.text_size = Some(size);
+    pub fn text_size(mut self, size: impl Into<Pixels>) -> Self {
+        self.text_size = Some(size.into());
         self
     }
 
     /// Sets the font of the [`PeakMeter`]'s ticks bar.
     pub fn font(mut self, font: Font) -> Self {
-        self.font = font;
+        self.font = Some(font);
         self
     }
 }
 
-impl<'a, Message> Widget<Message, Renderer> for PeakMeter<'a, Message>
+impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer> for PeakMeter<Message>
 where
     Message: Clone,
+    Renderer: TextRenderer,
+    Renderer::Font: From<crate::Font>,
 {
-    fn width(&self) -> Length {
-        self.width
+    fn tag(&self) -> tree::Tag {
+        tree::Tag::of::<State>()
     }
 
-    fn height(&self) -> Length {
-        self.height
+    fn state(&self) -> tree::State {
+        tree::State::new(State::default())
     }
 
-    fn layout(&self, _renderer: &Renderer, limits: &layout::Limits) -> layout::Node {
-        let limits = limits.width(self.width).height(self.height);
-        let size = limits.resolve(Size::ZERO);
+    fn size(&self) -> Size<Length> {
+        (self.width, self.height).into()
+    }
 
-        layout::Node::new(size)
+    fn layout(
+        &self,
+        _tree: &mut Tree,
+        _renderer: &Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
+        layout::atomic(limits, self.width, self.height)
     }
 
     fn draw(
         &self,
+        tree: &Tree,
         renderer: &mut Renderer,
+        _theme: &Theme,
         style: &renderer::Style,
         layout: Layout<'_>,
-        _cursor_position: Point,
-        _viewport: &Rectangle,
+        _cursor: mouse::Cursor,
+        viewport: &Rectangle,
     ) {
-        let bounds = layout.bounds();
-        let bar_bounds = Rectangle {
-            height: bounds.height / 2.0,
-            ..bounds
-        };
-        let ticks_bounds = Rectangle {
-            y: bounds.y + (bounds.height / 2.0),
-            height: bounds.height / 2.0,
-            ..bounds
-        };
+        let state = tree.state.downcast_ref::<State>();
 
-        let text_size = self
-            .text_size
-            .unwrap_or_else(|| (renderer.default_size() as f32 * 0.7).round() as u16);
+        let bounds = layout.bounds();
+        let bar_bounds = bounds.shrink(padding::bottom(bounds.height / 2.0));
+        let ticks_bounds = bounds.shrink(padding::top(bounds.height / 2.0));
 
         // We'll draw a simple horizontal for [-90, 20] dB where we'll treat -80 as -infinity, with
         // a label containing the tick markers below it. If `.hold_time()` was called then we'll
@@ -181,9 +177,12 @@ where
             renderer.fill_quad(
                 renderer::Quad {
                     bounds: tick_bounds,
-                    border_radius: 0.0,
-                    border_width: 0.0,
-                    border_color: Color::TRANSPARENT,
+                    border: Border {
+                        color: Color::TRANSPARENT,
+                        width: 0.0,
+                        radius: 0.0.into(),
+                    },
+                    ..Default::default()
                 },
                 Background::Color(tick_color),
             );
@@ -192,14 +191,14 @@ where
         // Draw the hold peak value if the hold time option has been set
         if let Some(hold_time) = self.hold_time {
             let now = Instant::now();
-            let mut held_peak_value_db = self.state.held_peak_value_db.load();
-            let last_peak_value = self.state.last_held_peak_value.load();
+            let mut held_peak_value_db = state.held_peak_value_db.load();
+            let last_peak_value = state.last_held_peak_value.load();
             if self.current_value_db >= held_peak_value_db
                 || last_peak_value.is_none()
                 || now > last_peak_value.unwrap() + hold_time
             {
-                self.state.held_peak_value_db.store(self.current_value_db);
-                self.state.last_held_peak_value.store(Some(now));
+                state.held_peak_value_db.store(self.current_value_db);
+                state.last_held_peak_value.store(Some(now));
                 held_peak_value_db = self.current_value_db;
             }
 
@@ -211,9 +210,12 @@ where
                         width: TICK_WIDTH,
                         height: bar_bounds.height - (BORDER_WIDTH * 2.0),
                     },
-                    border_radius: 0.0,
-                    border_width: 0.0,
-                    border_color: Color::TRANSPARENT,
+                    border: Border {
+                        color: Color::TRANSPARENT,
+                        width: 0.0,
+                        radius: 0.0.into(),
+                    },
+                    ..Default::default()
                 },
                 Background::Color(Color::from_rgb(0.3, 0.3, 0.3)),
             );
@@ -223,12 +225,23 @@ where
         renderer.fill_quad(
             renderer::Quad {
                 bounds: bar_bounds,
-                border_radius: 0.0,
-                border_width: BORDER_WIDTH,
-                border_color: Color::BLACK,
+                border: Border {
+                    color: Color::BLACK,
+                    width: BORDER_WIDTH,
+                    radius: 0.0.into(),
+                },
+                ..Default::default()
             },
             Background::Color(Color::TRANSPARENT),
         );
+
+        let text_size = self
+            .text_size
+            .unwrap_or_else(|| Pixels((renderer.default_size().0 * 0.7).round()));
+        let font = self
+            .font
+            .map(Renderer::Font::from)
+            .unwrap_or_else(|| renderer.default_font());
 
         // Beneath the bar we want to draw the names of the ticks
         for tick_db in text_ticks {
@@ -242,9 +255,12 @@ where
                         width: TICK_WIDTH,
                         height: ticks_bounds.height * 0.3,
                     },
-                    border_radius: 0.0,
-                    border_width: 0.0,
-                    border_color: Color::TRANSPARENT,
+                    border: Border {
+                        color: Color::TRANSPARENT,
+                        width: 0.0,
+                        radius: 0.0.into(),
+                    },
+                    ..Default::default()
                 },
                 Background::Color(Color::from_rgb(0.3, 0.3, 0.3)),
             );
@@ -254,47 +270,75 @@ where
             } else {
                 tick_db.to_string()
             };
-            renderer.fill_text(text::Text {
-                content: &tick_text,
-                font: self.font,
-                size: text_size as f32,
-                bounds: Rectangle {
+            renderer.fill_text(
+                text::Text {
+                    content: tick_text,
+                    font,
+                    size: text_size,
+                    bounds: ticks_bounds.size(),
+                    horizontal_alignment: alignment::Horizontal::Center,
+                    vertical_alignment: alignment::Vertical::Top,
+                    line_height: Default::default(),
+                    shaping: Default::default(),
+                    wrapping: text::Wrapping::None,
+                },
+                Point {
                     x: x_coordinate,
                     y: ticks_bounds.y + (ticks_bounds.height * 0.35),
-                    ..ticks_bounds
                 },
-                color: style.text_color,
-                horizontal_alignment: alignment::Horizontal::Center,
-                vertical_alignment: alignment::Vertical::Top,
-            });
+                style.text_color,
+                *viewport,
+            );
         }
 
         // Every proper graph needs a unit label
         let zero_db_x_coordinate = db_to_x_coord(0.0);
-        let zero_db_text_width = renderer.measure_width("0", text_size, self.font);
-        renderer.fill_text(text::Text {
-            // The spacing looks a bit off if we start with a space here so we'll add a little
-            // offset to the x-coordinate instead
-            content: "dBFS",
-            font: self.font,
-            size: text_size as f32,
-            bounds: Rectangle {
-                x: zero_db_x_coordinate + (zero_db_text_width / 2.0) + (text_size as f32 * 0.2),
-                y: ticks_bounds.y + (ticks_bounds.height * 0.35),
-                ..ticks_bounds
-            },
-            color: style.text_color,
-            horizontal_alignment: alignment::Horizontal::Left,
+
+        let zero_db_text_width = Renderer::Paragraph::with_text(text::Text {
+            content: "0",
+            font,
+            size: text_size,
+            bounds: ticks_bounds.size(),
+            horizontal_alignment: alignment::Horizontal::Center,
             vertical_alignment: alignment::Vertical::Top,
-        });
+            line_height: Default::default(),
+            shaping: Default::default(),
+            wrapping: text::Wrapping::None,
+        })
+        .min_width();
+
+        renderer.fill_text(
+            text::Text {
+                // The spacing looks a bit off if we start with a space here so we'll add a little
+                // offset to the x-coordinate instead
+                content: "dBFS".into(),
+                font,
+                size: text_size,
+                bounds: ticks_bounds.size(),
+                horizontal_alignment: alignment::Horizontal::Left,
+                vertical_alignment: alignment::Vertical::Top,
+                line_height: Default::default(),
+                shaping: Default::default(),
+                wrapping: text::Wrapping::None,
+            },
+            Point {
+                x: zero_db_x_coordinate + (zero_db_text_width / 2.0) + (text_size.0 * 0.2),
+                y: ticks_bounds.y + (ticks_bounds.height * 0.35),
+            },
+            style.text_color,
+            *viewport,
+        );
     }
 }
 
-impl<'a, Message> From<PeakMeter<'a, Message>> for Element<'a, Message>
+impl<'a, Theme, Message, Renderer> From<PeakMeter<Message>>
+    for Element<'a, Message, Theme, Renderer>
 where
-    Message: 'a + Clone,
+    Message: Clone + 'a,
+    Renderer: TextRenderer + 'a,
+    Renderer::Font: From<crate::Font>,
 {
-    fn from(widget: PeakMeter<'a, Message>) -> Self {
+    fn from(widget: PeakMeter<Message>) -> Self {
         Element::new(widget)
     }
 }

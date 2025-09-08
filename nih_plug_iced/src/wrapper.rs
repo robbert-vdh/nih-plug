@@ -2,14 +2,15 @@
 //! `nih_plug_iced`.
 
 use crossbeam::channel;
+use futures_util::FutureExt;
+use iced_baseview::{
+    baseview::WindowScalePolicy, core::Element, futures::Subscription, window::WindowSubs,
+    Renderer, Task,
+};
 use nih_plug::prelude::GuiContext;
 use std::sync::Arc;
 
-use crate::futures::FutureExt;
-use crate::{
-    futures, subscription, Application, Color, Command, Element, IcedEditor, ParameterUpdate,
-    Subscription, WindowQueue, WindowScalePolicy, WindowSubs,
-};
+use crate::{IcedEditor, ParameterUpdate};
 
 /// Wraps an `iced_baseview` [`Application`] around [`IcedEditor`]. Needed to allow editors to
 /// always receive a copy of the GUI context.
@@ -30,6 +31,16 @@ pub enum Message<E: IcedEditor> {
     ParameterUpdate,
 }
 
+impl<E: IcedEditor> Message<E> {
+    fn into_editor_message(self) -> Option<E::Message> {
+        if let Message::EditorMessage(message) = self {
+            Some(message)
+        } else {
+            None
+        }
+    }
+}
+
 impl<E: IcedEditor> std::fmt::Debug for Message<E> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -48,7 +59,7 @@ impl<E: IcedEditor> Clone for Message<E> {
     }
 }
 
-impl<E: IcedEditor> Application for IcedEditorWrapperApplication<E> {
+impl<E: IcedEditor> iced_baseview::Application for IcedEditorWrapperApplication<E> {
     type Executor = E::Executor;
     type Message = Message<E>;
     type Flags = (
@@ -56,34 +67,30 @@ impl<E: IcedEditor> Application for IcedEditorWrapperApplication<E> {
         Arc<channel::Receiver<ParameterUpdate>>,
         E::InitializationFlags,
     );
+    type Theme = E::Theme;
 
     fn new(
         (context, parameter_updates_receiver, flags): Self::Flags,
-    ) -> (Self, Command<Self::Message>) {
-        let (editor, command) = E::new(flags, context);
+    ) -> (Self, Task<Self::Message>) {
+        let (editor, task) = E::new(flags, context);
 
         (
             Self {
                 editor,
                 parameter_updates_receiver,
             },
-            command.map(Message::EditorMessage),
+            task.map(Message::EditorMessage),
         )
     }
 
     #[inline]
-    fn update(
-        &mut self,
-        window: &mut WindowQueue,
-        message: Self::Message,
-    ) -> Command<Self::Message> {
+    fn update(&mut self, message: Self::Message) -> Task<Self::Message> {
         match message {
-            Message::EditorMessage(message) => self
-                .editor
-                .update(window, message)
-                .map(Message::EditorMessage),
+            Message::EditorMessage(message) => {
+                self.editor.update(message).map(Message::EditorMessage)
+            }
             // This message only exists to force a redraw
-            Message::ParameterUpdate => Command::none(),
+            Message::ParameterUpdate => Task::none(),
         }
     }
 
@@ -93,15 +100,17 @@ impl<E: IcedEditor> Application for IcedEditorWrapperApplication<E> {
         window_subs: &mut WindowSubs<Self::Message>,
     ) -> Subscription<Self::Message> {
         // Since we're wrapping around `E::Message`, we need to do this transformation ourselves
-        let mut editor_window_subs = WindowSubs {
-            on_frame: match &window_subs.on_frame {
-                Some(Message::EditorMessage(message)) => Some(message.clone()),
-                _ => None,
-            },
-            on_window_will_close: match &window_subs.on_window_will_close {
-                Some(Message::EditorMessage(message)) => Some(message.clone()),
-                _ => None,
-            },
+        let on_frame = window_subs.on_frame.clone();
+        let on_window_will_close = window_subs.on_window_will_close.clone();
+        let mut editor_window_subs: WindowSubs<E::Message> = WindowSubs {
+            on_frame: Some(Arc::new(move || {
+                let cb = on_frame.clone();
+                cb.and_then(|cb| cb().and_then(|m| m.into_editor_message()))
+            })),
+            on_window_will_close: Some(Arc::new(move || {
+                let cb = on_window_will_close.clone();
+                cb.and_then(|cb| cb().and_then(|m| m.into_editor_message()))
+            })),
         };
 
         let subscription = Subscription::batch([
@@ -109,50 +118,58 @@ impl<E: IcedEditor> Application for IcedEditorWrapperApplication<E> {
             // into a stream that doesn't require consuming that receiver (which wouldn't work in
             // this case since the subscriptions function gets called repeatedly). So we'll just use
             // a crossbeam queue and this unfold instead.
-            subscription::unfold(
+            Subscription::run_with_id(
                 "parameter updates",
-                self.parameter_updates_receiver.clone(),
-                |parameter_updates_receiver| match parameter_updates_receiver.try_recv() {
-                    Ok(_) => futures::future::ready((
-                        Some(Message::ParameterUpdate),
-                        parameter_updates_receiver,
-                    ))
-                    .boxed(),
-                    Err(_) => futures::future::pending().boxed(),
-                },
+                futures_util::stream::unfold(
+                    self.parameter_updates_receiver.clone(),
+                    |parameter_updates_receiver| match parameter_updates_receiver.try_recv() {
+                        Ok(_) => futures_util::future::ready(Some((
+                            Message::ParameterUpdate,
+                            parameter_updates_receiver,
+                        )))
+                        .boxed(),
+                        Err(channel::TryRecvError::Empty) => {
+                            futures_util::future::pending().boxed()
+                        }
+                        Err(channel::TryRecvError::Disconnected) => {
+                            futures_util::future::ready(None).boxed()
+                        }
+                    },
+                ),
             ),
             self.editor
                 .subscription(&mut editor_window_subs)
-                .map(Message::EditorMessage),
+                .map(|m| Message::EditorMessage(m)),
         ]);
 
-        if let Some(message) = editor_window_subs.on_frame {
-            window_subs.on_frame = Some(Message::EditorMessage(message));
+        if let Some(message) = editor_window_subs.on_frame.as_ref() {
+            let message = Arc::clone(message);
+            window_subs.on_frame = Some(Arc::new(move || message().map(Message::EditorMessage)));
         }
-        if let Some(message) = editor_window_subs.on_window_will_close {
-            window_subs.on_window_will_close = Some(Message::EditorMessage(message));
+        if let Some(message) = editor_window_subs.on_window_will_close.as_ref() {
+            let message = Arc::clone(message);
+            window_subs.on_window_will_close =
+                Some(Arc::new(move || message().map(Message::EditorMessage)));
         }
 
         subscription
     }
 
     #[inline]
-    fn view(&mut self) -> Element<'_, Self::Message> {
+    fn view(&self) -> Element<'_, Self::Message, Self::Theme, Renderer> {
         self.editor.view().map(Message::EditorMessage)
     }
 
     #[inline]
-    fn background_color(&self) -> Color {
-        self.editor.background_color()
-    }
-
-    #[inline]
     fn scale_policy(&self) -> WindowScalePolicy {
-        self.editor.scale_policy()
+        WindowScalePolicy::SystemScaleFactor
     }
 
-    #[inline]
-    fn renderer_settings() -> iced_baseview::backend::settings::Settings {
-        E::renderer_settings()
+    fn title(&self) -> String {
+        self.editor.title()
+    }
+
+    fn theme(&self) -> Self::Theme {
+        self.editor.theme()
     }
 }

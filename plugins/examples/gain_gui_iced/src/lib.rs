@@ -9,7 +9,7 @@ mod editor;
 const PEAK_METER_DECAY_MS: f64 = 150.0;
 
 /// This is mostly identical to the gain example, minus some fluff, and with a GUI.
-struct Gain {
+pub struct Gain {
     params: Arc<GainParams>,
 
     /// Needed to normalize the peak meter's response based on the sample rate.
