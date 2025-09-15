@@ -1,0 +1,15 @@
+[package]
+name = "task"
+version = "0.1.0"
+edition = "2021"
+authors = ["Brian Edwards <brian.edwards@jalopymusic.com>"]
+homepage = "https://github.com/robbert-vdh/nih-plug"
+license = "GPL-3.0-or-later"
+description = "Background task example"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+nih_plug = { path = "../../../", features = ["assert_process_allocs"] }
+crossbeam = "0.8"

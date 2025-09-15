@@ -34,6 +34,7 @@ members = [
   "plugins/examples/sine",
   "plugins/examples/stft",
   "plugins/examples/sysex",
+  "plugins/examples/task",
 
   "plugins/soft_vacuum",
   "plugins/buffr_glitch",
