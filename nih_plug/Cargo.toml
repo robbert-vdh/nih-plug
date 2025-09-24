@@ -10,42 +10,6 @@ keywords = ["audio", "plugin", "vst", "vst3"]
 description = "A simple but modern API-agnostic audio plugin framework"
 repository = "https://github.com/robbert-vdh/nih-plug"
 
-[workspace]
-resolver = "2"
-members = [
-  "nih_plug_derive",
-  "nih_plug_egui",
-  "nih_plug_iced",
-  "nih_plug_vizia",
-  "nih_plug_xtask",
-
-  "cargo_nih_plug",
-  "xtask",
-
-  "plugins/examples/byo_gui_gl",
-  "plugins/examples/byo_gui_softbuffer",
-  "plugins/examples/byo_gui_wgpu",
-  "plugins/examples/gain",
-  "plugins/examples/gain_gui_egui",
-  "plugins/examples/gain_gui_iced",
-  "plugins/examples/gain_gui_vizia",
-  "plugins/examples/midi_inverter",
-  "plugins/examples/poly_mod_synth",
-  "plugins/examples/sine",
-  "plugins/examples/stft",
-  "plugins/examples/sysex",
-
-  "plugins/soft_vacuum",
-  "plugins/buffr_glitch",
-  "plugins/crisp",
-  "plugins/crossover",
-  "plugins/diopser",
-  "plugins/loudness_war_winner",
-  "plugins/puberty_simulator",
-  "plugins/safety_limiter",
-  "plugins/spectral_compressor",
-]
-
 [features]
 default = ["vst3"]
 
@@ -76,7 +40,7 @@ zstd = ["dep:zstd"]
 docs = []
 
 [dependencies]
-nih_plug_derive = { path = "nih_plug_derive" }
+nih_plug_derive = { path = "../nih_plug_derive" }
 
 anyhow = "1.0"
 anymap3 = "1.0.1"
