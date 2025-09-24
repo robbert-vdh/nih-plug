@@ -12,7 +12,7 @@ description = "A simple example plugin with a raw Softbuffer context for renderi
 crate-type = ["cdylib", "lib"]
 
 [dependencies]
-nih_plug = { path = "../../../", features = ["assert_process_allocs", "standalone"] }
+nih_plug = { path = "../../../nih_plug", features = ["assert_process_allocs", "standalone"] }
 # NOTE: OpenGL support is not needed here, but rust-analyzer gets confused when
 #       some crates do use it and others don't
 baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "9a0b42c09d712777b2edb4c5e0cb6baf21e988f0", features = ["opengl"]}

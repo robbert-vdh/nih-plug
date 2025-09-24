@@ -7,4 +7,4 @@ description = "A cargo subcommand for compiling and bundling plugins, analogous 
 license = "ISC"
 
 [dependencies]
-nih_plug_xtask = { path = "../nih_plug_xtask" }
+nih_plug_xtask = { path = "../../nih_plug_xtask" }

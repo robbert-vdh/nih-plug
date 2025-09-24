@@ -10,6 +10,6 @@ homepage = "https://github.com/robbert-vdh/nih-plug/tree/master/plugins/puberty_
 crate-type = ["cdylib"]
 
 [dependencies]
-nih_plug = { path = "../../", features = ["assert_process_allocs"] }
+nih_plug = { path = "../../nih_plug", features = ["assert_process_allocs"] }
 
 realfft = "3.0"
