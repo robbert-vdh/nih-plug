@@ -1,7 +1,7 @@
 //! A context passed during the process function.
 
 use super::PluginApi;
-use crate::prelude::{Plugin, PluginNoteEvent};
+use crate::prelude::{ParamPtr, Plugin, PluginNoteEvent};
 
 /// Contains both context data and callbacks the plugin can use during processing. Most notably this
 /// is how a plugin sends and receives note events, gets transport information, and accesses
@@ -92,10 +92,43 @@ pub trait ProcessContext<P: Plugin> {
     /// monophonic modulation when dropping the capacity down to 1.
     fn set_current_voice_capacity(&self, capacity: u32);
 
-    // TODO: Add this, this works similar to [GuiContext::set_parameter] but it adds the parameter
-    //       change to a queue (or directly to the VST3 plugin's parameter output queues) instead of
-    //       using main thread host automation (and all the locks involved there).
-    // fn set_parameter<P: Param>(&self, param: &P, value: P::Plain);
+    /// Inform the host that a parameter will be automated. This queues the event to be sent to the
+    /// host at the end of the current processing cycle. This should be called before calling
+    /// [`raw_set_parameter_normalized()`][Self::raw_set_parameter_normalized()] for the specified
+    /// parameter. Create a [`ParamSetter`] and use
+    /// [`ParamSetter::begin_set_parameter()`][crate::prelude::ParamSetter::begin_set_parameter()]
+    /// instead for a safe, user friendly API.
+    ///
+    /// # Safety
+    ///
+    /// The implementing function still needs to check if `param` actually exists. This function is
+    /// mostly marked as unsafe for API reasons.
+    unsafe fn raw_begin_set_parameter(&self, param: ParamPtr);
+
+    /// Inform the host that a parameter is being automated with an already normalized value. This
+    /// queues the event to be sent to the host at the end of the current processing cycle. Create
+    /// a [`ParamSetter`] and use
+    /// [`ParamSetter::set_parameter()`][crate::prelude::ParamSetter::set_parameter()] instead for
+    /// a safe, user friendly API.
+    ///
+    /// # Safety
+    ///
+    /// The implementing function still needs to check if `param` actually exists. This function is
+    /// mostly marked as unsafe for API reasons.
+    unsafe fn raw_set_parameter_normalized(&self, param: ParamPtr, normalized: f32);
+
+    /// Inform the host that a parameter has been automated. This queues the event to be sent to
+    /// the host at the end of the current processing cycle. This should be called after calling
+    /// [`raw_set_parameter_normalized()`][Self::raw_set_parameter_normalized()] for the specified
+    /// parameter. Create a [`ParamSetter`] and use
+    /// [`ParamSetter::end_set_parameter()`][crate::prelude::ParamSetter::end_set_parameter()]
+    /// instead for a safe, user friendly API.
+    ///
+    /// # Safety
+    ///
+    /// The implementing function still needs to check if `param` actually exists. This function is
+    /// mostly marked as unsafe for API reasons.
+    unsafe fn raw_end_set_parameter(&self, param: ParamPtr);
 }
 
 /// Information about the plugin's transport. Depending on the plugin API and the host not all

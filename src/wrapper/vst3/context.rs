@@ -116,6 +116,55 @@ impl<P: Vst3Plugin> ProcessContext<P> for WrapperProcessContext<'_, P> {
     fn set_current_voice_capacity(&self, _capacity: u32) {
         // This is only supported by CLAP
     }
+
+    unsafe fn raw_begin_set_parameter(&self, param: ParamPtr) {
+        match &*self.inner.component_handler.borrow() {
+            Some(handler) => match self.inner.param_ptr_to_hash.get(&param) {
+                Some(hash) => {
+                    handler.begin_edit(*hash);
+                }
+                None => nih_debug_assert_failure!("Unknown parameter: {:?}", param),
+            },
+            None => nih_debug_assert_failure!("Component handler not yet set"),
+        }
+    }
+
+    unsafe fn raw_set_parameter_normalized(&self, param: ParamPtr, normalized: f32) {
+        match &*self.inner.component_handler.borrow() {
+            Some(handler) => match self.inner.param_ptr_to_hash.get(&param) {
+                Some(hash) => {
+                    // Update the parameter value directly since we're on the audio thread
+                    // The is_processing check ensures we don't update values mid-process
+                    if !self.inner.is_processing.load(Ordering::SeqCst) {
+                        self.inner.set_normalized_value_by_hash(
+                            *hash,
+                            normalized,
+                            self.inner
+                                .current_buffer_config
+                                .load()
+                                .map(|c| c.sample_rate),
+                        );
+                    }
+
+                    handler.perform_edit(*hash, normalized as f64);
+                }
+                None => nih_debug_assert_failure!("Unknown parameter: {:?}", param),
+            },
+            None => nih_debug_assert_failure!("Component handler not yet set"),
+        }
+    }
+
+    unsafe fn raw_end_set_parameter(&self, param: ParamPtr) {
+        match &*self.inner.component_handler.borrow() {
+            Some(handler) => match self.inner.param_ptr_to_hash.get(&param) {
+                Some(hash) => {
+                    handler.end_edit(*hash);
+                }
+                None => nih_debug_assert_failure!("Unknown parameter: {:?}", param),
+            },
+            None => nih_debug_assert_failure!("Component handler not yet set"),
+        }
+    }
 }
 
 impl<P: Vst3Plugin> GuiContext for WrapperGuiContext<P> {
