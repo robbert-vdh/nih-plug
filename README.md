@@ -136,9 +136,11 @@ Scroll down for more information on the underlying plugin framework.
 - Optional support for compressing the human readable JSON state files using
   [Zstandard](https://en.wikipedia.org/wiki/Zstd).
 - Comes with adapters for popular Rust GUI frameworks as well as some basic
-  widgets for them that integrate with NIH-plug's parameter system. Currently
-  there's support for [egui](nih_plug_egui), [iced](nih_plug_iced) and
-  [VIZIA](nih_plug_vizia).
+  widgets for them that integrate with NIH-plug's parameter system.
+  - Currently supported GUI frameworks include:
+    - [VIZIA](nih_plug_vizia)
+    - [iced](nih_plug_iced)
+    - [egui](https://codeberg.org/BillyDM/egui-baseview) (3rd party)
   - A simple and safe API for state saving and restoring from the editor is
     provided by the framework if you want to do your own internal preset
     management.
@@ -198,10 +200,10 @@ examples.
   off a couple other parts of the API, like support for storing arbitrary
   serializable state.
 - **gain-gui** is the same plugin as gain, but with a GUI to control the
-  parameter and a digital peak meter. Comes in three exciting flavors:
-  [egui](plugins/examples/gain_gui_egui),
-  [iced](plugins/examples/gain_gui_iced), and
-  [VIZIA](plugins/examples/gain_gui_vizia).
+  parameter and a digital peak meter. Comes in two exciting flavors:
+  [VIZIA](plugins/examples/gain_gui_vizia) and
+  [iced](plugins/examples/gain_gui_iced). (Third party examples exist for
+  [egui](https://codeberg.org/BillyDM/egui-baseview/src/branch/main/nih_plug_egui).)
 
   There are also examples for making custom GUIs with
   [OpenGL](plugins/examples/byo_gui_gl), [wgpu](plugins/examples/byo_gui_wgpu),

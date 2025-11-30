@@ -56,7 +56,6 @@ jobs:
           cargo doc --features docs,simd,standalone,zstd --no-deps
           -p nih_plug
           -p nih_plug_derive
-          -p nih_plug_egui
           -p nih_plug_iced
           -p nih_plug_vizia
           -p nih_plug_xtask
