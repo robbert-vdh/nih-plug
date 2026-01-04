@@ -112,7 +112,12 @@ where
                     // Ask the plugin host to resize to self.size()
                     if context.request_resize() {
                         // Resize the content of egui window
-                        queue.resize(PhySize::new(new_size.0, new_size.1));
+                        // Convert logical pixels to physical pixels using the scale factor
+                        let scale = egui_ctx.pixels_per_point();
+                        queue.resize(PhySize::new(
+                            (new_size.0 as f32 * scale) as u32,
+                            (new_size.1 as f32 * scale) as u32,
+                        ));
                         egui_ctx.send_viewport_cmd(ViewportCommand::InnerSize(Vec2::new(
                             new_size.0 as f32,
                             new_size.1 as f32,
