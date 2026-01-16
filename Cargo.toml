@@ -145,3 +145,6 @@ strip = "symbols"
 inherits = "release"
 debug = true
 strip = "none"
+
+[patch."https://github.com/RustAudio/baseview.git"]
+baseview = { git = "https://github.com/john-parton/baseview.git", branch = "bugfix/srgb-not-supported" }
