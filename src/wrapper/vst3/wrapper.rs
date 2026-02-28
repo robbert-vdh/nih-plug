@@ -5,6 +5,10 @@ use std::num::NonZeroU32;
 use std::ptr::NonNull;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use vst3::Steinberg::Vst::ProcessContext_::StatesAndFlags_::{
+    kBarPositionValid, kCycleActive, kCycleValid, kPlaying, kProjectTimeMusicValid, kRecording,
+    kTempoValid, kTimeSigValid,
+};
 use vst3::Steinberg::Vst::{
     kNoParamId, kNoParentUnitId, kNoProgramListId, kRootUnitId, BusDirection, CString, CtrlNumber,
     DataEvent, Event, Event_::EventTypes, Event_::EventTypes_, IAudioProcessor,
@@ -1349,16 +1353,12 @@ impl<P: Vst3Plugin> IAudioProcessorTrait for Wrapper<P> {
                     if !data.processContext.is_null() {
                         let context = &*data.processContext;
 
-                        // These constants are missing from vst3-sys, see:
-                        // https://steinbergmedia.github.io/vst3_doc/vstinterfaces/structSteinberg_1_1Vst_1_1ProcessContext.html
-                        transport.playing = context.state & (1 << 1) != 0; // kPlaying
-                        transport.recording = context.state & (1 << 3) != 0; // kRecording
-                        if context.state & (1 << 10) != 0 {
-                            // kTempoValid
+                        transport.playing = context.state & kPlaying != 0;
+                        transport.recording = context.state & kRecording != 0;
+                        if context.state & kTempoValid != 0 {
                             transport.tempo = Some(context.tempo);
                         }
-                        if context.state & (1 << 13) != 0 {
-                            // kTimeSigValid
+                        if context.state & kTimeSigValid != 0 {
                             transport.time_sig_numerator = Some(context.timeSigNumerator);
                             transport.time_sig_denominator = Some(context.timeSigDenominator);
                         }
@@ -1366,13 +1366,11 @@ impl<P: Vst3Plugin> IAudioProcessorTrait for Wrapper<P> {
                         // We need to compensate for the block splitting here
                         transport.pos_samples =
                             Some(context.projectTimeSamples + block_start as i64);
-                        if context.state & (1 << 9) != 0 {
-                            // kProjectTimeMusicValid
+                        if context.state & kProjectTimeMusicValid != 0 {
                             if P::SAMPLE_ACCURATE_AUTOMATION
                                 && block_start > 0
-                                && (context.state & (1 << 10) != 0)
+                                && (context.state & kTempoValid != 0)
                             {
-                                // kTempoValid
                                 transport.pos_beats = Some(
                                     context.projectTimeMusic
                                         + (block_start as f64 / sample_rate as f64 / 60.0
@@ -1383,8 +1381,7 @@ impl<P: Vst3Plugin> IAudioProcessorTrait for Wrapper<P> {
                             }
                         }
 
-                        if context.state & (1 << 11) != 0 {
-                            // kBarPositionValid
+                        if context.state & kBarPositionValid != 0 {
                             if P::SAMPLE_ACCURATE_AUTOMATION && block_start > 0 {
                                 // The transport object knows how to recompute this from the other information
                                 transport.bar_start_pos_beats =
@@ -1396,8 +1393,7 @@ impl<P: Vst3Plugin> IAudioProcessorTrait for Wrapper<P> {
                                 transport.bar_start_pos_beats = Some(context.barPositionMusic);
                             }
                         }
-                        if context.state & (1 << 2) != 0 && context.state & (1 << 12) != 0 {
-                            // kCycleActive && kCycleValid
+                        if context.state & kCycleActive != 0 && context.state & kCycleValid != 0 {
                             transport.loop_range_beats =
                                 Some((context.cycleStartMusic, context.cycleEndMusic));
                         }
