@@ -80,7 +80,7 @@ impl PluginInfo {
         info.cardinality = ClassCardinality_::kManyInstances as i32;
         strlcpy(&mut info.category, "Audio Module Class");
         strlcpy(&mut info.name, self.name);
-        info.classFlags = ComponentFlags_::kSimpleModeSupported;
+        info.classFlags = ComponentFlags_::kSimpleModeSupported as u32;
         strlcpy(&mut info.subCategories, &self.subcategories);
         strlcpy(&mut info.vendor, self.vendor);
         strlcpy(&mut info.version, self.version);
@@ -97,7 +97,7 @@ impl PluginInfo {
         info.cardinality = ClassCardinality_::kManyInstances as i32;
         strlcpy(&mut info.category, "Audio Module Class");
         u16strlcpy(&mut info.name, self.name);
-        info.classFlags = ComponentFlags_::kSimpleModeSupported;
+        info.classFlags = ComponentFlags_::kSimpleModeSupported as u32;
         strlcpy(&mut info.subCategories, &self.subcategories);
         u16strlcpy(&mut info.vendor, self.vendor);
         u16strlcpy(&mut info.version, self.version);
