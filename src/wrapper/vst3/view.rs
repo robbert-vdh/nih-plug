@@ -209,7 +209,7 @@ impl<P: Vst3Plugin> RunLoopEventHandler<P> {
             tasks: ArrayQueue::new(TASK_QUEUE_CAPACITY),
         });
 
-        let handler_ptr: *mut IEventHandler = &handler as *const _ as *mut _;
+        let handler_ptr = &*handler as *const _ as *mut _;
 
         assert_eq!(
             unsafe {
@@ -522,7 +522,7 @@ impl<P: Vst3Plugin> Drop for RunLoopEventHandler<P> {
 
         unsafe {
             self.run_loop
-                .unregisterEventHandler(&self as *const _ as *mut _);
+                .unregisterEventHandler(self as *const _ as *mut _);
         }
     }
 }
