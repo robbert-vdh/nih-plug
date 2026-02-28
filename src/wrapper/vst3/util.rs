@@ -4,7 +4,7 @@ use widestring::U16CString;
 
 /// When `Plugin::MIDI_INPUT` is set to `MidiConfig::MidiCCs` or higher then we'll register 130*16
 /// additional parameters to handle MIDI CCs, channel pressure, and pitch bend, in that order.
-/// vst3-sys doesn't expose these constants.
+/// vst3 doesn't expose these constants.
 pub const VST3_MIDI_CCS: u32 = 130;
 pub const VST3_MIDI_CHANNELS: u32 = 16;
 /// The number of parameters we'll need to register if the plugin accepts MIDI CCs.

@@ -21,7 +21,7 @@ use crate::plugin::vst3::Vst3Plugin;
 use crate::prelude::{Editor, ParentWindowHandle};
 
 // Thanks for putting this behind a platform-specific ifdef...
-// NOTE: This should also be used on the BSDs, but vst3-sys exposes these interfaces only for Linux
+// NOTE: This should also be used on the BSDs, which should be possible since vst3-sys is replaced by the vst3 crate
 #[cfg(target_os = "linux")]
 use {
     crate::event_loop::{EventLoop, MainThreadExecutor, TASK_QUEUE_CAPACITY},
@@ -32,7 +32,7 @@ use {
     },
 };
 
-// Window handle type constants missing from vst3-sys
+// Window handle type constants missing from vst3
 #[allow(unused)]
 const VST3_PLATFORM_HWND: &str = "HWND";
 #[allow(unused)]
@@ -44,8 +44,9 @@ const VST3_PLATFORM_UIVIEW: &str = "UIView";
 #[allow(unused)]
 const VST3_PLATFORM_X11_WINDOW: &str = "X11EmbedWindowID";
 
-/// FIXME: vst3-sys does not allow you to conditionally define fields with #[cfg()], so this is a
-///        workaround to define the field outside of the struct
+/// FIXME: vst3-sys did not allow you to conditionally define fields with #[cfg()], so this is a
+/// workaround to define the field outside of the struct. Since vst3-sys is replaced by the vst3
+/// crate this should be fixable.
 #[cfg(target_os = "linux")]
 struct RunLoopEventHandlerWrapper<P: Vst3Plugin>(RwLock<Option<Box<RunLoopEventHandler<P>>>>);
 #[cfg(not(target_os = "linux"))]
@@ -62,7 +63,7 @@ pub(crate) struct WrapperView<P: Vst3Plugin> {
     plug_frame: RwLock<Option<ComPtr<IPlugFrame>>>,
     /// Allows handling events events on the host's GUI thread when using Linux. Needed because
     /// otherwise REAPER doesn't like us very much. The event handler could be implemented directly
-    /// on this object but vst3-sys does not let us conditionally implement interfaces.
+    /// on this object since vst3-sys is replaced by the vst3 crate.
     run_loop_event_handler: RunLoopEventHandlerWrapper<P>,
 
     /// The DPI scaling factor as passed to the [IPlugViewContentScaleSupport::set_scale_factor()]
@@ -77,9 +78,10 @@ impl<P: Vst3Plugin> Class for WrapperView<P> {
 }
 
 /// Allow handling tasks on the host's GUI thread on Linux. This doesn't need to be a separate
-/// struct, but vst3-sys does not let us implement interfaces conditionally and the interface is
-/// only exposed when compiling on Linux. The struct will register itself when calling
-/// [`RunLoopEventHandler::new()`] and it will unregister itself when it gets dropped.
+/// struct, but vst3-sys did not let us implement interfaces conditionally and the interface is
+/// only exposed when compiling on Linux. This should be fixable since we use the vst3 crate.
+/// The struct will register itself when calling [`RunLoopEventHandler::new()`] and it will
+/// unregister itself when it gets dropped.
 #[cfg(target_os = "linux")]
 struct RunLoopEventHandler<P: Vst3Plugin> {
     /// We need access to the inner wrapper so we that we can post any outstanding tasks there when

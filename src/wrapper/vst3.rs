@@ -28,7 +28,7 @@ macro_rules! nih_export_vst3 {
             use ::std::collections::HashSet;
             use ::std::ffi::c_void;
 
-            // `vst3_sys` is imported from the VST3 wrapper module
+            // `vst3` is imported from the VST3 wrapper module
             use $crate::wrapper::vst3::{PluginInfo, Wrapper};
             use $crate::wrapper::vst3::vst3::Steinberg::{kInvalidArgument, kResultOk, tresult, int32, FIDString, TUID};
             use $crate::wrapper::vst3::vst3::Steinberg::{
