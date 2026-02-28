@@ -27,7 +27,9 @@ use {
     crate::event_loop::{EventLoop, MainThreadExecutor, TASK_QUEUE_CAPACITY},
     crossbeam::queue::ArrayQueue,
     libc,
-    vst3_sys::gui::linux::{FileDescriptor, IEventHandler, IRunLoop},
+    vst3::Steinberg::Linux::{
+        FileDescriptor, IEventHandler, IEventHandlerTrait, IRunLoop, IRunLoopTrait,
+    },
 };
 
 // Window handle type constants missing from vst3-sys
@@ -79,7 +81,6 @@ impl<P: Vst3Plugin> Class for WrapperView<P> {
 /// only exposed when compiling on Linux. The struct will register itself when calling
 /// [`RunLoopEventHandler::new()`] and it will unregister itself when it gets dropped.
 #[cfg(target_os = "linux")]
-#[VST3(implements(IEventHandler))]
 struct RunLoopEventHandler<P: Vst3Plugin> {
     /// We need access to the inner wrapper so we that we can post any outstanding tasks there when
     /// this object gets dropped so no work is lost.
@@ -183,7 +184,7 @@ impl<P: Vst3Plugin> WrapperView<P> {
 
 #[cfg(target_os = "linux")]
 impl<P: Vst3Plugin> RunLoopEventHandler<P> {
-    pub fn new(inner: Arc<WrapperInner<P>>, run_loop: VstPtr<dyn IRunLoop>) -> Box<Self> {
+    pub fn new(inner: Arc<WrapperInner<P>>, run_loop: ComPtr<IRunLoop>) -> Box<Self> {
         let mut sockets = [0i32; 2];
         assert_eq!(
             unsafe {
@@ -198,23 +199,21 @@ impl<P: Vst3Plugin> RunLoopEventHandler<P> {
         );
         let [socket_read_fd, socket_write_fd] = sockets;
 
-        let handler = RunLoopEventHandler::allocate(
+        let handler = Box::new(RunLoopEventHandler {
             inner,
             run_loop,
             socket_read_fd,
             socket_write_fd,
-            ArrayQueue::new(TASK_QUEUE_CAPACITY),
-        );
+            tasks: ArrayQueue::new(TASK_QUEUE_CAPACITY),
+        });
 
-        // vst3-sys provides no way to convert to a SharedVstPtr, so, uh, yeah. These are pointers
-        // to vtable poitners.
-        let event_handler: SharedVstPtr<dyn IEventHandler> =
-            unsafe { mem::transmute(&handler.__ieventhandlervptr as *const *const _) };
+        let handler_ptr: *mut IEventHandler = &handler as *const _ as *mut _;
+
         assert_eq!(
             unsafe {
                 handler
                     .run_loop
-                    .register_event_handler(event_handler, handler.socket_read_fd)
+                    .registerEventHandler(handler_ptr, handler.socket_read_fd)
             },
             kResultOk
         );
@@ -397,11 +396,11 @@ impl<P: Vst3Plugin> IPlugViewTrait for WrapperView<P> {
                 // host's GUI thread. REAPER will segfault when we don't do this for resizes.
                 #[cfg(target_os = "linux")]
                 {
-                    *self.run_loop_event_handler.0.write() = frame.cast().map(|run_loop| {
-                        RunLoopEventHandler::new(self.inner.clone(), VstPtr::from(run_loop))
-                    });
+                    *self.run_loop_event_handler.0.write() = frame
+                        .cast()
+                        .map(|run_loop| RunLoopEventHandler::new(self.inner.clone(), run_loop));
                 }
-                // *self.plug_frame.write() = Some(VstPtr::from(frame));
+                // *self.plug_frame.write() = Some(ComPtr::from(frame));
             }
             None => {
                 #[cfg(target_os = "linux")]
@@ -457,8 +456,8 @@ impl<P: Vst3Plugin> IPlugViewContentScaleSupportTrait for WrapperView<P> {
 }
 
 #[cfg(target_os = "linux")]
-impl<P: Vst3Plugin> IEventHandler for RunLoopEventHandler<P> {
-    unsafe fn on_fd_is_set(&self, _fd: FileDescriptor) {
+impl<P: Vst3Plugin> IEventHandlerTrait for RunLoopEventHandler<P> {
+    unsafe fn onFDIsSet(&self, _fd: FileDescriptor) {
         // There should be a one-to-one correlation to bytes being written to `self.socket_read_fd`
         // and events being pushed to `self.tasks`, but because the process of pushing a task and
         // notifying this thread through the socket is not atomic we can't reliably just read a byte
@@ -519,8 +518,9 @@ impl<P: Vst3Plugin> Drop for RunLoopEventHandler<P> {
             libc::close(self.socket_write_fd);
         }
 
-        let event_handler: SharedVstPtr<dyn IEventHandler> =
-            unsafe { mem::transmute(&self.__ieventhandlervptr as *const _) };
-        unsafe { self.run_loop.unregister_event_handler(event_handler) };
+        unsafe {
+            self.run_loop
+                .unregisterEventHandler(&self as *const _ as *mut _);
+        }
     }
 }
