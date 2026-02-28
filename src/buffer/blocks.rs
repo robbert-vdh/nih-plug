@@ -3,7 +3,7 @@
 use std::marker::PhantomData;
 
 #[cfg(feature = "simd")]
-use std::simd::{LaneCount, Simd, SupportedLaneCount};
+use std::simd::Simd;
 
 use super::SamplesIter;
 
@@ -226,10 +226,7 @@ impl<'slice, 'sample> Block<'slice, 'sample> {
     pub fn to_channel_simd<const LANES: usize>(
         &self,
         sample_index: usize,
-    ) -> Option<Simd<f32, LANES>>
-    where
-        LaneCount<LANES>: SupportedLaneCount,
-    {
+    ) -> Option<Simd<f32, LANES>> {
         if sample_index > self.samples() {
             return None;
         }
@@ -258,10 +255,7 @@ impl<'slice, 'sample> Block<'slice, 'sample> {
     pub unsafe fn to_channel_simd_unchecked<const LANES: usize>(
         &self,
         sample_index: usize,
-    ) -> Simd<f32, LANES>
-    where
-        LaneCount<LANES>: SupportedLaneCount,
-    {
+    ) -> Simd<f32, LANES> {
         let mut values = [0.0; LANES];
         for (channel_idx, value) in values.iter_mut().enumerate() {
             *value = *(&(*self.buffers))
@@ -284,10 +278,7 @@ impl<'slice, 'sample> Block<'slice, 'sample> {
         &mut self,
         sample_index: usize,
         vector: Simd<f32, LANES>,
-    ) -> bool
-    where
-        LaneCount<LANES>: SupportedLaneCount,
-    {
+    ) -> bool {
         if sample_index > self.samples() {
             return false;
         }
@@ -319,9 +310,7 @@ impl<'slice, 'sample> Block<'slice, 'sample> {
         &mut self,
         sample_index: usize,
         vector: Simd<f32, LANES>,
-    ) where
-        LaneCount<LANES>: SupportedLaneCount,
-    {
+    ) {
         let values = vector.to_array();
         for (channel_idx, value) in values.into_iter().enumerate() {
             *(&mut (*self.buffers))
