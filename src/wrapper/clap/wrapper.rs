@@ -22,9 +22,6 @@ use clap_sys::ext::audio_ports::{
 use clap_sys::ext::audio_ports_config::{
     clap_audio_ports_config, clap_plugin_audio_ports_config, CLAP_EXT_AUDIO_PORTS_CONFIG,
 };
-use clap_sys::ext::remote_controls::{
-    clap_plugin_remote_controls, clap_remote_controls_page, CLAP_EXT_REMOTE_CONTROLS,
-};
 use clap_sys::ext::gui::{
     clap_gui_resize_hints, clap_host_gui, clap_plugin_gui, clap_window, CLAP_EXT_GUI,
     CLAP_WINDOW_API_COCOA, CLAP_WINDOW_API_WIN32, CLAP_WINDOW_API_X11,
@@ -40,6 +37,9 @@ use clap_sys::ext::params::{
     CLAP_PARAM_IS_MODULATABLE, CLAP_PARAM_IS_MODULATABLE_PER_NOTE_ID, CLAP_PARAM_IS_READONLY,
     CLAP_PARAM_IS_STEPPED, CLAP_PARAM_RESCAN_VALUES,
 };
+use clap_sys::ext::remote_controls::{
+    clap_plugin_remote_controls, clap_remote_controls_page, CLAP_EXT_REMOTE_CONTROLS,
+};
 use clap_sys::ext::render::{
     clap_plugin_render, clap_plugin_render_mode, CLAP_EXT_RENDER, CLAP_RENDER_OFFLINE,
     CLAP_RENDER_REALTIME,
@@ -47,6 +47,12 @@ use clap_sys::ext::render::{
 use clap_sys::ext::state::{clap_plugin_state, CLAP_EXT_STATE};
 use clap_sys::ext::tail::{clap_plugin_tail, CLAP_EXT_TAIL};
 use clap_sys::ext::thread_check::{clap_host_thread_check, CLAP_EXT_THREAD_CHECK};
+use clap_sys::ext::track_info::{
+    clap_host_track_info, clap_plugin_track_info, CLAP_EXT_TRACK_INFO, CLAP_EXT_TRACK_INFO_COMPAT,
+    CLAP_TRACK_INFO_HAS_AUDIO_CHANNEL, CLAP_TRACK_INFO_HAS_TRACK_COLOR,
+    CLAP_TRACK_INFO_HAS_TRACK_NAME, CLAP_TRACK_INFO_IS_FOR_BUS, CLAP_TRACK_INFO_IS_FOR_MASTER,
+    CLAP_TRACK_INFO_IS_FOR_RETURN_TRACK,
+};
 use clap_sys::ext::voice_info::{
     clap_host_voice_info, clap_plugin_voice_info, clap_voice_info, CLAP_EXT_VOICE_INFO,
     CLAP_VOICE_INFO_SUPPORTS_OVERLAPPING_NOTES,
@@ -63,7 +69,7 @@ use clap_sys::stream::{clap_istream, clap_ostream};
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::{self, SendTimeoutError};
 use crossbeam::queue::ArrayQueue;
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use std::any::Any;
 use std::borrow::Borrow;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -80,6 +86,7 @@ use std::time::Duration;
 use super::context::{WrapperGuiContext, WrapperInitContext, WrapperProcessContext};
 use super::descriptor::PluginDescriptor;
 use super::util::ClapPtr;
+use crate::context::track_info::{TrackColor, TrackInfo, TrackType};
 use crate::event_loop::{BackgroundThread, EventLoop, MainThreadExecutor, TASK_QUEUE_CAPACITY};
 use crate::midi::MidiResult;
 use crate::prelude::{
@@ -241,6 +248,11 @@ pub struct Wrapper<P: ClapPlugin> {
     /// of active voices using a context method called from the initialization or processing
     /// context. This defaults to the maximum number of voices.
     current_voice_capacity: AtomicU32,
+
+    clap_plugin_track_info: clap_plugin_track_info,
+    host_track_info: AtomicRefCell<Option<ClapPtr<clap_host_track_info>>>,
+    /// The current track information, as reported by the host through the track-info extension.
+    track_info: RwLock<Option<TrackInfo>>,
 
     /// A queue of tasks that still need to be performed. Because CLAP lets the plugin request a
     /// host callback directly, we don't need to use the OsEventLoop we use in our other plugin
@@ -680,6 +692,12 @@ impl<P: ClapPlugin> Wrapper<P> {
                     })
                     .unwrap_or(1),
             ),
+
+            clap_plugin_track_info: clap_plugin_track_info {
+                changed: Some(Self::ext_track_info_changed),
+            },
+            host_track_info: AtomicRefCell::new(None),
+            track_info: RwLock::new(None),
 
             tasks: ArrayQueue::new(TASK_QUEUE_CAPACITY),
             main_thread_id: thread::current().id(),
@@ -1855,6 +1873,18 @@ impl<P: ClapPlugin> Wrapper<P> {
             &wrapper.host_callback,
             CLAP_EXT_THREAD_CHECK,
         );
+        *wrapper.host_track_info.borrow_mut() = query_host_extension::<clap_host_track_info>(
+            &wrapper.host_callback,
+            CLAP_EXT_TRACK_INFO,
+        )
+        .or_else(|| {
+            query_host_extension::<clap_host_track_info>(
+                &wrapper.host_callback,
+                CLAP_EXT_TRACK_INFO_COMPAT,
+            )
+        });
+        // Fetch initial track info if available
+        wrapper.update_track_info();
 
         true
     }
@@ -2337,6 +2367,8 @@ impl<P: ClapPlugin> Wrapper<P> {
             &wrapper.clap_plugin_tail as *const _ as *const c_void
         } else if id == CLAP_EXT_VOICE_INFO && P::CLAP_POLY_MODULATION_CONFIG.is_some() {
             &wrapper.clap_plugin_voice_info as *const _ as *const c_void
+        } else if id == CLAP_EXT_TRACK_INFO || id == CLAP_EXT_TRACK_INFO_COMPAT {
+            &wrapper.clap_plugin_track_info as *const _ as *const c_void
         } else {
             nih_trace!("Host tried to query unknown extension {:?}", id);
             std::ptr::null()
@@ -3209,6 +3241,79 @@ impl<P: ClapPlugin> Wrapper<P> {
             }
             None => false,
         }
+    }
+
+    unsafe extern "C" fn ext_track_info_changed(plugin: *const clap_plugin) {
+        check_null_ptr!((), plugin, (*plugin).plugin_data);
+        let wrapper = &*((*plugin).plugin_data as *const Self);
+
+        wrapper.update_track_info();
+    }
+
+    /// Query the host for the current track information and store it.
+    fn update_track_info(&self) {
+        let host_track_info = self.host_track_info.borrow();
+        let host_track_info = match host_track_info.as_ref() {
+            Some(h) => h,
+            None => return,
+        };
+
+        let mut info = std::mem::MaybeUninit::uninit();
+        let success = unsafe {
+            clap_call! { host_track_info=>get(&*self.host_callback, info.as_mut_ptr()) }
+        };
+
+        if success {
+            let info = unsafe { info.assume_init() };
+
+            let name = if info.flags & CLAP_TRACK_INFO_HAS_TRACK_NAME != 0 {
+                let name_cstr = unsafe { CStr::from_ptr(info.name.as_ptr()) };
+                name_cstr.to_str().ok().map(|s| s.to_string())
+            } else {
+                None
+            };
+
+            let color = if info.flags & CLAP_TRACK_INFO_HAS_TRACK_COLOR != 0 {
+                Some(TrackColor {
+                    red: info.color.red,
+                    green: info.color.green,
+                    blue: info.color.blue,
+                    alpha: info.color.alpha,
+                })
+            } else {
+                None
+            };
+
+            let audio_channel_count = if info.flags & CLAP_TRACK_INFO_HAS_AUDIO_CHANNEL != 0 {
+                Some(info.audio_channel_count as u32)
+            } else {
+                None
+            };
+
+            let track_type = if info.flags & CLAP_TRACK_INFO_IS_FOR_MASTER != 0 {
+                TrackType::Master
+            } else if info.flags & CLAP_TRACK_INFO_IS_FOR_RETURN_TRACK != 0 {
+                TrackType::Return
+            } else if info.flags & CLAP_TRACK_INFO_IS_FOR_BUS != 0 {
+                TrackType::Bus
+            } else {
+                TrackType::Regular
+            };
+
+            *self.track_info.write() = Some(TrackInfo {
+                name,
+                color,
+                audio_channel_count,
+                track_type,
+            });
+        } else {
+            *self.track_info.write() = None;
+        }
+    }
+
+    /// Get the current track info, if available.
+    pub fn get_track_info(&self) -> Option<TrackInfo> {
+        self.track_info.read().clone()
     }
 }
 

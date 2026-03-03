@@ -10,11 +10,12 @@ use vst3_sys::base::{kInvalidArgument, kNoInterface, kResultFalse, kResultOk, tr
 use vst3_sys::base::{IBStream, IPluginBase};
 use vst3_sys::utils::SharedVstPtr;
 use vst3_sys::vst::{
-    kNoParamId, kNoParentUnitId, kNoProgramListId, kRootUnitId, Event, EventTypes, IAudioProcessor,
-    IComponent, IEditController, IEventList, IMidiMapping, INoteExpressionController,
-    IParamValueQueue, IParameterChanges, IProcessContextRequirements, IUnitInfo,
-    LegacyMidiCCOutEvent, NoteExpressionTypeInfo, NoteExpressionValueDescription, NoteOffEvent,
-    NoteOnEvent, ParameterFlags, PolyPressureEvent, ProgramListInfo, TChar, UnitInfo,
+    kChannelColorKey, kChannelNameKey, kNoParamId, kNoParentUnitId, kNoProgramListId, kRootUnitId,
+    Event, EventTypes, IAttributeList, IAudioProcessor, IComponent, IEditController, IEventList,
+    IInfoListener, IMidiMapping, INoteExpressionController, IParamValueQueue, IParameterChanges,
+    IProcessContextRequirements, IUnitInfo, LegacyMidiCCOutEvent, NoteExpressionTypeInfo,
+    NoteExpressionValueDescription, NoteOffEvent, NoteOnEvent, ParameterFlags, PolyPressureEvent,
+    ProgramListInfo, TChar, UnitInfo,
 };
 use vst3_sys::VST3;
 use widestring::U16CStr;
@@ -26,6 +27,7 @@ use super::util::{
 };
 use super::util::{VST3_MIDI_CHANNELS, VST3_MIDI_PARAMS_END};
 use super::view::WrapperView;
+use crate::context::track_info::{TrackColor, TrackInfo};
 use crate::prelude::{
     AuxiliaryBuffers, BufferConfig, MidiConfig, NoteEvent, ParamFlags, ProcessMode, ProcessStatus,
     SysExMessage, Transport, Vst3Plugin,
@@ -45,7 +47,8 @@ use vst3_sys as vst3_com;
     IMidiMapping,
     INoteExpressionController,
     IProcessContextRequirements,
-    IUnitInfo
+    IUnitInfo,
+    IInfoListener
 ))]
 pub struct Wrapper<P: Vst3Plugin> {
     inner: Arc<WrapperInner<P>>,
@@ -1891,5 +1894,74 @@ impl<P: Vst3Plugin> IUnitInfo for Wrapper<P> {
         _data: SharedVstPtr<dyn IBStream>,
     ) -> tresult {
         kInvalidArgument
+    }
+}
+
+impl<P: Vst3Plugin> IInfoListener for Wrapper<P> {
+    unsafe fn set_channel_context_infos(&self, list: *mut c_void) -> tresult {
+        if list.is_null() {
+            *self.inner.track_info.write() = None;
+            return kResultOk;
+        }
+
+        // The list parameter is an IAttributeList* passed as c_void*. In the vst3-sys COM
+        // model, an interface pointer is `*mut *mut VTable`, so we cast accordingly.
+        let attr_list: vst3_sys::VstPtr<dyn IAttributeList> = match vst3_sys::VstPtr::shared(
+            list as *mut *mut <dyn IAttributeList as vst3_sys::ComInterface>::VTable,
+        ) {
+            Some(ptr) => ptr,
+            None => return kResultOk,
+        };
+
+        // Read channel name
+        let mut name_buf = [0i16; 128];
+        let name = if attr_list.get_string(
+            kChannelNameKey,
+            name_buf.as_mut_ptr(),
+            name_buf.len() as u32,
+        ) == kResultOk
+        {
+            U16CStr::from_ptr_str(name_buf.as_ptr() as *const u16)
+                .to_string()
+                .ok()
+        } else {
+            None
+        };
+
+        // Read channel color (ColorSpec is a u32 packed as ARGB)
+        let mut color_value: i64 = 0;
+        let color = if attr_list.get_int(kChannelColorKey, &mut color_value) == kResultOk {
+            let cs = color_value as u32;
+            Some(TrackColor {
+                alpha: ((cs >> 24) & 0xFF) as u8,
+                red: ((cs >> 16) & 0xFF) as u8,
+                green: ((cs >> 8) & 0xFF) as u8,
+                blue: (cs & 0xFF) as u8,
+            })
+        } else {
+            None
+        };
+
+        // Merge with existing track info rather than replacing, since some hosts (e.g.
+        // Ableton Live) may send partial updates with name and color in separate calls
+        let mut track_info = self.inner.track_info.write();
+        if let Some(existing) = track_info.as_mut() {
+            if name.is_some() {
+                existing.name = name;
+            }
+            if color.is_some() {
+                existing.color = color;
+            }
+        } else {
+            *track_info = Some(TrackInfo {
+                name,
+                color,
+                // VST3's IInfoListener doesn't provide channel count or track type
+                audio_channel_count: None,
+                track_type: crate::context::track_info::TrackType::Regular,
+            });
+        }
+
+        kResultOk
     }
 }
