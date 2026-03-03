@@ -7,7 +7,7 @@
 /// [`InitContext`][super::init::InitContext],
 /// [`ProcessContext`][super::process::ProcessContext], and
 /// [`GuiContext`][super::gui::GuiContext].
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct TrackInfo {
     /// The name of the track, if available.
     pub name: Option<String>,

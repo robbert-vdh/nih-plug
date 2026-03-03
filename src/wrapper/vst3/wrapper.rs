@@ -27,7 +27,7 @@ use super::util::{
 };
 use super::util::{VST3_MIDI_CHANNELS, VST3_MIDI_PARAMS_END};
 use super::view::WrapperView;
-use crate::context::track_info::{TrackColor, TrackInfo};
+use crate::context::track_info::{TrackColor, TrackInfo, TrackType};
 use crate::prelude::{
     AuxiliaryBuffers, BufferConfig, MidiConfig, NoteEvent, ParamFlags, ProcessMode, ProcessStatus,
     SysExMessage, Transport, Vst3Plugin,
@@ -1921,6 +1921,8 @@ impl<P: Vst3Plugin> IInfoListener for Wrapper<P> {
             name_buf.len() as u32,
         ) == kResultOk
         {
+            // Ensure null termination in case a buggy host fills the entire buffer
+            name_buf[name_buf.len() - 1] = 0;
             U16CStr::from_ptr_str(name_buf.as_ptr() as *const u16)
                 .to_string()
                 .ok()
@@ -1958,7 +1960,7 @@ impl<P: Vst3Plugin> IInfoListener for Wrapper<P> {
                 color,
                 // VST3's IInfoListener doesn't provide channel count or track type
                 audio_channel_count: None,
-                track_type: crate::context::track_info::TrackType::Regular,
+                track_type: TrackType::Regular,
             });
         }
 

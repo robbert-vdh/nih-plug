@@ -3285,7 +3285,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             };
 
             let audio_channel_count = if info.flags & CLAP_TRACK_INFO_HAS_AUDIO_CHANNEL != 0 {
-                Some(info.audio_channel_count as u32)
+                u32::try_from(info.audio_channel_count).ok()
             } else {
                 None
             };
