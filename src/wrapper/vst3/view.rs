@@ -48,7 +48,9 @@ const VST3_PLATFORM_X11_WINDOW: &str = "X11EmbedWindowID";
 /// workaround to define the field outside of the struct. Since vst3-sys is replaced by the vst3
 /// crate this should be fixable.
 #[cfg(target_os = "linux")]
-struct RunLoopEventHandlerWrapper<P: Vst3Plugin>(RwLock<Option<Box<RunLoopEventHandler<P>>>>);
+struct RunLoopEventHandlerWrapper<P: Vst3Plugin>(
+    RwLock<Option<ComWrapper<RunLoopEventHandler<P>>>>,
+);
 #[cfg(not(target_os = "linux"))]
 struct RunLoopEventHandlerWrapper<P: Vst3Plugin>(std::marker::PhantomData<P>);
 
@@ -104,6 +106,14 @@ struct RunLoopEventHandler<P: Vst3Plugin> {
     /// [`on_main_thread()`][Self::on_main_thread()] on the main thread, and then continue to pop
     /// tasks off this queue there until it is empty.
     tasks: ArrayQueue<Task<P>>,
+
+    /// We need access to the IEventHandler pointer to be able to call `IRunLoop::unregisterEventHandler()` when this object gets dropped.
+    com_ptr: RwLock<Option<ComPtr<IEventHandler>>>,
+}
+
+#[cfg(target_os = "linux")]
+impl<P: Vst3Plugin> Class for RunLoopEventHandler<P> {
+    type Interfaces = (IEventHandler,);
 }
 
 impl<P: Vst3Plugin> WrapperView<P> {
@@ -186,7 +196,7 @@ impl<P: Vst3Plugin> WrapperView<P> {
 
 #[cfg(target_os = "linux")]
 impl<P: Vst3Plugin> RunLoopEventHandler<P> {
-    pub fn new(inner: Arc<WrapperInner<P>>, run_loop: ComPtr<IRunLoop>) -> Box<Self> {
+    pub fn new(inner: Arc<WrapperInner<P>>, run_loop: ComPtr<IRunLoop>) -> ComWrapper<Self> {
         let mut sockets = [0i32; 2];
         assert_eq!(
             unsafe {
@@ -201,21 +211,22 @@ impl<P: Vst3Plugin> RunLoopEventHandler<P> {
         );
         let [socket_read_fd, socket_write_fd] = sockets;
 
-        let handler = Box::new(RunLoopEventHandler {
+        let mut handler = ComWrapper::new(RunLoopEventHandler {
             inner,
             run_loop,
             socket_read_fd,
             socket_write_fd,
             tasks: ArrayQueue::new(TASK_QUEUE_CAPACITY),
+            com_ptr: RwLock::new(None),
         });
-
-        let handler_ptr = &*handler as *const _ as *mut _;
+        let com_ptr = handler.to_com_ptr::<IEventHandler>();
+        *handler.com_ptr.write() = com_ptr.clone();
 
         assert_eq!(
             unsafe {
                 handler
                     .run_loop
-                    .registerEventHandler(handler_ptr, handler.socket_read_fd)
+                    .registerEventHandler(com_ptr.unwrap().into_raw(), handler.socket_read_fd)
             },
             kResultOk
         );
@@ -522,7 +533,7 @@ impl<P: Vst3Plugin> Drop for RunLoopEventHandler<P> {
 
         unsafe {
             self.run_loop
-                .unregisterEventHandler(self as *const _ as *mut _);
+                .unregisterEventHandler(self.com_ptr.read().clone().unwrap().into_raw());
         }
     }
 }
