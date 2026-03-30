@@ -27,6 +27,7 @@ use {
     crate::event_loop::{EventLoop, MainThreadExecutor, TASK_QUEUE_CAPACITY},
     crossbeam::queue::ArrayQueue,
     libc,
+    std::cell::Cell,
     vst3::Steinberg::Linux::{
         FileDescriptor, IEventHandler, IEventHandlerTrait, IRunLoop, IRunLoopTrait,
     },
@@ -108,7 +109,7 @@ struct RunLoopEventHandler<P: Vst3Plugin> {
     tasks: ArrayQueue<Task<P>>,
 
     /// We need access to the IEventHandler pointer to be able to call `IRunLoop::unregisterEventHandler()` when this object gets dropped.
-    com_ptr: RwLock<Option<ComPtr<IEventHandler>>>,
+    event_handler_ptr: Cell<*mut IEventHandler>,
 }
 
 #[cfg(target_os = "linux")]
@@ -217,16 +218,16 @@ impl<P: Vst3Plugin> RunLoopEventHandler<P> {
             socket_read_fd,
             socket_write_fd,
             tasks: ArrayQueue::new(TASK_QUEUE_CAPACITY),
-            com_ptr: RwLock::new(None),
+            event_handler_ptr: Cell::new(std::ptr::null_mut()),
         });
-        let com_ptr = handler.to_com_ptr::<IEventHandler>();
-        *handler.com_ptr.write() = com_ptr.clone();
+        let event_handler_ptr = handler.to_com_ptr::<IEventHandler>().unwrap().into_raw();
+        handler.event_handler_ptr.set(event_handler_ptr);
 
         assert_eq!(
             unsafe {
                 handler
                     .run_loop
-                    .registerEventHandler(com_ptr.unwrap().into_raw(), handler.socket_read_fd)
+                    .registerEventHandler(event_handler_ptr, handler.socket_read_fd)
             },
             kResultOk
         );
@@ -533,7 +534,7 @@ impl<P: Vst3Plugin> Drop for RunLoopEventHandler<P> {
 
         unsafe {
             self.run_loop
-                .unregisterEventHandler(self.com_ptr.read().clone().unwrap().into_raw());
+                .unregisterEventHandler(self.event_handler_ptr.get());
         }
     }
 }
