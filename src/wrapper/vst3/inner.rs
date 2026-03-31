@@ -46,9 +46,11 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// [`IEditController::set_component_handler`].
     pub component_handler: AtomicRefCell<Option<ComPtr<IComponentHandler>>>,
 
-    /// Our own [`IPlugView`] instance. This is set while the editor is actually visible (which is
-    /// different form the lifetime of [`WrapperView`][super::WrapperView] itself).
+    /// Our own [`IPlugView`] instance.
     pub plug_view: RwLock<Option<ComWrapper<WrapperView<P>>>>,
+
+    /// Whether the editor is currently open. This is changed by the attached and removed functions on IPlugViewTrait
+    pub is_editor_open: AtomicBool,
 
     /// A realtime-safe task queue so the plugin can schedule tasks that need to be run later on the
     /// GUI thread. This field should not be used directly for posting tasks. This should be done
@@ -289,6 +291,8 @@ impl<P: Vst3Plugin> WrapperInner<P> {
 
             plug_view: RwLock::new(None),
 
+            is_editor_open: AtomicBool::new(false),
+
             event_loop: AtomicRefCell::new(None),
 
             is_processing: AtomicBool::new(false),
@@ -414,12 +418,19 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             // regular event loop. If the editor gets dropped while there's still outstanding work
             // left in the run loop task queue, then those tasks will be posted to the regular event
             // loop so no work is lost.
-            match &*self.plug_view.read() {
-                Some(plug_view) => match plug_view.do_maybe_in_run_loop(task) {
+            if self.is_editor_open.load(Ordering::Relaxed) {
+                match self
+                    .plug_view
+                    .read()
+                    .clone()
+                    .unwrap()
+                    .do_maybe_in_run_loop(task)
+                {
                     Ok(()) => true,
                     Err(task) => event_loop.schedule_gui(task),
-                },
-                None => event_loop.schedule_gui(task),
+                }
+            } else {
+                event_loop.schedule_gui(task)
             }
         }
     }
@@ -600,7 +611,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         // TODO: Right now there's no way to know if loading the state changed the GUI's size. We
         //       could keep track of the last known size and compare the GUI's current size against
         //       that but that also seems brittle.
-        if self.plug_view.read().is_some() {
+        if self.is_editor_open.load(Ordering::SeqCst) {
             let task_posted = self.schedule_gui(Task::RequestResize);
             nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
         }
@@ -615,14 +626,14 @@ impl<P: Vst3Plugin> MainThreadExecutor<Task<P>> for WrapperInner<P> {
         match task {
             Task::PluginTask(task) => (self.task_executor.lock())(task),
             Task::ParameterValuesChanged => {
-                if self.plug_view.read().is_some() {
+                if self.is_editor_open.load(Ordering::SeqCst) {
                     if let Some(editor) = self.editor.borrow().as_ref() {
                         editor.lock().param_values_changed();
                     }
                 }
             }
             Task::ParameterValueChanged(param_hash, normalized_value) => {
-                if self.plug_view.read().is_some() {
+                if self.is_editor_open.load(Ordering::SeqCst) {
                     if let Some(editor) = self.editor.borrow().as_ref() {
                         let param_id = &self.param_id_by_hash[&param_hash];
                         editor
@@ -644,14 +655,18 @@ impl<P: Vst3Plugin> MainThreadExecutor<Task<P>> for WrapperInner<P> {
                 },
                 None => nih_debug_assert_failure!("Component handler not yet set"),
             },
-            Task::RequestResize => match &*self.plug_view.read() {
-                Some(plug_view) => unsafe {
-                    nih_debug_assert!(is_gui_thread);
-                    let success = WrapperView::request_resize(plug_view);
-                    nih_debug_assert!(success, "Failed requesting a window resize");
-                },
-                None => nih_debug_assert_failure!("Can't resize a closed editor"),
-            },
+            Task::RequestResize => {
+                if self.is_editor_open.load(Ordering::SeqCst) {
+                    unsafe {
+                        nih_debug_assert!(is_gui_thread);
+                        let success =
+                            WrapperView::request_resize(&self.plug_view.read().clone().unwrap());
+                        nih_debug_assert!(success, "Failed requesting a window resize");
+                    }
+                } else {
+                    nih_debug_assert_failure!("Can't resize a closed editor");
+                }
+            }
         }
     }
 }

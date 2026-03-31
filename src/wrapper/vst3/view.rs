@@ -47,7 +47,7 @@ const VST3_PLATFORM_X11_WINDOW: &str = "X11EmbedWindowID";
 
 /// FIXME: vst3-sys did not allow you to conditionally define fields with #[cfg()], so this is a
 /// workaround to define the field outside of the struct. Since vst3-sys is replaced by the vst3
-/// crate this should be fixable.
+/// crate this might be fixable.
 #[cfg(target_os = "linux")]
 struct RunLoopEventHandlerWrapper<P: Vst3Plugin>(
     RwLock<Option<ComWrapper<RunLoopEventHandler<P>>>>,
@@ -65,7 +65,7 @@ pub(crate) struct WrapperView<P: Vst3Plugin> {
     /// The `IPlugFrame` instance passed by the host during [IPlugView::set_frame()].
     plug_frame: RwLock<Option<ComPtr<IPlugFrame>>>,
     /// Allows handling events events on the host's GUI thread when using Linux. Needed because
-    /// otherwise REAPER doesn't like us very much. The event handler could be implemented directly
+    /// otherwise REAPER doesn't like us very much. The event handler could possibly be implemented directly
     /// on this object since vst3-sys is replaced by the vst3 crate.
     run_loop_event_handler: RunLoopEventHandlerWrapper<P>,
 
@@ -320,7 +320,7 @@ impl<P: Vst3Plugin> IPlugViewTrait for WrapperView<P> {
                     .lock()
                     .spawn(parent_handle, self.inner.clone().make_gui_context()),
             );
-            // *self.inner.plug_view.write() = Some(ObjectPtr::from(self));
+            self.inner.is_editor_open.store(true, Ordering::SeqCst);
 
             kResultOk
         } else {
@@ -335,7 +335,7 @@ impl<P: Vst3Plugin> IPlugViewTrait for WrapperView<P> {
     unsafe fn removed(&self) -> tresult {
         let mut editor_handle = self.editor_handle.write();
         if editor_handle.is_some() {
-            *self.inner.plug_view.write() = None;
+            self.inner.is_editor_open.store(false, Ordering::SeqCst);
             *editor_handle = None;
 
             kResultOk
@@ -414,7 +414,7 @@ impl<P: Vst3Plugin> IPlugViewTrait for WrapperView<P> {
                         .cast()
                         .map(|run_loop| RunLoopEventHandler::new(self.inner.clone(), run_loop));
                 }
-                // *self.plug_frame.write() = Some(ComPtr::from(frame));
+                *self.plug_frame.write() = Some(frame.to_com_ptr());
             }
             None => {
                 #[cfg(target_os = "linux")]

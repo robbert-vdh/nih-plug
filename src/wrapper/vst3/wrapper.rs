@@ -702,7 +702,9 @@ impl<P: Vst3Plugin> IEditControllerTrait for Wrapper<P> {
         match self.inner.editor.borrow().as_ref() {
             Some(editor) => {
                 let view = ComWrapper::new(WrapperView::new(self.inner.clone(), editor.clone()));
-                view.to_com_ptr::<IPlugView>().unwrap().into_raw()
+                let plug_view_ptr = view.to_com_ptr::<IPlugView>().unwrap().into_raw();
+                *self.inner.plug_view.write() = Some(view);
+                plug_view_ptr
             }
             None => std::ptr::null_mut(),
         }
