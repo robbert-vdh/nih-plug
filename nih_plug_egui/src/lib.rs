@@ -21,6 +21,7 @@ compile_error!("There's currently no software rendering support for egui");
 pub use egui_baseview::egui;
 
 mod editor;
+pub mod resizable_window;
 pub mod widgets;
 
 /// Create an [`Editor`] instance using an [`egui`][::egui] GUI. Using the user state parameter is
@@ -66,6 +67,11 @@ pub struct EguiState {
     /// The window's size in logical pixels before applying `scale_factor`.
     #[serde(with = "nih_plug::params::persist::serialize_atomic_cell")]
     size: AtomicCell<(u32, u32)>,
+
+    /// The new size of the window, if it was requested to resize by the GUI.
+    #[serde(skip)]
+    requested_size: AtomicCell<Option<(u32, u32)>>,
+
     /// Whether the editor's window is currently open.
     #[serde(skip)]
     open: AtomicBool,
@@ -90,6 +96,7 @@ impl EguiState {
     pub fn from_size(width: u32, height: u32) -> Arc<EguiState> {
         Arc::new(EguiState {
             size: AtomicCell::new((width, height)),
+            requested_size: Default::default(),
             open: AtomicBool::new(false),
         })
     }
@@ -103,5 +110,10 @@ impl EguiState {
     // Called `is_open()` instead of `open()` to avoid the ambiguity.
     pub fn is_open(&self) -> bool {
         self.open.load(Ordering::Acquire)
+    }
+
+    /// Set the new size that will be used to resize the window if the host allows.
+    fn set_requested_size(&self, new_size: (u32, u32)) {
+        self.requested_size.store(Some(new_size));
     }
 }

@@ -38,7 +38,7 @@ macro_rules! impl_persistent_arc {
             T: serde::Serialize + serde::Deserialize<'a> + Send + Sync,
         {
             fn set(&self, new_value: T) {
-                self.as_ref().set(new_value);
+                PersistentField::set(self.as_ref(), new_value);
             }
             fn map<F, R>(&self, f: F) -> R
             where

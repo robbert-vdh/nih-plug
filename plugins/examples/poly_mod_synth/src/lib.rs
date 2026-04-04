@@ -435,7 +435,7 @@ impl Plugin for PolyModSynth {
 
 impl PolyModSynth {
     /// Get the index of a voice by its voice ID, if the voice exists. This does not immediately
-    /// reutnr a reference to the voice to avoid lifetime issues.
+    /// return a reference to the voice to avoid lifetime issues.
     fn get_voice_idx(&mut self, voice_id: i32) -> Option<usize> {
         self.voices
             .iter_mut()

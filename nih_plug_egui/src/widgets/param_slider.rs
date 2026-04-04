@@ -1,5 +1,6 @@
 use std::sync::{Arc, LazyLock};
 
+use egui_baseview::egui::emath::GuiRounding;
 use egui_baseview::egui::{
     self, emath, vec2, Key, Response, Sense, Stroke, TextEdit, TextStyle, Ui, Vec2, Widget,
     WidgetText,
@@ -236,6 +237,7 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                 response.rect,
                 0.0,
                 Stroke::new(1.0, ui.visuals().widgets.active.bg_fill),
+                egui::StrokeKind::Middle,
             );
         }
     }
@@ -291,9 +293,10 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                     let stroke = visuals.bg_stroke;
                     ui.painter().rect(
                         response.rect.expand(visuals.expansion),
-                        visuals.rounding,
+                        visuals.corner_radius,
                         fill,
                         stroke,
+                        egui::StrokeKind::Middle,
                     );
                 }
 
@@ -323,7 +326,7 @@ impl<P: Param> Widget for ParamSlider<'_, P> {
             let height = ui
                 .text_style_height(&TextStyle::Body)
                 .max(ui.spacing().interact_size.y * 0.8);
-            let slider_height = ui.painter().round_to_pixel(height * 0.8);
+            let slider_height = (height * 0.8).round_to_pixels(ui.painter().pixels_per_point());
             let mut response = ui
                 .vertical(|ui| {
                     ui.allocate_space(vec2(slider_width, (height - slider_height) / 2.0));
