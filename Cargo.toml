@@ -63,6 +63,9 @@ standalone = ["dep:baseview", "dep:clap", "dep:cpal", "dep:jack", "dep:midir", "
 # wrapper you might otherwise still include a couple (unused) symbols from the
 # `vst3-sys` crate.
 vst3 = ["dep:vst3-sys"]
+# Enables the `nih_export_au!()` macro for Apple Audio Unit (AUv2) plugins on macOS.
+# Builds AudioComponentPlugInInterface vtable + Cocoa view (objc2-app-kit).
+au = ["dep:au-sys", "dep:objc2", "dep:objc2-foundation", "dep:objc2-app-kit"]
 # Add adapters to the Buffer object for reading the channel data to and from
 # `std::simd` vectors. Requires a nightly compiler.
 simd = []
@@ -126,6 +129,12 @@ libc = "0.2.124"
 [target.'cfg(target_os = "macos")'.dependencies]
 objc = "0.2.7"
 core-foundation = "0.9.3"
+
+# Used for the `au` feature (Apple Audio Unit v2 plugin wrapper).
+au-sys = { version = "0.1", optional = true }
+objc2 = { version = "0.6", optional = true }
+objc2-foundation = { version = "0.3", optional = true }
+objc2-app-kit = { version = "0.3", optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows]
 version = "0.44"

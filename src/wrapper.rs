@@ -9,6 +9,8 @@ pub(crate) mod util;
 pub mod standalone;
 #[cfg(feature = "vst3")]
 pub mod vst3;
+#[cfg(all(feature = "au", target_os = "macos"))]
+pub mod au;
 
 // This is used by the wrappers.
 pub use util::setup_logger;
