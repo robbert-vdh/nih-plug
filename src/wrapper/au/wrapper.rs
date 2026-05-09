@@ -1523,6 +1523,12 @@ fn build_parameter_info(entry: &ParamEntry) -> au::AudioUnitParameterInfo {
     info
 }
 
+/// Create a `CFStringRef` whose retain count is +1 and transfer ownership to
+/// the caller. Used for `AudioUnitParameterInfo::cfNameString` and `unitName`,
+/// which Apple documents as "create" semantics — the host releases the string
+/// after reading the parameter info. The `mem::forget` is therefore *not* a
+/// leak; dropping the `CFString` here would over-release once the host calls
+/// `CFRelease`.
 fn string_to_cfstring(s: &str) -> au::CFStringRef {
     let cf_string = CFString::new(s);
     let ptr = cf_string.as_concrete_TypeRef();
