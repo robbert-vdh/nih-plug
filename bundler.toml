@@ -3,6 +3,24 @@
 #
 # [package_name]
 # name = "Human Readable Plugin Name"  # defaults to <package_name>
+#
+# Audio Unit-specific metadata (macOS only) goes under [package_name.au]:
+#
+# [package_name.au]
+# type = "aufx"           # 4cc: aufx (effect), aumu (instrument), aumf (MIDI fx), augn (generator)
+# subtype = "Abcd"        # 4cc unique within manufacturer's product line
+# manufacturer = "MyCo"   # 4cc manufacturer code
+# description = "..."     # optional, shown by some hosts
+# version = "1.0.0"       # optional, defaults to "1.0.0"
+
+[gain]
+name = "Gain"
+
+[gain.au]
+type = "aufx"
+subtype = "MPgN"
+manufacturer = "MoiP"
+description = "Smoothed gain — nih-plug AU example"
 
 [soft_vacuum]
 name = "Soft Vacuum"

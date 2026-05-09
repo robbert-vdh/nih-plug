@@ -210,5 +210,19 @@ impl Vst3Plugin for Gain {
         &[Vst3SubCategory::Fx, Vst3SubCategory::Tools];
 }
 
+#[cfg(all(feature = "au", target_os = "macos"))]
+impl AuPlugin for Gain {
+    // `aufx` = audio effect. `MPgN` = Moist Plugins Gain (subtype, must be
+    // unique within this manufacturer). `MoiP` = Moist Plugins (manufacturer
+    // 4cc). These three values must match the `[gain.au]` block in
+    // `bundler.toml` — they are duplicated because the bundler can't dlopen
+    // a cross-compiled dylib to read the constants at build time.
+    const AU_TYPE: [u8; 4] = *b"aufx";
+    const AU_SUBTYPE: [u8; 4] = *b"MPgN";
+    const AU_MANUFACTURER: [u8; 4] = *b"MoiP";
+}
+
 nih_export_clap!(Gain);
 nih_export_vst3!(Gain);
+#[cfg(all(feature = "au", target_os = "macos"))]
+nih_export_au!(Gain);

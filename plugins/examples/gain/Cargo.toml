@@ -8,6 +8,13 @@ license = "ISC"
 [lib]
 crate-type = ["cdylib"]
 
+[features]
+default = ["au"]
+# Forwards to nih_plug's `au` feature so cfg(feature = "au") in lib.rs is
+# meaningful in this crate. The wrapper module is itself macOS-gated, so on
+# other platforms enabling this is a no-op (au-sys etc. are macOS-only deps).
+au = ["nih_plug/au"]
+
 [dependencies]
 nih_plug = { path = "../../../", features = ["assert_process_allocs"] }
 
