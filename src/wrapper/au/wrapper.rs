@@ -41,6 +41,11 @@ use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use au_sys as au;
+use core_foundation::base::{CFType, TCFType};
+use core_foundation::data::CFData;
+use core_foundation::dictionary::CFDictionary;
+use core_foundation::number::CFNumber;
+use core_foundation::string::CFString;
 
 use crate::buffer::Buffer;
 use crate::context::process::Transport;
@@ -48,8 +53,10 @@ use crate::params::internals::ParamPtr;
 use crate::params::{ParamFlags, Params};
 use crate::plugin::au::AuPlugin;
 use crate::prelude::{AudioIOLayout, AuxiliaryBuffers, BufferConfig, ProcessMode};
+use crate::wrapper::state::{self, PluginState};
 
 use super::context::{AuInitContext, AuProcessContext, ContextSink};
+use super::factory::fourcc;
 
 /// One AU plugin instance. Owned by Apple's component manager via the
 /// `AudioComponentPlugInInterface` pointer returned from the factory.
@@ -568,6 +575,91 @@ impl<P: AuPlugin> Wrapper<P> {
         au::noErr
     }
 
+    fn get_class_info(&self) -> *mut c_void {
+        let state = unsafe {
+            state::serialize_object::<P>(
+                self._params_arc.clone(),
+                self.params_by_id.iter().map(|e| (&e.id_str, e.ptr)),
+            )
+        };
+        let json = serde_json::to_string(&state).unwrap_or_default();
+        let data = CFData::from_buffer(json.as_bytes());
+
+        let dict = CFDictionary::from_CFType_pairs(&[
+            (
+                CFString::from_static_string("version").as_CFType(),
+                CFNumber::from(0i32).as_CFType(),
+            ),
+            (
+                CFString::from_static_string("type").as_CFType(),
+                CFNumber::from(fourcc(P::AU_TYPE) as i32).as_CFType(),
+            ),
+            (
+                CFString::from_static_string("subtype").as_CFType(),
+                CFNumber::from(fourcc(P::AU_SUBTYPE) as i32).as_CFType(),
+            ),
+            (
+                CFString::from_static_string("manufacturer").as_CFType(),
+                CFNumber::from(fourcc(P::AU_MANUFACTURER) as i32).as_CFType(),
+            ),
+            (
+                CFString::from_static_string("data").as_CFType(),
+                data.as_CFType(),
+            ),
+        ]);
+
+        let ptr = dict.as_concrete_TypeRef();
+        std::mem::forget(dict);
+        ptr as *mut c_void
+    }
+
+    fn set_class_info(&self, dict_ptr: *const c_void) -> au::OSStatus {
+        if dict_ptr.is_null() {
+            return au::kAudioUnitErr_InvalidPropertyValue;
+        }
+
+        let dict = unsafe { CFDictionary::<CFString, CFType>::wrap_under_get_rule(dict_ptr as _) };
+
+        let data_key = CFString::from_static_string("data");
+        let data = match dict.find(&data_key) {
+            Some(d) => unsafe { CFData::wrap_under_get_rule(d.as_CFTypeRef() as _) },
+            None => return au::kAudioUnitErr_InvalidPropertyValue,
+        };
+
+        let mut state: PluginState = match serde_json::from_slice(data.bytes()) {
+            Ok(s) => s,
+            Err(_) => return au::kAudioUnitErr_InvalidPropertyValue,
+        };
+
+        let sr = self.sample_rate();
+        let buffer_config = if sr > 0.0 {
+            Some(BufferConfig {
+                sample_rate: sr as f32,
+                min_buffer_size: None,
+                max_buffer_size: self.max_frames_per_slice(),
+                process_mode: ProcessMode::Realtime,
+            })
+        } else {
+            None
+        };
+
+        unsafe {
+            state::deserialize_object::<P>(
+                &mut state,
+                self._params_arc.clone(),
+                |id| {
+                    self.params_by_id
+                        .iter()
+                        .find(|e| e.id_str == id)
+                        .map(|e| e.ptr)
+                },
+                buffer_config.as_ref(),
+            );
+        }
+
+        au::noErr
+    }
+
     unsafe extern "C" fn get_property_info(
         self_ptr: *mut c_void,
         id: au::AudioUnitPropertyID,
@@ -647,6 +739,9 @@ impl<P: AuPlugin> Wrapper<P> {
             }
             au::kAudioUnitProperty_InPlaceProcessing => {
                 respond(std::mem::size_of::<au::UInt32>() as u32, true)
+            }
+            au::kAudioUnitProperty_ClassInfo if scope == au::kAudioUnitScope_Global => {
+                respond(std::mem::size_of::<*mut c_void>() as u32, true)
             }
             _ => au::kAudioUnitErr_InvalidProperty,
         }
@@ -830,6 +925,17 @@ impl<P: AuPlugin> Wrapper<P> {
                 }
                 au::noErr
             }
+            au::kAudioUnitProperty_ClassInfo if scope == au::kAudioUnitScope_Global => {
+                if (unsafe { *io_data_size } as usize) < std::mem::size_of::<*mut c_void>() {
+                    return au::kAudioUnitErr_InvalidPropertyValue;
+                }
+                let dict = this.get_class_info();
+                unsafe {
+                    *(out_data as *mut *mut c_void) = dict;
+                    *io_data_size = std::mem::size_of::<*mut c_void>() as u32;
+                }
+                au::noErr
+            }
             _ => au::kAudioUnitErr_InvalidProperty,
         }
     }
@@ -837,13 +943,13 @@ impl<P: AuPlugin> Wrapper<P> {
     unsafe extern "C" fn set_property(
         self_ptr: *mut c_void,
         id: au::AudioUnitPropertyID,
-        _scope: au::AudioUnitScope,
+        scope: au::AudioUnitScope,
         _element: au::AudioUnitElement,
         in_data: *const c_void,
         in_data_size: au::UInt32,
     ) -> au::OSStatus {
         let this = unsafe { Self::from_ptr(self_ptr) };
-        let status = Self::set_property_impl(this, id, in_data, in_data_size);
+        let status = Self::set_property_impl(this, id, scope, in_data, in_data_size);
         // Drain after the change so listeners see the new value.
         this.drain_notifications();
         status
@@ -852,6 +958,7 @@ impl<P: AuPlugin> Wrapper<P> {
     fn set_property_impl(
         this: &Self,
         id: au::AudioUnitPropertyID,
+        scope: au::AudioUnitScope,
         in_data: *const c_void,
         in_data_size: au::UInt32,
     ) -> au::OSStatus {
@@ -949,9 +1056,7 @@ impl<P: AuPlugin> Wrapper<P> {
                 au::noErr
             }
             au::kAudioUnitProperty_SetRenderCallback => {
-                if (in_data_size as usize)
-                    < std::mem::size_of::<au::AURenderCallbackStruct>()
-                {
+                if (in_data_size as usize) < std::mem::size_of::<au::AURenderCallbackStruct>() {
                     return au::kAudioUnitErr_InvalidPropertyValue;
                 }
                 let cb = unsafe { *(in_data as *const au::AURenderCallbackStruct) };
@@ -962,6 +1067,13 @@ impl<P: AuPlugin> Wrapper<P> {
                 au::noErr
             }
             au::kAudioUnitProperty_InPlaceProcessing => au::noErr,
+            au::kAudioUnitProperty_ClassInfo if scope == au::kAudioUnitScope_Global => {
+                if (in_data_size as usize) < std::mem::size_of::<*mut c_void>() {
+                    return au::kAudioUnitErr_InvalidPropertyValue;
+                }
+                let dict = unsafe { *(in_data as *const *mut c_void) };
+                this.set_class_info(dict)
+            }
             _ => au::kAudioUnitErr_InvalidProperty,
         }
     }
@@ -1285,8 +1397,8 @@ impl<P: AuPlugin> Wrapper<P> {
 }
 
 /// Build the `AudioUnitParameterInfo` blob the host queries for each
-/// parameter. Populates the legacy 52-byte name buffer; the CFString slot is
-/// left null until AUD-339 (Phase 4 CoreFoundation bridge).
+/// parameter. Populates the legacy 52-byte name buffer and the modern CFString
+/// slot (AUD-339).
 fn build_parameter_info(entry: &ParamEntry) -> au::AudioUnitParameterInfo {
     let mut info: au::AudioUnitParameterInfo = unsafe { std::mem::zeroed() };
 
@@ -1316,8 +1428,17 @@ fn build_parameter_info(entry: &ParamEntry) -> au::AudioUnitParameterInfo {
         }
     };
     info.unit = unit;
-    info.unitName = std::ptr::null_mut();
-    info.cfNameString = std::ptr::null_mut();
+    info.unitName = if unit == au::kAudioUnitParameterUnit_Generic {
+        let unit_str = unsafe { entry.ptr.unit() };
+        if !unit_str.is_empty() {
+            string_to_cfstring(unit_str)
+        } else {
+            ptr::null_mut()
+        }
+    } else {
+        ptr::null_mut()
+    };
+    info.cfNameString = string_to_cfstring(name_str);
     info.clumpID = 0;
 
     info.flags = au::kAudioUnitParameterFlag_IsReadable
@@ -1325,6 +1446,13 @@ fn build_parameter_info(entry: &ParamEntry) -> au::AudioUnitParameterInfo {
         | au::kAudioUnitParameterFlag_CanRamp;
 
     info
+}
+
+fn string_to_cfstring(s: &str) -> au::CFStringRef {
+    let cf_string = CFString::new(s);
+    let ptr = cf_string.as_concrete_TypeRef();
+    std::mem::forget(cf_string);
+    ptr as au::CFStringRef
 }
 
 /// True if the plugin advertises an `AudioIOLayout` whose main I/O matches
