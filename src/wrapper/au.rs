@@ -11,6 +11,7 @@
 //! Phase 4: Cocoa view via `objc2-app-kit`.
 //! Phase 5: bundle generation in `nih_plug_xtask`.
 
+mod context;
 mod factory;
 mod wrapper;
 

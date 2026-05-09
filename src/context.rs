@@ -16,6 +16,8 @@ pub enum PluginApi {
     Clap,
     Standalone,
     Vst3,
+    /// Apple Audio Unit v2. Available with the `au` feature on macOS.
+    Au,
 }
 
 impl Display for PluginApi {
@@ -24,6 +26,7 @@ impl Display for PluginApi {
             PluginApi::Clap => write!(f, "CLAP"),
             PluginApi::Standalone => write!(f, "standalone"),
             PluginApi::Vst3 => write!(f, "VST3"),
+            PluginApi::Au => write!(f, "AU"),
         }
     }
 }
