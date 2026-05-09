@@ -1,4 +1,4 @@
-//! AU wrapper, Phase 2.
+//! AU wrapper, Phase 3.5.
 //!
 //! Hosts the plugin's `Params` so:
 //!   - `kAudioUnitProperty_ParameterList` returns the AU parameter ID array
@@ -8,15 +8,36 @@
 //! AU parameter IDs are simply the index into `param_map()` — stable across
 //! one binary build (the nih-plug derive guarantees field declaration order).
 //!
-//! Render is still Phase 1 (silence). Phase 3 will wire the actual
-//! `Plugin::process()` path.
+//! # Concurrency model
+//!
+//! AU hosts call us from at least two threads concurrently:
+//!   - **main thread** — `SetProperty`, `GetProperty`, `SetParameter` (UI),
+//!     `Initialize` / `Uninitialize`
+//!   - **audio thread** — `Render`, `SetParameter` (sample-accurate automation)
+//!
+//! The wrapper exposes only `&Self` from `from_ptr` so we can never construct
+//! two `&mut Self` simultaneously. Mutable state is split into three buckets:
+//!
+//!   1. **host-setup atomics** — `sample_rate`, `n_channels`,
+//!      `max_frames_per_slice`, `latency_seconds`, `initialized`. Written by
+//!      main thread before `Initialize`, read by the audio thread thereafter.
+//!      `AtomicU32`/`AtomicU64` (latency/sr packed as f64 bits).
+//!
+//!   2. **audio-thread-owned scratch** — `input_scratch`. Inside `UnsafeCell`,
+//!      only ever touched from `render()`. AU guarantees render is not
+//!      re-entered, so a `&mut` borrow inside that scope is sound.
+//!
+//!   3. **main↔audio shared state** — `input_callback`. `Mutex<Option<…>>`;
+//!      main thread updates rarely, audio thread snapshots into a local `Copy`
+//!      at the top of `render()`. The mutex is held only for the snapshot.
 
+use std::cell::UnsafeCell;
 use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::num::NonZeroU32;
 use std::ptr;
-use std::sync::atomic::Ordering;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 
 use au_sys as au;
 
@@ -25,7 +46,6 @@ use crate::context::process::Transport;
 use crate::params::internals::ParamPtr;
 use crate::params::Params;
 use crate::plugin::au::AuPlugin;
-use crate::plugin::Plugin;
 use crate::prelude::{AudioIOLayout, AuxiliaryBuffers, BufferConfig, ProcessMode};
 
 use super::context::{AuInitContext, AuProcessContext, ContextSink};
@@ -40,36 +60,45 @@ pub struct Wrapper<P: AuPlugin> {
     /// Apple-required vtable. MUST be the first field.
     vtable: au::AudioComponentPlugInInterface,
 
-    /// Host's `AudioUnit` opaque handle, set in `Open`.
-    instance: au::AudioUnit,
+    /// Host's `AudioUnit` opaque handle, set in `Open` (main thread, once).
+    /// Stored as raw ptr behind atomic so we can read from any thread.
+    instance: AtomicU64,
 
-    /// Sample rate set via `kAudioUnitProperty_StreamFormat`.
-    sample_rate: f64,
+    /// Sample rate set via `kAudioUnitProperty_StreamFormat`. f64 bits.
+    sample_rate_bits: AtomicU64,
 
     /// Maximum frames per `AudioUnitRender` slice.
-    max_frames_per_slice: u32,
+    max_frames_per_slice: AtomicU32,
 
     /// Channel count set via `StreamFormat`.
-    n_channels: u32,
+    n_channels: AtomicU32,
 
-    /// Latency reported via `kAudioUnitProperty_Latency`.
-    latency_seconds: f64,
+    /// Latency reported via `kAudioUnitProperty_Latency`. f64 bits.
+    latency_seconds_bits: AtomicU64,
+
+    /// Whether `Plugin::initialize()` has run successfully since the last
+    /// `Uninitialize` / first construction. Render is a no-op when false.
+    initialized: AtomicBool,
 
     /// The plugin instance. Kept for the entire lifetime of the wrapper so
     /// the `ParamPtr` raw pointers in `params_by_id` remain valid.
-    plugin: Box<P>,
+    ///
+    /// Wrapped in `UnsafeCell` because `Plugin::initialize` / `process` /
+    /// `reset` / `deactivate` take `&mut self`, but we only ever expose `&Self`
+    /// from `from_ptr`. AU's threading model guarantees these methods are not
+    /// concurrent with each other (Initialize/Uninitialize/Reset run on main,
+    /// process runs on audio thread, and the host serialises lifecycle vs.
+    /// render via `Initialize`/`Uninitialize` boundaries — render can only
+    /// happen between them).
+    plugin: UnsafeCell<Box<P>>,
 
     /// Parameter handles in declaration order. The AU parameter ID is the
-    /// index into this vec.
+    /// index into this vec. Built once in `new()`, then read-only.
     params_by_id: Vec<ParamEntry>,
 
     /// Strong reference back to the `Params` object referenced by every
     /// `ParamPtr` in `params_by_id`.
     _params_arc: Arc<dyn Params>,
-
-    /// Whether `Plugin::initialize()` has run successfully since the last
-    /// `Uninitialize` / first construction. Render is a no-op when false.
-    initialized: bool,
 
     /// Scratch sink shared between Init/Process contexts. Lets the plugin
     /// report a latency change back via `set_latency_samples()`.
@@ -79,16 +108,18 @@ pub struct Wrapper<P: AuPlugin> {
     /// `kAudioUnitProperty_SetRenderCallback`. We invoke this at the top of
     /// every `render()` call to pull input audio for the effect.
     ///
-    /// Hosts that don't use the callback model (or for in-place processing)
-    /// leave this `None` and we just operate on whatever the host wrote
-    /// into `io_data` ahead of the call.
-    input_callback: Option<au::AURenderCallbackStruct>,
+    /// `AURenderCallbackStruct` is `Copy`. Audio thread snapshots out under
+    /// the mutex at the start of render and releases immediately.
+    input_callback: Mutex<Option<au::AURenderCallbackStruct>>,
 
     /// Per-channel scratch buffers for the input pull. Sized in `Initialize`
     /// to `[max_frames_per_slice]` so the render path is allocation-free.
     /// One `Vec<f32>` per channel; we hand the host a synthesised
     /// `AudioBufferList` whose `mData` pointers point into these vectors.
-    input_scratch: Vec<Vec<f32>>,
+    ///
+    /// `UnsafeCell` because only `render()` touches it after `Initialize`,
+    /// and AU does not re-enter render.
+    input_scratch: UnsafeCell<Vec<Vec<f32>>>,
 }
 
 struct ParamEntry {
@@ -96,6 +127,30 @@ struct ParamEntry {
     #[allow(dead_code)]
     id_str: String,
     ptr: ParamPtr,
+}
+
+/// `Send` + `Sync` justification:
+///
+/// - All publicly mutable fields are atomic or behind a `Mutex`.
+/// - `plugin` and `input_scratch` are `UnsafeCell`-wrapped, accessed only
+///   through `&mut` borrows constructed during a single audio-thread render
+///   call (`input_scratch`) or during main-thread lifecycle calls that AU
+///   serialises against render (`plugin`). The host contract forbids
+///   `Initialize` / `Uninitialize` / `Reset` concurrent with `Render`.
+/// - `ParamPtr` in `params_by_id` is built once and read-only thereafter;
+///   per nih-plug contract, `set_normalized_value` and the value getters
+///   are themselves thread-safe.
+/// - The `vtable` and `_params_arc` are immutable after construction.
+unsafe impl<P: AuPlugin> Send for Wrapper<P> {}
+unsafe impl<P: AuPlugin> Sync for Wrapper<P> {}
+
+#[inline]
+fn pack_f64(v: f64) -> u64 {
+    v.to_bits()
+}
+#[inline]
+fn unpack_f64(b: u64) -> f64 {
+    f64::from_bits(b)
 }
 
 impl<P: AuPlugin> Wrapper<P> {
@@ -116,29 +171,90 @@ impl<P: AuPlugin> Wrapper<P> {
                 Lookup: Self::lookup,
                 reserved: ptr::null_mut(),
             },
-            instance: ptr::null_mut(),
-            sample_rate: 44_100.0,
-            max_frames_per_slice: 1024,
-            n_channels: 2,
-            latency_seconds: 0.0,
-            plugin,
+            instance: AtomicU64::new(0),
+            sample_rate_bits: AtomicU64::new(pack_f64(44_100.0)),
+            max_frames_per_slice: AtomicU32::new(1024),
+            n_channels: AtomicU32::new(2),
+            latency_seconds_bits: AtomicU64::new(pack_f64(0.0)),
+            initialized: AtomicBool::new(false),
+            plugin: UnsafeCell::new(plugin),
             params_by_id,
             _params_arc: params_arc,
-            initialized: false,
             sink: ContextSink::new(),
-            input_callback: None,
-            input_scratch: Vec::new(),
+            input_callback: Mutex::new(None),
+            input_scratch: UnsafeCell::new(Vec::new()),
         });
         Box::into_raw(boxed) as *mut au::AudioComponentPlugInInterface
     }
 
-    unsafe fn from_ptr<'a>(ptr: *mut c_void) -> &'a mut Self {
-        &mut *(ptr as *mut Self)
+    /// Returns a shared reference to the wrapper. We never hand out `&mut Self`
+    /// because AU's main + audio threads can both be inside the wrapper at
+    /// the same time and `&mut Self` aliasing would be UB.
+    #[inline]
+    unsafe fn from_ptr<'a>(ptr: *mut c_void) -> &'a Self {
+        unsafe { &*(ptr as *const Self) }
     }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Field accessors (atomic)
+    // ─────────────────────────────────────────────────────────────────────
+
+    #[inline]
+    fn sample_rate(&self) -> f64 {
+        unpack_f64(self.sample_rate_bits.load(Ordering::Acquire))
+    }
+    #[inline]
+    fn set_sample_rate(&self, sr: f64) {
+        self.sample_rate_bits.store(pack_f64(sr), Ordering::Release);
+    }
+    #[inline]
+    fn latency_seconds(&self) -> f64 {
+        unpack_f64(self.latency_seconds_bits.load(Ordering::Acquire))
+    }
+    #[inline]
+    fn set_latency_seconds(&self, l: f64) {
+        self.latency_seconds_bits
+            .store(pack_f64(l), Ordering::Release);
+    }
+    #[inline]
+    fn n_channels(&self) -> u32 {
+        self.n_channels.load(Ordering::Acquire)
+    }
+    #[inline]
+    fn max_frames_per_slice(&self) -> u32 {
+        self.max_frames_per_slice.load(Ordering::Acquire)
+    }
+    #[inline]
+    fn is_initialized(&self) -> bool {
+        self.initialized.load(Ordering::Acquire)
+    }
+
+    /// SAFETY: caller must guarantee no other reference (mut or shared) to
+    /// `*self.plugin.get()` is alive. AU's contract gives this for the
+    /// `Initialize` / `Uninitialize` / `Reset` / `Render` paths because the
+    /// host serialises lifecycle calls vs. render and never re-enters render.
+    #[inline]
+    #[allow(clippy::mut_from_ref)]
+    unsafe fn plugin_mut(&self) -> &mut P {
+        unsafe { &mut **self.plugin.get() }
+    }
+
+    /// SAFETY: same as `plugin_mut` — only call from `render()`. Returns the
+    /// scratch vector for in-place mutation by the audio thread.
+    #[inline]
+    #[allow(clippy::mut_from_ref)]
+    unsafe fn input_scratch_mut(&self) -> &mut Vec<Vec<f32>> {
+        unsafe { &mut *self.input_scratch.get() }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Component manager vtable
+    // ─────────────────────────────────────────────────────────────────────
 
     unsafe extern "C" fn open(self_ptr: *mut c_void, instance: au::AudioUnit) -> au::OSStatus {
         let this = unsafe { Self::from_ptr(self_ptr) };
-        this.instance = instance;
+        this.instance
+            .store(instance as usize as u64, Ordering::Release);
         au::noErr
     }
 
@@ -202,20 +318,19 @@ impl<P: AuPlugin> Wrapper<P> {
     unsafe extern "C" fn initialize(self_ptr: *mut c_void) -> au::OSStatus {
         let this = unsafe { Self::from_ptr(self_ptr) };
 
-        // Pick the first matching layout from the plugin's declared options.
-        // AU effects with mismatched in/out channels aren't supported in
-        // Phase 3 — we just use the host's stream-format channel count for
-        // both sides.
-        let chans = NonZeroU32::new(this.n_channels.max(1));
+        let n_ch = this.n_channels().max(1);
+        let chans = NonZeroU32::new(n_ch);
         let io_layout = AudioIOLayout {
             main_input_channels: chans,
             main_output_channels: chans,
             ..AudioIOLayout::const_default()
         };
+        let max_frames = this.max_frames_per_slice();
+        let sr = this.sample_rate();
         let buffer_config = BufferConfig {
-            sample_rate: this.sample_rate as f32,
+            sample_rate: sr as f32,
             min_buffer_size: None,
-            max_buffer_size: this.max_frames_per_slice,
+            max_buffer_size: max_frames,
             process_mode: ProcessMode::Realtime,
         };
 
@@ -223,40 +338,43 @@ impl<P: AuPlugin> Wrapper<P> {
             sink: this.sink.clone(),
             _marker: PhantomData,
         };
-        let ok = this.plugin.initialize(&io_layout, &buffer_config, &mut ctx);
+        // SAFETY: AU forbids Initialize concurrent with Render.
+        let plugin = unsafe { this.plugin_mut() };
+        let ok = plugin.initialize(&io_layout, &buffer_config, &mut ctx);
         if !ok {
             return au::kAudioUnitErr_FailedInitialization;
         }
-
-        // `Plugin::initialize()` is always followed by `Plugin::reset()`.
-        this.plugin.reset();
+        plugin.reset();
 
         // Allocate input scratch space: one Vec<f32> per channel, each
         // sized to max_frames_per_slice so the render path is allocation
         // free.
-        let nch = this.n_channels.max(1) as usize;
-        let cap = this.max_frames_per_slice as usize;
-        this.input_scratch.clear();
-        this.input_scratch.reserve(nch);
-        for _ in 0..nch {
-            this.input_scratch.push(vec![0.0_f32; cap]);
+        // SAFETY: same — render is serialised vs. Initialize.
+        let scratch = unsafe { this.input_scratch_mut() };
+        scratch.clear();
+        scratch.reserve(n_ch as usize);
+        for _ in 0..n_ch as usize {
+            scratch.push(vec![0.0_f32; max_frames as usize]);
         }
 
-        // Pull the latency the plugin reported (if any).
         let latency = this.sink.latency_samples.load(Ordering::Relaxed);
-        if latency > 0 && this.sample_rate > 0.0 {
-            this.latency_seconds = latency as f64 / this.sample_rate;
+        if latency > 0 && sr > 0.0 {
+            this.set_latency_seconds(latency as f64 / sr);
         }
 
-        this.initialized = true;
+        this.initialized.store(true, Ordering::Release);
         au::noErr
     }
 
     unsafe extern "C" fn uninitialize(self_ptr: *mut c_void) -> au::OSStatus {
         let this = unsafe { Self::from_ptr(self_ptr) };
-        if this.initialized {
-            this.plugin.deactivate();
-            this.initialized = false;
+        if this
+            .initialized
+            .compare_exchange(true, false, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            // SAFETY: AU forbids Uninitialize concurrent with Render.
+            unsafe { this.plugin_mut() }.deactivate();
         }
         au::noErr
     }
@@ -267,7 +385,8 @@ impl<P: AuPlugin> Wrapper<P> {
         _element: au::AudioUnitElement,
     ) -> au::OSStatus {
         let this = unsafe { Self::from_ptr(self_ptr) };
-        this.plugin.reset();
+        // SAFETY: AU calls Reset on the main thread, serialised against render.
+        unsafe { this.plugin_mut() }.reset();
         au::noErr
     }
 
@@ -375,7 +494,7 @@ impl<P: AuPlugin> Wrapper<P> {
                     return au::kAudioUnitErr_InvalidPropertyValue;
                 }
                 unsafe {
-                    *(out_data as *mut au::Float64) = this.sample_rate;
+                    *(out_data as *mut au::Float64) = this.sample_rate();
                     *io_data_size = std::mem::size_of::<au::Float64>() as u32;
                 }
                 au::noErr
@@ -394,7 +513,7 @@ impl<P: AuPlugin> Wrapper<P> {
             }
             au::kAudioUnitProperty_Latency if scope == au::kAudioUnitScope_Global => {
                 unsafe {
-                    *(out_data as *mut au::Float64) = this.latency_seconds;
+                    *(out_data as *mut au::Float64) = this.latency_seconds();
                     *io_data_size = std::mem::size_of::<au::Float64>() as u32;
                 }
                 au::noErr
@@ -408,7 +527,7 @@ impl<P: AuPlugin> Wrapper<P> {
             }
             au::kAudioUnitProperty_MaximumFramesPerSlice => {
                 unsafe {
-                    *(out_data as *mut au::UInt32) = this.max_frames_per_slice;
+                    *(out_data as *mut au::UInt32) = this.max_frames_per_slice();
                     *io_data_size = std::mem::size_of::<au::UInt32>() as u32;
                 }
                 au::noErr
@@ -420,7 +539,7 @@ impl<P: AuPlugin> Wrapper<P> {
                     return au::kAudioUnitErr_InvalidPropertyValue;
                 }
                 let asbd = au::AudioStreamBasicDescription {
-                    mSampleRate: this.sample_rate,
+                    mSampleRate: this.sample_rate(),
                     mFormatID: au::kAudioFormatLinearPCM,
                     mFormatFlags: au::kAudioFormatFlagIsFloat
                         | au::kAudioFormatFlagIsPacked
@@ -428,7 +547,7 @@ impl<P: AuPlugin> Wrapper<P> {
                     mBytesPerPacket: 4,
                     mFramesPerPacket: 1,
                     mBytesPerFrame: 4,
-                    mChannelsPerFrame: this.n_channels,
+                    mChannelsPerFrame: this.n_channels(),
                     mBitsPerChannel: 32,
                     mReserved: 0,
                 };
@@ -529,7 +648,8 @@ impl<P: AuPlugin> Wrapper<P> {
                 if (in_data_size as usize) < std::mem::size_of::<au::Float64>() {
                     return au::kAudioUnitErr_InvalidPropertyValue;
                 }
-                this.sample_rate = unsafe { *(in_data as *const au::Float64) };
+                let sr = unsafe { *(in_data as *const au::Float64) };
+                this.set_sample_rate(sr);
                 au::noErr
             }
             au::kAudioUnitProperty_StreamFormat => {
@@ -539,15 +659,17 @@ impl<P: AuPlugin> Wrapper<P> {
                     return au::kAudioUnitErr_InvalidPropertyValue;
                 }
                 let asbd = unsafe { &*(in_data as *const au::AudioStreamBasicDescription) };
-                this.sample_rate = asbd.mSampleRate;
-                this.n_channels = asbd.mChannelsPerFrame;
+                this.set_sample_rate(asbd.mSampleRate);
+                this.n_channels
+                    .store(asbd.mChannelsPerFrame, Ordering::Release);
                 au::noErr
             }
             au::kAudioUnitProperty_MaximumFramesPerSlice => {
                 if (in_data_size as usize) < std::mem::size_of::<au::UInt32>() {
                     return au::kAudioUnitErr_InvalidPropertyValue;
                 }
-                this.max_frames_per_slice = unsafe { *(in_data as *const au::UInt32) };
+                let v = unsafe { *(in_data as *const au::UInt32) };
+                this.max_frames_per_slice.store(v, Ordering::Release);
                 au::noErr
             }
             au::kAudioUnitProperty_BypassEffect => au::noErr,
@@ -558,12 +680,10 @@ impl<P: AuPlugin> Wrapper<P> {
                     return au::kAudioUnitErr_InvalidPropertyValue;
                 }
                 let cb = unsafe { *(in_data as *const au::AURenderCallbackStruct) };
-                // Ignore null callbacks (host clearing the slot).
-                this.input_callback = if cb.inputProc.is_some() {
-                    Some(cb)
-                } else {
-                    None
-                };
+                let new_cb = if cb.inputProc.is_some() { Some(cb) } else { None };
+                if let Ok(mut guard) = this.input_callback.lock() {
+                    *guard = new_cb;
+                }
                 au::noErr
             }
             au::kAudioUnitProperty_InPlaceProcessing => au::noErr,
@@ -621,14 +741,9 @@ impl<P: AuPlugin> Wrapper<P> {
     /// Phase 3 render. Convert the host's `AudioBufferList` into the
     /// nih-plug `Buffer` shape and dispatch to `Plugin::process`.
     ///
-    /// The wrapper advertises non-interleaved float as the only stream
-    /// format (`AudioStreamBasicDescription` in `kAudioUnitProperty_StreamFormat`),
-    /// so each `AudioBuffer` in `io_data` corresponds to exactly one channel
-    /// (`mNumberChannels == 1`) holding `in_number_frames` `f32` samples.
-    /// We also advertise in-place processing, so for hosts that honour it
-    /// `io_data` already contains the input audio when render is called.
-    /// Hosts that disable in-place still pass output buffers — they're
-    /// expected to have copied the input ahead of time.
+    /// Concurrency: this runs on the audio thread. We only touch the wrapper
+    /// through `&Self` plus controlled `UnsafeCell` borrows for the things
+    /// the audio thread owns (`plugin`, `input_scratch`).
     unsafe extern "C" fn render(
         self_ptr: *mut c_void,
         _io_action_flags: *mut au::AudioUnitRenderActionFlags,
@@ -643,34 +758,34 @@ impl<P: AuPlugin> Wrapper<P> {
             return au::kAudioUnitErr_InvalidParameter;
         }
 
-        // Bail out cleanly if Initialize was never called: zero the buffers
-        // and return.  This protects the plugin from being asked to process
-        // before sample rate / max-frames / channel count are known.
-        if !this.initialized {
+        if !this.is_initialized() {
             unsafe { zero_buffer_list(io_data, in_number_frames) };
             return au::noErr;
         }
 
         let n_frames_us = in_number_frames as usize;
 
-        // ── 1) Pull input from the host. ─────────────────────────────────
-        // If the host registered a SetRenderCallback for our input bus,
-        // call it with a synthesised AudioBufferList whose buffers point
-        // into `input_scratch`. After the call, `input_scratch[ch][..n_frames]`
-        // holds the channel data we need to feed the plugin.
-        //
-        // If no callback was registered, we operate "in place" on whatever
-        // the host wrote into `io_data` directly (as advertised via the
-        // InPlaceProcessing property). For Ableton, Logic, Reaper this
-        // path is the common one.
+        // Snapshot the input callback under the mutex (cheap struct copy).
+        // Held only for the duration of the load so main-thread updates
+        // never block render for long. Note: the lock itself can technically
+        // contend with main thread; this is addressed in AUD-337 via a
+        // lock-free swap. For now, the only writer is SetRenderCallback
+        // which is rare.
+        let callback_snapshot = this
+            .input_callback
+            .lock()
+            .ok()
+            .and_then(|g| *g);
+
+        // ── 1) Pull input from the host (callback path). ─────────────────
+        // SAFETY: render is not re-entered, so the audio thread is the sole
+        // owner of input_scratch right now.
+        let input_scratch = unsafe { this.input_scratch_mut() };
         let mut pulled_from_callback = false;
-        if let Some(cb) = this.input_callback {
-            // Build an AudioBufferList in scratch memory big enough for
-            // `n_channels` buffers. The struct has a single `[AudioBuffer; 1]`
-            // tail array; for >1 channel we need extra storage.
-            let n_ch = this.input_scratch.len();
-            if n_ch > 0 && this.input_scratch[0].len() >= n_frames_us {
-                let header_size = std::mem::size_of::<au::UInt32>(); // mNumberBuffers
+        if let Some(cb) = callback_snapshot {
+            let n_ch = input_scratch.len();
+            if n_ch > 0 && input_scratch[0].len() >= n_frames_us {
+                let header_size = std::mem::size_of::<au::UInt32>();
                 let buf_size = std::mem::size_of::<au::AudioBuffer>();
                 let bl_bytes = header_size + buf_size * n_ch;
                 let mut bl_storage: Vec<u8> = vec![0u8; bl_bytes];
@@ -679,21 +794,20 @@ impl<P: AuPlugin> Wrapper<P> {
                     (*bl_ptr).mNumberBuffers = n_ch as au::UInt32;
                 }
                 let buffers_ptr = unsafe {
-                    (bl_storage.as_mut_ptr().add(header_size)) as *mut au::AudioBuffer
+                    bl_storage.as_mut_ptr().add(header_size) as *mut au::AudioBuffer
                 };
                 for ch in 0..n_ch {
-                    let scratch_ptr = this.input_scratch[ch].as_mut_ptr();
+                    let scratch_ptr = input_scratch[ch].as_mut_ptr();
                     unsafe {
                         *buffers_ptr.add(ch) = au::AudioBuffer {
                             mNumberChannels: 1,
-                            mDataByteSize: (n_frames_us * std::mem::size_of::<f32>()) as au::UInt32,
+                            mDataByteSize: (n_frames_us * std::mem::size_of::<f32>())
+                                as au::UInt32,
                             mData: scratch_ptr as *mut c_void,
                         };
                     }
                 }
 
-                // Build a default AudioTimeStamp (zero is fine for offline-style
-                // pull). The host inputProc fills it; we provide a zeroed one.
                 let ts: au::AudioTimeStamp = unsafe { std::mem::zeroed() };
                 let mut flags: au::AudioUnitRenderActionFlags = 0;
                 let proc = cb.inputProc.unwrap();
@@ -702,7 +816,7 @@ impl<P: AuPlugin> Wrapper<P> {
                         cb.inputProcRefCon,
                         &mut flags,
                         &ts,
-                        0, // input bus number
+                        0,
                         in_number_frames,
                         bl_ptr,
                     )
@@ -715,55 +829,24 @@ impl<P: AuPlugin> Wrapper<P> {
 
         let n_frames = n_frames_us;
 
-        // ── 2) Build process buffer slices. ──────────────────────────────
-        // Strategy: nih-plug's Plugin::process operates in place on its
-        // `Buffer` slices, so we always feed it slices into the output
-        // (io_data) buffers. If we pulled input via the host callback into
-        // `input_scratch`, copy that into io_data first; otherwise the host
-        // already provided in-place audio there.
+        // ── 2) Build process buffer slices over io_data. ─────────────────
         let bl = unsafe { &mut *io_data };
         let n_buffers = bl.mNumberBuffers as usize;
         let buffers_ptr = bl.mBuffers.as_mut_ptr();
 
-        // If host pulled via callback, copy scratch → io_data so process() sees input.
+        // If we pulled via callback, copy scratch → io_data so process()
+        // sees the input audio.
         if pulled_from_callback {
-            for i in 0..n_buffers.min(this.input_scratch.len()) {
+            for i in 0..n_buffers.min(input_scratch.len()) {
                 let buf = unsafe { &mut *buffers_ptr.add(i) };
                 if buf.mData.is_null() {
                     continue;
                 }
-                let dst =
-                    unsafe { std::slice::from_raw_parts_mut(buf.mData as *mut f32, n_frames) };
-                let src = &this.input_scratch[i][..n_frames];
+                let dst = unsafe {
+                    std::slice::from_raw_parts_mut(buf.mData as *mut f32, n_frames)
+                };
+                let src = &input_scratch[i][..n_frames];
                 dst.copy_from_slice(src);
-            }
-        }
-
-        // Diagnostic: input RMS *after* the pull/copy step, gated to first 5 calls.
-        unsafe {
-            static mut DBG: u32 = 0;
-            if DBG < 5 {
-                let mut sum = 0.0_f64;
-                let mut max = 0.0_f32;
-                let mut cnt = 0_u64;
-                for i in 0..n_buffers {
-                    let buf = &*buffers_ptr.add(i);
-                    if buf.mData.is_null() { continue; }
-                    let s = std::slice::from_raw_parts(buf.mData as *const f32, n_frames);
-                    for v in s.iter() {
-                        sum += (*v as f64) * (*v as f64);
-                        let a = v.abs();
-                        if a > max { max = a; }
-                        cnt += 1;
-                    }
-                }
-                let rms = if cnt > 0 { (sum / cnt as f64).sqrt() } else { 0.0 };
-                eprintln!(
-                    "[NIH-AU] render n_frames={} buf_count={} pulled={} cb_set={} rms_in={:.6} max_in={:.6}",
-                    in_number_frames, n_buffers, pulled_from_callback,
-                    this.input_callback.is_some(), rms, max
-                );
-                DBG += 1;
             }
         }
 
@@ -776,8 +859,9 @@ impl<P: AuPlugin> Wrapper<P> {
             let slice = unsafe {
                 std::slice::from_raw_parts_mut(buf.mData as *mut f32, n_frames)
             };
-            // SAFETY: erasing the lifetime is fine because the slice never
-            // outlives this render() call — Buffer is consumed locally.
+            // SAFETY: erasing the lifetime is unsound in general; tracked in
+            // AUD-333. The slice never outlives this render() call and the
+            // resulting Buffer is consumed locally before return.
             let static_slice: &'static mut [f32] = unsafe {
                 std::mem::transmute::<&mut [f32], &'static mut [f32]>(slice)
             };
@@ -795,18 +879,20 @@ impl<P: AuPlugin> Wrapper<P> {
             inputs: &mut [],
             outputs: &mut [],
         };
+        let sr = this.sample_rate();
         let mut process_ctx = AuProcessContext::<P> {
             sink: this.sink.clone(),
-            transport: Transport::new(this.sample_rate as f32),
+            transport: Transport::new(sr as f32),
             _marker: PhantomData,
         };
 
-        let _status = this.plugin.process(&mut buffer, &mut aux, &mut process_ctx);
+        // SAFETY: render is not concurrent with Initialize/Uninitialize/Reset
+        // and AU does not re-enter render, so this `&mut P` is unique.
+        let _status = unsafe { this.plugin_mut() }.process(&mut buffer, &mut aux, &mut process_ctx);
 
-        // Pull any latency change the plugin requested during process.
         let latency = this.sink.latency_samples.load(Ordering::Relaxed);
-        if latency > 0 && this.sample_rate > 0.0 {
-            this.latency_seconds = latency as f64 / this.sample_rate;
+        if latency > 0 && sr > 0.0 {
+            this.set_latency_seconds(latency as f64 / sr);
         }
 
         au::noErr
@@ -833,12 +919,10 @@ impl<P: AuPlugin> Wrapper<P> {
 
 /// Build the `AudioUnitParameterInfo` blob the host queries for each
 /// parameter. Populates the legacy 52-byte name buffer; the CFString slot is
-/// left null until Phase 4 brings in the CoreFoundation bridge.
+/// left null until AUD-339 (Phase 4 CoreFoundation bridge).
 fn build_parameter_info(entry: &ParamEntry) -> au::AudioUnitParameterInfo {
     let mut info: au::AudioUnitParameterInfo = unsafe { std::mem::zeroed() };
 
-    // Legacy 52-byte name buffer. AU tools and older hosts read this when the
-    // modern CFString slot is absent.
     let name_str = unsafe { entry.ptr.name() };
     let max = info.name.len() - 1;
     let bytes = name_str.as_bytes();
@@ -856,9 +940,6 @@ fn build_parameter_info(entry: &ParamEntry) -> au::AudioUnitParameterInfo {
     info.maxValue = max_plain;
     info.defaultValue = default_plain;
 
-    // Boolean parameters always have step_count == Some(1); enums Some(n>=2).
-    // Both map to AU's `Indexed`. Floats have None — we then guess from the
-    // unit string.
     let unit = match unsafe { entry.ptr.step_count() } {
         Some(1) => au::kAudioUnitParameterUnit_Boolean,
         Some(_) => au::kAudioUnitParameterUnit_Indexed,
@@ -879,8 +960,6 @@ fn build_parameter_info(entry: &ParamEntry) -> au::AudioUnitParameterInfo {
     info
 }
 
-/// Heuristic mapping from nih-plug's `Param::unit()` display string to an
-/// AU unit ID. Hosts use this to format the value in their generic UI.
 fn classify_unit(unit: &str) -> au::AudioUnitParameterUnit {
     let lower = unit.to_ascii_lowercase();
     if lower.contains("db") || lower.contains("decibel") {
@@ -896,12 +975,8 @@ fn classify_unit(unit: &str) -> au::AudioUnitParameterUnit {
     }
 }
 
-unsafe impl<P: AuPlugin> Send for Wrapper<P> {}
-
 pub use Wrapper as AuWrapper;
 
-/// Write zeros into every non-null buffer in `bl`. Used as a safe fallback
-/// when render is called before initialization has succeeded.
 unsafe fn zero_buffer_list(bl: *mut au::AudioBufferList, n_frames: au::UInt32) {
     if bl.is_null() {
         return;
