@@ -5,6 +5,8 @@ pub use std::num::NonZeroU32;
 pub use crate::debug::*;
 
 pub use crate::nih_export_clap;
+#[cfg(all(feature = "au", target_os = "macos"))]
+pub use crate::nih_export_au;
 #[cfg(feature = "vst3")]
 pub use crate::nih_export_vst3;
 #[cfg(feature = "standalone")]
@@ -37,6 +39,8 @@ pub use crate::params::{BoolParam, FloatParam, IntParam, Param, ParamFlags};
 pub use crate::plugin::clap::{ClapPlugin, PolyModulationConfig};
 #[cfg(feature = "vst3")]
 pub use crate::plugin::vst3::Vst3Plugin;
+#[cfg(all(feature = "au", target_os = "macos"))]
+pub use crate::plugin::au::AuPlugin;
 pub use crate::plugin::{Plugin, ProcessStatus, TaskExecutor};
 pub use crate::wrapper::clap::features::ClapFeature;
 pub use crate::wrapper::state::PluginState;

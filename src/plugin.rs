@@ -11,6 +11,8 @@ use crate::prelude::{
 pub mod clap;
 #[cfg(feature = "vst3")]
 pub mod vst3;
+#[cfg(all(feature = "au", target_os = "macos"))]
+pub mod au;
 
 /// A function that can execute a plugin's [`BackgroundTask`][Plugin::BackgroundTask]s. A plugin can
 /// dispatch these tasks from the `initialize()` function, the `process()` function, or the GUI, so
