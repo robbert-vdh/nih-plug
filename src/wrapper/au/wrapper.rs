@@ -1,69 +1,83 @@
-//! Phase 1 AU wrapper — minimum viable.
+//! AU wrapper, Phase 2.
 //!
-//! Implements the `AudioComponentPlugInInterface` vtable so that
-//! `auval -v <type> <subtype> <manufacturer>` can:
-//!   1. Find the component (via the bundle's `Info.plist` + factory function).
-//!   2. Open / close it (lifecycle).
-//!   3. Query basic properties (sample rate, element counts, latency).
-//!   4. Set the stream format (host configures channel count + rate).
+//! Hosts the plugin's `Params` so:
+//!   - `kAudioUnitProperty_ParameterList` returns the AU parameter ID array
+//!   - `kAudioUnitProperty_ParameterInfo` returns name / range / default / unit
+//!   - `AudioUnitGet/SetParameter` hand off to the underlying nih-plug `ParamPtr`
 //!
-//! Render and parameters are not yet wired — `AudioUnitRender` returns
-//! silence, `kAudioUnitProperty_ParameterList` returns 0 entries. Phase 2/3
-//! will fill those in.
+//! AU parameter IDs are simply the index into `param_map()` — stable across
+//! one binary build (the nih-plug derive guarantees field declaration order).
+//!
+//! Render is still Phase 1 (silence). Phase 3 will wire the actual
+//! `Plugin::process()` path.
 
 use std::ffi::c_void;
-use std::marker::PhantomData;
 use std::ptr;
 use std::sync::Arc;
 
 use au_sys as au;
 
+use crate::params::internals::ParamPtr;
+use crate::params::Params;
 use crate::plugin::au::AuPlugin;
+use crate::plugin::Plugin;
 
 /// One AU plugin instance. Owned by Apple's component manager via the
 /// `AudioComponentPlugInInterface` pointer returned from the factory.
 ///
 /// The first field MUST be the vtable, since Apple's component manager
-/// dispatches through `instance->vtable->Lookup(selector)` — i.e. the host
-/// receives a pointer to this struct interpreted as `AudioComponentPlugInInterface*`,
-/// then chases the function pointers stored at offset 0.
+/// dispatches through `instance->vtable->Lookup(selector)`.
 #[repr(C)]
 pub struct Wrapper<P: AuPlugin> {
     /// Apple-required vtable. MUST be the first field.
     vtable: au::AudioComponentPlugInInterface,
 
-    /// Reference back to the host's `AudioUnit` opaque handle, set in `Open`.
+    /// Host's `AudioUnit` opaque handle, set in `Open`.
     instance: au::AudioUnit,
 
-    /// Sample rate set via `kAudioUnitProperty_StreamFormat`. Defaults to 44100
-    /// before the host explicitly sets it.
+    /// Sample rate set via `kAudioUnitProperty_StreamFormat`.
     sample_rate: f64,
 
-    /// Maximum frames per `AudioUnitRender` slice. Hosts use this to size
-    /// their internal buffers and we honour it as an upper bound.
+    /// Maximum frames per `AudioUnitRender` slice.
     max_frames_per_slice: u32,
 
-    /// Channel count in/out. Currently we mirror the input layout to output;
-    /// AU effects with mismatched in/out channel counts aren't supported in
-    /// Phase 1.
+    /// Channel count set via `StreamFormat`.
     n_channels: u32,
 
-    /// Latency in seconds, reported via `kAudioUnitProperty_Latency`.
+    /// Latency reported via `kAudioUnitProperty_Latency`.
     latency_seconds: f64,
 
-    /// Phantom marker so the type system knows about `P` even though Phase 1
-    /// doesn't construct an actual `Plugin` instance yet (Phase 3 will).
-    _plugin: PhantomData<P>,
+    /// The plugin instance. Kept for the entire lifetime of the wrapper so
+    /// the `ParamPtr` raw pointers in `params_by_id` remain valid.
+    _plugin: Box<P>,
+
+    /// Parameter handles in declaration order. The AU parameter ID is the
+    /// index into this vec.
+    params_by_id: Vec<ParamEntry>,
+
+    /// Strong reference back to the `Params` object referenced by every
+    /// `ParamPtr` in `params_by_id`.
+    _params_arc: Arc<dyn Params>,
+}
+
+struct ParamEntry {
+    /// Stable string ID — currently unused but kept for future state save/load.
+    #[allow(dead_code)]
+    id_str: String,
+    ptr: ParamPtr,
 }
 
 impl<P: AuPlugin> Wrapper<P> {
-    /// Allocates and returns a new instance, embedded in a `Box` and leaked
-    /// for the host to manage. The host calls `Close` later and we re-`Box`
-    /// to drop it.
-    ///
-    /// Returned pointer is `*mut AudioComponentPlugInInterface` because the
-    /// vtable is the first field.
     pub fn new() -> *mut au::AudioComponentPlugInInterface {
+        let plugin = Box::new(P::default());
+        let params_arc = plugin.params();
+
+        let params_by_id: Vec<ParamEntry> = params_arc
+            .param_map()
+            .into_iter()
+            .map(|(id_str, ptr, _group)| ParamEntry { id_str, ptr })
+            .collect();
+
         let boxed = Box::new(Wrapper::<P> {
             vtable: au::AudioComponentPlugInInterface {
                 Open: Self::open,
@@ -76,23 +90,16 @@ impl<P: AuPlugin> Wrapper<P> {
             max_frames_per_slice: 1024,
             n_channels: 2,
             latency_seconds: 0.0,
-            _plugin: PhantomData,
+            _plugin: plugin,
+            params_by_id,
+            _params_arc: params_arc,
         });
-        let ptr = Box::into_raw(boxed);
-        // Casting to vtable pointer — the host will only ever access the first field.
-        ptr as *mut au::AudioComponentPlugInInterface
+        Box::into_raw(boxed) as *mut au::AudioComponentPlugInInterface
     }
 
-    /// Reconstruct `&mut Self` from the opaque `*mut c_void` pointer Apple's
-    /// component manager passes through every dispatch call.
-    ///
-    /// SAFETY: Must only be called with a pointer originally returned by
-    /// `Wrapper::new()`. The host's contract guarantees this.
     unsafe fn from_ptr<'a>(ptr: *mut c_void) -> &'a mut Self {
         &mut *(ptr as *mut Self)
     }
-
-    // ─── Vtable: lifecycle ────────────────────────────────────────────────
 
     unsafe extern "C" fn open(self_ptr: *mut c_void, instance: au::AudioUnit) -> au::OSStatus {
         let this = unsafe { Self::from_ptr(self_ptr) };
@@ -101,21 +108,13 @@ impl<P: AuPlugin> Wrapper<P> {
     }
 
     unsafe extern "C" fn close(self_ptr: *mut c_void) -> au::OSStatus {
-        // Re-box so it's dropped.
         unsafe {
             let _ = Box::from_raw(self_ptr as *mut Self);
         }
         au::noErr
     }
 
-    /// Selector dispatch table. Apple's component manager calls this once per
-    /// distinct selector and caches the result, so it must return a function
-    /// pointer or null for unsupported selectors.
     unsafe extern "C" fn lookup(selector: au::SInt16) -> Option<au::AudioComponentMethod> {
-        // SAFETY: each branch returns a function with a different concrete
-        // signature, so we transmute through `AudioComponentMethod` (which is
-        // a variadic-style fn pointer) to satisfy the vtable's union-style
-        // C ABI. This pattern is what Apple's own AUBase template uses.
         let method: au::AudioComponentMethod = match selector {
             au::kAudioUnitInitializeSelect => unsafe {
                 std::mem::transmute::<au::AudioUnitInitializeProc, _>(Self::initialize)
@@ -146,8 +145,6 @@ impl<P: AuPlugin> Wrapper<P> {
             au::kAudioUnitRenderSelect => unsafe {
                 std::mem::transmute::<au::AudioUnitRenderProc, _>(Self::render)
             },
-            // Add property listeners: stubbed (we don't notify, but auval
-            // expects the selector to exist).
             au::kAudioUnitAddPropertyListenerSelect => unsafe {
                 std::mem::transmute::<au::AudioUnitAddPropertyListenerProc, _>(
                     Self::add_property_listener,
@@ -162,8 +159,6 @@ impl<P: AuPlugin> Wrapper<P> {
         };
         Some(method)
     }
-
-    // ─── Vtable: AU dispatch methods ──────────────────────────────────────
 
     unsafe extern "C" fn initialize(_self_ptr: *mut c_void) -> au::OSStatus {
         au::noErr
@@ -181,9 +176,6 @@ impl<P: AuPlugin> Wrapper<P> {
         au::noErr
     }
 
-    /// Returns metadata about a property: its size and whether it can be set.
-    /// `auval` calls this for almost every property to probe what the unit
-    /// supports.
     unsafe extern "C" fn get_property_info(
         self_ptr: *mut c_void,
         id: au::AudioUnitPropertyID,
@@ -192,9 +184,8 @@ impl<P: AuPlugin> Wrapper<P> {
         out_data_size: *mut au::UInt32,
         out_writable: *mut au::Boolean,
     ) -> au::OSStatus {
-        let _this = unsafe { Self::from_ptr(self_ptr) };
+        let this = unsafe { Self::from_ptr(self_ptr) };
 
-        // Helper to set the two output values when both pointers are present.
         let respond = |size: au::UInt32, writable: bool| -> au::OSStatus {
             unsafe {
                 if !out_data_size.is_null() {
@@ -232,9 +223,18 @@ impl<P: AuPlugin> Wrapper<P> {
             {
                 respond(std::mem::size_of::<au::UInt32>() as u32, true)
             }
-            au::kAudioUnitProperty_ParameterList => {
-                // 0 parameters in Phase 1 — return 0 size.
-                respond(0, false)
+            au::kAudioUnitProperty_ParameterList if scope == au::kAudioUnitScope_Global => {
+                let n_params = this.params_by_id.len() as u32;
+                respond(
+                    n_params * std::mem::size_of::<au::AudioUnitParameterID>() as u32,
+                    false,
+                )
+            }
+            au::kAudioUnitProperty_ParameterInfo if scope == au::kAudioUnitScope_Global => {
+                respond(
+                    std::mem::size_of::<au::AudioUnitParameterInfo>() as u32,
+                    false,
+                )
             }
             au::kAudioUnitProperty_SupportedNumChannels
                 if scope == au::kAudioUnitScope_Global =>
@@ -248,7 +248,10 @@ impl<P: AuPlugin> Wrapper<P> {
                 respond(std::mem::size_of::<au::OSStatus>() as u32, false)
             }
             au::kAudioUnitProperty_SetRenderCallback if scope == au::kAudioUnitScope_Input => {
-                respond(std::mem::size_of::<au::AURenderCallbackStruct>() as u32, true)
+                respond(
+                    std::mem::size_of::<au::AURenderCallbackStruct>() as u32,
+                    true,
+                )
             }
             au::kAudioUnitProperty_InPlaceProcessing => {
                 respond(std::mem::size_of::<au::UInt32>() as u32, true)
@@ -261,7 +264,7 @@ impl<P: AuPlugin> Wrapper<P> {
         self_ptr: *mut c_void,
         id: au::AudioUnitPropertyID,
         scope: au::AudioUnitScope,
-        _element: au::AudioUnitElement,
+        element: au::AudioUnitElement,
         out_data: *mut c_void,
         io_data_size: *mut au::UInt32,
     ) -> au::OSStatus {
@@ -336,7 +339,43 @@ impl<P: AuPlugin> Wrapper<P> {
                 };
                 unsafe {
                     *(out_data as *mut au::AudioStreamBasicDescription) = asbd;
-                    *io_data_size = std::mem::size_of::<au::AudioStreamBasicDescription>() as u32;
+                    *io_data_size =
+                        std::mem::size_of::<au::AudioStreamBasicDescription>() as u32;
+                }
+                au::noErr
+            }
+            au::kAudioUnitProperty_ParameterList if scope == au::kAudioUnitScope_Global => {
+                let n = this.params_by_id.len();
+                let needed = (n * std::mem::size_of::<au::AudioUnitParameterID>()) as u32;
+                if unsafe { *io_data_size } < needed {
+                    return au::kAudioUnitErr_InvalidPropertyValue;
+                }
+                let dst = out_data as *mut au::AudioUnitParameterID;
+                for i in 0..n {
+                    unsafe {
+                        *dst.add(i) = i as au::AudioUnitParameterID;
+                    }
+                }
+                unsafe {
+                    *io_data_size = needed;
+                }
+                au::noErr
+            }
+            au::kAudioUnitProperty_ParameterInfo if scope == au::kAudioUnitScope_Global => {
+                let idx = element as usize;
+                let entry = match this.params_by_id.get(idx) {
+                    Some(e) => e,
+                    None => return au::kAudioUnitErr_InvalidParameter,
+                };
+                if (unsafe { *io_data_size } as usize)
+                    < std::mem::size_of::<au::AudioUnitParameterInfo>()
+                {
+                    return au::kAudioUnitErr_InvalidPropertyValue;
+                }
+                let info = build_parameter_info(entry);
+                unsafe {
+                    *(out_data as *mut au::AudioUnitParameterInfo) = info;
+                    *io_data_size = std::mem::size_of::<au::AudioUnitParameterInfo>() as u32;
                 }
                 au::noErr
             }
@@ -346,7 +385,6 @@ impl<P: AuPlugin> Wrapper<P> {
                 if (unsafe { *io_data_size } as usize) < std::mem::size_of::<au::AUChannelInfo>() {
                     return au::kAudioUnitErr_InvalidPropertyValue;
                 }
-                // -1 / -1 means "any matching in/out channel count" — i.e. mono and stereo both work.
                 unsafe {
                     *(out_data as *mut au::AUChannelInfo) = au::AUChannelInfo {
                         inChannels: -1,
@@ -424,29 +462,55 @@ impl<P: AuPlugin> Wrapper<P> {
         }
     }
 
+    /// Read the current parameter value, projected from the plugin's
+    /// normalised `[0, 1]` representation back to the plain (display) value.
     unsafe extern "C" fn get_parameter(
-        _self_ptr: *mut c_void,
-        _id: au::AudioUnitParameterID,
+        self_ptr: *mut c_void,
+        id: au::AudioUnitParameterID,
         _scope: au::AudioUnitScope,
         _element: au::AudioUnitElement,
-        _out_value: *mut au::AudioUnitParameterValue,
+        out_value: *mut au::AudioUnitParameterValue,
     ) -> au::OSStatus {
-        // Phase 1: no parameters.
-        au::kAudioUnitErr_InvalidParameter
+        let this = unsafe { Self::from_ptr(self_ptr) };
+        let entry = match this.params_by_id.get(id as usize) {
+            Some(e) => e,
+            None => return au::kAudioUnitErr_InvalidParameter,
+        };
+        if out_value.is_null() {
+            return au::kAudioUnitErr_InvalidParameter;
+        }
+        let normalized = unsafe { entry.ptr.unmodulated_normalized_value() };
+        let plain = unsafe { entry.ptr.preview_plain(normalized) };
+        unsafe {
+            *out_value = plain;
+        }
+        au::noErr
     }
 
+    /// Set a parameter from the host. AU sends the plain value; convert back
+    /// to the [0, 1] normalised range nih-plug expects.
     unsafe extern "C" fn set_parameter(
-        _self_ptr: *mut c_void,
-        _id: au::AudioUnitParameterID,
+        self_ptr: *mut c_void,
+        id: au::AudioUnitParameterID,
         _scope: au::AudioUnitScope,
         _element: au::AudioUnitElement,
-        _value: au::AudioUnitParameterValue,
+        value: au::AudioUnitParameterValue,
         _buffer_offset_in_frames: au::UInt32,
     ) -> au::OSStatus {
-        au::kAudioUnitErr_InvalidParameter
+        let this = unsafe { Self::from_ptr(self_ptr) };
+        let entry = match this.params_by_id.get(id as usize) {
+            Some(e) => e,
+            None => return au::kAudioUnitErr_InvalidParameter,
+        };
+        let normalized = unsafe { entry.ptr.preview_normalized(value) };
+        unsafe {
+            let _ = entry.ptr.set_normalized_value(normalized);
+        }
+        au::noErr
     }
 
-    /// Phase 1 render: silence. Phase 3 will hook in the actual `Plugin::process`.
+    /// Phase 2 render: still silence — Phase 3 will hook the real
+    /// `Plugin::process`.
     unsafe extern "C" fn render(
         _self_ptr: *mut c_void,
         _io_action_flags: *mut au::AudioUnitRenderActionFlags,
@@ -493,14 +557,71 @@ impl<P: AuPlugin> Wrapper<P> {
     }
 }
 
-/// Marker so `Wrapper<P>` is `Send` — Apple's host calls vtable methods from
-/// arbitrary threads but only one thread at a time per instance.
+/// Build the `AudioUnitParameterInfo` blob the host queries for each
+/// parameter. Populates the legacy 52-byte name buffer; the CFString slot is
+/// left null until Phase 4 brings in the CoreFoundation bridge.
+fn build_parameter_info(entry: &ParamEntry) -> au::AudioUnitParameterInfo {
+    let mut info: au::AudioUnitParameterInfo = unsafe { std::mem::zeroed() };
+
+    // Legacy 52-byte name buffer. AU tools and older hosts read this when the
+    // modern CFString slot is absent.
+    let name_str = unsafe { entry.ptr.name() };
+    let max = info.name.len() - 1;
+    let bytes = name_str.as_bytes();
+    let n = bytes.len().min(max);
+    for i in 0..n {
+        info.name[i] = bytes[i] as std::os::raw::c_char;
+    }
+
+    let normalized_default = unsafe { entry.ptr.default_normalized_value() };
+    let default_plain = unsafe { entry.ptr.preview_plain(normalized_default) };
+    let min_plain = unsafe { entry.ptr.preview_plain(0.0) };
+    let max_plain = unsafe { entry.ptr.preview_plain(1.0) };
+
+    info.minValue = min_plain;
+    info.maxValue = max_plain;
+    info.defaultValue = default_plain;
+
+    // Boolean parameters always have step_count == Some(1); enums Some(n>=2).
+    // Both map to AU's `Indexed`. Floats have None — we then guess from the
+    // unit string.
+    let unit = match unsafe { entry.ptr.step_count() } {
+        Some(1) => au::kAudioUnitParameterUnit_Boolean,
+        Some(_) => au::kAudioUnitParameterUnit_Indexed,
+        None => {
+            let unit_str = unsafe { entry.ptr.unit() };
+            classify_unit(unit_str)
+        }
+    };
+    info.unit = unit;
+    info.unitName = std::ptr::null_mut();
+    info.cfNameString = std::ptr::null_mut();
+    info.clumpID = 0;
+
+    info.flags = au::kAudioUnitParameterFlag_IsReadable
+        | au::kAudioUnitParameterFlag_IsWritable
+        | au::kAudioUnitParameterFlag_CanRamp;
+
+    info
+}
+
+/// Heuristic mapping from nih-plug's `Param::unit()` display string to an
+/// AU unit ID. Hosts use this to format the value in their generic UI.
+fn classify_unit(unit: &str) -> au::AudioUnitParameterUnit {
+    let lower = unit.to_ascii_lowercase();
+    if lower.contains("db") || lower.contains("decibel") {
+        au::kAudioUnitParameterUnit_Decibels
+    } else if lower.contains("hz") || lower.contains("hertz") || lower == "khz" {
+        au::kAudioUnitParameterUnit_Hertz
+    } else if lower.contains('%') || lower.contains("percent") {
+        au::kAudioUnitParameterUnit_Percent
+    } else if lower.contains("ms") || lower.contains("sec") || lower.contains("second") {
+        au::kAudioUnitParameterUnit_Seconds
+    } else {
+        au::kAudioUnitParameterUnit_Generic
+    }
+}
+
 unsafe impl<P: AuPlugin> Send for Wrapper<P> {}
 
-/// Public re-exports for the `nih_export_au!` macro.
 pub use Wrapper as AuWrapper;
-
-/// Hold a strong reference to the plugin metadata so the macro can build a
-/// `static PLUGIN_INFO` and thread it through the factory function.
-#[allow(dead_code)]
-pub struct PluginRef<P: AuPlugin>(Arc<()>, PhantomData<P>);
