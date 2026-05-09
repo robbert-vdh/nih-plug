@@ -34,6 +34,31 @@ type BundlerConfig = HashMap<String, PackageConfig>;
 #[derive(Debug, Clone, Deserialize)]
 struct PackageConfig {
     name: Option<String>,
+    /// Audio Unit metadata. Required for the AU bundler to emit a usable
+    /// `AudioComponents` entry in Info.plist; without it the host cannot
+    /// instantiate the plugin even though the bundle exists on disk.
+    au: Option<AuPackageConfig>,
+}
+
+/// Audio Unit-specific metadata for `bundler.toml`. Mirrors the fields the
+/// `AuPlugin` trait exposes in the source — the duplication is unavoidable
+/// because cross-compiled dylibs cannot be dlopen'd by the bundler at build
+/// time to read the constants.
+#[derive(Debug, Clone, Deserialize)]
+struct AuPackageConfig {
+    /// Four-character type code (e.g. `"aufx"`, `"aumu"`).
+    #[serde(rename = "type")]
+    au_type: String,
+    /// Four-character subtype code unique within the manufacturer's product line.
+    subtype: String,
+    /// Four-character manufacturer code.
+    manufacturer: String,
+    /// Optional human-readable description shown by some hosts.
+    #[serde(default)]
+    description: Option<String>,
+    /// Plugin version as `"major.minor.patch"`. Defaults to `"1.0.0"`.
+    #[serde(default)]
+    version: Option<String>,
 }
 
 /// The target we're generating a plugin for. This can be either the native target or a cross
@@ -342,7 +367,7 @@ fn bundle_binary(
 ) -> Result<()> {
     let bundle_home_dir = bundle_home(target_dir);
     let bundle_name = match load_bundler_config()?.and_then(|c| c.get(package).cloned()) {
-        Some(PackageConfig { name: Some(name) }) => name,
+        Some(PackageConfig { name: Some(name), .. }) => name,
         _ => package.to_string(),
     };
 
@@ -406,7 +431,7 @@ fn bundle_plugin(
 ) -> Result<()> {
     let bundle_home_dir = bundle_home(target_dir);
     let bundle_name = match load_bundler_config()?.and_then(|c| c.get(package).cloned()) {
-        Some(PackageConfig { name: Some(name) }) => name,
+        Some(PackageConfig { name: Some(name), .. }) => name,
         _ => package.to_string(),
     };
 
@@ -426,7 +451,13 @@ fn bundle_plugin(
         .with_context(|| format!("Could not parse '{}'", first_lib_path.display()))?;
     let bundle_vst3 = symbols::exported(first_lib_path, "GetPluginFactory")
         .with_context(|| format!("Could not parse '{}'", first_lib_path.display()))?;
-    let bundled_plugin = bundle_clap || bundle_vst2 || bundle_vst3;
+    // Audio Unit (macOS only). The factory function name is fixed by `nih_export_au!`.
+    let bundle_au = matches!(
+        compilation_target,
+        CompilationTarget::MacOS(_) | CompilationTarget::MacOSUniversal
+    ) && symbols::exported(first_lib_path, "nih_plug_au_factory")
+        .with_context(|| format!("Could not parse '{}'", first_lib_path.display()))?;
+    let bundled_plugin = bundle_clap || bundle_vst2 || bundle_vst3 || bundle_au;
 
     if bundle_clap {
         let clap_bundle_library_name = clap_bundle_library_name(&bundle_name, compilation_target);
@@ -510,6 +541,30 @@ fn bundle_plugin(
         maybe_codesign(vst3_bundle_home, compilation_target);
 
         eprintln!("Created a VST3 bundle at '{}'", vst3_bundle_home.display());
+    }
+    if bundle_au {
+        let au_config = load_bundler_config()?
+            .and_then(|c| c.get(package).cloned())
+            .and_then(|c| c.au)
+            .with_context(|| format!(
+                "Package '{package}' exports an Audio Unit factory but bundler.toml has no \
+                 [{package}.au] section. Add type/subtype/manufacturer four-character codes."
+            ))?;
+
+        let au_lib_path =
+            bundle_home_dir.join(au_bundle_library_name(&bundle_name, compilation_target));
+
+        fs::create_dir_all(au_lib_path.parent().unwrap())
+            .context("Could not create AU bundle directory")?;
+        util::reflink_or_combine(lib_paths, &au_lib_path, compilation_target)
+            .context("Could not create AU bundle")?;
+
+        // `{name}.component/Contents/MacOS/{name}` → bundle home is the `.component` dir.
+        let au_bundle_home = au_lib_path.parent().unwrap().parent().unwrap().parent().unwrap();
+        create_au_bundle_metadata(package, &bundle_name, au_bundle_home, &au_config)?;
+        maybe_codesign(au_bundle_home, compilation_target);
+
+        eprintln!("Created an AU bundle at '{}'", au_bundle_home.display());
     }
     if !bundled_plugin {
         eprintln!("Not creating any plugin bundles because the package does not export any plugins")
@@ -727,6 +782,20 @@ fn vst3_bundle_library_name(package: &str, target: CompilationTarget) -> String 
     }
 }
 
+/// The full path to the library file inside of an Audio Unit bundle, including the leading
+/// `.component` directory. Audio Units are macOS-only, so this panics on other targets.
+///
+/// Layout: `{name}.component/Contents/MacOS/{name}` — same shape as VST3 on macOS, but with
+/// the `.component` extension that CoreAudio's component manager scans for.
+fn au_bundle_library_name(package: &str, target: CompilationTarget) -> String {
+    match target {
+        CompilationTarget::MacOS(_) | CompilationTarget::MacOSUniversal => {
+            format!("{package}.component/Contents/MacOS/{package}")
+        }
+        _ => panic!("Audio Units are only supported on macOS"),
+    }
+}
+
 /// If compiling for macOS, create all of the bundl-y stuff Steinberg and Apple require you to have.
 ///
 /// This still requires you to move the dylib file to `{bundle_home}/Contents/macOS/{package}`
@@ -795,6 +864,131 @@ pub fn maybe_create_macos_bundle_metadata(
     Ok(())
 }
 
+/// Create the AU-specific Info.plist (with the required `AudioComponents` array) and PkgInfo.
+/// Unlike VST3/CLAP, AU plugins need extra Info.plist keys so the host can identify and
+/// instantiate the component without dlopen'ing the dylib first.
+fn create_au_bundle_metadata(
+    package: &str,
+    display_name: &str,
+    bundle_home: &Path,
+    config: &AuPackageConfig,
+) -> Result<()> {
+    validate_fourcc(&config.au_type, "type")?;
+    validate_fourcc(&config.subtype, "subtype")?;
+    validate_fourcc(&config.manufacturer, "manufacturer")?;
+
+    let version_string = config.version.as_deref().unwrap_or("1.0.0");
+    let version_int = parse_au_version(version_string)?;
+    let description = config
+        .description
+        .clone()
+        .unwrap_or_else(|| format!("{display_name} (NIH-plug)"));
+    let component_name = format!("{}: {display_name}", config.manufacturer);
+
+    fs::create_dir_all(bundle_home.join("Contents")).context("Could not create Contents/")?;
+    fs::write(
+        bundle_home.join("Contents").join("PkgInfo"),
+        "BNDL????",
+    )
+    .context("Could not create PkgInfo file")?;
+    fs::write(
+        bundle_home.join("Contents").join("Info.plist"),
+        format!(r#"<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist>
+  <dict>
+    <key>CFBundleExecutable</key>
+    <string>{display_name}</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.nih-plug.{package}</string>
+    <key>CFBundleName</key>
+    <string>{display_name}</string>
+    <key>CFBundleDisplayName</key>
+    <string>{display_name}</string>
+    <key>CFBundlePackageType</key>
+    <string>BNDL</string>
+    <key>CFBundleSignature</key>
+    <string>????</string>
+    <key>CFBundleShortVersionString</key>
+    <string>{version_string}</string>
+    <key>CFBundleVersion</key>
+    <string>{version_string}</string>
+    <key>NSHumanReadableCopyright</key>
+    <string></string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>AudioComponents</key>
+    <array>
+      <dict>
+        <key>name</key>
+        <string>{component_name}</string>
+        <key>description</key>
+        <string>{description}</string>
+        <key>factoryFunction</key>
+        <string>nih_plug_au_factory</string>
+        <key>type</key>
+        <string>{ty}</string>
+        <key>subtype</key>
+        <string>{subty}</string>
+        <key>manufacturer</key>
+        <string>{manu}</string>
+        <key>version</key>
+        <integer>{version_int}</integer>
+        <key>sandboxSafe</key>
+        <true/>
+      </dict>
+    </array>
+  </dict>
+</plist>
+"#,
+            ty = config.au_type,
+            subty = config.subtype,
+            manu = config.manufacturer,
+        ),
+    )
+    .context("Could not create Info.plist file")?;
+
+    Ok(())
+}
+
+/// Validate that a string is exactly 4 ASCII characters — Apple's four-char-code requirement.
+/// `field_name` is used in the error message.
+fn validate_fourcc(s: &str, field_name: &str) -> Result<()> {
+    if s.len() != 4 || !s.is_ascii() {
+        anyhow::bail!(
+            "AU {field_name} must be exactly 4 ASCII characters, got '{s}' ({} bytes)",
+            s.len()
+        );
+    }
+    Ok(())
+}
+
+/// Parse a "major.minor.patch" version string into the AU 32-bit integer encoding
+/// `(major << 16) | (minor << 8) | patch`. Each component must fit in 8 bits except
+/// `major` which gets 16 bits.
+fn parse_au_version(s: &str) -> Result<u32> {
+    let parts: Vec<&str> = s.split('.').collect();
+    if parts.len() != 3 {
+        anyhow::bail!("AU version must be 'major.minor.patch', got '{s}'");
+    }
+    let major: u32 = parts[0]
+        .parse()
+        .with_context(|| format!("AU version major component '{}' is not a number", parts[0]))?;
+    let minor: u32 = parts[1]
+        .parse()
+        .with_context(|| format!("AU version minor component '{}' is not a number", parts[1]))?;
+    let patch: u32 = parts[2]
+        .parse()
+        .with_context(|| format!("AU version patch component '{}' is not a number", parts[2]))?;
+    if major > 0xFFFF || minor > 0xFF || patch > 0xFF {
+        anyhow::bail!(
+            "AU version components out of range (major <= 65535, minor/patch <= 255), got '{s}'"
+        );
+    }
+    Ok((major << 16) | (minor << 8) | patch)
+}
+
 /// If compiling for macOS, try to self-sign the bundle at the given path. This shouldn't be
 /// necessary, but AArch64 macOS is stricter about these things and sometimes self built plugins may
 /// not load otherwise. Presumably in combination with hardened runtimes.
@@ -820,5 +1014,46 @@ pub fn maybe_codesign(bundle_home: &Path, target: CompilationTarget) {
             "WARNING: Could not self-sign '{}', it may fail to run depending on the environment",
             bundle_home.display()
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fourcc_accepts_four_ascii() {
+        assert!(validate_fourcc("aufx", "type").is_ok());
+        assert!(validate_fourcc("Aud1", "subtype").is_ok());
+        assert!(validate_fourcc("MyCo", "manufacturer").is_ok());
+    }
+
+    #[test]
+    fn fourcc_rejects_wrong_length() {
+        assert!(validate_fourcc("auf", "type").is_err());
+        assert!(validate_fourcc("aufxx", "type").is_err());
+        assert!(validate_fourcc("", "type").is_err());
+    }
+
+    #[test]
+    fn fourcc_rejects_non_ascii() {
+        // "café" — 'é' is multi-byte UTF-8 so .len() == 5 anyway; check a 4-char non-ASCII case
+        assert!(validate_fourcc("aufé", "type").is_err());
+    }
+
+    #[test]
+    fn parse_version_basic() {
+        assert_eq!(parse_au_version("1.0.0").unwrap(), 0x0001_0000);
+        assert_eq!(parse_au_version("0.1.3").unwrap(), 0x0000_0103);
+        assert_eq!(parse_au_version("2.5.10").unwrap(), 0x0002_050A);
+    }
+
+    #[test]
+    fn parse_version_rejects_malformed() {
+        assert!(parse_au_version("1.0").is_err());
+        assert!(parse_au_version("1.0.0.0").is_err());
+        assert!(parse_au_version("a.b.c").is_err());
+        // patch overflow (256 > 255)
+        assert!(parse_au_version("1.0.256").is_err());
     }
 }
