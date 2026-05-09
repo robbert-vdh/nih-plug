@@ -993,6 +993,31 @@ impl<P: AuPlugin> Wrapper<P> {
 
     /// Set a parameter from the host. AU sends the plain value; convert back
     /// to the [0, 1] normalised range nih-plug expects.
+    ///
+    /// # Audio-thread safety
+    ///
+    /// AU may invoke this from the audio thread for sample-accurate
+    /// automation. The call chain is:
+    ///   `ParamPtr::set_normalized_value` →
+    ///   `<concrete Param>::set_normalized_value` (Float/Int/Bool/Enum) →
+    ///   `set_plain_value` → `AtomicF32::swap` + a few `AtomicF32::store`s.
+    /// All atomic, no allocation, no locking — verified by code inspection
+    /// of `src/params/{float,integer,boolean,enums}.rs`. The only escape
+    /// hatch is the user-supplied `value_changed: Arc<dyn Fn(f32)>` callback,
+    /// which the plugin author owns and must keep audio-safe; nih-plug's
+    /// default is `None`.
+    ///
+    /// # `buffer_offset_in_frames`
+    ///
+    /// AU's sample-accurate automation passes a non-zero offset when the
+    /// parameter change should land mid-buffer. nih-plug's `Plugin::process`
+    /// API operates on a single contiguous buffer per call and has no
+    /// per-sample parameter dispatch, so we cannot honour `offset > 0`
+    /// precisely without splitting the buffer (which we don't do today).
+    /// Current behaviour: apply the change immediately. The next render
+    /// call will see it. Worst-case granularity error is `max_frames_per_slice`
+    /// samples — typically ≤1024 frames at 48 kHz → ≤21 ms. Tracked as a
+    /// known limitation.
     unsafe extern "C" fn set_parameter(
         self_ptr: *mut c_void,
         id: au::AudioUnitParameterID,
@@ -1009,6 +1034,18 @@ impl<P: AuPlugin> Wrapper<P> {
         let normalized = unsafe { entry.ptr.preview_normalized(value) };
         unsafe {
             let _ = entry.ptr.set_normalized_value(normalized);
+        }
+        // Mirror BYPASS-flagged param into our atomic if this update was
+        // routed through the bypass parameter (some hosts expose bypass
+        // both as a property and as a parameter).
+        if let Some(bypass_idx) = this.bypass_param_idx {
+            if id as usize == bypass_idx {
+                let on = normalized >= 0.5;
+                let prev = this.bypass.swap(on, Ordering::AcqRel);
+                if prev != on {
+                    this.mark_pending(NOTIFY_BYPASS_EFFECT);
+                }
+            }
         }
         au::noErr
     }
