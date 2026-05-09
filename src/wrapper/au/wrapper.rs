@@ -34,6 +34,7 @@
 use std::cell::UnsafeCell;
 use std::ffi::c_void;
 use std::marker::PhantomData;
+use std::mem;
 use std::num::NonZeroU32;
 use std::ptr;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
@@ -112,14 +113,93 @@ pub struct Wrapper<P: AuPlugin> {
     /// the mutex at the start of render and releases immediately.
     input_callback: Mutex<Option<au::AURenderCallbackStruct>>,
 
-    /// Per-channel scratch buffers for the input pull. Sized in `Initialize`
-    /// to `[max_frames_per_slice]` so the render path is allocation-free.
-    /// One `Vec<f32>` per channel; we hand the host a synthesised
-    /// `AudioBufferList` whose `mData` pointers point into these vectors.
+    /// Audio-thread-owned render state: input scratch, BufferList scratch,
+    /// and the persistent `Buffer<'static>` whose channel slot vector is
+    /// pre-sized in `Initialize`.
     ///
     /// `UnsafeCell` because only `render()` touches it after `Initialize`,
     /// and AU does not re-enter render.
-    input_scratch: UnsafeCell<Vec<Vec<f32>>>,
+    render_state: UnsafeCell<RenderState>,
+}
+
+/// All audio-thread mutable state. Reused across render calls and grown
+/// only inside `Initialize` (main thread, before render is allowed). The
+/// render hot path only writes existing slots — no allocation.
+struct RenderState {
+    /// Per-channel scratch for input pulled via the host's render callback.
+    /// One inner vec per channel, each pre-sized to `max_frames_per_slice`.
+    input_scratch: Vec<Vec<f32>>,
+
+    /// Backing storage for the synthesised `AudioBufferList` we hand to
+    /// the host's input callback. Sized once in `Initialize` to fit the
+    /// header + N `AudioBuffer` entries with correct alignment.
+    /// Stored as `Vec<u64>` to guarantee 8-byte alignment, which matches
+    /// `AudioBuffer`'s layout (one `u32` + one `u32` + one `*mut c_void`).
+    bl_storage: Vec<u64>,
+
+    /// Persistent `Buffer` whose `output_slices` vector has its capacity
+    /// pre-grown to the channel count. Each render call rewrites the
+    /// existing slots in place — no `Vec::push`/`with_capacity`.
+    ///
+    /// The `'static` lifetime parameter is a placeholder; the slices we
+    /// stash inside live only as long as the surrounding `render()` call,
+    /// and we always clear them before returning.
+    buffer: Buffer<'static>,
+}
+
+impl RenderState {
+    fn new() -> Self {
+        Self {
+            input_scratch: Vec::new(),
+            bl_storage: Vec::new(),
+            buffer: Buffer::default(),
+        }
+    }
+
+    /// Provision storage for `n_channels` channels and `max_frames`
+    /// frames per slice. Called from `Initialize` only.
+    fn provision(&mut self, n_channels: usize, max_frames: usize) {
+        self.input_scratch.clear();
+        self.input_scratch.reserve_exact(n_channels);
+        for _ in 0..n_channels {
+            self.input_scratch.push(vec![0.0_f32; max_frames]);
+        }
+
+        // Layout the BufferList: header + N AudioBuffers, with the N-array
+        // starting at the natural offset of `mBuffers` (8-byte aligned).
+        let bl_bytes = bl_byte_size(n_channels);
+        // Round up to u64 count.
+        let words = bl_bytes.div_ceil(mem::size_of::<u64>());
+        self.bl_storage.clear();
+        self.bl_storage.resize(words, 0);
+
+        // Pre-size the channel slot vector so render only rewrites slots.
+        // SAFETY: empty slices carry no provenance; rewriting them in
+        // render with valid host pointers is the same pattern used by
+        // BufferManager::for_audio_io_layout.
+        unsafe {
+            self.buffer.set_slices(0, |slices| {
+                slices.clear();
+                slices.reserve_exact(n_channels);
+                for _ in 0..n_channels {
+                    slices.push(&mut []);
+                }
+            });
+        }
+    }
+}
+
+/// Compute the exact byte size of an `AudioBufferList` with `n` buffers,
+/// honoring the offset of `mBuffers` (which the C compiler inserts padding
+/// for so the array is correctly aligned).
+#[inline]
+fn bl_byte_size(n: usize) -> usize {
+    // The platform's `AudioBufferList` declares `mBuffers: [AudioBuffer; 1]`.
+    // Its `offset_of(mBuffers)` is the correct start of the array on this
+    // ABI — typically 8 on x86_64/arm64 (4 bytes for `mNumberBuffers` + 4
+    // bytes of padding before the 8-byte-aligned `AudioBuffer`).
+    let header_offset = mem::offset_of!(au::AudioBufferList, mBuffers);
+    header_offset + n * mem::size_of::<au::AudioBuffer>()
 }
 
 struct ParamEntry {
@@ -182,7 +262,7 @@ impl<P: AuPlugin> Wrapper<P> {
             _params_arc: params_arc,
             sink: ContextSink::new(),
             input_callback: Mutex::new(None),
-            input_scratch: UnsafeCell::new(Vec::new()),
+            render_state: UnsafeCell::new(RenderState::new()),
         });
         Box::into_raw(boxed) as *mut au::AudioComponentPlugInInterface
     }
@@ -239,12 +319,13 @@ impl<P: AuPlugin> Wrapper<P> {
         unsafe { &mut **self.plugin.get() }
     }
 
-    /// SAFETY: same as `plugin_mut` — only call from `render()`. Returns the
-    /// scratch vector for in-place mutation by the audio thread.
+    /// SAFETY: same as `plugin_mut` — only call from `render()` or from
+    /// `initialize()` (host serialises against render). Returns the
+    /// `RenderState` for in-place mutation by the audio thread.
     #[inline]
     #[allow(clippy::mut_from_ref)]
-    unsafe fn input_scratch_mut(&self) -> &mut Vec<Vec<f32>> {
-        unsafe { &mut *self.input_scratch.get() }
+    unsafe fn render_state_mut(&self) -> &mut RenderState {
+        unsafe { &mut *self.render_state.get() }
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -346,16 +427,10 @@ impl<P: AuPlugin> Wrapper<P> {
         }
         plugin.reset();
 
-        // Allocate input scratch space: one Vec<f32> per channel, each
-        // sized to max_frames_per_slice so the render path is allocation
-        // free.
-        // SAFETY: same — render is serialised vs. Initialize.
-        let scratch = unsafe { this.input_scratch_mut() };
-        scratch.clear();
-        scratch.reserve(n_ch as usize);
-        for _ in 0..n_ch as usize {
-            scratch.push(vec![0.0_f32; max_frames as usize]);
-        }
+        // Provision the audio-thread render state so the hot path is
+        // allocation-free. SAFETY: render is serialised vs. Initialize.
+        let render_state = unsafe { this.render_state_mut() };
+        render_state.provision(n_ch as usize, max_frames as usize);
 
         let latency = this.sink.latency_samples.load(Ordering::Relaxed);
         if latency > 0 && sr > 0.0 {
@@ -738,12 +813,16 @@ impl<P: AuPlugin> Wrapper<P> {
         au::noErr
     }
 
-    /// Phase 3 render. Convert the host's `AudioBufferList` into the
+    /// Render hot path. Convert the host's `AudioBufferList` into the
     /// nih-plug `Buffer` shape and dispatch to `Plugin::process`.
     ///
-    /// Concurrency: this runs on the audio thread. We only touch the wrapper
-    /// through `&Self` plus controlled `UnsafeCell` borrows for the things
-    /// the audio thread owns (`plugin`, `input_scratch`).
+    /// Concurrency: runs on the audio thread. The wrapper is borrowed as
+    /// `&Self`; mutable access to the plugin and to the render scratch goes
+    /// through `UnsafeCell` borrows that are unique by AU's host contract
+    /// (no render re-entry, no concurrent Initialize/Uninitialize/Reset).
+    ///
+    /// Allocation: this function performs no heap allocations on the hot
+    /// path. All scratch storage is provisioned in `Initialize`.
     unsafe extern "C" fn render(
         self_ptr: *mut c_void,
         _io_action_flags: *mut au::AudioUnitRenderActionFlags,
@@ -763,52 +842,54 @@ impl<P: AuPlugin> Wrapper<P> {
             return au::noErr;
         }
 
-        let n_frames_us = in_number_frames as usize;
+        let n_frames = in_number_frames as usize;
 
         // Snapshot the input callback under the mutex (cheap struct copy).
-        // Held only for the duration of the load so main-thread updates
-        // never block render for long. Note: the lock itself can technically
-        // contend with main thread; this is addressed in AUD-337 via a
-        // lock-free swap. For now, the only writer is SetRenderCallback
-        // which is rare.
-        let callback_snapshot = this
-            .input_callback
-            .lock()
-            .ok()
-            .and_then(|g| *g);
+        // Released immediately so main-thread updates don't block render
+        // for long. Lock-free swap is tracked in AUD-337.
+        let callback_snapshot = this.input_callback.lock().ok().and_then(|g| *g);
 
-        // ── 1) Pull input from the host (callback path). ─────────────────
-        // SAFETY: render is not re-entered, so the audio thread is the sole
-        // owner of input_scratch right now.
-        let input_scratch = unsafe { this.input_scratch_mut() };
+        // SAFETY: render is not re-entered; we are the sole owner of
+        // RenderState for the duration of this call.
+        let rs = unsafe { this.render_state_mut() };
+
+        // ── 1) Pull input via host render callback (if registered). ──────
         let mut pulled_from_callback = false;
         if let Some(cb) = callback_snapshot {
-            let n_ch = input_scratch.len();
-            if n_ch > 0 && input_scratch[0].len() >= n_frames_us {
-                let header_size = std::mem::size_of::<au::UInt32>();
-                let buf_size = std::mem::size_of::<au::AudioBuffer>();
-                let bl_bytes = header_size + buf_size * n_ch;
-                let mut bl_storage: Vec<u8> = vec![0u8; bl_bytes];
-                let bl_ptr = bl_storage.as_mut_ptr() as *mut au::AudioBufferList;
+            let n_ch = rs.input_scratch.len();
+            // Verify our pre-allocated BufferList scratch is big enough.
+            // Should always hold since `provision` sized it for n_ch and
+            // n_ch is fixed between Initialize calls.
+            if n_ch > 0
+                && rs.input_scratch[0].len() >= n_frames
+                && rs.bl_storage.len() * mem::size_of::<u64>() >= bl_byte_size(n_ch)
+            {
+                let bl_ptr = rs.bl_storage.as_mut_ptr() as *mut au::AudioBufferList;
                 unsafe {
                     (*bl_ptr).mNumberBuffers = n_ch as au::UInt32;
                 }
+                // The N-tuple of AudioBuffer entries lives at the natural
+                // C `mBuffers` offset, which the compiler computes
+                // accounting for any padding after `mNumberBuffers`.
+                let header_offset =
+                    mem::offset_of!(au::AudioBufferList, mBuffers);
                 let buffers_ptr = unsafe {
-                    bl_storage.as_mut_ptr().add(header_size) as *mut au::AudioBuffer
+                    (rs.bl_storage.as_mut_ptr() as *mut u8).add(header_offset)
+                        as *mut au::AudioBuffer
                 };
                 for ch in 0..n_ch {
-                    let scratch_ptr = input_scratch[ch].as_mut_ptr();
+                    let scratch_ptr = rs.input_scratch[ch].as_mut_ptr();
                     unsafe {
                         *buffers_ptr.add(ch) = au::AudioBuffer {
                             mNumberChannels: 1,
-                            mDataByteSize: (n_frames_us * std::mem::size_of::<f32>())
+                            mDataByteSize: (n_frames * mem::size_of::<f32>())
                                 as au::UInt32,
                             mData: scratch_ptr as *mut c_void,
                         };
                     }
                 }
 
-                let ts: au::AudioTimeStamp = unsafe { std::mem::zeroed() };
+                let ts: au::AudioTimeStamp = unsafe { mem::zeroed() };
                 let mut flags: au::AudioUnitRenderActionFlags = 0;
                 let proc = cb.inputProc.unwrap();
                 let status = unsafe {
@@ -827,9 +908,7 @@ impl<P: AuPlugin> Wrapper<P> {
             }
         }
 
-        let n_frames = n_frames_us;
-
-        // ── 2) Build process buffer slices over io_data. ─────────────────
+        // ── 2) Wire host io_data slices into the persistent Buffer. ──────
         let bl = unsafe { &mut *io_data };
         let n_buffers = bl.mNumberBuffers as usize;
         let buffers_ptr = bl.mBuffers.as_mut_ptr();
@@ -837,7 +916,7 @@ impl<P: AuPlugin> Wrapper<P> {
         // If we pulled via callback, copy scratch → io_data so process()
         // sees the input audio.
         if pulled_from_callback {
-            for i in 0..n_buffers.min(input_scratch.len()) {
+            for i in 0..n_buffers.min(rs.input_scratch.len()) {
                 let buf = unsafe { &mut *buffers_ptr.add(i) };
                 if buf.mData.is_null() {
                     continue;
@@ -845,33 +924,40 @@ impl<P: AuPlugin> Wrapper<P> {
                 let dst = unsafe {
                     std::slice::from_raw_parts_mut(buf.mData as *mut f32, n_frames)
                 };
-                let src = &input_scratch[i][..n_frames];
+                let src = &rs.input_scratch[i][..n_frames];
                 dst.copy_from_slice(src);
             }
         }
 
-        let mut channels: Vec<&'static mut [f32]> = Vec::with_capacity(n_buffers);
-        for i in 0..n_buffers {
-            let buf = unsafe { &mut *buffers_ptr.add(i) };
-            if buf.mData.is_null() {
-                continue;
-            }
-            let slice = unsafe {
-                std::slice::from_raw_parts_mut(buf.mData as *mut f32, n_frames)
-            };
-            // SAFETY: erasing the lifetime is unsound in general; tracked in
-            // AUD-333. The slice never outlives this render() call and the
-            // resulting Buffer is consumed locally before return.
-            let static_slice: &'static mut [f32] = unsafe {
-                std::mem::transmute::<&mut [f32], &'static mut [f32]>(slice)
-            };
-            channels.push(static_slice);
-        }
-
-        let mut buffer = Buffer::default();
+        // Rewrite the persistent Buffer's slot vector. The slot count was
+        // pre-grown in `provision()`, so this is purely in-place writes.
+        // SAFETY: each slice points to host-owned memory that remains valid
+        // for the duration of this render() call. The slices are cleared
+        // back to `&mut []` at the end of this function so the `'static`
+        // lifetime in the slot type can never outlive the host data.
         unsafe {
-            buffer.set_slices(n_frames, |dst| {
-                *dst = channels;
+            rs.buffer.set_slices(n_frames, |slots| {
+                let n = slots.len().min(n_buffers);
+                for i in 0..n {
+                    let buf = &mut *buffers_ptr.add(i);
+                    if buf.mData.is_null() {
+                        slots[i] = &mut [];
+                        continue;
+                    }
+                    let raw = std::slice::from_raw_parts_mut(
+                        buf.mData as *mut f32,
+                        n_frames,
+                    );
+                    // The slot type carries `'static` because `RenderState`
+                    // is itself field-stored; the slice we put here lives
+                    // only until we clear it below. This mirrors the
+                    // pattern in `BufferManager::create_buffers`.
+                    slots[i] = mem::transmute::<&mut [f32], &'static mut [f32]>(raw);
+                }
+                // Defensively null any extra slots.
+                for slot in &mut slots[n..] {
+                    *slot = &mut [];
+                }
             });
         }
 
@@ -888,7 +974,21 @@ impl<P: AuPlugin> Wrapper<P> {
 
         // SAFETY: render is not concurrent with Initialize/Uninitialize/Reset
         // and AU does not re-enter render, so this `&mut P` is unique.
-        let _status = unsafe { this.plugin_mut() }.process(&mut buffer, &mut aux, &mut process_ctx);
+        let _status = unsafe { this.plugin_mut() }.process(
+            &mut rs.buffer,
+            &mut aux,
+            &mut process_ctx,
+        );
+
+        // Clear the slot slices so the `'static` lifetime can never escape
+        // this render call via a stale `&mut [f32]`.
+        unsafe {
+            rs.buffer.set_slices(0, |slots| {
+                for slot in slots.iter_mut() {
+                    *slot = &mut [];
+                }
+            });
+        }
 
         let latency = this.sink.latency_samples.load(Ordering::Relaxed);
         if latency > 0 && sr > 0.0 {
