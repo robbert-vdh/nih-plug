@@ -123,6 +123,9 @@ pub struct Wrapper<P: AuPlugin> {
     /// index into this vec. Built once in `new()`, then read-only.
     params_by_id: Vec<ParamEntry>,
 
+    /// Host callbacks for transport, tempo, and time signature.
+    host_callbacks: Mutex<Option<au::HostCallbackInfo>>,
+
     /// Strong reference back to the `Params` object referenced by every
     /// `ParamPtr` in `params_by_id`.
     _params_arc: Arc<dyn Params>,
@@ -313,6 +316,7 @@ impl<P: AuPlugin> Wrapper<P> {
             bypass_param_idx,
             plugin: UnsafeCell::new(plugin),
             params_by_id,
+            host_callbacks: Mutex::new(None),
             _params_arc: params_arc,
             sink: ContextSink::new(),
             input_callback: Mutex::new(None),
@@ -743,6 +747,9 @@ impl<P: AuPlugin> Wrapper<P> {
             au::kAudioUnitProperty_ClassInfo if scope == au::kAudioUnitScope_Global => {
                 respond(std::mem::size_of::<*mut c_void>() as u32, true)
             }
+            au::kAudioUnitProperty_HostCallbacks if scope == au::kAudioUnitScope_Global => {
+                respond(std::mem::size_of::<au::HostCallbackInfo>() as u32, true)
+            }
             _ => au::kAudioUnitErr_InvalidProperty,
         }
     }
@@ -1074,6 +1081,16 @@ impl<P: AuPlugin> Wrapper<P> {
                 let dict = unsafe { *(in_data as *const *mut c_void) };
                 this.set_class_info(dict)
             }
+            au::kAudioUnitProperty_HostCallbacks if scope == au::kAudioUnitScope_Global => {
+                if (in_data_size as usize) < std::mem::size_of::<au::HostCallbackInfo>() {
+                    return au::kAudioUnitErr_InvalidPropertyValue;
+                }
+                let cb = unsafe { ptr::read(in_data as *const au::HostCallbackInfo) };
+                if let Ok(mut guard) = this.host_callbacks.lock() {
+                    *guard = Some(cb);
+                }
+                au::noErr
+            }
             _ => au::kAudioUnitErr_InvalidProperty,
         }
     }
@@ -1310,14 +1327,72 @@ impl<P: AuPlugin> Wrapper<P> {
             });
         }
 
+        let sr = this.sample_rate();
+        let mut transport = Transport::new(sr as f32);
+        if let Ok(guard) = this.host_callbacks.lock() {
+            if let Some(cb) = guard.as_ref() {
+                if let Some(beat_and_tempo) = cb.beatAndTempoProc {
+                    let mut beat = 0.0;
+                    let mut tempo = 0.0;
+                    if unsafe { beat_and_tempo(cb.hostUserData, &mut beat, &mut tempo) } == au::noErr
+                    {
+                        transport.pos_beats = Some(beat);
+                        transport.tempo = Some(tempo);
+                    }
+                }
+                if let Some(musical_time) = cb.musicalTimeLocationProc {
+                    let mut delta = 0u32;
+                    let mut num = 0.0f32;
+                    let mut den = 0u32;
+                    let mut bar_start = 0.0f64;
+                    if unsafe {
+                        musical_time(
+                            cb.hostUserData,
+                            &mut delta,
+                            &mut num,
+                            &mut den,
+                            &mut bar_start,
+                        )
+                    } == au::noErr
+                    {
+                        transport.time_sig_numerator = Some(num as i32);
+                        transport.time_sig_denominator = Some(den as i32);
+                        transport.bar_start_pos_beats = Some(bar_start);
+                    }
+                }
+                if let Some(state_proc) = cb.transportStateProc {
+                    let mut playing = 0u8; // Boolean is often u8
+                    let mut changed = 0u8;
+                    let mut sample_pos = 0.0f64;
+                    let mut cycling = 0u8;
+                    let mut cycle_start = 0.0f64;
+                    let mut cycle_end = 0.0f64;
+                    if unsafe {
+                        state_proc(
+                            cb.hostUserData,
+                            &mut playing,
+                            &mut changed,
+                            &mut sample_pos,
+                            &mut cycling,
+                            &mut cycle_start,
+                            &mut cycle_end,
+                        )
+                    } == au::noErr
+                    {
+                        transport.playing = playing != 0;
+                        transport.pos_samples = Some(sample_pos as i64);
+                    }
+                }
+            }
+        }
+
         let mut aux = AuxiliaryBuffers {
             inputs: &mut [],
             outputs: &mut [],
         };
-        let sr = this.sample_rate();
         let mut process_ctx = AuProcessContext::<P> {
             sink: this.sink.clone(),
-            transport: Transport::new(sr as f32),
+            transport,
             _marker: PhantomData,
         };
 
