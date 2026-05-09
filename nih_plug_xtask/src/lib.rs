@@ -894,14 +894,15 @@ fn create_au_bundle_metadata(
     fs::write(
         bundle_home.join("Contents").join("Info.plist"),
         format!(r#"<?xml version="1.0" encoding="UTF-8"?>
-
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist>
+<plist version="1.0">
   <dict>
     <key>CFBundleExecutable</key>
     <string>{display_name}</string>
     <key>CFBundleIdentifier</key>
     <string>com.nih-plug.{package}</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
     <key>CFBundleName</key>
     <string>{display_name}</string>
     <key>CFBundleDisplayName</key>
@@ -914,6 +915,8 @@ fn create_au_bundle_metadata(
     <string>{version_string}</string>
     <key>CFBundleVersion</key>
     <string>{version_string}</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>11.0</string>
     <key>NSHumanReadableCopyright</key>
     <string></string>
     <key>NSHighResolutionCapable</key>
