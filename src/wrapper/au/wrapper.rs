@@ -1583,3 +1583,42 @@ unsafe fn zero_buffer_list(bl: *mut au::AudioBufferList, n_frames: au::UInt32) {
         unsafe { ptr::write_bytes(buf.mData as *mut f32, 0, n_samples) };
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn classify_unit_decibels() {
+        assert_eq!(classify_unit("dB"), au::kAudioUnitParameterUnit_Decibels);
+        assert_eq!(classify_unit("decibel"), au::kAudioUnitParameterUnit_Decibels);
+        assert_eq!(classify_unit("dBFS"), au::kAudioUnitParameterUnit_Decibels);
+    }
+
+    #[test]
+    fn classify_unit_hertz() {
+        assert_eq!(classify_unit("Hz"), au::kAudioUnitParameterUnit_Hertz);
+        assert_eq!(classify_unit("kHz"), au::kAudioUnitParameterUnit_Hertz);
+        assert_eq!(classify_unit("hertz"), au::kAudioUnitParameterUnit_Hertz);
+    }
+
+    #[test]
+    fn classify_unit_percent() {
+        assert_eq!(classify_unit("%"), au::kAudioUnitParameterUnit_Percent);
+        assert_eq!(classify_unit("percent"), au::kAudioUnitParameterUnit_Percent);
+    }
+
+    #[test]
+    fn classify_unit_seconds() {
+        assert_eq!(classify_unit("ms"), au::kAudioUnitParameterUnit_Seconds);
+        assert_eq!(classify_unit("sec"), au::kAudioUnitParameterUnit_Seconds);
+        assert_eq!(classify_unit("seconds"), au::kAudioUnitParameterUnit_Seconds);
+    }
+
+    #[test]
+    fn classify_unit_generic_fallback() {
+        assert_eq!(classify_unit(""), au::kAudioUnitParameterUnit_Generic);
+        assert_eq!(classify_unit("ratio"), au::kAudioUnitParameterUnit_Generic);
+        assert_eq!(classify_unit("semitones"), au::kAudioUnitParameterUnit_Generic);
+    }
+}
