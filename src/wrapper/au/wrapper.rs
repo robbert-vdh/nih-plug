@@ -674,11 +674,31 @@ impl<P: AuPlugin> Wrapper<P> {
                 if (unsafe { *io_data_size } as usize) < std::mem::size_of::<au::AUChannelInfo>() {
                     return au::kAudioUnitErr_InvalidPropertyValue;
                 }
-                unsafe {
-                    *(out_data as *mut au::AUChannelInfo) = au::AUChannelInfo {
+                // Report the first declared layout's main channel count.
+                // If multiple layouts are declared we currently only expose
+                // one entry; auval accepts this as a conservative answer.
+                let info = match P::AUDIO_IO_LAYOUTS.iter().next() {
+                    Some(layout) => {
+                        let in_ch = layout
+                            .main_input_channels
+                            .map(|n| n.get() as i16)
+                            .unwrap_or(0);
+                        let out_ch = layout
+                            .main_output_channels
+                            .map(|n| n.get() as i16)
+                            .unwrap_or(0);
+                        au::AUChannelInfo {
+                            inChannels: in_ch,
+                            outChannels: out_ch,
+                        }
+                    }
+                    None => au::AUChannelInfo {
                         inChannels: -1,
                         outChannels: -1,
-                    };
+                    },
+                };
+                unsafe {
+                    *(out_data as *mut au::AUChannelInfo) = info;
                     *io_data_size = std::mem::size_of::<au::AUChannelInfo>() as u32;
                 }
                 au::noErr
@@ -723,7 +743,13 @@ impl<P: AuPlugin> Wrapper<P> {
                 if (in_data_size as usize) < std::mem::size_of::<au::Float64>() {
                     return au::kAudioUnitErr_InvalidPropertyValue;
                 }
+                if this.is_initialized() {
+                    return au::kAudioUnitErr_Initialized;
+                }
                 let sr = unsafe { *(in_data as *const au::Float64) };
+                if !(sr > 0.0 && sr.is_finite()) {
+                    return au::kAudioUnitErr_InvalidPropertyValue;
+                }
                 this.set_sample_rate(sr);
                 au::noErr
             }
@@ -733,17 +759,50 @@ impl<P: AuPlugin> Wrapper<P> {
                 {
                     return au::kAudioUnitErr_InvalidPropertyValue;
                 }
+                // AU spec: StreamFormat may not change while initialized.
+                if this.is_initialized() {
+                    return au::kAudioUnitErr_Initialized;
+                }
                 let asbd = unsafe { &*(in_data as *const au::AudioStreamBasicDescription) };
+
+                // Reject malformed channel count.
+                if asbd.mChannelsPerFrame == 0 {
+                    return au::kAudioUnitErr_InvalidPropertyValue;
+                }
+                // Reject non-PCM / non-float / interleaved — we only ever
+                // advertise non-interleaved 32-bit float in get_property.
+                if asbd.mFormatID != au::kAudioFormatLinearPCM
+                    || (asbd.mFormatFlags & au::kAudioFormatFlagIsFloat) == 0
+                    || (asbd.mFormatFlags & au::kAudioFormatFlagIsNonInterleaved) == 0
+                {
+                    return au::kAudioUnitErr_FormatNotSupported;
+                }
+                if asbd.mBitsPerChannel != 32 {
+                    return au::kAudioUnitErr_FormatNotSupported;
+                }
+                // Match the requested channel count against P::AUDIO_IO_LAYOUTS.
+                // For an effect (in_ch == out_ch) we look for a layout where
+                // both main_input and main_output match.
+                let req_ch = asbd.mChannelsPerFrame;
+                if !layout_supports::<P>(req_ch) {
+                    return au::kAudioUnitErr_FormatNotSupported;
+                }
+
                 this.set_sample_rate(asbd.mSampleRate);
-                this.n_channels
-                    .store(asbd.mChannelsPerFrame, Ordering::Release);
+                this.n_channels.store(req_ch, Ordering::Release);
                 au::noErr
             }
             au::kAudioUnitProperty_MaximumFramesPerSlice => {
                 if (in_data_size as usize) < std::mem::size_of::<au::UInt32>() {
                     return au::kAudioUnitErr_InvalidPropertyValue;
                 }
+                if this.is_initialized() {
+                    return au::kAudioUnitErr_Initialized;
+                }
                 let v = unsafe { *(in_data as *const au::UInt32) };
+                if v == 0 {
+                    return au::kAudioUnitErr_InvalidPropertyValue;
+                }
                 this.max_frames_per_slice.store(v, Ordering::Release);
                 au::noErr
             }
@@ -1058,6 +1117,20 @@ fn build_parameter_info(entry: &ParamEntry) -> au::AudioUnitParameterInfo {
         | au::kAudioUnitParameterFlag_CanRamp;
 
     info
+}
+
+/// True if the plugin advertises an `AudioIOLayout` whose main I/O matches
+/// `req_ch`. We require both `main_input_channels` and `main_output_channels`
+/// to match because AU effects use a single channel count for both sides.
+fn layout_supports<P: AuPlugin>(req_ch: u32) -> bool {
+    let req = match NonZeroU32::new(req_ch) {
+        Some(n) => n,
+        None => return false,
+    };
+    P::AUDIO_IO_LAYOUTS.iter().any(|layout| {
+        layout.main_input_channels == Some(req)
+            && layout.main_output_channels == Some(req)
+    })
 }
 
 fn classify_unit(unit: &str) -> au::AudioUnitParameterUnit {
