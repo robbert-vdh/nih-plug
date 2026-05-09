@@ -426,7 +426,13 @@ fn bundle_plugin(
         .with_context(|| format!("Could not parse '{}'", first_lib_path.display()))?;
     let bundle_vst3 = symbols::exported(first_lib_path, "GetPluginFactory")
         .with_context(|| format!("Could not parse '{}'", first_lib_path.display()))?;
-    let bundled_plugin = bundle_clap || bundle_vst2 || bundle_vst3;
+    // Audio Unit (macOS only). The factory function name is fixed by `nih_export_au!`.
+    let bundle_au = matches!(
+        compilation_target,
+        CompilationTarget::MacOS(_) | CompilationTarget::MacOSUniversal
+    ) && symbols::exported(first_lib_path, "nih_plug_au_factory")
+        .with_context(|| format!("Could not parse '{}'", first_lib_path.display()))?;
+    let bundled_plugin = bundle_clap || bundle_vst2 || bundle_vst3 || bundle_au;
 
     if bundle_clap {
         let clap_bundle_library_name = clap_bundle_library_name(&bundle_name, compilation_target);
@@ -510,6 +516,28 @@ fn bundle_plugin(
         maybe_codesign(vst3_bundle_home, compilation_target);
 
         eprintln!("Created a VST3 bundle at '{}'", vst3_bundle_home.display());
+    }
+    if bundle_au {
+        let au_lib_path =
+            bundle_home_dir.join(au_bundle_library_name(&bundle_name, compilation_target));
+
+        fs::create_dir_all(au_lib_path.parent().unwrap())
+            .context("Could not create AU bundle directory")?;
+        util::reflink_or_combine(lib_paths, &au_lib_path, compilation_target)
+            .context("Could not create AU bundle")?;
+
+        // `{name}.component/Contents/MacOS/{name}` → bundle home is the `.component` dir.
+        let au_bundle_home = au_lib_path.parent().unwrap().parent().unwrap().parent().unwrap();
+        maybe_create_macos_bundle_metadata(
+            package,
+            &bundle_name,
+            au_bundle_home,
+            compilation_target,
+            BundleType::Plugin,
+        )?;
+        maybe_codesign(au_bundle_home, compilation_target);
+
+        eprintln!("Created an AU bundle at '{}'", au_bundle_home.display());
     }
     if !bundled_plugin {
         eprintln!("Not creating any plugin bundles because the package does not export any plugins")
@@ -724,6 +752,20 @@ fn vst3_bundle_library_name(package: &str, target: CompilationTarget) -> String 
         CompilationTarget::Windows(Architecture::RISCV64) => {
             panic!("riscv64 are not supported by windows currently!")
         }
+    }
+}
+
+/// The full path to the library file inside of an Audio Unit bundle, including the leading
+/// `.component` directory. Audio Units are macOS-only, so this panics on other targets.
+///
+/// Layout: `{name}.component/Contents/MacOS/{name}` — same shape as VST3 on macOS, but with
+/// the `.component` extension that CoreAudio's component manager scans for.
+fn au_bundle_library_name(package: &str, target: CompilationTarget) -> String {
+    match target {
+        CompilationTarget::MacOS(_) | CompilationTarget::MacOSUniversal => {
+            format!("{package}.component/Contents/MacOS/{package}")
+        }
+        _ => panic!("Audio Units are only supported on macOS"),
     }
 }
 
