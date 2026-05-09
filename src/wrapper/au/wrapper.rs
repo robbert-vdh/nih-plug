@@ -45,7 +45,7 @@ use au_sys as au;
 use crate::buffer::Buffer;
 use crate::context::process::Transport;
 use crate::params::internals::ParamPtr;
-use crate::params::Params;
+use crate::params::{ParamFlags, Params};
 use crate::plugin::au::AuPlugin;
 use crate::prelude::{AudioIOLayout, AuxiliaryBuffers, BufferConfig, ProcessMode};
 
@@ -80,6 +80,16 @@ pub struct Wrapper<P: AuPlugin> {
     /// Whether `Plugin::initialize()` has run successfully since the last
     /// `Uninitialize` / first construction. Render is a no-op when false.
     initialized: AtomicBool,
+
+    /// Host-controlled bypass (`kAudioUnitProperty_BypassEffect`). When set,
+    /// `render()` skips `Plugin::process()` and just passes input → output.
+    /// If the plugin declares a `ParamFlags::BYPASS` parameter we keep it in
+    /// sync so plugins that observe bypass state through their own param see
+    /// the toggle too.
+    bypass: AtomicBool,
+
+    /// Index of the BYPASS-flagged param in `params_by_id`, if any.
+    bypass_param_idx: Option<usize>,
 
     /// The plugin instance. Kept for the entire lifetime of the wrapper so
     /// the `ParamPtr` raw pointers in `params_by_id` remain valid.
@@ -244,6 +254,12 @@ impl<P: AuPlugin> Wrapper<P> {
             .map(|(id_str, ptr, _group)| ParamEntry { id_str, ptr })
             .collect();
 
+        // Find the BYPASS-flagged param, if the plugin declares one.
+        let bypass_param_idx = params_by_id.iter().position(|e| {
+            // SAFETY: ParamPtr accessors are documented thread-safe.
+            unsafe { e.ptr.flags() }.contains(ParamFlags::BYPASS)
+        });
+
         let boxed = Box::new(Wrapper::<P> {
             vtable: au::AudioComponentPlugInInterface {
                 Open: Self::open,
@@ -257,6 +273,8 @@ impl<P: AuPlugin> Wrapper<P> {
             n_channels: AtomicU32::new(2),
             latency_seconds_bits: AtomicU64::new(pack_f64(0.0)),
             initialized: AtomicBool::new(false),
+            bypass: AtomicBool::new(false),
+            bypass_param_idx,
             plugin: UnsafeCell::new(plugin),
             params_by_id,
             _params_arc: params_arc,
@@ -704,8 +722,9 @@ impl<P: AuPlugin> Wrapper<P> {
                 au::noErr
             }
             au::kAudioUnitProperty_BypassEffect if scope == au::kAudioUnitScope_Global => {
+                let on = if this.bypass.load(Ordering::Acquire) { 1 } else { 0 };
                 unsafe {
-                    *(out_data as *mut au::UInt32) = 0;
+                    *(out_data as *mut au::UInt32) = on;
                     *io_data_size = std::mem::size_of::<au::UInt32>() as u32;
                 }
                 au::noErr
@@ -806,7 +825,27 @@ impl<P: AuPlugin> Wrapper<P> {
                 this.max_frames_per_slice.store(v, Ordering::Release);
                 au::noErr
             }
-            au::kAudioUnitProperty_BypassEffect => au::noErr,
+            au::kAudioUnitProperty_BypassEffect => {
+                if (in_data_size as usize) < std::mem::size_of::<au::UInt32>() {
+                    return au::kAudioUnitErr_InvalidPropertyValue;
+                }
+                let v = unsafe { *(in_data as *const au::UInt32) };
+                let on = v != 0;
+                this.bypass.store(on, Ordering::Release);
+                // Mirror into the plugin's BYPASS-flagged param if present,
+                // so plugins can observe the toggle through their own params.
+                if let Some(idx) = this.bypass_param_idx {
+                    if let Some(entry) = this.params_by_id.get(idx) {
+                        // Boolean params use 0.0 / 1.0 normalised. set_normalized_value
+                        // is documented thread-safe.
+                        let n = if on { 1.0 } else { 0.0 };
+                        unsafe {
+                            let _ = entry.ptr.set_normalized_value(n);
+                        }
+                    }
+                }
+                au::noErr
+            }
             au::kAudioUnitProperty_SetRenderCallback => {
                 if (in_data_size as usize)
                     < std::mem::size_of::<au::AURenderCallbackStruct>()
@@ -1031,13 +1070,19 @@ impl<P: AuPlugin> Wrapper<P> {
             _marker: PhantomData,
         };
 
-        // SAFETY: render is not concurrent with Initialize/Uninitialize/Reset
-        // and AU does not re-enter render, so this `&mut P` is unique.
-        let _status = unsafe { this.plugin_mut() }.process(
-            &mut rs.buffer,
-            &mut aux,
-            &mut process_ctx,
-        );
+        // Bypass: skip Plugin::process entirely. Input has already been
+        // copied into io_data above (callback path) or sits there in-place
+        // (host path), so the pass-through is implicit — we just don't run
+        // the plugin's DSP.
+        if !this.bypass.load(Ordering::Acquire) {
+            // SAFETY: render is not concurrent with Initialize/Uninitialize/Reset
+            // and AU does not re-enter render, so this `&mut P` is unique.
+            let _status = unsafe { this.plugin_mut() }.process(
+                &mut rs.buffer,
+                &mut aux,
+                &mut process_ctx,
+            );
+        }
 
         // Clear the slot slices so the `'static` lifetime can never escape
         // this render call via a stale `&mut [f32]`.
