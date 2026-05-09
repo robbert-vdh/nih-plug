@@ -91,6 +91,15 @@ pub struct Wrapper<P: AuPlugin> {
     /// Index of the BYPASS-flagged param in `params_by_id`, if any.
     bypass_param_idx: Option<usize>,
 
+    /// Property listeners registered by the host. Notifications fire on the
+    /// main thread; audio-thread changes (latency, etc.) only set bits in
+    /// `pending_notifications` and the next main-thread entry drains them.
+    listeners: Mutex<Vec<Listener>>,
+
+    /// Bitset of property changes pending main-thread notification.
+    /// See `NOTIFY_*` constants.
+    pending_notifications: AtomicU32,
+
     /// The plugin instance. Kept for the entire lifetime of the wrapper so
     /// the `ParamPtr` raw pointers in `params_by_id` remain valid.
     ///
@@ -219,6 +228,26 @@ struct ParamEntry {
     ptr: ParamPtr,
 }
 
+/// One registered host property listener. The `proc` is called whenever the
+/// matching property changes. The host owns `user_data`; we only forward it.
+#[derive(Copy, Clone)]
+struct Listener {
+    property_id: au::AudioUnitPropertyID,
+    proc: au::AudioUnitPropertyListenerProc,
+    user_data: *mut c_void,
+}
+
+// SAFETY: `proc` is a function pointer (Send/Sync trivially), `user_data` is
+// host-owned opaque storage we never dereference, only forward.
+unsafe impl Send for Listener {}
+unsafe impl Sync for Listener {}
+
+// Bits in `pending_notifications`. Each bit maps to a property whose listeners
+// must be called from the main thread.
+const NOTIFY_LATENCY: u32 = 1 << 0;
+const NOTIFY_STREAM_FORMAT: u32 = 1 << 1;
+const NOTIFY_BYPASS_EFFECT: u32 = 1 << 2;
+
 /// `Send` + `Sync` justification:
 ///
 /// - All publicly mutable fields are atomic or behind a `Mutex`.
@@ -280,6 +309,8 @@ impl<P: AuPlugin> Wrapper<P> {
             _params_arc: params_arc,
             sink: ContextSink::new(),
             input_callback: Mutex::new(None),
+            listeners: Mutex::new(Vec::new()),
+            pending_notifications: AtomicU32::new(0),
             render_state: UnsafeCell::new(RenderState::new()),
         });
         Box::into_raw(boxed) as *mut au::AudioComponentPlugInInterface
@@ -325,6 +356,54 @@ impl<P: AuPlugin> Wrapper<P> {
     #[inline]
     fn is_initialized(&self) -> bool {
         self.initialized.load(Ordering::Acquire)
+    }
+
+    /// Mark `mask` of property bits as needing notification. Cheap atomic OR;
+    /// callable from any thread.
+    #[inline]
+    fn mark_pending(&self, mask: u32) {
+        self.pending_notifications.fetch_or(mask, Ordering::Release);
+    }
+
+    /// Drain any pending notifications and call registered listeners.
+    /// **Must be called from the main thread only** — host listener procs
+    /// generally are not audio-safe. Called from main-thread entry points
+    /// (`get_property`, `set_property`, `initialize`, etc.).
+    fn drain_notifications(&self) {
+        let pending = self.pending_notifications.swap(0, Ordering::AcqRel);
+        if pending == 0 {
+            return;
+        }
+        let instance = self.instance.load(Ordering::Acquire) as usize as au::AudioUnit;
+        if instance.is_null() {
+            return;
+        }
+        // Snapshot listeners so the lock isn't held across host callbacks.
+        let listeners = match self.listeners.lock() {
+            Ok(g) => g.clone(),
+            Err(_) => return,
+        };
+        let fire = |id: au::AudioUnitPropertyID, scope: au::AudioUnitScope| {
+            for l in &listeners {
+                if l.property_id == id {
+                    // SAFETY: host owns user_data; instance is the same
+                    // AudioUnit handle the host registered against.
+                    unsafe {
+                        (l.proc)(l.user_data, instance, id, scope, 0);
+                    }
+                }
+            }
+        };
+        if pending & NOTIFY_LATENCY != 0 {
+            fire(au::kAudioUnitProperty_Latency, au::kAudioUnitScope_Global);
+        }
+        if pending & NOTIFY_STREAM_FORMAT != 0 {
+            fire(au::kAudioUnitProperty_StreamFormat, au::kAudioUnitScope_Output);
+            fire(au::kAudioUnitProperty_StreamFormat, au::kAudioUnitScope_Input);
+        }
+        if pending & NOTIFY_BYPASS_EFFECT != 0 {
+            fire(au::kAudioUnitProperty_BypassEffect, au::kAudioUnitScope_Global);
+        }
     }
 
     /// SAFETY: caller must guarantee no other reference (mut or shared) to
@@ -452,10 +531,16 @@ impl<P: AuPlugin> Wrapper<P> {
 
         let latency = this.sink.latency_samples.load(Ordering::Relaxed);
         if latency > 0 && sr > 0.0 {
-            this.set_latency_seconds(latency as f64 / sr);
+            let new_l = latency as f64 / sr;
+            let prev_l = this.latency_seconds();
+            this.set_latency_seconds(new_l);
+            if (prev_l - new_l).abs() > f64::EPSILON {
+                this.mark_pending(NOTIFY_LATENCY);
+            }
         }
 
         this.initialized.store(true, Ordering::Release);
+        this.drain_notifications();
         au::noErr
     }
 
@@ -576,6 +661,8 @@ impl<P: AuPlugin> Wrapper<P> {
         io_data_size: *mut au::UInt32,
     ) -> au::OSStatus {
         let this = unsafe { Self::from_ptr(self_ptr) };
+        // Main-thread entry: drain any audio-thread-marked notifications.
+        this.drain_notifications();
 
         if out_data.is_null() || io_data_size.is_null() {
             return au::kAudioUnitErr_InvalidParameter;
@@ -756,7 +843,18 @@ impl<P: AuPlugin> Wrapper<P> {
         in_data_size: au::UInt32,
     ) -> au::OSStatus {
         let this = unsafe { Self::from_ptr(self_ptr) };
+        let status = Self::set_property_impl(this, id, in_data, in_data_size);
+        // Drain after the change so listeners see the new value.
+        this.drain_notifications();
+        status
+    }
 
+    fn set_property_impl(
+        this: &Self,
+        id: au::AudioUnitPropertyID,
+        in_data: *const c_void,
+        in_data_size: au::UInt32,
+    ) -> au::OSStatus {
         match id {
             au::kAudioUnitProperty_SampleRate => {
                 if (in_data_size as usize) < std::mem::size_of::<au::Float64>() {
@@ -809,6 +907,7 @@ impl<P: AuPlugin> Wrapper<P> {
 
                 this.set_sample_rate(asbd.mSampleRate);
                 this.n_channels.store(req_ch, Ordering::Release);
+                this.mark_pending(NOTIFY_STREAM_FORMAT);
                 au::noErr
             }
             au::kAudioUnitProperty_MaximumFramesPerSlice => {
@@ -831,7 +930,10 @@ impl<P: AuPlugin> Wrapper<P> {
                 }
                 let v = unsafe { *(in_data as *const au::UInt32) };
                 let on = v != 0;
-                this.bypass.store(on, Ordering::Release);
+                let prev = this.bypass.swap(on, Ordering::AcqRel);
+                if prev != on {
+                    this.mark_pending(NOTIFY_BYPASS_EFFECT);
+                }
                 // Mirror into the plugin's BYPASS-flagged param if present,
                 // so plugins can observe the toggle through their own params.
                 if let Some(idx) = this.bypass_param_idx {
@@ -1096,27 +1198,51 @@ impl<P: AuPlugin> Wrapper<P> {
 
         let latency = this.sink.latency_samples.load(Ordering::Relaxed);
         if latency > 0 && sr > 0.0 {
-            this.set_latency_seconds(latency as f64 / sr);
+            let new_l = latency as f64 / sr;
+            let prev_l = this.latency_seconds();
+            this.set_latency_seconds(new_l);
+            if (prev_l - new_l).abs() > f64::EPSILON {
+                // We're on the audio thread; just mark pending. The next
+                // main-thread property/lifecycle call will drain it.
+                this.mark_pending(NOTIFY_LATENCY);
+            }
         }
 
         au::noErr
     }
 
     unsafe extern "C" fn add_property_listener(
-        _self_ptr: *mut c_void,
-        _id: au::AudioUnitPropertyID,
-        _proc: au::AudioUnitPropertyListenerProc,
-        _user_data: *mut c_void,
+        self_ptr: *mut c_void,
+        id: au::AudioUnitPropertyID,
+        proc: au::AudioUnitPropertyListenerProc,
+        user_data: *mut c_void,
     ) -> au::OSStatus {
+        let this = unsafe { Self::from_ptr(self_ptr) };
+        if let Ok(mut guard) = this.listeners.lock() {
+            guard.push(Listener {
+                property_id: id,
+                proc,
+                user_data,
+            });
+        }
         au::noErr
     }
 
     unsafe extern "C" fn remove_property_listener_with_user_data(
-        _self_ptr: *mut c_void,
-        _id: au::AudioUnitPropertyID,
-        _proc: au::AudioUnitPropertyListenerProc,
-        _user_data: *mut c_void,
+        self_ptr: *mut c_void,
+        id: au::AudioUnitPropertyID,
+        proc: au::AudioUnitPropertyListenerProc,
+        user_data: *mut c_void,
     ) -> au::OSStatus {
+        let this = unsafe { Self::from_ptr(self_ptr) };
+        let proc_addr = proc as usize;
+        if let Ok(mut guard) = this.listeners.lock() {
+            guard.retain(|l| {
+                !(l.property_id == id
+                    && (l.proc as usize) == proc_addr
+                    && l.user_data == user_data)
+            });
+        }
         au::noErr
     }
 }
