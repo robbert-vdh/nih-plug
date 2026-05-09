@@ -74,6 +74,21 @@ pub struct Wrapper<P: AuPlugin> {
     /// Scratch sink shared between Init/Process contexts. Lets the plugin
     /// report a latency change back via `set_latency_samples()`.
     sink: Arc<ContextSink>,
+
+    /// Input render callback registered by the host via
+    /// `kAudioUnitProperty_SetRenderCallback`. We invoke this at the top of
+    /// every `render()` call to pull input audio for the effect.
+    ///
+    /// Hosts that don't use the callback model (or for in-place processing)
+    /// leave this `None` and we just operate on whatever the host wrote
+    /// into `io_data` ahead of the call.
+    input_callback: Option<au::AURenderCallbackStruct>,
+
+    /// Per-channel scratch buffers for the input pull. Sized in `Initialize`
+    /// to `[max_frames_per_slice]` so the render path is allocation-free.
+    /// One `Vec<f32>` per channel; we hand the host a synthesised
+    /// `AudioBufferList` whose `mData` pointers point into these vectors.
+    input_scratch: Vec<Vec<f32>>,
 }
 
 struct ParamEntry {
@@ -111,6 +126,8 @@ impl<P: AuPlugin> Wrapper<P> {
             _params_arc: params_arc,
             initialized: false,
             sink: ContextSink::new(),
+            input_callback: None,
+            input_scratch: Vec::new(),
         });
         Box::into_raw(boxed) as *mut au::AudioComponentPlugInInterface
     }
@@ -213,6 +230,17 @@ impl<P: AuPlugin> Wrapper<P> {
 
         // `Plugin::initialize()` is always followed by `Plugin::reset()`.
         this.plugin.reset();
+
+        // Allocate input scratch space: one Vec<f32> per channel, each
+        // sized to max_frames_per_slice so the render path is allocation
+        // free.
+        let nch = this.n_channels.max(1) as usize;
+        let cap = this.max_frames_per_slice as usize;
+        this.input_scratch.clear();
+        this.input_scratch.reserve(nch);
+        for _ in 0..nch {
+            this.input_scratch.push(vec![0.0_f32; cap]);
+        }
 
         // Pull the latency the plugin reported (if any).
         let latency = this.sink.latency_samples.load(Ordering::Relaxed);
@@ -523,7 +551,21 @@ impl<P: AuPlugin> Wrapper<P> {
                 au::noErr
             }
             au::kAudioUnitProperty_BypassEffect => au::noErr,
-            au::kAudioUnitProperty_SetRenderCallback => au::noErr,
+            au::kAudioUnitProperty_SetRenderCallback => {
+                if (in_data_size as usize)
+                    < std::mem::size_of::<au::AURenderCallbackStruct>()
+                {
+                    return au::kAudioUnitErr_InvalidPropertyValue;
+                }
+                let cb = unsafe { *(in_data as *const au::AURenderCallbackStruct) };
+                // Ignore null callbacks (host clearing the slot).
+                this.input_callback = if cb.inputProc.is_some() {
+                    Some(cb)
+                } else {
+                    None
+                };
+                au::noErr
+            }
             au::kAudioUnitProperty_InPlaceProcessing => au::noErr,
             _ => au::kAudioUnitErr_InvalidProperty,
         }
@@ -609,35 +651,133 @@ impl<P: AuPlugin> Wrapper<P> {
             return au::noErr;
         }
 
-        let n_frames = in_number_frames as usize;
+        let n_frames_us = in_number_frames as usize;
 
-        // Collect mutable f32 slices for each channel directly out of the
-        // host's `AudioBufferList`. Each `AudioBuffer` is one channel
-        // (NonInterleaved stream format) with `mNumberChannels == 1`.
+        // ── 1) Pull input from the host. ─────────────────────────────────
+        // If the host registered a SetRenderCallback for our input bus,
+        // call it with a synthesised AudioBufferList whose buffers point
+        // into `input_scratch`. After the call, `input_scratch[ch][..n_frames]`
+        // holds the channel data we need to feed the plugin.
+        //
+        // If no callback was registered, we operate "in place" on whatever
+        // the host wrote into `io_data` directly (as advertised via the
+        // InPlaceProcessing property). For Ableton, Logic, Reaper this
+        // path is the common one.
+        let mut pulled_from_callback = false;
+        if let Some(cb) = this.input_callback {
+            // Build an AudioBufferList in scratch memory big enough for
+            // `n_channels` buffers. The struct has a single `[AudioBuffer; 1]`
+            // tail array; for >1 channel we need extra storage.
+            let n_ch = this.input_scratch.len();
+            if n_ch > 0 && this.input_scratch[0].len() >= n_frames_us {
+                let header_size = std::mem::size_of::<au::UInt32>(); // mNumberBuffers
+                let buf_size = std::mem::size_of::<au::AudioBuffer>();
+                let bl_bytes = header_size + buf_size * n_ch;
+                let mut bl_storage: Vec<u8> = vec![0u8; bl_bytes];
+                let bl_ptr = bl_storage.as_mut_ptr() as *mut au::AudioBufferList;
+                unsafe {
+                    (*bl_ptr).mNumberBuffers = n_ch as au::UInt32;
+                }
+                let buffers_ptr = unsafe {
+                    (bl_storage.as_mut_ptr().add(header_size)) as *mut au::AudioBuffer
+                };
+                for ch in 0..n_ch {
+                    let scratch_ptr = this.input_scratch[ch].as_mut_ptr();
+                    unsafe {
+                        *buffers_ptr.add(ch) = au::AudioBuffer {
+                            mNumberChannels: 1,
+                            mDataByteSize: (n_frames_us * std::mem::size_of::<f32>()) as au::UInt32,
+                            mData: scratch_ptr as *mut c_void,
+                        };
+                    }
+                }
+
+                // Build a default AudioTimeStamp (zero is fine for offline-style
+                // pull). The host inputProc fills it; we provide a zeroed one.
+                let ts: au::AudioTimeStamp = unsafe { std::mem::zeroed() };
+                let mut flags: au::AudioUnitRenderActionFlags = 0;
+                let proc = cb.inputProc.unwrap();
+                let status = unsafe {
+                    proc(
+                        cb.inputProcRefCon,
+                        &mut flags,
+                        &ts,
+                        0, // input bus number
+                        in_number_frames,
+                        bl_ptr,
+                    )
+                };
+                if status == au::noErr {
+                    pulled_from_callback = true;
+                }
+            }
+        }
+
+        let n_frames = n_frames_us;
+
+        // ── 2) Build process buffer slices. ──────────────────────────────
+        // Strategy: nih-plug's Plugin::process operates in place on its
+        // `Buffer` slices, so we always feed it slices into the output
+        // (io_data) buffers. If we pulled input via the host callback into
+        // `input_scratch`, copy that into io_data first; otherwise the host
+        // already provided in-place audio there.
         let bl = unsafe { &mut *io_data };
         let n_buffers = bl.mNumberBuffers as usize;
         let buffers_ptr = bl.mBuffers.as_mut_ptr();
 
-        // We can't store these slices in a `Vec` *and* have them live long
-        // enough for `Buffer::set_slices` while the borrow checker is happy
-        // about the lifetime erasure that AU's C ABI demands. Instead:
-        // build a stack-local `Vec<&'static mut [f32]>` (lifetime-erased),
-        // pass it into `Buffer` via the `set_slices` closure, and ensure
-        // nothing in this function outlives the closure.
+        // If host pulled via callback, copy scratch → io_data so process() sees input.
+        if pulled_from_callback {
+            for i in 0..n_buffers.min(this.input_scratch.len()) {
+                let buf = unsafe { &mut *buffers_ptr.add(i) };
+                if buf.mData.is_null() {
+                    continue;
+                }
+                let dst =
+                    unsafe { std::slice::from_raw_parts_mut(buf.mData as *mut f32, n_frames) };
+                let src = &this.input_scratch[i][..n_frames];
+                dst.copy_from_slice(src);
+            }
+        }
+
+        // Diagnostic: input RMS *after* the pull/copy step, gated to first 5 calls.
+        unsafe {
+            static mut DBG: u32 = 0;
+            if DBG < 5 {
+                let mut sum = 0.0_f64;
+                let mut max = 0.0_f32;
+                let mut cnt = 0_u64;
+                for i in 0..n_buffers {
+                    let buf = &*buffers_ptr.add(i);
+                    if buf.mData.is_null() { continue; }
+                    let s = std::slice::from_raw_parts(buf.mData as *const f32, n_frames);
+                    for v in s.iter() {
+                        sum += (*v as f64) * (*v as f64);
+                        let a = v.abs();
+                        if a > max { max = a; }
+                        cnt += 1;
+                    }
+                }
+                let rms = if cnt > 0 { (sum / cnt as f64).sqrt() } else { 0.0 };
+                eprintln!(
+                    "[NIH-AU] render n_frames={} buf_count={} pulled={} cb_set={} rms_in={:.6} max_in={:.6}",
+                    in_number_frames, n_buffers, pulled_from_callback,
+                    this.input_callback.is_some(), rms, max
+                );
+                DBG += 1;
+            }
+        }
+
         let mut channels: Vec<&'static mut [f32]> = Vec::with_capacity(n_buffers);
         for i in 0..n_buffers {
             let buf = unsafe { &mut *buffers_ptr.add(i) };
             if buf.mData.is_null() {
-                // Skip channels whose buffer the host didn't supply.
                 continue;
             }
-            // `mNumberChannels` is 1 for non-interleaved buffers; the
-            // sample count is `in_number_frames`.
             let slice = unsafe {
                 std::slice::from_raw_parts_mut(buf.mData as *mut f32, n_frames)
             };
             // SAFETY: erasing the lifetime is fine because the slice never
-            // outlives this `render()` call — `Buffer` is consumed locally.
+            // outlives this render() call — Buffer is consumed locally.
             let static_slice: &'static mut [f32] = unsafe {
                 std::mem::transmute::<&mut [f32], &'static mut [f32]>(slice)
             };
