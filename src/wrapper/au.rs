@@ -1,21 +1,15 @@
 //! Apple Audio Unit (AUv2) wrapper for nih-plug.
 //!
-//! Phase 1 (current): minimum viable AU — registers via
-//! `AudioComponentPlugInInterface`, exposes the basic property selectors
-//! (`SampleRate`, `StreamFormat`, `Latency`, `MaximumFramesPerSlice`,
-//! `SupportedNumChannels`), and renders silence.  `auval` should validate
-//! the component end-to-end at this stage.
-//!
-//! Phase 2: parameters + state.
-//! Phase 3: real `Plugin::process` render path.
-//! Phase 4: Cocoa view via `objc2-app-kit`.
-//! Phase 5: bundle generation in `nih_plug_xtask`.
+//! Implements a complete AUv2 plugin via `AudioComponentPlugInInterface`:
+//! parameter hosting, stream format negotiation, real `Plugin::process` render,
+//! bypass, property listeners, and transport/tempo via `HostCallbackInfo`.
+//! Bundle generation lives in `nih_plug_xtask` (`bundle-au` subcommand).
 
 mod context;
 mod factory;
 mod wrapper;
 
-pub use factory::{fourcc, PluginInfo};
+pub use factory::fourcc;
 pub use wrapper::{AuWrapper, Wrapper};
 
 // Re-export `au-sys` so the macro can refer to its types without a

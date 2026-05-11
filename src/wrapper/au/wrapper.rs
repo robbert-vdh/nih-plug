@@ -1,9 +1,11 @@
-//! AU wrapper, Phase 3.5.
+//! AU wrapper — full render pipeline (AUv2).
 //!
-//! Hosts the plugin's `Params` so:
-//!   - `kAudioUnitProperty_ParameterList` returns the AU parameter ID array
-//!   - `kAudioUnitProperty_ParameterInfo` returns name / range / default / unit
-//!   - `AudioUnitGet/SetParameter` hand off to the underlying nih-plug `ParamPtr`
+//! Implements the complete AUv2 plugin lifecycle:
+//!   - Parameter hosting: `ParameterList`, `ParameterInfo`, `Get/SetParameter`
+//!   - Stream format negotiation and `Initialize` / `Uninitialize`
+//!   - `Render` with input-callback pull, bypass, and `Plugin::process`
+//!   - Property listeners, transport / tempo via `HostCallbackInfo`
+//!   - `BypassEffect` property with `ParamFlags::BYPASS` sync
 //!
 //! AU parameter IDs are simply the index into `param_map()` — stable across
 //! one binary build (the nih-plug derive guarantees field declaration order).
@@ -1604,6 +1606,9 @@ fn classify_unit(unit: &str) -> au::AudioUnitParameterUnit {
     } else if lower.contains('%') || lower.contains("percent") {
         au::kAudioUnitParameterUnit_Percent
     } else if lower.contains("ms") || lower.contains("sec") || lower.contains("second") {
+        // AU has no kAudioUnitParameterUnit_Milliseconds; map "ms" to Seconds.
+        // Hosts display the raw value, so plugins must expose values in seconds
+        // when they want AU-native time display.
         au::kAudioUnitParameterUnit_Seconds
     } else {
         au::kAudioUnitParameterUnit_Generic

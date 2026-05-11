@@ -56,6 +56,7 @@ pub fn type_name_of_ptr<T: ?Sized>(_ptr: *const T) -> &'static str {
 
 pub(crate) use check_null_ptr_msg;
 pub(crate) use clap_call;
+#[allow(unused_imports)]
 pub(crate) use unsafe_clap_call;
 
 /// Send+Sync wrapper around CLAP host extension pointers.
