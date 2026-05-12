@@ -1,8 +1,5 @@
 use std::cmp;
-use std::ops::Deref;
-use vst3_sys::interfaces::IUnknown;
-use vst3_sys::vst::TChar;
-use vst3_sys::ComInterface;
+use vst3::Steinberg::Vst::TChar;
 use widestring::U16CString;
 
 /// When `Plugin::MIDI_INPUT` is set to `MidiConfig::MidiCCs` or higher then we'll register 130*16
@@ -58,63 +55,6 @@ pub fn u16strlcpy(dest: &mut [TChar], src: &str) {
     dest[..copy_len].copy_from_slice(&src_utf16_chars_signed[..copy_len]);
     dest[copy_len] = 0;
 }
-
-/// Send+Sync wrapper for these interface pointers.
-#[repr(transparent)]
-pub struct VstPtr<T: vst3_sys::ComInterface + ?Sized> {
-    ptr: vst3_sys::VstPtr<T>,
-}
-
-/// The same as [`VstPtr`] with shared semnatics, but for objects we defined ourself since `VstPtr`
-/// only works for interfaces.
-#[repr(transparent)]
-pub struct ObjectPtr<T: IUnknown> {
-    ptr: *const T,
-}
-
-impl<T: ComInterface + ?Sized> Deref for VstPtr<T> {
-    type Target = vst3_sys::VstPtr<T>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.ptr
-    }
-}
-
-impl<T: IUnknown> Deref for ObjectPtr<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.ptr }
-    }
-}
-
-impl<T: vst3_sys::ComInterface + ?Sized> From<vst3_sys::VstPtr<T>> for VstPtr<T> {
-    fn from(ptr: vst3_sys::VstPtr<T>) -> Self {
-        Self { ptr }
-    }
-}
-
-impl<T: IUnknown> From<&T> for ObjectPtr<T> {
-    /// Create a smart pointer for an existing reference counted object.
-    fn from(obj: &T) -> Self {
-        unsafe { obj.add_ref() };
-        Self { ptr: obj }
-    }
-}
-
-impl<T: IUnknown> Drop for ObjectPtr<T> {
-    fn drop(&mut self) {
-        unsafe { (*self).release() };
-    }
-}
-
-/// SAFETY: Sharing these pointers across thread is s safe as they have internal atomic reference
-/// counting, so as long as a `VstPtr<T>` handle exists the object will stay alive.
-unsafe impl<T: ComInterface + ?Sized> Send for VstPtr<T> {}
-unsafe impl<T: ComInterface + ?Sized> Sync for VstPtr<T> {}
-
-unsafe impl<T: IUnknown> Send for ObjectPtr<T> {}
-unsafe impl<T: IUnknown> Sync for ObjectPtr<T> {}
 
 #[cfg(test)]
 mod miri {

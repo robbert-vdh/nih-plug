@@ -3,7 +3,7 @@ use std::cell::Cell;
 use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use vst3_sys::vst::IComponentHandler;
+use vst3::Steinberg::Vst::IComponentHandlerTrait;
 
 use crate::prelude::{
     GuiContext, InitContext, ParamPtr, PluginApi, PluginNoteEvent, PluginState, ProcessContext,
@@ -43,6 +43,9 @@ pub(crate) struct WrapperProcessContext<'a, P: Vst3Plugin> {
     pub(super) output_events_guard: AtomicRefMut<'a, VecDeque<PluginNoteEvent<P>>>,
     pub(super) transport: Transport,
 }
+
+unsafe impl<P: Vst3Plugin> Send for WrapperGuiContext<P> {}
+unsafe impl<P: Vst3Plugin> Sync for WrapperGuiContext<P> {}
 
 /// A [`GuiContext`] implementation for the wrapper. This is passed to the plugin in
 /// [`Editor::spawn()`][crate::prelude::Editor::spawn()] so it can interact with the rest of the plugin and
@@ -118,7 +121,7 @@ impl<P: Vst3Plugin> ProcessContext<P> for WrapperProcessContext<'_, P> {
     }
 }
 
-impl<P: Vst3Plugin> GuiContext for WrapperGuiContext<P> {
+impl<P: Vst3Plugin + Send> GuiContext for WrapperGuiContext<P> {
     fn plugin_api(&self) -> PluginApi {
         PluginApi::Vst3
     }
@@ -138,7 +141,7 @@ impl<P: Vst3Plugin> GuiContext for WrapperGuiContext<P> {
         match &*self.inner.component_handler.borrow() {
             Some(handler) => match self.inner.param_ptr_to_hash.get(&param) {
                 Some(hash) => {
-                    handler.begin_edit(*hash);
+                    handler.beginEdit(*hash);
                 }
                 None => nih_debug_assert_failure!("Unknown parameter: {:?}", param),
             },
@@ -179,7 +182,7 @@ impl<P: Vst3Plugin> GuiContext for WrapperGuiContext<P> {
                         );
                     }
 
-                    handler.perform_edit(*hash, normalized as f64);
+                    handler.performEdit(*hash, normalized as f64);
                 }
                 None => nih_debug_assert_failure!("Unknown parameter: {:?}", param),
             },
@@ -202,7 +205,7 @@ impl<P: Vst3Plugin> GuiContext for WrapperGuiContext<P> {
         match &*self.inner.component_handler.borrow() {
             Some(handler) => match self.inner.param_ptr_to_hash.get(&param) {
                 Some(hash) => {
-                    handler.end_edit(*hash);
+                    handler.endEdit(*hash);
                 }
                 None => nih_debug_assert_failure!("Unknown parameter: {:?}", param),
             },

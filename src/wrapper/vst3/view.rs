@@ -5,18 +5,20 @@ use std::ffi::{c_void, CStr};
 use std::mem;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use vst3_sys::base::{kInvalidArgument, kNotImplemented, kResultFalse, kResultOk, tresult, TBool};
-use vst3_sys::gui::{IPlugFrame, IPlugView, IPlugViewContentScaleSupport, ViewRect};
-use vst3_sys::utils::SharedVstPtr;
-use vst3_sys::VST3;
+use vst3::Steinberg::{
+    char16, int16, kInvalidArgument, kNotImplemented, kResultFalse, kResultOk, tresult, FIDString,
+    TBool,
+};
+use vst3::Steinberg::{
+    IPlugFrame, IPlugFrameTrait, IPlugView, IPlugViewContentScaleSupport,
+    IPlugViewContentScaleSupportTrait, IPlugViewContentScaleSupport_::ScaleFactor, IPlugViewTrait,
+    ViewRect,
+};
+use vst3::{Class, ComPtr, ComRef, ComWrapper};
 
 use super::inner::{Task, WrapperInner};
-use super::util::{ObjectPtr, VstPtr};
 use crate::plugin::vst3::Vst3Plugin;
 use crate::prelude::{Editor, ParentWindowHandle};
-
-// Alias needed for the VST3 attribute macro
-use vst3_sys as vst3_com;
 
 // Thanks for putting this behind a platform-specific ifdef...
 // NOTE: This should also be used on the BSDs, but vst3-sys exposes these interfaces only for Linux
@@ -49,14 +51,13 @@ struct RunLoopEventHandlerWrapper<P: Vst3Plugin>(std::marker::PhantomData<P>);
 
 /// The plugin's [`IPlugView`] instance created in [`IEditController::create_view()`] if `P` has an
 /// editor. This is managed separately so the lifetime bounds match up.
-#[VST3(implements(IPlugView, IPlugViewContentScaleSupport))]
 pub(crate) struct WrapperView<P: Vst3Plugin> {
     inner: Arc<WrapperInner<P>>,
     editor: Arc<Mutex<Box<dyn Editor>>>,
     editor_handle: RwLock<Option<Box<dyn Any>>>,
 
     /// The `IPlugFrame` instance passed by the host during [IPlugView::set_frame()].
-    plug_frame: RwLock<Option<VstPtr<dyn IPlugFrame>>>,
+    plug_frame: RwLock<Option<ComPtr<IPlugFrame>>>,
     /// Allows handling events events on the host's GUI thread when using Linux. Needed because
     /// otherwise REAPER doesn't like us very much. The event handler could be implemented directly
     /// on this object but vst3-sys does not let us conditionally implement interfaces.
@@ -67,6 +68,10 @@ pub(crate) struct WrapperView<P: Vst3Plugin> {
     /// the sizes communicated to and from the DAW should be scaled by this factor since NIH-plug's
     /// APIs only deal in logical pixels.
     scaling_factor: AtomicF32,
+}
+
+impl<P: Vst3Plugin> Class for WrapperView<P> {
+    type Interfaces = (IPlugView, IPlugViewContentScaleSupport);
 }
 
 /// Allow handling tasks on the host's GUI thread on Linux. This doesn't need to be a separate
@@ -81,7 +86,7 @@ struct RunLoopEventHandler<P: Vst3Plugin> {
     inner: Arc<WrapperInner<P>>,
 
     /// The host's run loop interface. This lets us run tasks on the same thread as the host's UI.
-    run_loop: VstPtr<dyn IRunLoop>,
+    run_loop: ComPtr<IRunLoop>,
 
     /// We need a Unix domain socket the host can poll to know that we have an event to handle. In
     /// theory eventfd would be much better suited for this, but Ardour doesn't respond to fds that
@@ -99,18 +104,18 @@ struct RunLoopEventHandler<P: Vst3Plugin> {
 }
 
 impl<P: Vst3Plugin> WrapperView<P> {
-    pub fn new(inner: Arc<WrapperInner<P>>, editor: Arc<Mutex<Box<dyn Editor>>>) -> Box<Self> {
-        Self::allocate(
+    pub fn new(inner: Arc<WrapperInner<P>>, editor: Arc<Mutex<Box<dyn Editor>>>) -> Self {
+        Self {
             inner,
             editor,
-            RwLock::new(None),
-            RwLock::new(None),
+            editor_handle: RwLock::new(None),
+            plug_frame: RwLock::new(None),
             #[cfg(target_os = "linux")]
-            RunLoopEventHandlerWrapper(RwLock::new(None)),
+            run_loop_event_handler: RunLoopEventHandlerWrapper(RwLock::new(None)),
             #[cfg(not(target_os = "linux"))]
-            RunLoopEventHandlerWrapper(Default::default()),
-            AtomicF32::new(1.0),
-        )
+            run_loop_event_handler: RunLoopEventHandlerWrapper(Default::default()),
+            scaling_factor: AtomicF32::new(1.0),
+        }
     }
 
     /// Ask the host to resize the view to the size specified by [`Editor::size()`]. Will return false
@@ -120,9 +125,9 @@ impl<P: Vst3Plugin> WrapperView<P> {
     ///
     /// May cause memory corruption in Linux REAPER when called from outside of the `IRunLoop`.
     #[must_use]
-    pub unsafe fn request_resize(&self) -> bool {
+    pub unsafe fn request_resize(this: &ComWrapper<Self>) -> bool {
         // Don't do anything if the editor is not open, because that would be strange
-        if self
+        if this
             .editor_handle
             .try_read()
             .map(|e| e.is_none())
@@ -131,21 +136,19 @@ impl<P: Vst3Plugin> WrapperView<P> {
             return false;
         }
 
-        match &*self.plug_frame.read() {
+        match &*this.plug_frame.read() {
             Some(plug_frame) => {
-                let (unscaled_width, unscaled_height) = self.editor.lock().size();
-                let scaling_factor = self.scaling_factor.load(Ordering::Relaxed);
+                let (unscaled_width, unscaled_height) = this.editor.lock().size();
+                let scaling_factor = this.scaling_factor.load(Ordering::Relaxed);
                 let mut size = ViewRect {
+                    left: 0,
+                    top: 0,
                     right: (unscaled_width as f32 * scaling_factor).round() as i32,
                     bottom: (unscaled_height as f32 * scaling_factor).round() as i32,
-                    ..Default::default()
                 };
 
-                // The argument types are a bit wonky here because you can't construct a
-                // `SharedVstPtr`. This _should_ work however.
-                let plug_view: SharedVstPtr<dyn IPlugView> =
-                    mem::transmute(&self.__iplugviewvptr as *const *const _);
-                let result = plug_frame.resize_view(plug_view, &mut size);
+                let plug_view = this.as_com_ref::<IPlugView>().unwrap();
+                let result = plug_frame.resizeView(plug_view.as_ptr(), &mut size);
 
                 debug_assert_eq!(
                     result, kResultOk,
@@ -244,9 +247,9 @@ impl<P: Vst3Plugin> RunLoopEventHandler<P> {
     }
 }
 
-impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
+impl<P: Vst3Plugin> IPlugViewTrait for WrapperView<P> {
     #[cfg(all(target_family = "unix", not(target_os = "macos")))]
-    unsafe fn is_platform_type_supported(&self, type_: vst3_sys::base::FIDString) -> tresult {
+    unsafe fn isPlatformTypeSupported(&self, type_: FIDString) -> tresult {
         let type_ = CStr::from_ptr(type_);
         match type_.to_str() {
             Ok(type_) if type_ == VST3_PLATFORM_X11_WINDOW => kResultOk,
@@ -258,7 +261,7 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
     }
 
     #[cfg(target_os = "macos")]
-    unsafe fn is_platform_type_supported(&self, type_: vst3_sys::base::FIDString) -> tresult {
+    unsafe fn isPlatformTypeSupported(&self, type_: FIDString) -> tresult {
         let type_ = CStr::from_ptr(type_);
         match type_.to_str() {
             Ok(type_) if type_ == VST3_PLATFORM_NSVIEW => kResultOk,
@@ -270,7 +273,7 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
     }
 
     #[cfg(target_os = "windows")]
-    unsafe fn is_platform_type_supported(&self, type_: vst3_sys::base::FIDString) -> tresult {
+    unsafe fn isPlatformTypeSupported(&self, type_: FIDString) -> tresult {
         let type_ = CStr::from_ptr(type_);
         match type_.to_str() {
             Ok(type_) if type_ == VST3_PLATFORM_HWND => kResultOk,
@@ -281,7 +284,7 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
         }
     }
 
-    unsafe fn attached(&self, parent: *mut c_void, type_: vst3_sys::base::FIDString) -> tresult {
+    unsafe fn attached(&self, parent: *mut c_void, type_: FIDString) -> tresult {
         let mut editor_handle = self.editor_handle.write();
         if editor_handle.is_none() {
             let type_ = CStr::from_ptr(type_);
@@ -304,7 +307,7 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
                     .lock()
                     .spawn(parent_handle, self.inner.clone().make_gui_context()),
             );
-            *self.inner.plug_view.write() = Some(ObjectPtr::from(self));
+            // *self.inner.plug_view.write() = Some(ObjectPtr::from(self));
 
             kResultOk
         } else {
@@ -330,31 +333,21 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
         }
     }
 
-    unsafe fn on_wheel(&self, _distance: f32) -> tresult {
+    unsafe fn onWheel(&self, _distance: f32) -> tresult {
         // We'll let the plugin use the OS' input mechanisms because not all DAWs (or very few
         // actually) implement these functions
         kNotImplemented
     }
 
-    unsafe fn on_key_down(
-        &self,
-        _key: vst3_sys::base::char16,
-        _key_code: i16,
-        _modifiers: i16,
-    ) -> tresult {
+    unsafe fn onKeyDown(&self, _key: char16, _key_code: int16, _modifiers: int16) -> tresult {
         kNotImplemented
     }
 
-    unsafe fn on_key_up(
-        &self,
-        _key: vst3_sys::base::char16,
-        _key_code: i16,
-        _modifiers: i16,
-    ) -> tresult {
+    unsafe fn onKeyUp(&self, _key: char16, _key_code: int16, _modifiers: int16) -> tresult {
         kNotImplemented
     }
 
-    unsafe fn get_size(&self, size: *mut ViewRect) -> tresult {
+    unsafe fn getSize(&self, size: *mut ViewRect) -> tresult {
         check_null_ptr!(size);
 
         *size = mem::zeroed();
@@ -373,7 +366,7 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
         kResultOk
     }
 
-    unsafe fn on_size(&self, new_size: *mut ViewRect) -> tresult {
+    unsafe fn onSize(&self, new_size: *mut ViewRect) -> tresult {
         check_null_ptr!(new_size);
 
         // TODO: Implement Host->Plugin resizing
@@ -393,14 +386,12 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
         }
     }
 
-    unsafe fn on_focus(&self, _state: TBool) -> tresult {
+    unsafe fn onFocus(&self, _state: TBool) -> tresult {
         kNotImplemented
     }
 
-    unsafe fn set_frame(&self, frame: *mut c_void) -> tresult {
-        // The correct argument type is missing from the bindings
-        let frame: SharedVstPtr<dyn IPlugFrame> = mem::transmute(frame);
-        match frame.upgrade() {
+    unsafe fn setFrame(&self, frame: *mut IPlugFrame) -> tresult {
+        match ComRef::from_raw(frame) {
             Some(frame) => {
                 // On Linux the host will expose another interface that lets us run code on the
                 // host's GUI thread. REAPER will segfault when we don't do this for resizes.
@@ -410,7 +401,7 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
                         RunLoopEventHandler::new(self.inner.clone(), VstPtr::from(run_loop))
                     });
                 }
-                *self.plug_frame.write() = Some(VstPtr::from(frame));
+                // *self.plug_frame.write() = Some(VstPtr::from(frame));
             }
             None => {
                 #[cfg(target_os = "linux")]
@@ -424,12 +415,12 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
         kResultOk
     }
 
-    unsafe fn can_resize(&self) -> tresult {
+    unsafe fn canResize(&self) -> tresult {
         // TODO: Implement Host->Plugin resizing
         kResultFalse
     }
 
-    unsafe fn check_size_constraint(&self, rect: *mut ViewRect) -> tresult {
+    unsafe fn checkSizeConstraint(&self, rect: *mut ViewRect) -> tresult {
         check_null_ptr!(rect);
 
         // TODO: Implement Host->Plugin resizing
@@ -441,8 +432,8 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
     }
 }
 
-impl<P: Vst3Plugin> IPlugViewContentScaleSupport for WrapperView<P> {
-    unsafe fn set_scale_factor(&self, factor: f32) -> tresult {
+impl<P: Vst3Plugin> IPlugViewContentScaleSupportTrait for WrapperView<P> {
+    unsafe fn setContentScaleFactor(&self, factor: ScaleFactor) -> tresult {
         // TODO: So apparently Ableton Live doesn't call this function. Right now we'll hardcode the
         //       default scale to 1.0 on Linux and Windows since we can't easily get the scale from
         //       baseview. A better alternative would be to do the fallback DPI scale detection
