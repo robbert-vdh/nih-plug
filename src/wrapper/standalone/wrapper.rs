@@ -121,6 +121,14 @@ struct WrapperWindowHandler {
     /// This is used to communicate with the wrapper from the audio thread and from within the
     /// baseview window handler on the GUI thread.
     gui_task_receiver: channel::Receiver<GuiTask>,
+
+    /// Set to true to signal the audio thread to stop processing. This is used to ensure the
+    /// audio thread stops before the window handler (and thus the editor) is dropped.
+    terminate_audio_thread: Arc<AtomicBool>,
+
+    /// Set to true by the audio thread when it has finished processing. Used to wait for the
+    /// audio thread to stop before allowing the window to close.
+    audio_thread_finished: Arc<AtomicBool>,
 }
 
 /// A message sent to the GUI thread.
@@ -146,7 +154,35 @@ impl WindowHandler for WrapperWindowHandler {
         }
     }
 
-    fn on_event(&mut self, _window: &mut Window, _event: baseview::Event) -> EventStatus {
+    fn on_event(&mut self, _window: &mut Window, event: baseview::Event) -> EventStatus {
+        // When the window is about to close, we need to stop the audio thread before the editor
+        // handle gets dropped. Otherwise there's a race condition where the audio thread might
+        // still be processing while the editor is being cleaned up, which can cause crashes
+        // (especially "Rust cannot catch foreign exceptions" errors on macOS).
+        if let baseview::Event::Window(baseview::WindowEvent::WillClose) = event {
+            // Signal the audio thread to stop
+            self.terminate_audio_thread.store(true, Ordering::SeqCst);
+
+            // Wait for the audio thread to finish processing. We use a spin-wait with a small
+            // sleep to avoid busy-waiting while still being responsive. The audio thread should
+            // exit quickly once it sees the terminate signal.
+            //
+            // We use a timeout to prevent hanging forever if something goes wrong. The audio
+            // thread should typically exit within a few hundred milliseconds at most.
+            const MAX_WAIT_MS: u32 = 5000;
+            let mut waited_ms = 0;
+            while !self.audio_thread_finished.load(Ordering::SeqCst) && waited_ms < MAX_WAIT_MS {
+                std::thread::sleep(std::time::Duration::from_millis(1));
+                waited_ms += 1;
+            }
+
+            if waited_ms >= MAX_WAIT_MS {
+                nih_log!(
+                    "Warning: Timed out waiting for audio thread to finish during window close"
+                );
+            }
+        }
+
         EventStatus::Ignored
     }
 }
@@ -314,10 +350,19 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
         // We'll spawn a separate thread to handle IO and to process audio. This audio thread should
         // terminate together with this function.
         let terminate_audio_thread = Arc::new(AtomicBool::new(false));
+        // This flag is set by the audio thread when it has finished processing. This is used by
+        // the window handler to wait for the audio thread to stop before allowing the window to
+        // close, preventing race conditions during cleanup.
+        let audio_thread_finished = Arc::new(AtomicBool::new(false));
         let audio_thread = {
             let this = self.clone();
             let terminate_audio_thread = terminate_audio_thread.clone();
-            thread::spawn(move || this.run_audio_thread(terminate_audio_thread, gui_task_sender))
+            let audio_thread_finished = audio_thread_finished.clone();
+            thread::spawn(move || {
+                this.run_audio_thread(terminate_audio_thread, gui_task_sender);
+                // Signal that we're done processing so the window handler can proceed with cleanup
+                audio_thread_finished.store(true, Ordering::SeqCst);
+            })
         };
 
         match self.editor.borrow().clone() {
@@ -334,6 +379,9 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
                 };
 
                 let (width, height) = editor.lock().size();
+                // Clone the flags to pass into the window handler closure
+                let terminate_audio_thread_for_handler = terminate_audio_thread.clone();
+                let audio_thread_finished_for_handler = audio_thread_finished.clone();
                 Window::open_blocking(
                     WindowOpenOptions {
                         title: String::from(P::NAME),
@@ -370,6 +418,8 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
                         WrapperWindowHandler {
                             _editor_handle: editor_handle,
                             gui_task_receiver,
+                            terminate_audio_thread: terminate_audio_thread_for_handler,
+                            audio_thread_finished: audio_thread_finished_for_handler,
                         }
                     },
                 )
@@ -382,6 +432,9 @@ impl<P: Plugin, B: Backend<P>> Wrapper<P, B> {
             }
         }
 
+        // NOTE: When using the GUI, the window handler already sets this flag and waits for the
+        // audio thread to finish in `on_event(WillClose)`. This call is still needed for the
+        // non-GUI case and as an extra safety net.
         terminate_audio_thread.store(true, Ordering::SeqCst);
         audio_thread.join().unwrap();
 
