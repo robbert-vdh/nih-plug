@@ -12,6 +12,8 @@ default = ["opengl", "default_fonts"]
 # `nih_plug_egui` always uses OpenGL since egui's wgpu backend is still unstable
 # depending on the platform
 opengl = ["egui-baseview/opengl"]
+wgpu = ["egui-baseview/wgpu"]
+
 default_fonts = ["egui-baseview/default_fonts"]
 rayon = ["egui-baseview/rayon"]
 
