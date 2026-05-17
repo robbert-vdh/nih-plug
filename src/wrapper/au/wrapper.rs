@@ -33,6 +33,7 @@
 //!      main thread updates rarely, audio thread snapshots into a local `Copy`
 //!      at the top of `render()`. The mutex is held only for the snapshot.
 
+use std::any::Any;
 use std::cell::UnsafeCell;
 use std::ffi::c_void;
 use std::marker::PhantomData;
@@ -51,13 +52,14 @@ use core_foundation::string::CFString;
 
 use crate::buffer::Buffer;
 use crate::context::process::Transport;
+use crate::editor::Editor;
 use crate::params::internals::ParamPtr;
 use crate::params::{ParamFlags, Params};
 use crate::plugin::au::AuPlugin;
 use crate::prelude::{AudioIOLayout, AuxiliaryBuffers, BufferConfig, ProcessMode};
 use crate::wrapper::state::{self, PluginState};
 
-use super::context::{AuInitContext, AuProcessContext, ContextSink};
+use super::context::{AuGuiContextInner, AuInitContext, AuProcessContext, ContextSink};
 use super::factory::fourcc;
 
 /// One AU plugin instance. Owned by Apple's component manager via the
@@ -151,6 +153,18 @@ pub struct Wrapper<P: AuPlugin> {
     /// `UnsafeCell` because only `render()` touches it after `Initialize`,
     /// and AU does not re-enter render.
     render_state: UnsafeCell<RenderState>,
+
+    /// The plugin's `Editor` instance, if the plugin provides one.
+    /// Created once in `new()` and never replaced.
+    editor: Option<Arc<Mutex<Box<dyn Editor>>>>,
+
+    /// The active editor window handle, returned by `Editor::spawn()`.
+    /// Present while the GUI window is open, None otherwise.
+    editor_handle: Mutex<Option<Box<dyn Any + Send>>>,
+
+    /// Shared context forwarded to the spawned editor so it can set
+    /// parameter values and query plugin state.
+    gui_context_inner: Option<Arc<AuGuiContextInner>>,
 }
 
 /// All audio-thread mutable state. Reused across render calls and grown
@@ -286,7 +300,7 @@ fn unpack_f64(b: u64) -> f64 {
 
 impl<P: AuPlugin> Wrapper<P> {
     pub fn new() -> *mut au::AudioComponentPlugInInterface {
-        let plugin = Box::new(P::default());
+        let mut plugin = Box::new(P::default());
         let params_arc = plugin.params();
 
         let params_by_id: Vec<ParamEntry> = params_arc
@@ -299,6 +313,36 @@ impl<P: AuPlugin> Wrapper<P> {
         let bypass_param_idx = params_by_id.iter().position(|e| {
             // SAFETY: ParamPtr accessors are documented thread-safe.
             unsafe { e.ptr.flags() }.contains(ParamFlags::BYPASS)
+        });
+
+        // Build (ParamPtr → AU param ID) map for GuiContext.
+        let params_by_ptr: Vec<(ParamPtr, au::AudioUnitParameterID)> = params_by_id
+            .iter()
+            .enumerate()
+            .map(|(idx, e)| (e.ptr, idx as au::AudioUnitParameterID))
+            .collect();
+
+        // Call editor() before moving `plugin` into the UnsafeCell.
+        // `AsyncExecutor` stubs — GUI background tasks not yet wired.
+        let async_executor = crate::context::gui::AsyncExecutor::<P> {
+            execute_background: Arc::new(|_| {}),
+            execute_gui: Arc::new(|_| {}),
+        };
+        let editor = plugin.editor(async_executor).map(|e| Arc::new(Mutex::new(e)));
+
+        // `gui_context_inner` is created here with instance = null; the
+        // real AudioUnit handle is filled in by `open()`. Because
+        // `AuGuiContextInner` is behind an `Arc` the editor closure
+        // captures a clone, and we update the pointer inside `open()`.
+        // However, `instance` is just an opaque pointer forwarded to the
+        // host — for the open() case where the GUI hasn't spawned yet this
+        // is fine: the GUI only opens after the component is open.
+        let gui_context_inner = editor.as_ref().map(|_| {
+            Arc::new(AuGuiContextInner {
+                instance_bits: AtomicU64::new(0),
+                params_arc: params_arc.clone(),
+                params_by_ptr,
+            })
         });
 
         let boxed = Box::new(Wrapper::<P> {
@@ -325,6 +369,9 @@ impl<P: AuPlugin> Wrapper<P> {
             listeners: Mutex::new(Vec::new()),
             pending_notifications: AtomicU32::new(0),
             render_state: UnsafeCell::new(RenderState::new()),
+            editor,
+            editor_handle: Mutex::new(None),
+            gui_context_inner,
         });
         Box::into_raw(boxed) as *mut au::AudioComponentPlugInInterface
     }
@@ -444,12 +491,21 @@ impl<P: AuPlugin> Wrapper<P> {
 
     unsafe extern "C" fn open(self_ptr: *mut c_void, instance: au::AudioUnit) -> au::OSStatus {
         let this = unsafe { Self::from_ptr(self_ptr) };
-        this.instance
-            .store(instance as usize as u64, Ordering::Release);
+        let bits = instance as usize as u64;
+        this.instance.store(bits, Ordering::Release);
+        // Update gui_context_inner so any later GUI spawn sees the real handle.
+        if let Some(inner) = &this.gui_context_inner {
+            inner.instance_bits.store(bits, Ordering::Release);
+        }
         au::noErr
     }
 
     unsafe extern "C" fn close(self_ptr: *mut c_void) -> au::OSStatus {
+        // Drop editor handle before the wrapper is destroyed.
+        let this = unsafe { Self::from_ptr(self_ptr) };
+        if let Ok(mut guard) = this.editor_handle.lock() {
+            *guard = None;
+        }
         unsafe {
             let _ = Box::from_raw(self_ptr as *mut Self);
         }
@@ -752,6 +808,13 @@ impl<P: AuPlugin> Wrapper<P> {
             au::kAudioUnitProperty_HostCallbacks if scope == au::kAudioUnitScope_Global => {
                 respond(std::mem::size_of::<au::HostCallbackInfo>() as u32, true)
             }
+            au::kAudioUnitProperty_CocoaUI if scope == au::kAudioUnitScope_Global => {
+                if this.editor.is_some() {
+                    respond(std::mem::size_of::<au::AUCocoaViewInfo>() as u32, false)
+                } else {
+                    au::kAudioUnitErr_InvalidProperty
+                }
+            }
             _ => au::kAudioUnitErr_InvalidProperty,
         }
     }
@@ -944,6 +1007,26 @@ impl<P: AuPlugin> Wrapper<P> {
                     *io_data_size = std::mem::size_of::<*mut c_void>() as u32;
                 }
                 au::noErr
+            }
+            au::kAudioUnitProperty_CocoaUI if scope == au::kAudioUnitScope_Global => {
+                if this.editor.is_none() {
+                    return au::kAudioUnitErr_InvalidProperty;
+                }
+                if (unsafe { *io_data_size } as usize) < std::mem::size_of::<au::AUCocoaViewInfo>() {
+                    return au::kAudioUnitErr_InvalidPropertyValue;
+                }
+                // Register (or look up) the per-type ObjC view factory class and
+                // return an AUCocoaViewInfo pointing at this dylib bundle + class name.
+                match cocoaui::cocoaui_view_info::<P>(this) {
+                    Some(info) => {
+                        unsafe {
+                            *(out_data as *mut au::AUCocoaViewInfo) = info;
+                            *io_data_size = std::mem::size_of::<au::AUCocoaViewInfo>() as u32;
+                        }
+                        au::noErr
+                    }
+                    None => au::kAudioUnitErr_InvalidProperty,
+                }
             }
             _ => au::kAudioUnitErr_InvalidProperty,
         }
@@ -1633,6 +1716,273 @@ fn classify_unit(unit: &str) -> au::AudioUnitParameterUnit {
 }
 
 pub use Wrapper as AuWrapper;
+
+// ─── CocoaUI view-factory bridge ─────────────────────────────────────────────
+//
+// AU v2 hosts query `kAudioUnitProperty_CocoaUI` to discover how to open the
+// plugin's GUI. The property returns an `AUCocoaViewInfo` containing:
+//   1. A CFURLRef pointing at the bundle that contains the view factory class.
+//   2. A CFStringRef naming the `NSObject<AUCocoaUIBase>` subclass.
+//
+// We register a per-plugin-type ObjC class (using `objc2::define_class!`) in
+// the dylib itself and tell the host the dylib *is* the bundle. The class
+// implements `uiViewForAudioUnit:withSize:` which calls `Editor::spawn()`.
+mod cocoaui {
+    use std::ffi::c_void;
+    use std::sync::Arc;
+
+    use au_sys as au;
+    use objc2::define_class;
+    use objc2::DefinedClass;
+    use objc2_app_kit::NSView;
+    use objc2_foundation::{NSRect, NSSize};
+
+    use crate::editor::ParentWindowHandle;
+    use crate::plugin::au::AuPlugin;
+
+    use super::Wrapper;
+
+    // ── ObjC view factory class ───────────────────────────────────────────
+
+    // Each `define_class!` block creates a *new Rust type* per invocation.
+    // We define a single concrete class `NihPlugAuViewFactory` (the name must
+    // be globally unique in the process — we embed a u64 hash of the type name
+    // to differentiate multiple nih-plug plugins loaded at once).
+    //
+    // The factory holds the wrapper pointer long enough to call spawn() and
+    // then the window handle is stored back in `Wrapper::editor_handle`.
+
+    // Spawn closure type: takes `parent: ParentWindowHandle`, spawns the GUI,
+    // returns the editor handle.
+    type SpawnFn = Box<
+        dyn FnOnce(ParentWindowHandle) -> Box<dyn std::any::Any + Send> + Send,
+    >;
+
+    // Thread-local slot: set by `cocoaui_view_info` just before the host calls
+    // `uiViewForAudioUnit:withSize:`, consumed inside that method.
+    std::thread_local! {
+        static PENDING_SPAWN: std::cell::Cell<*mut SpawnFn> =
+            const { std::cell::Cell::new(std::ptr::null_mut()) };
+    }
+
+    /// Ivars for the container NSView (`NihPlugAuViewFactory` is also an NSView subclass).
+    ///
+    /// `pending_spawn`: `SpawnFn` waiting to run once the view has a window.
+    /// `editor_handle`: result of `Editor::spawn()`, kept alive as long as the view exists.
+    struct ViewFactoryIvars {
+        /// Pending spawn closure — set once, consumed in `viewDidMoveToWindow`.
+        pending_spawn: std::cell::Cell<*mut ()>,
+        /// Live editor handle — keeps the egui event loop alive.
+        editor_handle: std::cell::Cell<*mut ()>,
+    }
+    // SAFETY: only touched on the main thread.
+    unsafe impl Send for ViewFactoryIvars {}
+    unsafe impl Sync for ViewFactoryIvars {}
+
+    impl Drop for ViewFactoryIvars {
+        fn drop(&mut self) {
+            // Free any unconsumed pending spawn (only if view is closed before window attach).
+            let spawn_raw = self.pending_spawn.get();
+            if !spawn_raw.is_null() {
+                drop(unsafe { Box::from_raw(spawn_raw as *mut SpawnFn) });
+            }
+            // Free the live editor handle.
+            let handle_raw = self.editor_handle.get();
+            if !handle_raw.is_null() {
+                drop(unsafe { Box::from_raw(handle_raw as *mut Box<dyn std::any::Any + Send>) });
+            }
+        }
+    }
+
+    // `NihPlugAuViewFactory` is both the AUCocoaUIBase factory object AND the
+    // container NSView that the host places in its view hierarchy.  By being an
+    // NSView subclass we receive `viewDidMoveToWindow` which fires *after* the
+    // view has a window — the correct moment to launch baseview / egui.
+    define_class!(
+        #[unsafe(super = NSView)]
+        #[ivars = ViewFactoryIvars]
+        struct NihPlugAuViewFactory;
+
+        impl NihPlugAuViewFactory {
+            #[unsafe(method_id(initWithFrame:))]
+            fn init_with_frame(
+                this: objc2::rc::Allocated<Self>,
+                frame: NSRect,
+            ) -> Option<objc2::rc::Retained<Self>> {
+                let this = this.set_ivars(ViewFactoryIvars {
+                    pending_spawn: std::cell::Cell::new(std::ptr::null_mut()),
+                    editor_handle: std::cell::Cell::new(std::ptr::null_mut()),
+                });
+                unsafe { objc2::msg_send_id![super(this), initWithFrame: frame] }
+            }
+
+            /// Called by AppKit when this view is first attached to a window.
+            /// This is the right moment to call `open_parented` because the
+            /// view already has a window, so baseview's tracking-area setup
+            /// and `makeFirstResponder` work correctly.
+            #[unsafe(method(viewDidMoveToWindow))]
+            fn view_did_move_to_window(&self) {
+                // Chain to super first.
+                unsafe { let _: () = objc2::msg_send![super(self), viewDidMoveToWindow]; };
+
+                // Only spawn once (when window transitions nil → some).
+                let spawn_raw = self.ivars().pending_spawn.get();
+                if spawn_raw.is_null() {
+                    return;
+                }
+
+                // Consume the pending spawn closure.
+                self.ivars().pending_spawn.set(std::ptr::null_mut());
+                let spawn_fn: SpawnFn = *unsafe { Box::from_raw(spawn_raw as *mut SpawnFn) };
+
+                let parent_handle =
+                    ParentWindowHandle::AppKitNsView(self as *const _ as *mut c_void);
+
+                let handle = spawn_fn(parent_handle);
+                let handle_raw = Box::into_raw(Box::new(handle)) as *mut ();
+                self.ivars().editor_handle.set(handle_raw);
+            }
+
+            /// `- (NSView *)uiViewForAudioUnit:(AudioUnit)inAU withSize:(NSSize)inPreferredSize`
+            #[unsafe(method(uiViewForAudioUnit:withSize:))]
+            fn ui_view_for_audio_unit(
+                &self,
+                _au: *mut c_void,
+                _size: NSSize,
+            ) -> *mut NSView {
+                // Retrieve the pending spawn closure from the thread-local set by
+                // `cocoaui_view_info` and stash it in our ivar.
+                let fn_ptr = PENDING_SPAWN.with(|c| c.replace(std::ptr::null_mut()));
+                if fn_ptr.is_null() {
+                    return std::ptr::null_mut();
+                }
+                let spawn_raw = fn_ptr as *mut ();
+                self.ivars().pending_spawn.set(spawn_raw);
+
+                // Return `self` as the container view — we are an NSView subclass.
+                self as *const _ as *mut NSView
+            }
+        }
+    );
+
+    // ── Public entry point ────────────────────────────────────────────────
+
+    /// Build an `AUCocoaViewInfo` for `this` wrapper.
+    /// Returns `None` if the plugin has no editor or we can't get the bundle URL.
+    pub fn cocoaui_view_info<P: AuPlugin>(this: &Wrapper<P>) -> Option<au::AUCocoaViewInfo> {
+        let editor = this.editor.as_ref()?;
+        let gui_ctx_inner = this.gui_context_inner.as_ref()?;
+
+        // Trigger ObjC class registration (define_class! registers lazily on
+        // first call to ::class()).  Then read back the actual ObjC name so
+        // the host can locate the class.
+        use objc2::ClassType as _;
+        let class_name = NihPlugAuViewFactory::class().name().to_str().unwrap_or("NihPlugAuViewFactory").to_string();
+
+        // Build a spawn closure capturing editor + gui context.
+        let editor_clone = editor.clone();
+        let inner_clone = gui_ctx_inner.clone();
+        let spawn: SpawnFn = Box::new(move |parent_handle| {
+            let gui_ctx: Arc<dyn crate::context::gui::GuiContext> =
+                Arc::new(crate::wrapper::au::context::AuGuiContext::<P> {
+                    inner: inner_clone,
+                    _marker: std::marker::PhantomData,
+                });
+            editor_clone.lock().unwrap().spawn(parent_handle, gui_ctx)
+        });
+        PENDING_SPAWN.with(|c| c.set(Box::into_raw(Box::new(spawn))));
+
+        // Bundle URL: the directory that contains the *running* dylib.
+        // We use `dladdr` on a known symbol to find our own path.
+        let bundle_url_ref = unsafe { bundle_cf_url() }?;
+
+        let class_name_ref = unsafe { au::cf_string_create(&class_name) };
+        if class_name_ref.is_null() {
+            // Clean up the pending spawn closure we just set.
+            PENDING_SPAWN.with(|c| {
+                let ptr = c.replace(std::ptr::null_mut());
+                if !ptr.is_null() {
+                    drop(unsafe { Box::from_raw(ptr) });
+                }
+            });
+            unsafe { au::cf_release(bundle_url_ref) };
+            return None;
+        }
+
+        Some(au::AUCocoaViewInfo {
+            mCocoaAUViewBundleLocation: bundle_url_ref,
+            mCocoaAUViewClass: [class_name_ref],
+        })
+    }
+
+    /// Returns a `CFURLRef` (+1 retain) for the bundle containing this dylib.
+    ///
+    /// Uses `dladdr` to resolve the path of a symbol inside this compilation
+    /// unit, then builds a `file://` CFURL pointing at the `.component`
+    /// bundle root (three directories up from `Contents/MacOS/<dylib>`).
+    ///
+    /// The return type is `CFStringRef` only because `au-sys` declares
+    /// `mCocoaAUViewBundleLocation` as `CFStringRef` (opaque pointer — the
+    /// actual AU spec uses `CFURLRef`).  We create a real `CFURLRef` and
+    /// cast the pointer so the host receives the correct type.
+    unsafe fn bundle_cf_url() -> Option<au::CFStringRef> {
+        #[repr(C)]
+        struct DlInfo {
+            dli_fname: *const std::os::raw::c_char,
+            dli_fbase: *mut c_void,
+            dli_sname: *const std::os::raw::c_char,
+            dli_saddr: *mut c_void,
+        }
+
+        extern "C" {
+            fn dladdr(addr: *const c_void, info: *mut DlInfo) -> std::os::raw::c_int;
+            // CoreFoundation: create a file-system URL from a POSIX path.
+            fn CFURLCreateFromFileSystemRepresentation(
+                allocator: *const c_void,
+                buffer: *const u8,
+                bufLen: i64,
+                isDirectory: u8,
+            ) -> *const c_void; // CFURLRef
+        }
+
+        // Use the address of this function itself as the anchor symbol.
+        let anchor: *const c_void = bundle_cf_url as *const c_void;
+        let mut info: DlInfo = unsafe { std::mem::zeroed() };
+        if unsafe { dladdr(anchor, &mut info) } == 0 || info.dli_fname.is_null() {
+            return None;
+        }
+
+        let dylib_path = unsafe { std::ffi::CStr::from_ptr(info.dli_fname) }
+            .to_str()
+            .ok()?;
+
+        // dylib sits at: Foo.component/Contents/MacOS/Foo
+        // We want the bundle root:   Foo.component/
+        let bundle_path = std::path::Path::new(dylib_path)
+            .parent()? // MacOS/
+            .parent()? // Contents/
+            .parent()? // Foo.component/
+            .to_str()?;
+
+        let path_bytes = bundle_path.as_bytes();
+        // SAFETY: kCFAllocatorDefault = NULL, isDirectory = true (1).
+        let cf_url = unsafe {
+            CFURLCreateFromFileSystemRepresentation(
+                std::ptr::null(),
+                path_bytes.as_ptr(),
+                path_bytes.len() as i64,
+                1, // isDirectory
+            )
+        };
+        if cf_url.is_null() {
+            None
+        } else {
+            // Cast CFURLRef → CFStringRef (both are opaque pointers;
+            // mCocoaAUViewBundleLocation is documented as CFURLRef).
+            Some(cf_url as au::CFStringRef)
+        }
+    }
+}
 
 unsafe fn zero_buffer_list(bl: *mut au::AudioBufferList, n_frames: au::UInt32) {
     if bl.is_null() {

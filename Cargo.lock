@@ -683,60 +683,6 @@ dependencies = [
 [[package]]
 name = "baseview"
 version = "0.1.0"
-source = "git+https://github.com/RustAudio/baseview.git?rev=1d9806d5bd92275d0d8142d9c9c90198757b9b25#1d9806d5bd92275d0d8142d9c9c90198757b9b25"
-dependencies = [
- "cocoa",
- "core-foundation 0.9.4",
- "keyboard-types",
- "nix 0.22.3",
- "objc",
- "raw-window-handle 0.4.3",
- "uuid",
- "winapi",
- "x11",
- "xcb 0.9.0",
- "xcb-util",
-]
-
-[[package]]
-name = "baseview"
-version = "0.1.0"
-source = "git+https://github.com/RustAudio/baseview.git?rev=2c1b1a7b0fef1a29a5150a6a8f6fef6a0cbab8c4#2c1b1a7b0fef1a29a5150a6a8f6fef6a0cbab8c4"
-dependencies = [
- "cocoa",
- "core-foundation 0.9.4",
- "keyboard-types",
- "nix 0.22.3",
- "objc",
- "raw-window-handle 0.5.2",
- "uuid",
- "winapi",
- "x11",
- "xcb 0.9.0",
- "xcb-util",
-]
-
-[[package]]
-name = "baseview"
-version = "0.1.0"
-source = "git+https://github.com/RustAudio/baseview.git?rev=579130ecb4f9f315ae52190af42f0ea46aeaa4a2#579130ecb4f9f315ae52190af42f0ea46aeaa4a2"
-dependencies = [
- "cocoa",
- "core-foundation 0.9.4",
- "keyboard-types",
- "nix 0.22.3",
- "objc",
- "raw-window-handle 0.5.2",
- "uuid",
- "winapi",
- "x11",
- "x11rb 0.13.1",
-]
-
-[[package]]
-name = "baseview"
-version = "0.1.0"
-source = "git+https://github.com/RustAudio/baseview.git?rev=9a0b42c09d712777b2edb4c5e0cb6baf21e988f0#9a0b42c09d712777b2edb4c5e0cb6baf21e988f0"
 dependencies = [
  "cocoa",
  "core-foundation 0.9.4",
@@ -881,7 +827,7 @@ name = "byo_gui_gl"
 version = "0.1.0"
 dependencies = [
  "atomic_float",
- "baseview 0.1.0 (git+https://github.com/RustAudio/baseview.git?rev=9a0b42c09d712777b2edb4c5e0cb6baf21e988f0)",
+ "baseview",
  "crossbeam",
  "glow 0.16.0",
  "nih_plug",
@@ -894,7 +840,7 @@ name = "byo_gui_softbuffer"
 version = "0.1.0"
 dependencies = [
  "atomic_float",
- "baseview 0.1.0 (git+https://github.com/RustAudio/baseview.git?rev=9a0b42c09d712777b2edb4c5e0cb6baf21e988f0)",
+ "baseview",
  "crossbeam",
  "nih_plug",
  "raw-window-handle 0.5.2",
@@ -908,7 +854,7 @@ name = "byo_gui_wgpu"
 version = "0.1.0"
 dependencies = [
  "atomic_float",
- "baseview 0.1.0 (git+https://github.com/RustAudio/baseview.git?rev=9a0b42c09d712777b2edb4c5e0cb6baf21e988f0)",
+ "baseview",
  "crossbeam",
  "nih_plug",
  "pollster",
@@ -1853,7 +1799,7 @@ name = "egui-baseview"
 version = "0.5.0"
 source = "git+https://github.com/BillyDM/egui-baseview.git?rev=ec70c3fe6b2f070dcacbc22924431edbe24bd1c0#ec70c3fe6b2f070dcacbc22924431edbe24bd1c0"
 dependencies = [
- "baseview 0.1.0 (git+https://github.com/RustAudio/baseview.git?rev=9a0b42c09d712777b2edb4c5e0cb6baf21e988f0)",
+ "baseview",
  "copypasta 0.10.1",
  "egui",
  "egui_glow",
@@ -2837,7 +2783,7 @@ name = "iced_baseview"
 version = "0.0.3"
 source = "git+https://github.com/robbert-vdh/iced_baseview.git?branch=feature/update-baseview#df3a852a15cf0e9fcc8d2b32f5718e56780beaf3"
 dependencies = [
- "baseview 0.1.0 (git+https://github.com/RustAudio/baseview.git?rev=1d9806d5bd92275d0d8142d9c9c90198757b9b25)",
+ "baseview",
  "copypasta 0.7.1",
  "iced_core",
  "iced_futures",
@@ -3588,7 +3534,7 @@ dependencies = [
  "atomic_refcell",
  "au-sys",
  "backtrace",
- "baseview 0.1.0 (git+https://github.com/RustAudio/baseview.git?rev=579130ecb4f9f315ae52190af42f0ea46aeaa4a2)",
+ "baseview",
  "bitflags 1.3.2",
  "cfg-if",
  "clap",
@@ -3637,7 +3583,7 @@ dependencies = [
 name = "nih_plug_egui"
 version = "0.0.0"
 dependencies = [
- "baseview 0.1.0 (git+https://github.com/RustAudio/baseview.git?rev=9a0b42c09d712777b2edb4c5e0cb6baf21e988f0)",
+ "baseview",
  "crossbeam",
  "egui-baseview",
  "nih_plug",
@@ -3651,7 +3597,7 @@ name = "nih_plug_iced"
 version = "0.0.0"
 dependencies = [
  "atomic_refcell",
- "baseview 0.1.0 (git+https://github.com/RustAudio/baseview.git?rev=1d9806d5bd92275d0d8142d9c9c90198757b9b25)",
+ "baseview",
  "crossbeam",
  "iced_baseview",
  "nih_plug",
@@ -3664,7 +3610,7 @@ dependencies = [
 name = "nih_plug_vizia"
 version = "0.0.0"
 dependencies = [
- "baseview 0.1.0 (git+https://github.com/RustAudio/baseview.git?rev=2c1b1a7b0fef1a29a5150a6a8f6fef6a0cbab8c4)",
+ "baseview",
  "crossbeam",
  "nih_plug",
  "nih_plug_assets",
@@ -6088,7 +6034,7 @@ name = "vizia_baseview"
 version = "0.1.0"
 source = "git+https://github.com/robbert-vdh/vizia.git?tag=patched-2024-05-06#e3fab5530cda9cb90f679508d9f058bd62189d36"
 dependencies = [
- "baseview 0.1.0 (git+https://github.com/RustAudio/baseview.git?rev=2c1b1a7b0fef1a29a5150a6a8f6fef6a0cbab8c4)",
+ "baseview",
  "femtovg",
  "lazy_static",
  "raw-window-handle 0.5.2",
@@ -7169,7 +7115,7 @@ version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "473068b7b80ac86a18328824f1054e5e007898c47b5bbc281bd7abe32bc3653c"
 dependencies = [
- "xcb 0.10.1",
+ "xcb",
 ]
 
 [[package]]
@@ -7247,17 +7193,6 @@ checksum = "ec107c4503ea0b4a98ef47356329af139c0a4f7750e621cf2973cd3385ebcb3d"
 
 [[package]]
 name = "xcb"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62056f63138b39116f82a540c983cc11f1c90cd70b3d492a70c25eaa50bd22a6"
-dependencies = [
- "libc",
- "log",
- "x11",
-]
-
-[[package]]
-name = "xcb"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "771e2b996df720cd1c6dd9ff90f62d91698fd3610cc078388d0564bdd6622a9c"
@@ -7265,16 +7200,6 @@ dependencies = [
  "libc",
  "log",
  "quick-xml",
-]
-
-[[package]]
-name = "xcb-util"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43893e47f27bf7d81d489feef3a0e34a457e90bc314b7e74ad9bb3980e4c1c48"
-dependencies = [
- "libc",
- "xcb 0.9.0",
 ]
 
 [[package]]

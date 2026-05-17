@@ -11,6 +11,10 @@ description = "A simple gain plugin with an egui GUI"
 # The `lib` artifact is needed for the standalone target
 crate-type = ["cdylib", "lib"]
 
+[features]
+default = ["au"]
+au = ["nih_plug/au"]
+
 [dependencies]
 nih_plug = { path = "../../../", features = ["assert_process_allocs", "standalone"] }
 nih_plug_egui = { path = "../../../nih_plug_egui" }

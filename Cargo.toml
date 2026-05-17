@@ -154,3 +154,11 @@ strip = "symbols"
 inherits = "release"
 debug = true
 strip = "none"
+
+# AUD-379: baseview patched to guard against null BASEVIEW_STATE_IVAR in
+# become_first_responder / resign_first_responder.  The crash happens when
+# an AU host calls uiViewForAudioUnit:withSize: on a parent view that is
+# already attached to a window: addSubview: fires viewWillMoveToWindow which
+# calls makeFirstResponder before WindowState has been stored in the ivar.
+[patch."https://github.com/RustAudio/baseview.git"]
+baseview = { path = "vendor/baseview" }

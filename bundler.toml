@@ -22,6 +22,15 @@ subtype = "MPgN"
 manufacturer = "MoiP"
 description = "Smoothed gain — nih-plug AU example"
 
+[gain_gui_egui]
+name = "Gain GUI (egui)"
+
+[gain_gui_egui.au]
+type = "aufx"
+subtype = "GnEG"
+manufacturer = "MoiP"
+description = "Gain with egui GUI — nih-plug AU example"
+
 [soft_vacuum]
 name = "Soft Vacuum"
 
