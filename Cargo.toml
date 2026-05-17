@@ -3,6 +3,7 @@ name = "nih_plug"
 version = "0.0.0"
 edition = "2021"
 rust-version = "1.80"
+links = "nih_plug_cocoaui"
 authors = ["Robbert van der Helm <mail@robbertvanderhelm.nl>"]
 license = "ISC"
 
@@ -135,6 +136,9 @@ au-sys = { version = "0.1", optional = true }
 objc2 = { version = "0.6", optional = true }
 objc2-foundation = { version = "0.3", optional = true }
 objc2-app-kit = { version = "0.3", optional = true }
+
+[build-dependencies]
+cc = { version = "1.0", optional = false }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows]
 version = "0.44"

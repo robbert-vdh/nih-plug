@@ -1879,162 +1879,126 @@ pub use Wrapper as AuWrapper;
 //   1. A CFURLRef pointing at the bundle that contains the view factory class.
 //   2. A CFStringRef naming the `NSObject<AUCocoaUIBase>` subclass.
 //
-// We register a per-plugin-type ObjC class (using `objc2::define_class!`) in
-// the dylib itself and tell the host the dylib *is* the bundle. The class
-// implements `uiViewForAudioUnit:withSize:` which calls `Editor::spawn()`.
+// IMPORTANT: objc2's `define_class!` does NOT emit __OBJC_CLASS_PROTOCOLS
+// metadata, so `conformsToProtocol:(AUCocoaUIBase)` returns NO in hosts.
+// We use a real Objective-C .m shim (src/wrapper/au/cocoaui.m, compiled via
+// build.rs + cc crate) which declares `@interface ... : NSObject <AUCocoaUIBase>`.
+// This generates proper protocol conformance metadata at compile time.
+//
+// The shim calls back into Rust via two C-ABI functions:
+//   nih_plug_au_cocoaui_take_spawn(key) -> *mut ()   — takes the spawn closure
 mod cocoaui {
     use std::ffi::c_void;
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex, OnceLock};
+    use std::collections::HashMap;
+    use std::sync::atomic::{AtomicPtr, AtomicU32, Ordering as AtomicOrdering};
 
     use au_sys as au;
-    use objc2::define_class;
-    use objc2::DefinedClass;
-    use objc2_app_kit::NSView;
-    use objc2_foundation::{NSRect, NSSize};
 
     use crate::editor::ParentWindowHandle;
     use crate::plugin::au::AuPlugin;
 
     use super::Wrapper;
 
-    // ── ObjC view factory class ───────────────────────────────────────────
+    type SpawnFn = Box<dyn FnOnce(ParentWindowHandle) -> Box<dyn std::any::Any + Send> + Send>;
 
-    // Each `define_class!` block creates a *new Rust type* per invocation.
-    // We define a single concrete class `NihPlugAuViewFactory` (the name must
-    // be globally unique in the process — we embed a u64 hash of the type name
-    // to differentiate multiple nih-plug plugins loaded at once).
+    fn au_log(msg: &str) {
+        use std::io::Write as _;
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true).append(true)
+            .open("/tmp/nih_plug_au.log")
+        {
+            let _ = writeln!(f, "{}", msg);
+        }
+    }
+
+    macro_rules! au_log {
+        ($($arg:tt)*) => { au_log(&format!($($arg)*)) };
+    }
+
+    // ── Global pending spawn pointer ───────────────────────────────────────────
     //
-    // The factory holds the wrapper pointer long enough to call spawn() and
-    // then the window handle is stored back in `Wrapper::editor_handle`.
-
-    // Spawn closure type: takes `parent: ParentWindowHandle`, spawns the GUI,
-    // returns the editor handle.
-    type SpawnFn = Box<
-        dyn FnOnce(ParentWindowHandle) -> Box<dyn std::any::Any + Send> + Send,
-    >;
-
-    // Thread-local slot: set by `cocoaui_view_info` just before the host calls
-    // `uiViewForAudioUnit:withSize:`, consumed inside that method.
-    std::thread_local! {
-        static PENDING_SPAWN: std::cell::Cell<*mut SpawnFn> =
-            const { std::cell::Cell::new(std::ptr::null_mut()) };
+    // Defined in cocoaui.m as `_Atomic(void *) nih_plug_au_pending_spawn_raw`.
+    // We reference it via extern so there is exactly ONE definition (the C one).
+    // cocoaui_view_info writes the spawn closure here; the ObjC shim's
+    // uiViewForAudioUnit:withSize: atomically swaps it to null and calls
+    // nih_plug_au_cocoaui_spawn(view, ptr).
+    extern "C" {
+        static nih_plug_au_pending_spawn_raw: AtomicPtr<c_void>;
+        // Plugin editor dimensions (logical points) — written before spawn, read by ObjC shim.
+        static nih_plug_au_editor_width:  AtomicU32;
+        static nih_plug_au_editor_height: AtomicU32;
     }
 
-    /// Ivars for the container NSView (`NihPlugAuViewFactory` is also an NSView subclass).
-    ///
-    /// `pending_spawn`: `SpawnFn` waiting to run once the view has a window.
-    /// `editor_handle`: result of `Editor::spawn()`, kept alive as long as the view exists.
-    struct ViewFactoryIvars {
-        /// Pending spawn closure — set once, consumed in `viewDidMoveToWindow`.
-        pending_spawn: std::cell::Cell<*mut ()>,
-        /// Live editor handle — keeps the egui event loop alive.
-        editor_handle: std::cell::Cell<*mut ()>,
-    }
-    // SAFETY: only touched on the main thread.
-    unsafe impl Send for ViewFactoryIvars {}
-    unsafe impl Sync for ViewFactoryIvars {}
+    // ── Editor handle store ────────────────────────────────────────────────────
+    //
+    // EguiEditorHandle must stay alive while the GUI is open.
+    // Keyed by container NSView pointer.
+    type EditorHandle = Box<dyn std::any::Any + Send>;
+    static HANDLE_MAP: OnceLock<Mutex<HashMap<u64, EditorHandle>>> = OnceLock::new();
 
-    impl Drop for ViewFactoryIvars {
-        fn drop(&mut self) {
-            // Free any unconsumed pending spawn (only if view is closed before window attach).
-            let spawn_raw = self.pending_spawn.get();
-            if !spawn_raw.is_null() {
-                drop(unsafe { Box::from_raw(spawn_raw as *mut SpawnFn) });
-            }
-            // Free the live editor handle.
-            let handle_raw = self.editor_handle.get();
-            if !handle_raw.is_null() {
-                drop(unsafe { Box::from_raw(handle_raw as *mut Box<dyn std::any::Any + Send>) });
-            }
+    fn handle_map() -> &'static Mutex<HashMap<u64, EditorHandle>> {
+        HANDLE_MAP.get_or_init(|| Mutex::new(HashMap::new()))
+    }
+
+    // ── C-ABI callbacks called by the ObjC shim ────────────────────────────────
+
+    /// Called by the ObjC shim after it creates the container NSView.
+    /// Runs the spawn closure and stores the editor handle.
+    #[no_mangle]
+    pub unsafe extern "C" fn nih_plug_au_cocoaui_spawn(
+        parent_ns_view: *mut c_void,
+        spawn_raw: *mut c_void,
+    ) {
+        au_log!("[nih-plug AU] cocoaui_spawn: view={:?}", parent_ns_view);
+        if spawn_raw.is_null() || parent_ns_view.is_null() {
+            return;
         }
+        let spawn_fn: SpawnFn = *unsafe { Box::from_raw(spawn_raw as *mut SpawnFn) };
+        let parent = ParentWindowHandle::AppKitNsView(parent_ns_view);
+        let handle = spawn_fn(parent);
+        handle_map().lock().unwrap().insert(parent_ns_view as u64, handle);
+        au_log!("[nih-plug AU] cocoaui_spawn: editor handle stored");
     }
 
-    // `NihPlugAuViewFactory` is both the AUCocoaUIBase factory object AND the
-    // container NSView that the host places in its view hierarchy.  By being an
-    // NSView subclass we receive `viewDidMoveToWindow` which fires *after* the
-    // view has a window — the correct moment to launch baseview / egui.
-    define_class!(
-        #[unsafe(super = NSView)]
-        #[ivars = ViewFactoryIvars]
-        struct NihPlugAuViewFactory;
+    extern "C" {
+        /// Defined in cocoaui.m — drops the ObjC global strong ref to the container view.
+        fn nih_plug_au_release_container(container_ns_view: *mut c_void);
+    }
 
-        impl NihPlugAuViewFactory {
-            #[unsafe(method_id(initWithFrame:))]
-            fn init_with_frame(
-                this: objc2::rc::Allocated<Self>,
-                frame: NSRect,
-            ) -> Option<objc2::rc::Retained<Self>> {
-                let this = this.set_ivars(ViewFactoryIvars {
-                    pending_spawn: std::cell::Cell::new(std::ptr::null_mut()),
-                    editor_handle: std::cell::Cell::new(std::ptr::null_mut()),
-                });
-                unsafe { objc2::msg_send![super(this), initWithFrame: frame] }
-            }
+    /// Called by the host (via dealloc/removeFromSuperview) when the GUI is closed.
+    /// Also called internally when replacing a stale container.
+    #[no_mangle]
+    pub unsafe extern "C" fn nih_plug_au_cocoaui_close_view(container_ns_view: *mut c_void) {
+        let removed = handle_map().lock().unwrap().remove(&(container_ns_view as u64));
+        au_log!("[nih-plug AU] cocoaui_close_view: view={:?} had_handle={}", container_ns_view, removed.is_some());
+        // Release the ObjC global strong reference so ARC can eventually
+        // dealloc the container once the host also releases it.
+        unsafe { nih_plug_au_release_container(container_ns_view) };
+    }
 
-            /// Called by AppKit when this view is first attached to a window.
-            /// This is the right moment to call `open_parented` because the
-            /// view already has a window, so baseview's tracking-area setup
-            /// and `makeFirstResponder` work correctly.
-            #[unsafe(method(viewDidMoveToWindow))]
-            fn view_did_move_to_window(&self) {
-                // Chain to super first.
-                unsafe { let _: () = objc2::msg_send![super(self), viewDidMoveToWindow]; };
+    // ── Public entry point ─────────────────────────────────────────────────────
 
-                // Only spawn once (when window transitions nil → some).
-                let spawn_raw = self.ivars().pending_spawn.get();
-                if spawn_raw.is_null() {
-                    return;
-                }
-
-                // Consume the pending spawn closure.
-                self.ivars().pending_spawn.set(std::ptr::null_mut());
-                let spawn_fn: SpawnFn = *unsafe { Box::from_raw(spawn_raw as *mut SpawnFn) };
-
-                let parent_handle =
-                    ParentWindowHandle::AppKitNsView(self as *const _ as *mut c_void);
-
-                let handle = spawn_fn(parent_handle);
-                let handle_raw = Box::into_raw(Box::new(handle)) as *mut ();
-                self.ivars().editor_handle.set(handle_raw);
-            }
-
-            /// `- (NSView *)uiViewForAudioUnit:(AudioUnit)inAU withSize:(NSSize)inPreferredSize`
-            #[unsafe(method(uiViewForAudioUnit:withSize:))]
-            fn ui_view_for_audio_unit(
-                &self,
-                _au: *mut c_void,
-                _size: NSSize,
-            ) -> *mut NSView {
-                // Retrieve the pending spawn closure from the thread-local set by
-                // `cocoaui_view_info` and stash it in our ivar.
-                let fn_ptr = PENDING_SPAWN.with(|c| c.replace(std::ptr::null_mut()));
-                if fn_ptr.is_null() {
-                    return std::ptr::null_mut();
-                }
-                let spawn_raw = fn_ptr as *mut ();
-                self.ivars().pending_spawn.set(spawn_raw);
-
-                // Return `self` as the container view — we are an NSView subclass.
-                self as *const _ as *mut NSView
-            }
-        }
-    );
-
-    // ── Public entry point ────────────────────────────────────────────────
+    /// ObjC factory class name, injected at compile time by build.rs.
+    const VIEW_CLASS_NAME: &str = env!("NIH_PLUG_AU_VIEW_CLASS");
 
     /// Build an `AUCocoaViewInfo` for `this` wrapper.
-    /// Returns `None` if the plugin has no editor or we can't get the bundle URL.
+    /// Stores the spawn closure in `nih_plug_au_pending_spawn_raw` so the ObjC
+    /// shim's `uiViewForAudioUnit:withSize:` can pick it up atomically.
     pub fn cocoaui_view_info<P: AuPlugin>(this: &Wrapper<P>) -> Option<au::AUCocoaViewInfo> {
+        au_log!("[nih-plug AU] cocoaui_view_info: called");
         let editor = this.editor.as_ref()?;
         let gui_ctx_inner = this.gui_context_inner.as_ref()?;
 
-        // Trigger ObjC class registration (define_class! registers lazily on
-        // first call to ::class()).  Then read back the actual ObjC name so
-        // the host can locate the class.
-        use objc2::ClassType as _;
-        let class_name = NihPlugAuViewFactory::class().name().to_str().unwrap_or("NihPlugAuViewFactory").to_string();
+        // Store the plugin's logical editor size so the ObjC shim can size the
+        // container correctly (Ableton passes preferredSize = {0,0}).
+        let (ew, eh) = editor.lock().unwrap().size();
+        unsafe {
+            nih_plug_au_editor_width .store(ew, AtomicOrdering::Release);
+            nih_plug_au_editor_height.store(eh, AtomicOrdering::Release);
+        }
+        au_log!("[nih-plug AU] cocoaui_view_info: editor_size={}x{}", ew, eh);
 
-        // Build a spawn closure capturing editor + gui context.
         let editor_clone = editor.clone();
         let inner_clone = gui_ctx_inner.clone();
         let spawn: SpawnFn = Box::new(move |parent_handle| {
@@ -2045,25 +2009,37 @@ mod cocoaui {
                 });
             editor_clone.lock().unwrap().spawn(parent_handle, gui_ctx)
         });
-        PENDING_SPAWN.with(|c| c.set(Box::into_raw(Box::new(spawn))));
+        let spawn_raw = Box::into_raw(Box::new(spawn)) as *mut c_void;
 
-        // Bundle URL: the directory that contains the *running* dylib.
-        // We use `dladdr` on a known symbol to find our own path.
-        let bundle_url_ref = unsafe { bundle_cf_url() }?;
+        // Drop any previously unconsumed spawn closure (e.g. host queried twice
+        // without ever calling uiViewForAudioUnit:withSize:).
+        // SAFETY: extern static defined in cocoaui.m; AtomicPtr ops are lock-free.
+        let old = unsafe { nih_plug_au_pending_spawn_raw.swap(spawn_raw, AtomicOrdering::AcqRel) };
+        if !old.is_null() {
+            drop(unsafe { Box::from_raw(old as *mut SpawnFn) });
+        }
+        au_log!("[nih-plug AU] cocoaui_view_info: spawn_raw={:?} stored", spawn_raw);
 
-        let class_name_ref = unsafe { au::cf_string_create(&class_name) };
+        let bundle_url_ref = match unsafe { bundle_cf_url() } {
+            Ok(r) => r,
+            Err(()) => {
+                // Roll back: reclaim the spawn closure we just stored.
+                let ptr = unsafe { nih_plug_au_pending_spawn_raw.swap(std::ptr::null_mut(), AtomicOrdering::AcqRel) };
+                if !ptr.is_null() { drop(unsafe { Box::from_raw(ptr as *mut SpawnFn) }); }
+                au_log!("[nih-plug AU] cocoaui_view_info: bundle_cf_url failed");
+                return None;
+            }
+        };
+
+        let class_name_ref = unsafe { au::cf_string_create(VIEW_CLASS_NAME) };
         if class_name_ref.is_null() {
-            // Clean up the pending spawn closure we just set.
-            PENDING_SPAWN.with(|c| {
-                let ptr = c.replace(std::ptr::null_mut());
-                if !ptr.is_null() {
-                    drop(unsafe { Box::from_raw(ptr) });
-                }
-            });
-            unsafe { au::cf_release(bundle_url_ref) };
+            unsafe { au::cf_release(bundle_url_ref as *mut c_void) };
+            let ptr = unsafe { nih_plug_au_pending_spawn_raw.swap(std::ptr::null_mut(), AtomicOrdering::AcqRel) };
+            if !ptr.is_null() { drop(unsafe { Box::from_raw(ptr as *mut SpawnFn) }); }
             return None;
         }
 
+        au_log!("[nih-plug AU] cocoaui_view_info: class={} bundle={:?}", VIEW_CLASS_NAME, bundle_url_ref);
         Some(au::AUCocoaViewInfo {
             mCocoaAUViewBundleLocation: bundle_url_ref,
             mCocoaAUViewClass: [class_name_ref],
@@ -2075,12 +2051,7 @@ mod cocoaui {
     /// Uses `dladdr` to resolve the path of a symbol inside this compilation
     /// unit, then builds a `file://` CFURL pointing at the `.component`
     /// bundle root (three directories up from `Contents/MacOS/<dylib>`).
-    ///
-    /// The return type is `CFStringRef` only because `au-sys` declares
-    /// `mCocoaAUViewBundleLocation` as `CFStringRef` (opaque pointer — the
-    /// actual AU spec uses `CFURLRef`).  We create a real `CFURLRef` and
-    /// cast the pointer so the host receives the correct type.
-    unsafe fn bundle_cf_url() -> Option<au::CFStringRef> {
+    unsafe fn bundle_cf_url() -> Result<au::CFStringRef, ()> {
         #[repr(C)]
         struct DlInfo {
             dli_fname: *const std::os::raw::c_char,
@@ -2091,36 +2062,32 @@ mod cocoaui {
 
         extern "C" {
             fn dladdr(addr: *const c_void, info: *mut DlInfo) -> std::os::raw::c_int;
-            // CoreFoundation: create a file-system URL from a POSIX path.
             fn CFURLCreateFromFileSystemRepresentation(
                 allocator: *const c_void,
                 buffer: *const u8,
                 bufLen: i64,
                 isDirectory: u8,
-            ) -> *const c_void; // CFURLRef
+            ) -> *const c_void;
         }
 
-        // Use the address of this function itself as the anchor symbol.
         let anchor: *const c_void = bundle_cf_url as *const c_void;
         let mut info: DlInfo = unsafe { std::mem::zeroed() };
         if unsafe { dladdr(anchor, &mut info) } == 0 || info.dli_fname.is_null() {
-            return None;
+            return Err(());
         }
 
         let dylib_path = unsafe { std::ffi::CStr::from_ptr(info.dli_fname) }
             .to_str()
-            .ok()?;
+            .map_err(|_| ())?;
 
-        // dylib sits at: Foo.component/Contents/MacOS/Foo
-        // We want the bundle root:   Foo.component/
+        // Foo.component/Contents/MacOS/Foo → Foo.component/
         let bundle_path = std::path::Path::new(dylib_path)
-            .parent()? // MacOS/
-            .parent()? // Contents/
-            .parent()? // Foo.component/
-            .to_str()?;
+            .parent().ok_or(())?  // MacOS/
+            .parent().ok_or(())?  // Contents/
+            .parent().ok_or(())?  // Foo.component/
+            .to_str().ok_or(())?;
 
         let path_bytes = bundle_path.as_bytes();
-        // SAFETY: kCFAllocatorDefault = NULL, isDirectory = true (1).
         let cf_url = unsafe {
             CFURLCreateFromFileSystemRepresentation(
                 std::ptr::null(),
@@ -2130,11 +2097,9 @@ mod cocoaui {
             )
         };
         if cf_url.is_null() {
-            None
+            Err(())
         } else {
-            // Cast CFURLRef → CFStringRef (both are opaque pointers;
-            // mCocoaAUViewBundleLocation is documented as CFURLRef).
-            Some(cf_url as au::CFStringRef)
+            Ok(cf_url as au::CFStringRef)
         }
     }
 }
