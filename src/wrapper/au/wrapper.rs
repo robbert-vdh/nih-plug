@@ -1194,7 +1194,7 @@ impl<P: AuPlugin> Wrapper<P> {
     unsafe extern "C" fn render(
         self_ptr: *mut c_void,
         _io_action_flags: *mut au::AudioUnitRenderActionFlags,
-        _in_time_stamp: *const au::AudioTimeStamp,
+        in_time_stamp: *const au::AudioTimeStamp,
         _in_output_bus_number: au::UInt32,
         in_number_frames: au::UInt32,
         io_data: *mut au::AudioBufferList,
@@ -1363,7 +1363,7 @@ impl<P: AuPlugin> Wrapper<P> {
                     }
                 }
                 if let Some(state_proc) = cb.transportStateProc {
-                    let mut playing = 0u8; // Boolean is often u8
+                    let mut playing = 0u8;
                     let mut changed = 0u8;
                     let mut sample_pos = 0.0f64;
                     let mut cycling = 0u8;
@@ -1383,8 +1383,25 @@ impl<P: AuPlugin> Wrapper<P> {
                     {
                         transport.playing = playing != 0;
                         transport.pos_samples = Some(sample_pos as i64);
+                        if cycling != 0 {
+                            transport.loop_range_samples =
+                                Some((cycle_start as i64, cycle_end as i64));
+                        }
                     }
                 }
+            }
+        }
+
+        // Fallback: if HostCallback didn't provide pos_samples, read it from
+        // the timestamp that the host passes every render call. AU hosts
+        // always set mSampleTime when kAudioTimeStampSampleTimeValid is set.
+        if transport.pos_samples.is_none() && !in_time_stamp.is_null() {
+            let ts = unsafe { &*in_time_stamp };
+            if ts.mFlags & au::kAudioTimeStampSampleTimeValid != 0 {
+                transport.pos_samples = Some(ts.mSampleTime as i64);
+                // Without transportStateProc we can't know playing state, so
+                // assume the engine is running if a valid timestamp is present.
+                transport.playing = true;
             }
         }
 
