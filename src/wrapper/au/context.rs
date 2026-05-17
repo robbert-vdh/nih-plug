@@ -188,18 +188,18 @@ impl<P: Plugin> GuiContext for AuGuiContext<P> {
 
 /// `AudioUnitParameter` — used by `AUParameterListenerNotify`.
 #[repr(C)]
-struct AUParameter {
-    mAudioUnit: au::AudioUnit,
-    mParameterID: au::AudioUnitParameterID,
-    mScope: au::AudioUnitScope,
-    mElement: au::AudioUnitElement,
+pub(super) struct AUParameter {
+    pub mAudioUnit: au::AudioUnit,
+    pub mParameterID: au::AudioUnitParameterID,
+    pub mScope: au::AudioUnitScope,
+    pub mElement: au::AudioUnitElement,
 }
 
 #[link(name = "AudioToolbox", kind = "framework")]
 extern "C" {
     /// Notifies all listeners registered for the given parameter.
     /// Declared here because `au-sys` does not expose this AudioToolbox API.
-    fn AUParameterListenerNotify(
+    pub(super) fn AUParameterListenerNotify(
         inSendingListener: *mut std::ffi::c_void,
         inSendingObject: *mut std::ffi::c_void,
         inParameter: *const AUParameter,

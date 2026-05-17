@@ -59,7 +59,7 @@ use crate::plugin::au::AuPlugin;
 use crate::prelude::{AudioIOLayout, AuxiliaryBuffers, BufferConfig, ProcessMode};
 use crate::wrapper::state::{self, PluginState};
 
-use super::context::{AuGuiContextInner, AuInitContext, AuProcessContext, ContextSink};
+use super::context::{AUParameter, AUParameterListenerNotify, AuGuiContextInner, AuInitContext, AuProcessContext, ContextSink};
 use super::factory::fourcc;
 
 /// One AU plugin instance. Owned by Apple's component manager via the
@@ -1261,6 +1261,16 @@ impl<P: AuPlugin> Wrapper<P> {
                 }
             }
         }
+        // Notify all registered AU parameter listeners (e.g. GUI parameter
+        // listeners, Logic's automation recording).
+        let instance = this.instance.load(Ordering::Acquire) as usize as au::AudioUnit;
+        let au_param = AUParameter {
+            mAudioUnit: instance,
+            mParameterID: id,
+            mScope: au::kAudioUnitScope_Global,
+            mElement: 0,
+        };
+        unsafe { AUParameterListenerNotify(std::ptr::null_mut(), std::ptr::null_mut(), &au_param) };
         au::noErr
     }
 
