@@ -593,6 +593,12 @@ impl<P: AuPlugin> Wrapper<P> {
         }
         plugin.reset();
 
+        // Initialize parameter smoothers with the current sample rate.
+        // This mirrors what the VST3/CLAP wrappers do in their initialize paths.
+        for entry in &this.params_by_id {
+            unsafe { entry.ptr.update_smoother(sr as f32, true) };
+        }
+
         // Provision the audio-thread render state so the hot path is
         // allocation-free. SAFETY: render is serialised vs. Initialize.
         let render_state = unsafe { this.render_state_mut() };
@@ -1261,6 +1267,12 @@ impl<P: AuPlugin> Wrapper<P> {
                 }
             }
         }
+        // Update the smoother target so sample-accurate automation and GUI
+        // interactions are reflected in the audio thread.
+        let sr = this.sample_rate();
+        if sr > 0.0 {
+            unsafe { entry.ptr.update_smoother(sr as f32, false) };
+        }
         // Notify all registered AU parameter listeners (e.g. GUI parameter
         // listeners, Logic's automation recording).
         let instance = this.instance.load(Ordering::Acquire) as usize as au::AudioUnit;
@@ -1512,31 +1524,6 @@ impl<P: AuPlugin> Wrapper<P> {
         // copied into io_data above (callback path) or sits there in-place
         // (host path), so the pass-through is implicit — we just don't run
         // the plugin's DSP.
-        // ── DIAGNOSTIC: one-shot render trace (AUD-343 PluginDoctor 무음 진단) ─
-        // 첫 render() 호출에서 한 번만 찍는다. AU host의 input 전달 모델 파악용.
-        // 검증 끝나면 통째로 제거할 일회성 코드.
-        {
-            use std::sync::atomic::AtomicBool;
-            static FIRST: AtomicBool = AtomicBool::new(true);
-            if FIRST.swap(false, Ordering::Relaxed) {
-                let cb_present = callback_snapshot.is_some();
-                let bypass = this.bypass.load(Ordering::Acquire);
-                let n_ch_buf = unsafe { (*io_data).mNumberBuffers };
-                let first_sample_in: f32 = unsafe {
-                    let buf = &*buffers_ptr;
-                    if !buf.mData.is_null() && n_frames > 0 {
-                        *(buf.mData as *const f32)
-                    } else {
-                        f32::NAN
-                    }
-                };
-                eprintln!(
-                    "[nih-plug AU] render#1: n_frames={n_frames} n_buffers={n_ch_buf} \
-                     pulled_from_callback={pulled_from_callback} input_callback_present={cb_present} \
-                     bypass={bypass} first_input_sample={first_sample_in:?}"
-                );
-            }
-        }
 
         if !this.bypass.load(Ordering::Acquire) {
             // SAFETY: render is not concurrent with Initialize/Uninitialize/Reset
@@ -1546,25 +1533,6 @@ impl<P: AuPlugin> Wrapper<P> {
                 &mut aux,
                 &mut process_ctx,
             );
-
-            // ── DIAGNOSTIC: post-process first output sample ──────────────
-            {
-                use std::sync::atomic::AtomicBool;
-                static FIRST_OUT: AtomicBool = AtomicBool::new(true);
-                if FIRST_OUT.swap(false, Ordering::Relaxed) {
-                    let first_sample_out: f32 = unsafe {
-                        let buf = &*buffers_ptr;
-                        if !buf.mData.is_null() && n_frames > 0 {
-                            *(buf.mData as *const f32)
-                        } else {
-                            f32::NAN
-                        }
-                    };
-                    eprintln!(
-                        "[nih-plug AU] render#1 post-process: first_output_sample={first_sample_out:?}"
-                    );
-                }
-            }
         }
 
         // Clear the slot slices so the `'static` lifetime can never escape
