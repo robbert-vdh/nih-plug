@@ -1968,7 +1968,7 @@ mod cocoaui {
                     pending_spawn: std::cell::Cell::new(std::ptr::null_mut()),
                     editor_handle: std::cell::Cell::new(std::ptr::null_mut()),
                 });
-                unsafe { objc2::msg_send_id![super(this), initWithFrame: frame] }
+                unsafe { objc2::msg_send![super(this), initWithFrame: frame] }
             }
 
             /// Called by AppKit when this view is first attached to a window.

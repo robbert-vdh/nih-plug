@@ -188,6 +188,7 @@ impl<P: Plugin> GuiContext for AuGuiContext<P> {
 
 /// `AudioUnitParameter` — used by `AUParameterListenerNotify`.
 #[repr(C)]
+#[allow(non_snake_case)]
 pub(super) struct AUParameter {
     pub mAudioUnit: au::AudioUnit,
     pub mParameterID: au::AudioUnitParameterID,
