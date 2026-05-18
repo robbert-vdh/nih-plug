@@ -4,7 +4,7 @@
 [![Tests](https://github.com/robbert-vdh/nih-plug/actions/workflows/test.yml/badge.svg?branch=master)](https://github.com/robbert-vdh/nih-plug/actions/workflows/test.yml?query=branch%3Amaster)
 [![Docs](https://github.com/robbert-vdh/nih-plug/actions/workflows/docs.yml/badge.svg?branch=master)](https://nih-plug.robbertvanderhelm.nl/)
 
-**NOTE: `NIH-plug` the plugin framework is currently in maintenance mode. If you are interested in the framework rather than the plugin, please check out [this community fork](https://codeberg.org/BillyDM/nih-plug) instead.**
+**NOTE: `NIH-plug` the plugin framework is currently in maintenance mode. If you are interested in the framework rather than the plugin, please check out [this community fork](https://codeberg.org/BillyDM/nice-plug) instead.**
 
 NIH-plug is an API-agnostic audio plugin framework written in Rust, as well as a
 small collection of plugins. The idea is to have a stateful yet simple plugin
