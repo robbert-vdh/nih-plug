@@ -118,7 +118,7 @@ pub struct Wrapper<P: ClapPlugin> {
     editor: AtomicRefCell<Option<Mutex<Box<dyn Editor>>>>,
     /// A handle for the currently active editor instance. The plugin should implement `Drop` on
     /// this handle for its closing behavior.
-    editor_handle: Mutex<Option<Box<dyn Any + Send>>>,
+    editor_handle: Mutex<Option<Box<dyn Any>>>,
     /// The DPI scaling factor as passed to the [IPlugViewContentScaleSupport::set_scale_factor()]
     /// function. Defaults to 1.0, and will be kept there on macOS. When reporting and handling size
     /// the sizes communicated to and from the DAW should be scaled by this factor since NIH-plug's
@@ -257,6 +257,9 @@ pub struct Wrapper<P: ClapPlugin> {
     /// for longer, blocking tasks. Initialized later as it needs a reference to the wrapper.
     background_thread: AtomicRefCell<Option<BackgroundThread<Task<P>, Self>>>,
 }
+
+unsafe impl<P: ClapPlugin> Send for Wrapper<P> {}
+unsafe impl<P: ClapPlugin> Sync for Wrapper<P> {}
 
 /// Tasks that can be sent from the plugin to be executed on the main thread in a non-blocking
 /// realtime-safe way. Instead of using a random thread or the OS' event loop like in the Linux
