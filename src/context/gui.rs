@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use super::track_info::TrackInfo;
 use super::PluginApi;
 use crate::prelude::{Param, ParamPtr, Plugin, PluginState};
 
@@ -63,6 +64,11 @@ pub trait GuiContext: Send + Sync + 'static {
     /// host. If the plugin is currently processing audio, then the parameter values will be
     /// restored at the end of the current processing cycle.
     fn set_state(&self, state: PluginState);
+
+    /// Get information about the track the plugin is on. Not all hosts support this, and the
+    /// information may not be available until the host provides it. Returns `None` if the host
+    /// does not provide track information.
+    fn track_info(&self) -> Option<TrackInfo>;
 }
 
 /// An way to run background tasks from the plugin's GUI, equivalent to the

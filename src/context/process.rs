@@ -1,5 +1,6 @@
 //! A context passed during the process function.
 
+use super::track_info::TrackInfo;
 use super::PluginApi;
 use crate::prelude::{Plugin, PluginNoteEvent};
 
@@ -39,6 +40,11 @@ pub trait ProcessContext<P: Plugin> {
 
     /// Get information about the current transport position and status.
     fn transport(&self) -> &Transport;
+
+    /// Get information about the track the plugin is on. Not all hosts support this, and the
+    /// information may not be available until the host provides it. Returns `None` if the host
+    /// does not provide track information.
+    fn track_info(&self) -> Option<TrackInfo>;
 
     /// Returns the next note event, if there is one. Use
     /// [`NoteEvent::timing()`][crate::prelude::NoteEvent::timing()] to get the event's timing

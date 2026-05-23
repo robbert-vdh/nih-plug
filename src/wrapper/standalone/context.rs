@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use super::backend::Backend;
 use super::wrapper::{Task, Wrapper};
+use crate::context::track_info::TrackInfo;
 use crate::prelude::{
     GuiContext, InitContext, ParamPtr, Plugin, PluginApi, PluginNoteEvent, ProcessContext,
     Transport,
@@ -52,6 +53,10 @@ impl<P: Plugin, B: Backend<P>> InitContext<P> for WrapperInitContext<'_, P, B> {
     fn set_current_voice_capacity(&self, _capacity: u32) {
         // This is only supported by CLAP
     }
+
+    fn track_info(&self) -> Option<TrackInfo> {
+        None
+    }
 }
 
 impl<P: Plugin, B: Backend<P>> ProcessContext<P> for WrapperProcessContext<'_, P, B> {
@@ -96,6 +101,10 @@ impl<P: Plugin, B: Backend<P>> ProcessContext<P> for WrapperProcessContext<'_, P
 
     fn set_current_voice_capacity(&self, _capacity: u32) {
         // This is only supported by CLAP
+    }
+
+    fn track_info(&self) -> Option<TrackInfo> {
+        None
     }
 }
 
@@ -158,5 +167,9 @@ impl<P: Plugin, B: Backend<P>> GuiContext for WrapperGuiContext<P, B> {
 
     fn set_state(&self, state: crate::wrapper::state::PluginState) {
         self.wrapper.set_state_object_from_gui(state)
+    }
+
+    fn track_info(&self) -> Option<TrackInfo> {
+        None
     }
 }
