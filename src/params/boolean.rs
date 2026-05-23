@@ -276,9 +276,15 @@ impl BoolParam {
     /// is the parameter's new value. This should not do anything expensive as it may be called
     /// multiple times in rapid succession, and it can be run from both the GUI and the audio
     /// thread.
+    #[inline]
     pub fn with_callback(mut self, callback: Arc<dyn Fn(bool) + Send + Sync>) -> Self {
-        self.value_changed = Some(callback);
+        self.set_callback(callback);
         self
+    }
+
+    /// Run a callback whenever this parameter's value changes. See [`BoolParam::with_callback`].
+    pub fn set_callback(&mut self, callback: Arc<dyn Fn(bool) + Send + Sync>) {
+        self.value_changed = Some(callback)
     }
 
     /// Use a custom conversion function to convert the boolean value to a string.
