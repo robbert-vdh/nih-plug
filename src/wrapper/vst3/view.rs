@@ -338,11 +338,26 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
 
     unsafe fn on_key_down(
         &self,
-        _key: vst3_sys::base::char16,
-        _key_code: i16,
+        key: vst3_sys::base::char16,
+        key_code: i16,
         _modifiers: i16,
     ) -> tresult {
-        kNotImplemented
+        // Only forward keys that carry a VST3 virtual key code. Those are
+        // keys the host (notably REAPER) may intercept as accelerators
+        // before they reach our native view — space, tab, return, arrows,
+        // etc. Plain printable characters arrive with `key_code = 0` and
+        // flow through the normal AppKit `keyDown:` path, which already
+        // handles text input via NSTextInputContext. Consuming them here
+        // would break letter input.
+        if key_code == 0 {
+            return kResultFalse;
+        }
+        let character = char::from_u32(key as u32);
+        if self.editor.lock().on_key_down(character) {
+            kResultOk
+        } else {
+            kResultFalse
+        }
     }
 
     unsafe fn on_key_up(
