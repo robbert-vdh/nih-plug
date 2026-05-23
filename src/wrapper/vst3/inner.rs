@@ -1,6 +1,7 @@
 use atomic_refcell::AtomicRefCell;
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::{self, SendTimeoutError};
+use crossbeam::queue::ArrayQueue;
 use parking_lot::{Mutex, RwLock};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -23,6 +24,14 @@ use crate::util::permit_alloc;
 use crate::wrapper::state::{self, PluginState};
 use crate::wrapper::util::buffer_management::BufferManager;
 use crate::wrapper::util::{hash_param_id, process_wrapper};
+
+const OUTPUT_PARAM_QUEUE_CAPACITY: usize = 2048;
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct OutputParamChange {
+    pub param_hash: u32,
+    pub normalized: f32,
+}
 
 /// The actual wrapper bits. We need this as an `Arc<T>` so we can safely use our event loop API.
 /// Since we can't combine that with VST3's interior reference counting this just has to be moved to
@@ -92,6 +101,8 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// Stores any events the plugin has output during the current processing cycle, analogous to
     /// `input_events`.
     pub output_events: AtomicRefCell<VecDeque<PluginNoteEvent<P>>>,
+    /// Realtime-safe output parameter changes sent from the audio thread.
+    pub output_parameter_changes: ArrayQueue<OutputParamChange>,
     /// VST3 has several useful predefined note expressions, but for some reason they are the only
     /// note event type that don't have MIDI note ID and channel fields. So we need to keep track of
     /// the most recent VST3 note IDs we've seen, and then map those back to MIDI note IDs and
@@ -307,6 +318,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             )),
             input_events: AtomicRefCell::new(VecDeque::with_capacity(1024)),
             output_events: AtomicRefCell::new(VecDeque::with_capacity(1024)),
+            output_parameter_changes: ArrayQueue::new(OUTPUT_PARAM_QUEUE_CAPACITY),
             note_expression_controller: AtomicRefCell::new(NoteExpressionController::default()),
             process_events: AtomicRefCell::new(Vec::with_capacity(4096)),
             updated_state_sender,
