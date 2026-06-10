@@ -144,8 +144,30 @@ impl Model for ParamModel {
     }
 }
 
+/// Emitted through vizia's event proxy when the host
+/// resized the window (`Editor::set_size`). Handled by [`WindowModel`] on the
+/// GUI thread, where the new size (already stored in whatever the
+/// `ViziaState`'s size function reads) is applied to the embedded window.
+/// An event (rather than an idle-callback flag) because vizia_baseview only
+/// runs the idle callback on input events, while the proxy queue is drained
+/// every frame — a host frame drag generates no input events.
+pub(crate) struct ApplyHostResize;
+
 impl Model for WindowModel {
     fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
+        event.map(|_: &ApplyHostResize, meta| {
+            let (width, height) = self.vizia_state.inner_logical_size();
+            // The host initiated this resize: skip the request_resize
+            // renegotiation that the resulting GeometryChanged would trigger
+            // (hosts that refuse plugin-initiated requests would revert
+            // their own resize).
+            self.vizia_state
+                .suppress_resize_request
+                .store(true, std::sync::atomic::Ordering::Release);
+            cx.set_window_size(WindowSize { width, height });
+            meta.consume();
+        });
+
         event.map(|gui_context_event, meta| match gui_context_event {
             GuiContextEvent::Resize => {
                 // This will trigger a `WindowEvent::GeometryChanged`, which in turn causes the
@@ -177,6 +199,22 @@ impl Model for WindowModel {
                 // Don't do anything if the current size already matches the new size, this could
                 // otherwise also cause a feedback loop on resize failure
                 if logical_size == old_logical_size && scale_factor == old_user_scale_factor {
+                    return;
+                }
+
+                // When this geometry change was caused by a
+                // **host-driven** resize (`Editor::set_size`), the host
+                // already knows and approved the size — renegotiating via
+                // `request_resize` would make hosts that refuse
+                // plugin-initiated requests (FL Studio) revert their own
+                // resize. Record the new size and stop here.
+                if self
+                    .vizia_state
+                    .suppress_resize_request
+                    .swap(false, std::sync::atomic::Ordering::AcqRel)
+                {
+                    self.last_inner_window_size.store(logical_size);
+                    self.vizia_state.scale_factor.store(scale_factor);
                     return;
                 }
 
