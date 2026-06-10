@@ -797,13 +797,11 @@ impl<P: ClapPlugin> Wrapper<P> {
             (Some(host_gui), Some(editor)) => {
                 let (unscaled_width, unscaled_height) = editor.lock().size();
                 let scaling_factor = self.editor_scaling_factor.load(Ordering::Relaxed);
+                let width = (unscaled_width as f32 * scaling_factor).round() as u32;
+                let height = (unscaled_height as f32 * scaling_factor).round() as u32;
 
                 unsafe_clap_call! {
-                    host_gui=>request_resize(
-                        &*self.host_callback,
-                        (unscaled_width as f32 * scaling_factor).round() as u32,
-                        (unscaled_height as f32 * scaling_factor).round() as u32,
-                    )
+                    host_gui=>request_resize(&*self.host_callback, width, height)
                 }
             }
             _ => false,
@@ -2712,8 +2710,14 @@ impl<P: ClapPlugin> Wrapper<P> {
     }
 
     unsafe extern "C" fn ext_gui_can_resize(_plugin: *const clap_plugin) -> bool {
-        // TODO: Implement Host->Plugin GUI resizing
-        false
+        // Declare resizability so hosts act on the plugin's
+        // own `request_resize()` calls (FL Studio checks `can_resize` and
+        // otherwise ignores the live request, only picking the new size up
+        // on the next window open). Host->plugin resizing is still
+        // effectively rejected: `adjust_size`/`set_size` only ever accept
+        // the editor's current size, so a host-initiated frame drag snaps
+        // back instead of clipping the GUI.
+        true
     }
 
     unsafe extern "C" fn ext_gui_get_resize_hints(
@@ -2725,12 +2729,20 @@ impl<P: ClapPlugin> Wrapper<P> {
     }
 
     unsafe extern "C" fn ext_gui_adjust_size(
-        _plugin: *const clap_plugin,
-        _width: *mut u32,
-        _height: *mut u32,
+        plugin: *const clap_plugin,
+        width: *mut u32,
+        height: *mut u32,
     ) -> bool {
-        // TODO: Implement Host->Plugin GUI resizing
-        false
+        // Host-driven resizing is
+        // accepted, so the proposal is echoed back unchanged here and applied
+        // (with the editor's own clamping) in `set_size`. Editors that don't
+        // implement `Editor::set_size` still only support their current size.
+        check_null_ptr!(false, plugin, (*plugin).plugin_data, width, height);
+        let wrapper = &*((*plugin).plugin_data as *const Self);
+        if wrapper.editor.borrow().is_none() {
+            return false;
+        }
+        true
     }
 
     unsafe extern "C" fn ext_gui_set_size(
@@ -2738,19 +2750,31 @@ impl<P: ClapPlugin> Wrapper<P> {
         width: u32,
         height: u32,
     ) -> bool {
-        // TODO: Implement Host->Plugin GUI resizing
-        // TODO: The host will also call this if an asynchronous (on Linux) resize request fails
+        // Forward host-driven resizes to the editor
+        // (`Editor::set_size`, logical pixels). Editors without support fall
+        // back to the old behavior of only accepting their current size.
         check_null_ptr!(false, plugin, (*plugin).plugin_data);
         let wrapper = &*((*plugin).plugin_data as *const Self);
 
-        let (unscaled_width, unscaled_height) =
-            wrapper.editor.borrow().as_ref().unwrap().lock().size();
         let scaling_factor = wrapper.editor_scaling_factor.load(Ordering::Relaxed);
+        let logical_width = (width as f32 / scaling_factor).round() as u32;
+        let logical_height = (height as f32 / scaling_factor).round() as u32;
+
+        let editor = wrapper.editor.borrow();
+        let Some(editor) = editor.as_ref() else {
+            return false;
+        };
+        let editor = editor.lock();
+        if editor.set_size(logical_width, logical_height) {
+            return true;
+        }
+
+        // Legacy fixed-size editors: only the current size is acceptable.
+        let (unscaled_width, unscaled_height) = editor.size();
         let (editor_width, editor_height) = (
             (unscaled_width as f32 * scaling_factor).round() as u32,
             (unscaled_height as f32 * scaling_factor).round() as u32,
         );
-
         width == editor_width && height == editor_height
     }
 
