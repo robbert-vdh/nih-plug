@@ -4,7 +4,6 @@ use crate::egui::Vec2;
 use crate::egui::ViewportCommand;
 use crate::EguiState;
 use baseview::gl::GlConfig;
-use baseview::PhySize;
 use baseview::{Size, WindowHandle, WindowOpenOptions, WindowScalePolicy};
 use crossbeam::atomic::AtomicCell;
 use egui_baseview::egui::Context;
@@ -104,15 +103,25 @@ where
             Default::default(),
             state,
             move |egui_ctx, _queue, state| build(egui_ctx, &mut state.write()),
-            move |egui_ctx, queue, state| {
+            move |egui_ctx, _queue, state| {
                 let setter = ParamSetter::new(context.as_ref());
 
                 // If the window was requested to resize
                 if let Some(new_size) = egui_state.requested_size.swap(None) {
                     // Ask the plugin host to resize to self.size()
                     if context.request_resize() {
-                        // Resize the content of egui window
-                        queue.resize(PhySize::new(new_size.0, new_size.1));
+                        // NOTE: Don't touch the surface size here. `queue.resize()` takes
+                        //       *physical* pixels while `new_size` is in *logical* points, so on
+                        //       any display with a scale factor above 1 this shrank the GL surface
+                        //       by that factor. It was usually invisible, because the viewport
+                        //       command below resizes the real window and the `Resized` event that
+                        //       follows overwrites the surface size with the correct value before
+                        //       the next frame is drawn. It became permanent whenever that resize
+                        //       was a no-op -- a request for the size the window already has --
+                        //       since then no configure event arrives to correct it, and the GUI
+                        //       stays at a fraction of its size (in the bottom-left corner, under
+                        //       OpenGL) until the editor is reopened. The window's own resize
+                        //       event is the single source of truth for the surface size.
                         egui_ctx.send_viewport_cmd(ViewportCommand::InnerSize(Vec2::new(
                             new_size.0 as f32,
                             new_size.1 as f32,

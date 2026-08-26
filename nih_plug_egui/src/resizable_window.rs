@@ -51,10 +51,16 @@ impl ResizableWindow {
                     .max(self.min_size);
 
                 if corner_response.dragged() {
-                    egui_state.set_requested_size((
-                        desired_size.x.round() as u32,
-                        desired_size.y.round() as u32,
-                    ));
+                    let requested_size =
+                        (desired_size.x.round() as u32, desired_size.y.round() as u32);
+
+                    // Only ask for a size the window doesn't already have. A drag that is
+                    // clamped by `min_size` otherwise re-requests the current size on every
+                    // frame, and a resize to the size already in force is a no-op the host
+                    // never reports back.
+                    if requested_size != egui_state.size() {
+                        egui_state.set_requested_size(requested_size);
+                    }
                 }
             }
 
