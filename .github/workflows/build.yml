@@ -102,3 +102,54 @@ jobs:
         with:
           name: ${{ env.ARCHIVE_NAME }}
           path: ${{ env.ARCHIVE_NAME }}
+
+  publish:
+    name: Update latest builds
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    needs: package
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create release archives
+        run: |
+          mkdir release
+
+          for artifact in artifacts/*; do
+            case "$(basename "$artifact")" in
+              *-ubuntu-22.04) platform=linux ;;
+              *-macos-universal) platform=macos-universal ;;
+              *-windows) platform=windows ;;
+              *) echo "Unexpected artifact: $artifact" >&2; exit 1 ;;
+            esac
+
+            (cd "$artifact" && zip -r "../../release/nih-plugs-$platform.zip" .)
+          done
+
+      - name: Update latest builds release
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git tag --force latest-builds "$GITHUB_SHA"
+          git push --force origin refs/tags/latest-builds
+
+          if gh release view latest-builds > /dev/null 2>&1; then
+            gh release edit latest-builds \
+              --title 'Latest builds' \
+              --notes "Automatically built from commit $GITHUB_SHA on $DEFAULT_BRANCH." \
+              --prerelease
+            gh release upload latest-builds release/*.zip --clobber
+          else
+            gh release create latest-builds release/*.zip \
+              --verify-tag \
+              --title 'Latest builds' \
+              --notes "Automatically built from commit $GITHUB_SHA on $DEFAULT_BRANCH." \
+              --prerelease \
+              --latest=false
+          fi

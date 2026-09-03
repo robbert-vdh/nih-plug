@@ -30,13 +30,11 @@ quickly get started with NIH-plug.
 ## Plugins
 
 Check each plugin's readme file for more details on what the plugin actually
-does. You can download the development binaries for Linux, Windows and macOS
-from the [automated
-builds](https://github.com/robbert-vdh/nih-plug/actions/workflows/build.yml?query=branch%3Amaster)
-page. Or if you're not signed in on GitHub, then you can also find the latest
-nightly build
-[here](https://nightly.link/robbert-vdh/nih-plug/workflows/build/master). You
-may need to [disable Gatekeeper](https://disable-gatekeeper.github.io/) on macOS to be able to use
+does. You can download the latest development binaries for Linux, Windows and
+macOS from the [Latest
+builds](https://github.com/robbert-vdh/nih-plug/releases/tag/latest-builds)
+page. You may need to [disable
+Gatekeeper](https://disable-gatekeeper.github.io/) on macOS to be able to use
 the plugins.
 
 Scroll down for more information on the underlying plugin framework.
