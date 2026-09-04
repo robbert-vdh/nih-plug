@@ -376,7 +376,6 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
     unsafe fn on_size(&self, new_size: *mut ViewRect) -> tresult {
         check_null_ptr!(new_size);
 
-        // TODO: Implement Host->Plugin resizing
         let (unscaled_width, unscaled_height) = self.editor.lock().size();
         let scaling_factor = self.scaling_factor.load(Ordering::Relaxed);
         let (editor_width, editor_height) = (
@@ -384,12 +383,28 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
             (unscaled_height as f32 * scaling_factor).round() as i32,
         );
 
-        let width = (*new_size).right - (*new_size).left;
-        let height = (*new_size).bottom - (*new_size).top;
-        if width == editor_width && height == editor_height {
-            kResultOk
+        if self.editor.lock().can_resize() {
+            let (unscaled_new_width, unscaled_new_height) = (
+                (*new_size).right - (*new_size).left,
+                (*new_size).bottom - (*new_size).top,
+            );
+            let (new_width, new_height) = (
+                (unscaled_new_width as f32 * scaling_factor).round() as i32,
+                (unscaled_new_height as f32 * scaling_factor).round() as i32,
+            );
+            if self.editor.lock().set_size(new_width as u32, new_height as u32) {
+                kResultOk
+            } else {
+                kResultFalse
+            }
         } else {
-            kResultFalse
+            let width = (*new_size).right - (*new_size).left;
+            let height = (*new_size).bottom - (*new_size).top;
+            if width == editor_width && height == editor_height {
+                kResultOk
+            } else {
+                kResultFalse
+            }
         }
     }
 
@@ -425,8 +440,11 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
     }
 
     unsafe fn can_resize(&self) -> tresult {
-        // TODO: Implement Host->Plugin resizing
-        kResultFalse
+        if self.editor.lock().can_resize() {
+            kResultOk
+        } else {
+            kResultFalse
+        }
     }
 
     unsafe fn check_size_constraint(&self, rect: *mut ViewRect) -> tresult {
