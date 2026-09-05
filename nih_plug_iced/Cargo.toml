@@ -8,7 +8,7 @@ license = "ISC"
 description = "An adapter to use iced GUIs with NIH-plug"
 
 [features]
-default = ["opengl"]
+default = []
 
 # NOTE: wgpu support has been removed from the iced-baseview fork out because
 #       this old iced version uses a wgpu version that doesn't pin the web-sys
@@ -20,53 +20,33 @@ default = ["opengl"]
 # wgpu = ["iced_baseview/wgpu", "baseview/opengl"]
 # Use OpenGL instead of wgpu for the rendering. This should increase platform
 # compatibility at the cost of some iced features not being available.
-opengl = ["iced_baseview/glow"]
+# opengl = ["iced_baseview/glow"]
 
 # Enables a debug view in native platforms (press F12)
 debug = ["iced_baseview/debug"]
 
-# # Enables the `Image` widget, only supported by the wgpu backend
-# wgpu_image = ["iced_baseview/wgpu_image"]
-# # Enables the `Svg` widget, only supported by the wgpu backend
-# wgpu_svg = ["iced_baseview/wgpu_svg"]
-
-# # Enables the `Canvas` widget for the wgpu backend
-# wgpu_canvas = ["iced_baseview/wgpu_canvas"]
-# Enables the `Canvas` widget for the OpenGL backend
-opengl_canvas = ["iced_baseview/glow_canvas"]
-
-# # Enables the `QRCode` widget for the wgpu backend
-# wgpu_qr_code = ["iced_baseview/wgpu_qr_code"]
-# Enables the `QRCode` widget for the OpenGL backend
-opengl_qr_code = ["iced_baseview/glow_qr_code"]
-
-# # Enables using system fonts for the wgpu backend
-# wgpu_default_system_font = ["iced_baseview/wgpu_default_system_font"]
-# Enables using system fonts for the OpenGL backend
-opengl_default_system_font = ["iced_baseview/glow_default_system_font"]
-
-# Enables advanced color conversion via `palette`
-palette = ["iced_baseview/palette"]
-
-# Enables `tokio` as the `executor::Default` on native platforms
-tokio = ["iced_baseview/tokio"]
-# Enables `async-std` as the `executor::Default` on native platforms
-async-std = ["iced_baseview/async-std"]
-# Enables `smol` as the `executor::Default` on native platforms
-smol = ["iced_baseview/smol"]
+wgpu = ["iced_baseview/wgpu"]
+# Enables the `Image` widget, only supported by the wgpu backend
+image = ["iced_baseview/image"]
+# Enables the `Svg` widget, only supported by the wgpu backend
+svg = ["iced_baseview/svg"]
+# Enables the `Canvas` widget for the wgpu backend
+canvas = ["iced_baseview/canvas"]
 
 [dependencies]
-nih_plug = { path = "..", default-features = false }
+nih_plug = { path = "..", default_features = false }
 nih_plug_assets = { git = "https://github.com/robbert-vdh/nih_plug_assets.git" }
 
 # The currently targeted version of baseview uses a different version of
 # `raw_window_handle` than NIH-plug, so we need to manually convert between them
-raw-window-handle = "0.4"
+raw-window-handle = "0.5"
 
 atomic_refcell = "0.1"
-baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "1d9806d5bd92275d0d8142d9c9c90198757b9b25" }
+baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "579130ecb4f9f315ae52190af42f0ea46aeaa4a2" }
 crossbeam = "0.8"
-# This targets iced 0.4
-iced_baseview = { git = "https://github.com/robbert-vdh/iced_baseview.git", branch = "feature/update-baseview", default-features = false }
+# This targets iced 0.13
+iced_baseview = { git = "https://github.com/BillyDM/iced_baseview.git", rev = "a0842a8205c852127981e27de6342cf2e665562f", default_features = false }
+futures-util = "0.3"
+
 # To make the state persistable
 serde = { version = "1.0", features = ["derive"] }
