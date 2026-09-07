@@ -92,6 +92,10 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// Stores any events the plugin has output during the current processing cycle, analogous to
     /// `input_events`.
     pub output_events: AtomicRefCell<VecDeque<PluginNoteEvent<P>>>,
+    /// Parameter changes queued by [`ProcessContext::set_parameter()`][crate::prelude::ProcessContext::set_parameter()]
+    /// during the current processing cycle. These are written to the host's output parameter
+    /// change queue and drained at the end of each processing block, analogous to `output_events`.
+    pub output_parameter_events: AtomicRefCell<VecDeque<OutputParamEvent>>,
     /// VST3 has several useful predefined note expressions, but for some reason they are the only
     /// note event type that don't have MIDI note ID and channel fields. So we need to keep track of
     /// the most recent VST3 note IDs we've seen, and then map those back to MIDI note IDs and
@@ -137,6 +141,17 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// having to add a setter function to the parameter (or even worse, have it be completely
     /// untyped).
     pub param_ptr_to_hash: HashMap<ParamPtr, u32>,
+}
+
+/// A parameter change queued by [`ProcessContext::set_parameter()`][crate::prelude::ProcessContext::set_parameter()],
+/// to be written to the host's output parameter change queue at the end of the current processing
+/// block.
+#[derive(Debug, Clone, Copy)]
+pub struct OutputParamEvent {
+    /// The internal hash for the parameter.
+    pub param_hash: u32,
+    /// The parameter's new normalized value.
+    pub normalized_value: f32,
 }
 
 /// Tasks that can be sent from the plugin to be executed on the main thread in a non-blocking
@@ -307,6 +322,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             )),
             input_events: AtomicRefCell::new(VecDeque::with_capacity(1024)),
             output_events: AtomicRefCell::new(VecDeque::with_capacity(1024)),
+            output_parameter_events: AtomicRefCell::new(VecDeque::with_capacity(1024)),
             note_expression_controller: AtomicRefCell::new(NoteExpressionController::default()),
             process_events: AtomicRefCell::new(Vec::with_capacity(4096)),
             updated_state_sender,
@@ -377,6 +393,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             inner: self,
             input_events_guard: self.input_events.borrow_mut(),
             output_events_guard: self.output_events.borrow_mut(),
+            output_parameter_events_guard: self.output_parameter_events.borrow_mut(),
             transport,
         }
     }

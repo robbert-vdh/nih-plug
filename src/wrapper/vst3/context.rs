@@ -10,7 +10,7 @@ use crate::prelude::{
     Transport, Vst3Plugin,
 };
 
-use super::inner::{Task, WrapperInner};
+use super::inner::{OutputParamEvent, Task, WrapperInner};
 
 /// An [`InitContext`] implementation for the wrapper.
 ///
@@ -41,6 +41,7 @@ pub(crate) struct WrapperProcessContext<'a, P: Vst3Plugin> {
     pub(super) inner: &'a WrapperInner<P>,
     pub(super) input_events_guard: AtomicRefMut<'a, VecDeque<PluginNoteEvent<P>>>,
     pub(super) output_events_guard: AtomicRefMut<'a, VecDeque<PluginNoteEvent<P>>>,
+    pub(super) output_parameter_events_guard: AtomicRefMut<'a, VecDeque<OutputParamEvent>>,
     pub(super) transport: Transport,
 }
 

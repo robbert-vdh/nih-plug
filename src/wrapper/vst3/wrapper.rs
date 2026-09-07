@@ -1636,6 +1636,33 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                     }
                 }
 
+                // Send any parameter changes output by the plugin during the process cycle
+                if let Some(param_changes) = data.output_param_changes.upgrade() {
+                    let mut output_parameter_events =
+                        self.inner.output_parameter_events.borrow_mut();
+                    while let Some(event) = output_parameter_events.pop_front() {
+                        let mut queue_index = 0i32;
+                        if let Some(queue) = param_changes
+                            .add_parameter_data(&event.param_hash, &mut queue_index)
+                            .upgrade()
+                        {
+                            let sample_offset = clamp_output_event_timing(
+                                block_start as u32,
+                                total_buffer_len as u32,
+                            );
+                            let mut point_index = 0i32;
+                            let result = queue.add_point(
+                                sample_offset as i32,
+                                event.normalized_value as f64,
+                                &mut point_index,
+                            );
+                            nih_debug_assert_eq!(result, kResultOk);
+                        } else {
+                            nih_debug_assert_failure!("Host did not return a parameter value queue");
+                        }
+                    }
+                }
+
                 // If our block ends at the end of the buffer then that means there are no more
                 // unprocessed (parameter) events. If there are more events, we'll just keep going
                 // through this process until we've processed the entire buffer.
