@@ -10,6 +10,21 @@ Since there is no stable release yet, the changes are organized per day in
 reverse chronological order. The main purpose of this document in its current
 state is to list breaking changes.
 
+## [2026-06-11]
+
+### Added
+
+- `Editor` has a new `set_size()` method with a default implementation that
+  rejects the resize. CLAP hosts that resize plugin windows host-side (the
+  user drags the host's window frame and the host proposes sizes through
+  `adjust_size()`/`set_size()`, like FL Studio does) now have those
+  proposals forwarded to the editor. The CLAP wrapper also declares
+  `can_resize` so hosts act on plugin-initiated `request_resize()` calls.
+- `nih_plug_vizia` has a new `ViziaState::new_resizable()` constructor that
+  accepts host-driven resizes: a callback updates (and may clamp) whatever
+  state the size function reads, and the new size is applied to the embedded
+  window on the GUI thread through vizia's event proxy.
+
 ## [2025-02-23]
 
 ### Breaking changes

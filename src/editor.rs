@@ -54,6 +54,20 @@ pub trait Editor: Send {
     /// there.
     fn set_scale_factor(&self, factor: f32) -> bool;
 
+    /// Called when the **host** wants to resize the editor
+    /// (host-driven resizing, e.g. the user dragging the plugin window frame
+    /// in FL Studio). `width` and `height` use the same unit as
+    /// [`size()`][Self::size()] — logical pixels before HiDPI scaling.
+    ///
+    /// Return `true` if the editor accepts the resize (possibly after
+    /// clamping): it must then report the new size from `size()` and resize
+    /// its embedded window on its own GUI thread. The default rejects host
+    /// resizing, which keeps the previous fixed-size behavior.
+    fn set_size(&self, width: u32, height: u32) -> bool {
+        let _ = (width, height);
+        false
+    }
+
     /// Called whenever a specific parameter's value has changed while the editor is open. You don't
     /// need to do anything with this, but this can be used to force a redraw when the host sends a
     /// new value for a parameter or when a parameter change sent to the host gets processed.
