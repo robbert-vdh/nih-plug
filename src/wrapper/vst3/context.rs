@@ -6,8 +6,8 @@ use std::sync::Arc;
 use vst3_sys::vst::IComponentHandler;
 
 use crate::prelude::{
-    GuiContext, InitContext, ParamPtr, PluginApi, PluginNoteEvent, PluginState, ProcessContext,
-    Transport, Vst3Plugin,
+    GuiContext, InitContext, Param, ParamPtr, PluginApi, PluginNoteEvent, PluginState,
+    ProcessContext, Transport, Vst3Plugin,
 };
 
 use super::inner::{OutputParamEvent, Task, WrapperInner};
@@ -116,6 +116,21 @@ impl<P: Vst3Plugin> ProcessContext<P> for WrapperProcessContext<'_, P> {
 
     fn set_current_voice_capacity(&self, _capacity: u32) {
         // This is only supported by CLAP
+    }
+
+    fn set_parameter<Pa: Param>(&mut self, param: &Pa, value: Pa::Plain) {
+        let ptr = param.as_ptr();
+        match self.inner.param_ptr_to_hash.get(&ptr) {
+            Some(hash) => {
+                let normalized = param.preview_normalized(value);
+                self.output_parameter_events_guard
+                    .push_back(OutputParamEvent {
+                        param_hash: *hash,
+                        normalized_value: normalized,
+                    });
+            }
+            None => nih_debug_assert_failure!("Unknown parameter: {:?}", ptr),
+        }
     }
 }
 
