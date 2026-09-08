@@ -9,8 +9,8 @@ use std::sync::Arc;
 use super::wrapper::{OutputParamEvent, Task, Wrapper};
 use crate::event_loop::EventLoop;
 use crate::prelude::{
-    ClapPlugin, GuiContext, InitContext, ParamPtr, PluginApi, PluginNoteEvent, ProcessContext,
-    RemoteControlsContext, RemoteControlsPage, RemoteControlsSection, Transport,
+    ClapPlugin, GuiContext, InitContext, Param, ParamPtr, PluginApi, PluginNoteEvent,
+    ProcessContext, RemoteControlsContext, RemoteControlsPage, RemoteControlsSection, Transport,
 };
 use crate::wrapper::util::strlcpy;
 
@@ -124,6 +124,27 @@ impl<P: ClapPlugin> ProcessContext<P> for WrapperProcessContext<'_, P> {
 
     fn set_current_voice_capacity(&self, capacity: u32) {
         self.wrapper.set_current_voice_capacity(capacity)
+    }
+
+    fn set_parameter<Pa: Param>(&mut self, param: &Pa, value: Pa::Plain) {
+        let ptr = param.as_ptr();
+        match self.wrapper.param_ptr_to_hash.get(&ptr) {
+            Some(hash) => {
+                let normalized = param.preview_normalized(value);
+                let clap_plain_value = normalized as f64 * param.step_count().unwrap_or(1) as f64;
+                let success = self.wrapper.queue_parameter_event(OutputParamEvent::SetValue {
+                    param_hash: *hash,
+                    clap_plain_value,
+                });
+
+                nih_debug_assert!(
+                    success,
+                    "Parameter output event queue was full, parameter change will not be sent to \
+                     the host"
+                );
+            }
+            None => nih_debug_assert_failure!("Unknown parameter: {:?}", ptr),
+        }
     }
 }
 

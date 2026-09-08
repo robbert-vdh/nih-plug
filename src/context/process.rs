@@ -1,7 +1,7 @@
 //! A context passed during the process function.
 
 use super::PluginApi;
-use crate::prelude::{Plugin, PluginNoteEvent};
+use crate::prelude::{Param, Plugin, PluginNoteEvent};
 
 /// Contains both context data and callbacks the plugin can use during processing. Most notably this
 /// is how a plugin sends and receives note events, gets transport information, and accesses
@@ -92,10 +92,15 @@ pub trait ProcessContext<P: Plugin> {
     /// monophonic modulation when dropping the capacity down to 1.
     fn set_current_voice_capacity(&self, capacity: u32);
 
-    // TODO: Add this, this works similar to [GuiContext::set_parameter] but it adds the parameter
-    //       change to a queue (or directly to the VST3 plugin's parameter output queues) instead of
-    //       using main thread host automation (and all the locks involved there).
-    // fn set_parameter<P: Param>(&self, param: &P, value: P::Plain);
+    /// Inform the host that a parameter's value has changed, similar to
+    /// [`ParamSetter::set_parameter()`][crate::prelude::ParamSetter::set_parameter()], but
+    /// realtime-safe: instead of going through main-thread host automation (and the locks that
+    /// involves), the change is placed on a queue (or, on VST3, written to the host's parameter
+    /// output queue) that gets flushed at the end of the current processing block, the same way
+    /// outgoing note events are handled. This does not send a begin/end gesture since it does not
+    /// represent a user editing gesture, and the parameter's reported value will not be updated
+    /// until the queued change has been flushed.
+    fn set_parameter<Pa: Param>(&mut self, param: &Pa, value: Pa::Plain);
 }
 
 /// Information about the plugin's transport. Depending on the plugin API and the host not all
