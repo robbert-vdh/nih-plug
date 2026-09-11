@@ -7,7 +7,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use vst3_sys::vst::kRootUnitId;
+use vst3::Steinberg::Vst::kRootUnitId;
 
 /// Transforms a map containing parameter hashes and slash-separated paths to an array of VST3 units
 /// and a mapping for each parameter hash to a unit (or to `None` if they belong to the root unit).
