@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-#[cfg(not(feature = "opengl"))]
+#[cfg(all(not(feature = "opengl"), not(feature = "wgpu")))]
 compile_error!("There's currently no software rendering support for egui");
 
 /// Re-export for convenience.
