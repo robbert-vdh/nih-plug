@@ -1,6 +1,6 @@
 [package]
 name = "buffr_glitch"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 authors = ["Robbert van der Helm <mail@robbertvanderhelm.nl>"]
 license = "GPL-3.0-or-later"

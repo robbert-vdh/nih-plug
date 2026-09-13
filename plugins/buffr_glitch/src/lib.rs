@@ -84,6 +84,10 @@ struct BuffrGlitchParams {
     /// ieration.
     #[id = "crossfade_ms"]
     crossfade_ms: FloatParam,
+
+    /// Turns on precise frequencies mode with buffers of two sizes.
+    #[id = "precise_frequency"]
+    precise_frequency: BoolParam,
 }
 
 impl Default for BuffrGlitch {
@@ -171,6 +175,8 @@ impl Default for BuffrGlitchParams {
             // This doesn't need smoothing because the value is set when the note is held down and cannot be changed afterwards
             .with_unit(" ms")
             .with_step_size(0.001),
+
+            precise_frequency: BoolParam::new("Precise Frequency", false),
         }
     }
 }
@@ -415,6 +421,8 @@ impl Voice {
             util::midi_note_to_freq(midi_note_id) * 2.0f32.powi(params.octave_shift.value());
         self.buffer
             .prepare_playback(note_frequency, params.crossfade_ms.value());
+
+        self.buffer.precise_mode = params.precise_frequency.value();
     }
 
     /// Start releasing the note.
