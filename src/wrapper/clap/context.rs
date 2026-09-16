@@ -7,6 +7,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
 use super::wrapper::{OutputParamEvent, Task, Wrapper};
+use crate::context::track_info::TrackInfo;
 use crate::event_loop::EventLoop;
 use crate::prelude::{
     ClapPlugin, GuiContext, InitContext, ParamPtr, PluginApi, PluginNoteEvent, ProcessContext,
@@ -88,6 +89,10 @@ impl<P: ClapPlugin> InitContext<P> for WrapperInitContext<'_, P> {
     fn set_current_voice_capacity(&self, capacity: u32) {
         self.wrapper.set_current_voice_capacity(capacity)
     }
+
+    fn track_info(&self) -> Option<TrackInfo> {
+        self.wrapper.get_track_info()
+    }
 }
 
 impl<P: ClapPlugin> ProcessContext<P> for WrapperProcessContext<'_, P> {
@@ -108,6 +113,10 @@ impl<P: ClapPlugin> ProcessContext<P> for WrapperProcessContext<'_, P> {
     #[inline]
     fn transport(&self) -> &Transport {
         &self.transport
+    }
+
+    fn track_info(&self) -> Option<TrackInfo> {
+        self.wrapper.get_track_info()
     }
 
     fn next_event(&mut self) -> Option<PluginNoteEvent<P>> {
@@ -237,6 +246,10 @@ impl<P: ClapPlugin> GuiContext for WrapperGuiContext<P> {
 
     fn set_state(&self, state: crate::wrapper::state::PluginState) {
         self.wrapper.set_state_object_from_gui(state)
+    }
+
+    fn track_info(&self) -> Option<TrackInfo> {
+        self.wrapper.get_track_info()
     }
 }
 

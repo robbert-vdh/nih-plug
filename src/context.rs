@@ -5,6 +5,7 @@ use std::fmt::Display;
 pub mod gui;
 pub mod init;
 pub mod process;
+pub mod track_info;
 
 // Contexts for more plugin-API specific features
 pub mod remote_controls;

@@ -1,3 +1,4 @@
+use crate::context::track_info::TrackInfo;
 use atomic_refcell::AtomicRefCell;
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::{self, SendTimeoutError};
@@ -137,6 +138,9 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// having to add a setter function to the parameter (or even worse, have it be completely
     /// untyped).
     pub param_ptr_to_hash: HashMap<ParamPtr, u32>,
+
+    /// The current track information, as reported by the host through `IInfoListener`.
+    pub track_info: RwLock<Option<TrackInfo>>,
 }
 
 /// Tasks that can be sent from the plugin to be executed on the main thread in a non-blocking
@@ -318,6 +322,8 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             param_units,
             param_id_to_hash,
             param_ptr_to_hash,
+
+            track_info: RwLock::new(None),
         });
 
         // FIXME: Right now this is safe, but if we are going to have a singleton main thread queue
@@ -428,6 +434,11 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             .get(&param)
             .and_then(|hash| self.param_id_by_hash.get(hash))
             .map(|s| s.as_str())
+    }
+
+    /// Get the current track info, if available.
+    pub fn get_track_info(&self) -> Option<TrackInfo> {
+        self.track_info.read().clone()
     }
 
     /// Convenience function for setting a value for a parameter as triggered by a VST3 parameter

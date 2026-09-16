@@ -1,5 +1,6 @@
 //! A context passed during plugin initialization.
 
+use super::track_info::TrackInfo;
 use super::PluginApi;
 use crate::prelude::Plugin;
 
@@ -34,4 +35,9 @@ pub trait InitContext<P: Plugin> {
     /// runtime allows the host to better optimize polyphonic modulation, or to switch to strictly
     /// monophonic modulation when dropping the capacity down to 1.
     fn set_current_voice_capacity(&self, capacity: u32);
+
+    /// Get information about the track the plugin is on. Not all hosts support this, and the
+    /// information may not be available until the host provides it. Returns `None` if the host
+    /// does not provide track information.
+    fn track_info(&self) -> Option<TrackInfo>;
 }

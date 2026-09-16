@@ -5,6 +5,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use vst3_sys::vst::IComponentHandler;
 
+use crate::context::track_info::TrackInfo;
 use crate::prelude::{
     GuiContext, InitContext, ParamPtr, PluginApi, PluginNoteEvent, PluginState, ProcessContext,
     Transport, Vst3Plugin,
@@ -79,6 +80,10 @@ impl<P: Vst3Plugin> InitContext<P> for WrapperInitContext<'_, P> {
     fn set_current_voice_capacity(&self, _capacity: u32) {
         // This is only supported by CLAP
     }
+
+    fn track_info(&self) -> Option<TrackInfo> {
+        self.inner.get_track_info()
+    }
 }
 
 impl<P: Vst3Plugin> ProcessContext<P> for WrapperProcessContext<'_, P> {
@@ -99,6 +104,10 @@ impl<P: Vst3Plugin> ProcessContext<P> for WrapperProcessContext<'_, P> {
     #[inline]
     fn transport(&self) -> &Transport {
         &self.transport
+    }
+
+    fn track_info(&self) -> Option<TrackInfo> {
+        self.inner.get_track_info()
     }
 
     fn next_event(&mut self) -> Option<PluginNoteEvent<P>> {
@@ -227,5 +236,9 @@ impl<P: Vst3Plugin> GuiContext for WrapperGuiContext<P> {
 
     fn set_state(&self, state: PluginState) {
         self.inner.set_state_object_from_gui(state)
+    }
+
+    fn track_info(&self) -> Option<TrackInfo> {
+        self.inner.get_track_info()
     }
 }
