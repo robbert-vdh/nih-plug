@@ -52,6 +52,10 @@ impl<P: Plugin, B: Backend<P>> InitContext<P> for WrapperInitContext<'_, P, B> {
     fn set_current_voice_capacity(&self, _capacity: u32) {
         // This is only supported by CLAP
     }
+
+    fn set_parameter_normalized(&self, param: ParamPtr, normalized: f32) {
+        self.wrapper.set_parameter(param, normalized);
+    }
 }
 
 impl<P: Plugin, B: Backend<P>> ProcessContext<P> for WrapperProcessContext<'_, P, B> {

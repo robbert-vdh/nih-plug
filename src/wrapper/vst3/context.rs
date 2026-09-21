@@ -10,7 +10,7 @@ use crate::prelude::{
     Transport, Vst3Plugin,
 };
 
-use super::inner::{Task, WrapperInner};
+use super::inner::{OutputParamChange, Task, WrapperInner};
 
 /// An [`InitContext`] implementation for the wrapper.
 ///
@@ -111,6 +111,28 @@ impl<P: Vst3Plugin> ProcessContext<P> for WrapperProcessContext<'_, P> {
 
     fn set_latency_samples(&self, samples: u32) {
         self.inner.set_latency_samples(samples)
+    }
+
+    fn set_parameter_normalized(&self, param: ParamPtr, normalized: f32) {
+        match self.inner.param_ptr_to_hash.get(&param) {
+            Some(hash) => {
+                let success = self
+                    .inner
+                    .output_parameter_changes
+                    .push(OutputParamChange {
+                        param_hash: *hash,
+                        normalized,
+                    })
+                    .is_ok();
+
+                nih_debug_assert!(
+                    success,
+                    "Output parameter change queue was full, parameter change will not be sent \
+                     to the host"
+                );
+            }
+            None => nih_debug_assert_failure!("Unknown parameter: {:?}", param),
+        }
     }
 
     fn set_current_voice_capacity(&self, _capacity: u32) {

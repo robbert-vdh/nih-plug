@@ -1636,6 +1636,32 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
                     }
                 }
 
+                if let Some(param_changes) = data.output_param_changes.upgrade() {
+                    let sample_offset = clamp_output_event_timing(
+                        block_start as u32,
+                        total_buffer_len as u32,
+                    ) as i32;
+                    while let Some(change) = self.inner.output_parameter_changes.pop() {
+                        let param_hash = change.param_hash;
+                        let mut queue_index = 0;
+                        let mut point_index = 0;
+                        if let Some(param_queue) = unsafe {
+                            param_changes
+                                .add_parameter_data(&param_hash as *const u32, &mut queue_index)
+                                .upgrade()
+                        } {
+                            let result = unsafe {
+                                param_queue.add_point(
+                                    sample_offset,
+                                    change.normalized as f64,
+                                    &mut point_index,
+                                )
+                            };
+                            nih_debug_assert_eq!(result, kResultOk);
+                        }
+                    }
+                }
+
                 // If our block ends at the end of the buffer then that means there are no more
                 // unprocessed (parameter) events. If there are more events, we'll just keep going
                 // through this process until we've processed the entire buffer.
