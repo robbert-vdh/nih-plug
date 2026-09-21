@@ -62,7 +62,7 @@ standalone = ["dep:baseview", "dep:clap", "dep:cpal", "dep:jack", "dep:midir", "
 # exists mostly for GPL-compliance reasons, since even if you don't use the VST3
 # wrapper you might otherwise still include a couple (unused) symbols from the
 # `vst3-sys` crate.
-vst3 = ["dep:vst3-sys"]
+vst3 = ["dep:vst3"]
 # Add adapters to the Buffer object for reading the channel data to and from
 # `std::simd` vectors. Requires a nightly compiler.
 simd = []
@@ -112,7 +112,7 @@ midir = { version = "0.9.1", optional = true }
 rtrb = { version = "0.2.2", optional = true }
 
 # Used for the `vst3` feature
-vst3-sys = { git = "https://github.com/robbert-vdh/vst3-sys.git", branch = "fix/drop-box-from-raw", optional = true }
+vst3 = { version = "0.3.0", optional = true }
 
 # Used for the `zstd` feature
 zstd = { version = "0.12.3", optional = true }

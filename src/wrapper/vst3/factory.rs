@@ -5,8 +5,10 @@
 //! frustrating and error prone, most code that does not specifically depend on all of the exposed
 //! plugin types was moved back to this module so it can be compiled and type checked as normal.
 
-use vst3_sys::base::{
-    ClassCardinality, FactoryFlags, PClassInfo, PClassInfo2, PClassInfoW, PFactoryInfo,
+use vst3::Steinberg::Vst::ComponentFlags_;
+use vst3::Steinberg::{
+    PClassInfo, PClassInfo2, PClassInfoW, PClassInfo_::ClassCardinality_, PFactoryInfo,
+    PFactoryInfo_::FactoryFlags_,
 };
 
 use super::subcategories::Vst3SubCategory;
@@ -53,7 +55,7 @@ impl PluginInfo {
         strlcpy(&mut info.vendor, self.vendor);
         strlcpy(&mut info.url, self.url);
         strlcpy(&mut info.email, self.email);
-        info.flags = FactoryFlags::kUnicode as i32;
+        info.flags = FactoryFlags_::kUnicode as i32;
 
         info
     }
@@ -62,8 +64,8 @@ impl PluginInfo {
     /// `IPluginFactory`.
     pub fn create_class_info(&self) -> PClassInfo {
         let mut info: PClassInfo = unsafe { std::mem::zeroed() };
-        info.cid.data = *self.cid;
-        info.cardinality = ClassCardinality::kManyInstances as i32;
+        info.cid = self.cid.map(|b| b as i8);
+        info.cardinality = ClassCardinality_::kManyInstances as i32;
         strlcpy(&mut info.category, "Audio Module Class");
         strlcpy(&mut info.name, self.name);
 
@@ -74,15 +76,15 @@ impl PluginInfo {
     /// `IPluginFactory2`.
     pub fn create_class_info_2(&self) -> PClassInfo2 {
         let mut info: PClassInfo2 = unsafe { std::mem::zeroed() };
-        info.cid.data = *self.cid;
-        info.cardinality = ClassCardinality::kManyInstances as i32;
+        info.cid = self.cid.map(|b| b as i8);
+        info.cardinality = ClassCardinality_::kManyInstances as i32;
         strlcpy(&mut info.category, "Audio Module Class");
         strlcpy(&mut info.name, self.name);
-        info.class_flags = 1 << 1; // kSimpleModeSupported
-        strlcpy(&mut info.subcategories, &self.subcategories);
+        info.classFlags = ComponentFlags_::kSimpleModeSupported;
+        strlcpy(&mut info.subCategories, &self.subcategories);
         strlcpy(&mut info.vendor, self.vendor);
         strlcpy(&mut info.version, self.version);
-        strlcpy(&mut info.sdk_version, VST3_SDK_VERSION);
+        strlcpy(&mut info.sdkVersion, VST3_SDK_VERSION);
 
         info
     }
@@ -91,15 +93,15 @@ impl PluginInfo {
     /// `IPluginFactory3`.
     pub fn create_class_info_unicode(&self) -> PClassInfoW {
         let mut info: PClassInfoW = unsafe { std::mem::zeroed() };
-        info.cid.data = *self.cid;
-        info.cardinality = ClassCardinality::kManyInstances as i32;
+        info.cid = self.cid.map(|b| b as i8);
+        info.cardinality = ClassCardinality_::kManyInstances as i32;
         strlcpy(&mut info.category, "Audio Module Class");
         u16strlcpy(&mut info.name, self.name);
-        info.class_flags = 1 << 1; // kSimpleModeSupported
-        strlcpy(&mut info.subcategories, &self.subcategories);
+        info.classFlags = ComponentFlags_::kSimpleModeSupported;
+        strlcpy(&mut info.subCategories, &self.subcategories);
         u16strlcpy(&mut info.vendor, self.vendor);
         u16strlcpy(&mut info.version, self.version);
-        u16strlcpy(&mut info.sdk_version, VST3_SDK_VERSION);
+        u16strlcpy(&mut info.sdkVersion, VST3_SDK_VERSION);
 
         info
     }
