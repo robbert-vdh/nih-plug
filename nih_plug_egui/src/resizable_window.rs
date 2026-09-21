@@ -3,7 +3,7 @@
 use egui_baseview::egui::emath::GuiRounding;
 use egui_baseview::egui::{InnerResponse, UiBuilder};
 
-use crate::egui::{pos2, CentralPanel, Context, Id, Rect, Response, Sense, Ui, Vec2};
+use crate::egui::{pos2, CentralPanel, Context, Id, LayerId, Order, Rect, Response, Sense, Ui, Vec2};
 use crate::EguiState;
 
 /// Adds a corner to the plugin window that can be dragged in order to resize it.
@@ -41,10 +41,21 @@ impl ResizableWindow {
 
             let ret = add_contents(&mut content_ui);
 
-            let corner_size = Vec2::splat(ui.visuals().resize_corner_size);
+            let corner_layer_id =
+                LayerId::new(Order::Foreground, self.id.with("resize_corner_layer"));
+            let mut corner_ui = ui.new_child(
+                UiBuilder::new()
+                    .layer_id(corner_layer_id)
+                    .max_rect(ui_rect)
+                    .layout(*ui.layout()),
+            );
+            corner_ui.set_clip_rect(ui_rect);
+
+            let corner_size = Vec2::splat(corner_ui.visuals().resize_corner_size);
             let corner_rect = Rect::from_min_size(ui_rect.max - corner_size, corner_size);
 
-            let corner_response = ui.interact(corner_rect, self.id.with("corner"), Sense::drag());
+            let corner_response =
+                corner_ui.interact(corner_rect, self.id.with("corner"), Sense::drag());
 
             if let Some(pointer_pos) = corner_response.interact_pointer_pos() {
                 let desired_size = (pointer_pos - ui_rect.min + 0.5 * corner_response.rect.size())
@@ -58,7 +69,7 @@ impl ResizableWindow {
                 }
             }
 
-            paint_resize_corner(&content_ui, &corner_response);
+            paint_resize_corner(&corner_ui, &corner_response);
 
             ret
         })
