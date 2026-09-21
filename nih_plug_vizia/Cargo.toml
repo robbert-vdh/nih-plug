@@ -11,7 +11,7 @@ description = "An adapter to use VIZIA GUIs with NIH-plug"
 nih_plug = { path = "..", default-features = false }
 nih_plug_assets = { git = "https://github.com/robbert-vdh/nih_plug_assets.git" }
 
-baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "2c1b1a7b0fef1a29a5150a6a8f6fef6a0cbab8c4" }
+baseview = { git = "https://github.com/john-parton/baseview.git", branch = "bugfix/srgb-not-supported" }
 # This contains an as of writing not yet merged patch for rounding errors when
 # resizing, and a workaround for certain events not firing when resizing
 vizia = { git = "https://github.com/robbert-vdh/vizia.git", tag = "patched-2024-05-06", default-features = false, features = ["baseview", "clipboard", "x11"] }
