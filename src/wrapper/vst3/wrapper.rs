@@ -922,6 +922,11 @@ impl<P: Vst3Plugin> IAudioProcessor for Wrapper<P> {
             };
 
             process_wrapper(|| plugin.reset());
+        } else {
+            // Process stopped - call the plugin's process_stopped() method
+            process_wrapper(|| {
+                self.inner.plugin.lock().process_stopped();
+            });
         }
 
         // We don't have any special handling for suspending and resuming plugins, yet

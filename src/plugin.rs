@@ -243,6 +243,19 @@ pub trait Plugin: Default + Send + 'static {
         context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus;
 
+    /// Called when audio processing stops, for instance when the plugin is turned off.
+    /// This is the counterpart to [`reset()`][Self::reset()] which is called
+    /// when processing starts or resumes.
+    ///
+    /// Unlike [`deactivate()`][Self::deactivate()], this is called for temporary processing
+    /// interruptions like bypassing, not major lifecycle changes.
+    /// You can use this to gracefully handle the transition to a non-processing state, such as clearing
+    /// buffers, writing silence to displays, or saving state.
+    ///
+    /// This method is called from both CLAP (`stop_processing`) and VST3 (`setProcessing(false)`)
+    /// hosts when they temporarily stop sending audio to the plugin.
+    fn process_stopped(&mut self) {}
+
     /// Called when the plugin is deactivated. The host will call
     /// [`initialize()`][Self::initialize()] again before the plugin resumes processing audio. These
     /// two functions will not be called when the host only temporarily stops processing audio. You

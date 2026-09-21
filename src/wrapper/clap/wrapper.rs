@@ -1939,6 +1939,10 @@ impl<P: ClapPlugin> Wrapper<P> {
         let wrapper = &*((*plugin).plugin_data as *const Self);
 
         wrapper.is_processing.store(false, Ordering::SeqCst);
+
+        process_wrapper(|| {
+            wrapper.plugin.lock().process_stopped();
+        });
     }
 
     unsafe extern "C" fn reset(plugin: *const clap_plugin) {
