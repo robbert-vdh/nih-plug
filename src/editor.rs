@@ -69,6 +69,20 @@ pub trait Editor: Send {
     /// loaded.
     fn param_values_changed(&self);
 
+    /// Called when the host sends a key-down event to the plugin view (VST3
+    /// `IPlugView::onKeyDown`). Return `true` if the editor consumed the key
+    /// (the wrapper will return `kResultTrue` to the host so the host skips its
+    /// own accelerator handling); return `false` to let the host process the
+    /// key normally.
+    ///
+    /// This is primarily for text-input routing in hosts like REAPER that
+    /// intercept certain keys (space, Cmd-shortcuts) before they reach the
+    /// plugin's native view. The editor should only return `true` if a text
+    /// input in the editor currently has focus and can consume the character.
+    fn on_key_down(&self, _character: Option<char>) -> bool {
+        false
+    }
+
     // TODO: Reconsider adding a tick function here for the Linux `IRunLoop`. To keep this platform
     //       and API agnostic, add a way to ask the GuiContext if the wrapper already provides a
     //       tick function. If it does not, then the Editor implementation must handle this by
