@@ -143,6 +143,25 @@ pub fn read_stream(stream: &clap_istream, mut slice: impl ByteReadBuffer) -> boo
     true
 }
 
+/// Append everything left in the stream to `buffer`. Returns `false` if the stream returns an
+/// error, or if `buffer` would grow beyond `max_len` bytes.
+pub fn read_stream_to_end(stream: &clap_istream, buffer: &mut Vec<u8>, max_len: usize) -> bool {
+    let mut chunk = [0u8; 4096];
+    loop {
+        let bytes_read = unsafe_clap_call! {
+            stream=>read(stream, chunk.as_mut_ptr() as *mut c_void, chunk.len() as u64)
+        };
+        if bytes_read == 0 {
+            return true;
+        }
+        if bytes_read < 0 || buffer.len() + bytes_read as usize > max_len {
+            return false;
+        }
+
+        buffer.extend_from_slice(&chunk[..bytes_read as usize]);
+    }
+}
+
 /// Write the data from a slice to a stream until either all data has been written, or the stream
 /// returns an error. This correctly handles streams that only allow smaller, buffered writes. This
 /// returns `false` if the stream returns an error or doesn't allow any writes anymore.

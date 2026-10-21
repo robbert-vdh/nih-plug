@@ -89,7 +89,7 @@ use crate::prelude::{
 };
 use crate::util::permit_alloc;
 use crate::wrapper::clap::context::RemoteControlPages;
-use crate::wrapper::clap::util::{read_stream, write_stream};
+use crate::wrapper::clap::util::{read_stream, read_stream_to_end, write_stream};
 use crate::wrapper::state::{self, PluginState};
 use crate::wrapper::util::buffer_management::{BufferManager, ChannelPointers};
 use crate::wrapper::util::{
@@ -3153,14 +3153,38 @@ impl<P: ClapPlugin> Wrapper<P> {
         }
         let length = u64::from_le_bytes(length_bytes);
 
-        let mut read_buffer: Vec<u8> = Vec::with_capacity(length as usize);
-        if !read_stream(&*stream, read_buffer.spare_capacity_mut()) {
-            nih_debug_assert_failure!(
-                "Error or end of stream while reading the state buffer from the stream."
-            );
-            return false;
-        }
-        read_buffer.set_len(length as usize);
+        // Anything larger is not a length prefix: either a corrupt stream, or a headerless state
+        // from nih-plug's own VST3 wrapper (raw JSON, or zstd), which a CLAP-to-VST3 wrapper such
+        // as clap-wrapper passes through unchanged when it reuses the old VST3 class ID. Eight
+        // bytes of JSON text or a zstd frame header always read as a length above the limit.
+        const MAX_STATE_LENGTH: u64 = 256 * 1024 * 1024;
+        let read_buffer = if length > MAX_STATE_LENGTH {
+            const ZSTD_MAGIC: [u8; 4] = [0x28, 0xb5, 0x2f, 0xfd];
+            if length_bytes[0] != b'{' && length_bytes[..4] != ZSTD_MAGIC {
+                nih_debug_assert_failure!("Invalid state length {} in the stream.", length);
+                return false;
+            }
+
+            let mut read_buffer = length_bytes.to_vec();
+            if !read_stream_to_end(&*stream, &mut read_buffer, MAX_STATE_LENGTH as usize) {
+                nih_debug_assert_failure!("Error while reading a headerless state from the stream.");
+                return false;
+            }
+            nih_trace!("Loading a headerless (VST3-format) state");
+
+            read_buffer
+        } else {
+            let mut read_buffer: Vec<u8> = Vec::with_capacity(length as usize);
+            if !read_stream(&*stream, read_buffer.spare_capacity_mut()) {
+                nih_debug_assert_failure!(
+                    "Error or end of stream while reading the state buffer from the stream."
+                );
+                return false;
+            }
+            read_buffer.set_len(length as usize);
+
+            read_buffer
+        };
 
         match state::deserialize_json(&read_buffer) {
             Some(mut state) => {
