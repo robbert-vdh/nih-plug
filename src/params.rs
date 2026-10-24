@@ -249,7 +249,7 @@ pub(crate) trait ParamMut: Param {
 /// with the `#[persist = "key"]` attribute containing types that can be serialized and deserialized
 /// with [Serde](https://serde.rs/).
 ///
-/// ## `#[nested]`, `#[nested(group_name = "group name")]`
+/// ## `#[nested]`, `#[nested(group = "group name")]`
 ///
 /// Finally, the `Params` object may include parameters from other objects. Setting a group name is
 /// optional, but some hosts can use this information to display the parameters in a tree structure.
@@ -258,7 +258,7 @@ pub(crate) trait ParamMut: Param {
 ///
 /// Take a look at the example gain example plugin to see how this is used.
 ///
-/// ## `#[nested(id_prefix = "foo", group_name = "Foo")]`
+/// ## `#[nested(id_prefix = "foo", group = "Foo")]`
 ///
 /// Adding this attribute to a `Params` sub-object works similarly to the regular `#[nested]`
 /// attribute, but it also adds an ID to all parameters from the nested object. If a parameter in
@@ -267,7 +267,7 @@ pub(crate) trait ParamMut: Param {
 /// the field. _This makes it possible to reuse the same parameter struct with different names and
 /// parameter indices._
 ///
-/// ## `#[nested(array, group_name = "Foo")]`
+/// ## `#[nested(array, group = "Foo")]`
 ///
 /// This can be applied to an array-like data structure and it works similar to a `nested` attribute
 /// with an `id_name`, except that it will iterate over the array and create unique indices for all
