@@ -2819,14 +2819,22 @@ impl<P: ClapPlugin> Wrapper<P> {
     }
 
     unsafe extern "C" fn ext_gui_show(_plugin: *const clap_plugin) -> bool {
-        // TODO: Does this get used? Is this only for the free-standing window extension? (which we
-        //       don't implement) This wouldn't make any sense for embedded editors.
-        false
+        check_null_ptr!(false, plugin, (*plugin).plugin_data);
+        let wrapper = &*((*plugin).plugin_data as *const Self);
+
+        // Some hosts (e.g. MorningDAW) call show() for embedded editors too and
+        // treat a false return as a failure to open the editor. The editor is
+        // already visible once it has a parent, so report success when it exists.
+        wrapper.editor_handle.lock().is_some()
     }
 
     unsafe extern "C" fn ext_gui_hide(_plugin: *const clap_plugin) -> bool {
-        // TODO: Same as the above
-        false
+        check_null_ptr!(false, plugin, (*plugin).plugin_data);
+        let wrapper = &*((*plugin).plugin_data as *const Self);
+
+        // Same as above: hiding an embedded editor is a no-op, but report
+        // success so hosts that call this don't treat it as an error.
+        wrapper.editor_handle.lock().is_some()
     }
 
     unsafe extern "C" fn ext_latency_get(plugin: *const clap_plugin) -> u32 {
