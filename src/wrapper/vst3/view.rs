@@ -425,8 +425,17 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
     }
 
     unsafe fn can_resize(&self) -> tresult {
-        // TODO: Implement Host->Plugin resizing
-        kResultFalse
+        // The editor may resize itself through its own resize handle (see
+        // `nih_plug_vizia::ResizeHandle`), which asks the host to resize the view through
+        // `IPlugFrame::resizeView()`. Hosts refuse to honour that request when this returns
+        // `kResultFalse`, which leaves the plugin's window stuck at its old size and crops the GUI.
+        //
+        // The editor still decides the size itself; `on_size()` rejects anything that does not match
+        // what the editor reports, so this does not let the host force arbitrary sizes on plugins
+        // that use a fixed size editor.
+        //
+        // In VST3 `kResultTrue` is the same value as `kResultOk`.
+        kResultOk
     }
 
     unsafe fn check_size_constraint(&self, rect: *mut ViewRect) -> tresult {
