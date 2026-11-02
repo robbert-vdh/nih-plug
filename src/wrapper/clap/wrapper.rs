@@ -2712,8 +2712,13 @@ impl<P: ClapPlugin> Wrapper<P> {
     }
 
     unsafe extern "C" fn ext_gui_can_resize(_plugin: *const clap_plugin) -> bool {
-        // TODO: Implement Host->Plugin GUI resizing
-        false
+        // The editor can resize itself through its own resize handle, and it asks the host to follow
+        // along through `clap_host_gui::request_resize()`. Hosts ignore that request when this
+        // returns false, leaving the plugin's window at its old size and cropping the GUI.
+        //
+        // The editor still decides the size; `ext_gui_set_size()` rejects anything that does not
+        // match what the editor reports, so this does not let the host force arbitrary sizes.
+        true
     }
 
     unsafe extern "C" fn ext_gui_get_resize_hints(

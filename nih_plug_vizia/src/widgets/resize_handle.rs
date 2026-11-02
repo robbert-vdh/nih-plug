@@ -20,6 +20,14 @@ pub struct ResizeHandle {
     start_dpi_factor: f32,
     /// The cursor position in physical screen pixels when the drag started.
     start_physical_coordinates: (f32, f32),
+    /// The window size in logical pixels when the drag started.
+    ///
+    /// The drag ratio has to be measured against the window itself instead of against the absolute
+    /// cursor position on the screen. Using the absolute position meant that the handle only behaved
+    /// correctly when the window happened to sit in the top-left corner of the screen: starting a
+    /// drag at the bottom-right of a window placed further away produced a wildly wrong ratio, and
+    /// dragging leftwards/upwards made the ratio negative.
+    start_logical_size: (f32, f32),
 }
 
 impl ResizeHandle {
@@ -32,6 +40,7 @@ impl ResizeHandle {
             start_scale_factor: 1.0,
             start_dpi_factor: 1.0,
             start_physical_coordinates: (0.0, 0.0),
+            start_logical_size: (1.0, 1.0),
         }
         .build(cx, |_| {})
     }
@@ -61,6 +70,10 @@ impl View for ResizeHandle {
                         cx.mouse().cursorx * self.start_dpi_factor,
                         cx.mouse().cursory * self.start_dpi_factor,
                     );
+                    // Remember how big the window was when the drag started. The drag ratio is
+                    // measured against this instead of against the absolute cursor position.
+                    let window_size = cx.window_size();
+                    self.start_logical_size = (window_size.width as f32, window_size.height as f32);
 
                     meta.consume();
                 } else {
@@ -82,18 +95,38 @@ impl View for ResizeHandle {
                 ));
 
                 if self.drag_active {
-                    // We need to convert our measurements into physical pixels relative to the
-                    // initial drag to be able to keep a consistent ratio. This 'relative to the
-                    // start' bit is important because otherwise we would be comparing the position
-                    // to the same absoltue screen spotion.
-                    // TODO: This may start doing fun things when the window grows so large that it
-                    //       gets pushed upwards or leftwards
+                    // Convert the cursor position into physical pixels. The drag ratio is then
+                    // measured as "how much larger is the window compared to when the drag
+                    // started", using the window's own size as the reference instead of the
+                    // absolute on-screen cursor position. Using the absolute position made the
+                    // handle behave differently depending on where the window sat on the screen,
+                    // and produced negative ratios when dragging up/leftwards.
                     let (compensated_physical_x, compensated_physical_y) =
                         (x * self.start_dpi_factor, y * self.start_dpi_factor);
                     let (start_physical_x, start_physical_y) = self.start_physical_coordinates;
+                    let (start_logical_width, start_logical_height) = self.start_logical_size;
+
+                    // Size of the window implied by the current cursor position, in physical
+                    // pixels: the handle sits in the bottom-right corner, so the cursor position
+                    // relative to the window's top-left corner is the window's physical size.
+                    //
+                    // The top-left corner of the window in physical pixels is the cursor position
+                    // at drag start minus the window's physical size at drag start.
+                    let start_physical_width = start_logical_width * self.start_dpi_factor;
+                    let start_physical_height = start_logical_height * self.start_dpi_factor;
+                    let window_physical_origin = (
+                        start_physical_x - start_physical_width,
+                        start_physical_y - start_physical_height,
+                    );
+
+                    let physical_width = (compensated_physical_x - window_physical_origin.0)
+                        .max(start_physical_width);
+                    let physical_height = (compensated_physical_y - window_physical_origin.1)
+                        .max(start_physical_height);
+
                     let new_scale_factor = (self.start_scale_factor
-                        * (compensated_physical_x / start_physical_x)
-                            .max(compensated_physical_y / start_physical_y)
+                        * (physical_width / start_physical_width)
+                            .max(physical_height / start_physical_height)
                             as f64)
                         // Vizia rounds borders to integer pixels, and at <0.5 scaling one pixel
                         // borders will simply disappear
