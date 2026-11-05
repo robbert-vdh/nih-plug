@@ -16,6 +16,7 @@ use vst3_sys::vst::{
     LegacyMidiCCOutEvent, NoteExpressionTypeInfo, NoteExpressionValueDescription, NoteOffEvent,
     NoteOnEvent, ParameterFlags, PolyPressureEvent, ProgramListInfo, TChar, UnitInfo,
 };
+use vst3_sys::vst::{IAttributeList, IInfoListener};
 use vst3_sys::VST3;
 use widestring::U16CStr;
 
@@ -45,7 +46,8 @@ use vst3_sys as vst3_com;
     IMidiMapping,
     INoteExpressionController,
     IProcessContextRequirements,
-    IUnitInfo
+    IUnitInfo,
+    IInfoListener
 ))]
 pub struct Wrapper<P: Vst3Plugin> {
     inner: Arc<WrapperInner<P>>,
@@ -1891,5 +1893,44 @@ impl<P: Vst3Plugin> IUnitInfo for Wrapper<P> {
         _data: SharedVstPtr<dyn IBStream>,
     ) -> tresult {
         kInvalidArgument
+    }
+}
+
+impl<P: Vst3Plugin> IInfoListener for Wrapper<P> {
+    unsafe fn set_channel_context_infos(&self, list: *mut c_void) -> tresult {
+        check_null_ptr!(list);
+
+        let Some(listener) = &self.inner.track_info_listener else {
+            return kResultOk;
+        };
+        let Some(list) = vst3_sys::VstPtr::<dyn IAttributeList>::shared(
+            list as *mut *mut _,
+        ) else {
+            return kInvalidArgument;
+        };
+
+        // The name: UTF-16, at most 128 characters.
+        let mut name_buf = [0 as vst3_sys::base::tchar; 128];
+        let name = if list.get_string(
+            vst3_sys::vst::kChannelNameKey,
+            name_buf.as_mut_ptr(),
+            std::mem::size_of_val(&name_buf) as u32,
+        ) == kResultOk
+        {
+            let end = name_buf.iter().position(|c| *c == 0).unwrap_or(name_buf.len());
+            let units: Vec<u16> = name_buf[..end].iter().map(|c| *c as u16).collect();
+            Some(String::from_utf16_lossy(&units))
+        } else {
+            None
+        };
+        let mut color: i64 = 0;
+        let color = (list.get_int(vst3_sys::vst::kChannelColorKey, &mut color) == kResultOk)
+            .then(|| {
+                let cs = color as u32;
+                [(cs >> 16) as u8, (cs >> 8) as u8, cs as u8]
+            });
+        listener(&crate::prelude::TrackInfo { name, color });
+
+        kResultOk
     }
 }

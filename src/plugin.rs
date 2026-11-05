@@ -166,6 +166,15 @@ pub trait Plugin: Default + Send + 'static {
         None
     }
 
+    /// A function the wrapper calls on the main thread with the track the plugin sits on (its
+    /// name and colour, as far as the host says them), once the host has told it and whenever it
+    /// changes: CLAP's `track-info`, VST3's `IInfoListener`. The function must not lock anything
+    /// the audio thread holds. Queried only once, immediately after the plugin instance is
+    /// created.
+    fn track_info_listener(&self) -> Option<Arc<dyn Fn(&TrackInfo) + Send + Sync>> {
+        None
+    }
+
     /// This function is always called just before a [`PluginState`] is loaded. This lets you
     /// directly modify old plugin state to perform migrations based on the [`PluginState::version`]
     /// field. Some examples of use cases for this are renaming parameter indices, remapping
@@ -252,6 +261,15 @@ pub trait Plugin: Default + Send + 'static {
     /// `initialize()` may be called more than once before `deactivate()` is called, for instance
     /// when restoring state while the plugin is still activate.
     fn deactivate(&mut self) {}
+}
+
+/// The track a plugin sits on, as the host tells it ([`Plugin::track_info_listener()`]).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TrackInfo {
+    /// The track's name.
+    pub name: Option<String>,
+    /// The track's colour, red, green and blue.
+    pub color: Option<[u8; 3]>,
 }
 
 /// Indicates the current situation after the plugin has processed audio.

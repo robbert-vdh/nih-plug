@@ -27,6 +27,10 @@ use clap_sys::ext::gui::{
     CLAP_WINDOW_API_COCOA, CLAP_WINDOW_API_WIN32, CLAP_WINDOW_API_X11,
 };
 use clap_sys::ext::latency::{clap_host_latency, clap_plugin_latency, CLAP_EXT_LATENCY};
+use clap_sys::ext::track_info::{
+    clap_host_track_info, clap_plugin_track_info, clap_track_info, CLAP_EXT_TRACK_INFO,
+    CLAP_EXT_TRACK_INFO_COMPAT, CLAP_TRACK_INFO_HAS_TRACK_COLOR, CLAP_TRACK_INFO_HAS_TRACK_NAME,
+};
 use clap_sys::ext::note_ports::{
     clap_note_port_info, clap_plugin_note_ports, CLAP_EXT_NOTE_PORTS, CLAP_NOTE_DIALECT_CLAP,
     CLAP_NOTE_DIALECT_MIDI,
@@ -191,6 +195,12 @@ pub struct Wrapper<P: ClapPlugin> {
 
     clap_plugin_latency: clap_plugin_latency,
     host_latency: AtomicRefCell<Option<ClapPtr<clap_host_latency>>>,
+
+    /// The plugin's track-info listener ([`Plugin::track_info_listener()`]), and the host's
+    /// track-info extension (queried in `init()`).
+    track_info_listener: Option<Arc<dyn Fn(&crate::prelude::TrackInfo) + Send + Sync>>,
+    clap_plugin_track_info: clap_plugin_track_info,
+    host_track_info: AtomicRefCell<Option<ClapPtr<clap_host_track_info>>>,
 
     clap_plugin_note_ports: clap_plugin_note_ports,
 
@@ -457,6 +467,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         // we'll calculate from the string ID specified by the plugin. These parameters should also
         // remain in the same order as the one returned by the plugin.
         let params = plugin.params();
+        let track_info_listener = plugin.track_info_listener();
         let param_id_hashes_ptrs_groups: Vec<_> = params
             .param_map()
             .into_iter()
@@ -630,6 +641,12 @@ impl<P: ClapPlugin> Wrapper<P> {
                 get: Some(Self::ext_latency_get),
             },
             host_latency: AtomicRefCell::new(None),
+
+            track_info_listener,
+            clap_plugin_track_info: clap_plugin_track_info {
+                changed: Some(Self::ext_track_info_changed),
+            },
+            host_track_info: AtomicRefCell::new(None),
 
             clap_plugin_note_ports: clap_plugin_note_ports {
                 count: Some(Self::ext_note_ports_count),
@@ -1867,8 +1884,59 @@ impl<P: ClapPlugin> Wrapper<P> {
             &wrapper.host_callback,
             CLAP_EXT_THREAD_CHECK,
         );
+        if wrapper.track_info_listener.is_some() {
+            *wrapper.host_track_info.borrow_mut() =
+                query_host_extension::<clap_host_track_info>(
+                    &wrapper.host_callback,
+                    CLAP_EXT_TRACK_INFO,
+                )
+                .or_else(|| {
+                    query_host_extension::<clap_host_track_info>(
+                        &wrapper.host_callback,
+                        CLAP_EXT_TRACK_INFO_COMPAT,
+                    )
+                });
+            wrapper.report_track_info();
+        }
 
         true
+    }
+
+    /// Asks the host for the track's name and colour and gives them to the plugin's listener.
+    /// Main thread only.
+    fn report_track_info(&self) {
+        let (Some(listener), Some(host_track_info)) =
+            (&self.track_info_listener, &*self.host_track_info.borrow())
+        else {
+            return;
+        };
+        // SAFETY: a zeroed `clap_track_info` is a valid empty one (null port type, no flags).
+        let mut info: clap_track_info = unsafe { std::mem::zeroed() };
+        let ok = unsafe_clap_call! {
+            host_track_info=>get(&*self.host_callback, &mut info)
+        };
+        if !ok {
+            return;
+        }
+        let name = (info.flags & CLAP_TRACK_INFO_HAS_TRACK_NAME != 0).then(|| {
+            let bytes: Vec<u8> = info
+                .name
+                .iter()
+                .take_while(|c| **c != 0)
+                .map(|c| *c as u8)
+                .collect();
+            String::from_utf8_lossy(&bytes).into_owned()
+        });
+        let color = (info.flags & CLAP_TRACK_INFO_HAS_TRACK_COLOR != 0)
+            .then_some([info.color.red, info.color.green, info.color.blue]);
+        listener(&crate::prelude::TrackInfo { name, color });
+    }
+
+    unsafe extern "C" fn ext_track_info_changed(plugin: *const clap_plugin) {
+        check_null_ptr!((), plugin, (*plugin).plugin_data);
+        let wrapper = &*((*plugin).plugin_data as *const Self);
+
+        wrapper.report_track_info();
     }
 
     unsafe extern "C" fn destroy(plugin: *const clap_plugin) {
@@ -1887,6 +1955,9 @@ impl<P: ClapPlugin> Wrapper<P> {
     ) -> bool {
         check_null_ptr!(false, plugin, (*plugin).plugin_data);
         let wrapper = &*((*plugin).plugin_data as *const Self);
+
+        // Hosts that knew nothing of the track at `init()` know it by now.
+        wrapper.report_track_info();
 
         let audio_io_layout = wrapper.current_audio_io_layout.load();
         let buffer_config = BufferConfig {
@@ -2352,6 +2423,10 @@ impl<P: ClapPlugin> Wrapper<P> {
             &wrapper.clap_plugin_gui as *const _ as *const c_void
         } else if id == CLAP_EXT_LATENCY {
             &wrapper.clap_plugin_latency as *const _ as *const c_void
+        } else if (id == CLAP_EXT_TRACK_INFO || id == CLAP_EXT_TRACK_INFO_COMPAT)
+            && wrapper.track_info_listener.is_some()
+        {
+            &wrapper.clap_plugin_track_info as *const _ as *const c_void
         } else if id == CLAP_EXT_NOTE_PORTS
             && (P::MIDI_INPUT >= MidiConfig::Basic || P::MIDI_OUTPUT >= MidiConfig::Basic)
         {
