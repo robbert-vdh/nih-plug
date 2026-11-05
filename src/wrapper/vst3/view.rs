@@ -376,8 +376,8 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
     unsafe fn on_size(&self, new_size: *mut ViewRect) -> tresult {
         check_null_ptr!(new_size);
 
-        // TODO: Implement Host->Plugin resizing
-        let (unscaled_width, unscaled_height) = self.editor.lock().size();
+        let editor = self.editor.lock();
+        let (unscaled_width, unscaled_height) = editor.size();
         let scaling_factor = self.scaling_factor.load(Ordering::Relaxed);
         let (editor_width, editor_height) = (
             (unscaled_width as f32 * scaling_factor).round() as i32,
@@ -387,6 +387,18 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
         let width = (*new_size).right - (*new_size).left;
         let height = (*new_size).bottom - (*new_size).top;
         if width == editor_width && height == editor_height {
+            return kResultOk;
+        }
+        if !editor.can_resize() || width <= 0 || height <= 0 {
+            return kResultFalse;
+        }
+
+        // Host->Plugin resizing. VST3 sizes are physical pixels except on macOS.
+        let (w, h) = (
+            (width as f32 / scaling_factor).round() as u32,
+            (height as f32 / scaling_factor).round() as u32,
+        );
+        if editor.set_size(w, h) {
             kResultOk
         } else {
             kResultFalse
@@ -425,19 +437,35 @@ impl<P: Vst3Plugin> IPlugView for WrapperView<P> {
     }
 
     unsafe fn can_resize(&self) -> tresult {
-        // TODO: Implement Host->Plugin resizing
-        kResultFalse
+        if self.editor.lock().can_resize() {
+            kResultOk
+        } else {
+            kResultFalse
+        }
     }
 
     unsafe fn check_size_constraint(&self, rect: *mut ViewRect) -> tresult {
         check_null_ptr!(rect);
 
-        // TODO: Implement Host->Plugin resizing
-        if (*rect).right - (*rect).left > 0 && (*rect).bottom - (*rect).top > 0 {
-            kResultOk
-        } else {
-            kResultFalse
+        let (width, height) = ((*rect).right - (*rect).left, (*rect).bottom - (*rect).top);
+        if width <= 0 || height <= 0 {
+            return kResultFalse;
         }
+        let editor = self.editor.lock();
+        if !editor.can_resize() {
+            return kResultOk;
+        }
+
+        // Snap the proposed rect to the closest size the editor accepts
+        let scaling_factor = self.scaling_factor.load(Ordering::Relaxed);
+        let (w, h) = editor.constrain_size(
+            (width as f32 / scaling_factor).round() as u32,
+            (height as f32 / scaling_factor).round() as u32,
+        );
+        (*rect).right = (*rect).left + (w as f32 * scaling_factor).round() as i32;
+        (*rect).bottom = (*rect).top + (h as f32 * scaling_factor).round() as i32;
+
+        kResultOk
     }
 }
 

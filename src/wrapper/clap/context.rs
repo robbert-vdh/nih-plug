@@ -29,8 +29,9 @@ pub(crate) struct WrapperInitContext<'a, P: ClapPlugin> {
 /// struct's docstring for mroe information.
 #[derive(Debug, Default)]
 pub(crate) struct PendingInitContextRequests {
-    /// The value of the last `.set_latency_samples()` call.
-    latency_changed: Cell<Option<u32>>,
+    /// The value of the last `.set_latency_samples()` call. `activate()` takes it to report the
+    /// latency from within itself, as CLAP requires.
+    pub(super) latency_changed: Cell<Option<u32>>,
 }
 
 /// A [`ProcessContext`] implementation for the wrapper. This is a separate object so it can hold on

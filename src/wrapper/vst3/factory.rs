@@ -23,6 +23,8 @@ pub const VST3_SDK_VERSION: &str = "VST 3.6.14";
 #[derive(Debug)]
 pub struct PluginInfo {
     pub cid: &'static [u8; 16],
+    /// The ARA main factory class's ID, when the plugin has ARA.
+    pub ara_cid: Option<[u8; 16]>,
     pub name: &'static str,
     pub subcategories: String,
     pub vendor: &'static str,
@@ -37,6 +39,7 @@ impl PluginInfo {
     pub fn for_plugin<P: Vst3Plugin>() -> PluginInfo {
         PluginInfo {
             cid: &P::PLATFORM_VST3_CLASS_ID,
+            ara_cid: (!P::vst3_ara_factory().is_null()).then(|| crate::plugin::vst3::vst3_ara_class_id(P::PLATFORM_VST3_CLASS_ID)),
             name: P::NAME,
             subcategories: make_subcategories_string::<P>(),
             vendor: P::VENDOR,
@@ -124,4 +127,32 @@ fn make_subcategories_string<P: Vst3Plugin>() -> String {
     nih_debug_assert!(subcategory_string.len() <= 127);
 
     subcategory_string
+}
+
+impl PluginInfo {
+    /// The ARA main factory class's [`PClassInfo`].
+    pub fn create_ara_class_info(&self) -> PClassInfo {
+        let mut info = self.create_class_info();
+        info.cid.data = self.ara_cid.unwrap_or(*self.cid);
+        strlcpy(&mut info.category, super::ara::ARA_MAIN_FACTORY_CLASS);
+        info
+    }
+
+    /// The ARA main factory class's [`PClassInfo2`].
+    pub fn create_ara_class_info_2(&self) -> PClassInfo2 {
+        let mut info = self.create_class_info_2();
+        info.cid.data = self.ara_cid.unwrap_or(*self.cid);
+        strlcpy(&mut info.category, super::ara::ARA_MAIN_FACTORY_CLASS);
+        strlcpy(&mut info.subcategories, "");
+        info
+    }
+
+    /// The ARA main factory class's [`PClassInfoW`].
+    pub fn create_ara_class_info_unicode(&self) -> PClassInfoW {
+        let mut info = self.create_class_info_unicode();
+        info.cid.data = self.ara_cid.unwrap_or(*self.cid);
+        strlcpy(&mut info.category, super::ara::ARA_MAIN_FACTORY_CLASS);
+        strlcpy(&mut info.subcategories, "");
+        info
+    }
 }

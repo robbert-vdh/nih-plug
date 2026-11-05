@@ -27,6 +27,10 @@ use clap_sys::ext::gui::{
     CLAP_WINDOW_API_COCOA, CLAP_WINDOW_API_WIN32, CLAP_WINDOW_API_X11,
 };
 use clap_sys::ext::latency::{clap_host_latency, clap_plugin_latency, CLAP_EXT_LATENCY};
+use clap_sys::ext::track_info::{
+    clap_host_track_info, clap_plugin_track_info, clap_track_info, CLAP_EXT_TRACK_INFO,
+    CLAP_EXT_TRACK_INFO_COMPAT, CLAP_TRACK_INFO_HAS_TRACK_COLOR, CLAP_TRACK_INFO_HAS_TRACK_NAME,
+};
 use clap_sys::ext::note_ports::{
     clap_note_port_info, clap_plugin_note_ports, CLAP_EXT_NOTE_PORTS, CLAP_NOTE_DIALECT_CLAP,
     CLAP_NOTE_DIALECT_MIDI,
@@ -126,6 +130,15 @@ pub struct Wrapper<P: ClapPlugin> {
     editor_scaling_factor: AtomicF32,
 
     is_processing: AtomicBool,
+    /// Whether the plugin is between `clap_plugin::activate()` and `deactivate()`, and whether
+    /// `activate()` is running right now. CLAP only lets the plugin report a latency change
+    /// (`clap_host_latency::changed()`) from within `activate()`; while active it must request a
+    /// restart instead.
+    is_active: AtomicBool,
+    is_activating: AtomicBool,
+    /// The latency reported at the last activation, so `activate()` knows whether to tell the
+    /// host it changed.
+    activated_latency: AtomicU32,
     /// The current IO configuration, modified through the `clap_plugin_audio_ports_config`
     /// extension. Initialized to the plugin's first audio IO configuration.
     current_audio_io_layout: AtomicCell<AudioIOLayout>,
@@ -182,6 +195,14 @@ pub struct Wrapper<P: ClapPlugin> {
 
     clap_plugin_latency: clap_plugin_latency,
     host_latency: AtomicRefCell<Option<ClapPtr<clap_host_latency>>>,
+
+    /// The plugin's track-info listener ([`Plugin::track_info_listener()`]), and the host's
+    /// track-info extension (queried in `init()`).
+    track_info_listener: Option<Arc<dyn Fn(&crate::prelude::TrackInfo) + Send + Sync>>,
+    /// [`ClapPlugin::clap_extension_context()`], asked once at creation.
+    pub(crate) extension_context: usize,
+    clap_plugin_track_info: clap_plugin_track_info,
+    host_track_info: AtomicRefCell<Option<ClapPtr<clap_host_track_info>>>,
 
     clap_plugin_note_ports: clap_plugin_note_ports,
 
@@ -393,14 +414,13 @@ impl<P: ClapPlugin> MainThreadExecutor<Task<P>> for Wrapper<P> {
                 Some(host_latency) => {
                     nih_debug_assert!(is_gui_thread);
 
-                    // XXX: The CLAP docs mention that you should request a restart if this happens
-                    //      while the plugin is activated (which is not entirely the same thing as
-                    //      is processing, but we'll treat it as the same thing). In practice just
-                    //      calling the latency changed function also seems to work just fine.
-                    if self.is_processing.load(Ordering::SeqCst) {
+                    // CLAP only allows `clap_host_latency::changed()` from within
+                    // `clap_plugin::activate()`. While the plugin is active, request a restart:
+                    // the reactivation reports the new latency (see `activate()`). While it is
+                    // inactive the host reads the latency when it activates the plugin.
+                    let _ = host_latency;
+                    if self.is_active.load(Ordering::SeqCst) {
                         unsafe_clap_call! { &*self.host_callback=>request_restart(&*self.host_callback) };
-                    } else {
-                        unsafe_clap_call! { host_latency=>changed(&*self.host_callback) };
                     }
                 }
                 None => nih_debug_assert_failure!("Host does not support the latency extension"),
@@ -449,6 +469,8 @@ impl<P: ClapPlugin> Wrapper<P> {
         // we'll calculate from the string ID specified by the plugin. These parameters should also
         // remain in the same order as the one returned by the plugin.
         let params = plugin.params();
+        let track_info_listener = plugin.track_info_listener();
+        let extension_context = plugin.clap_extension_context() as usize;
         let param_id_hashes_ptrs_groups: Vec<_> = params
             .param_map()
             .into_iter()
@@ -544,6 +566,9 @@ impl<P: ClapPlugin> Wrapper<P> {
             editor_scaling_factor: AtomicF32::new(1.0),
 
             is_processing: AtomicBool::new(false),
+            is_active: AtomicBool::new(false),
+            is_activating: AtomicBool::new(false),
+            activated_latency: AtomicU32::new(0),
             current_audio_io_layout: AtomicCell::new(
                 P::AUDIO_IO_LAYOUTS.first().copied().unwrap_or_default(),
             ),
@@ -619,6 +644,13 @@ impl<P: ClapPlugin> Wrapper<P> {
                 get: Some(Self::ext_latency_get),
             },
             host_latency: AtomicRefCell::new(None),
+
+            track_info_listener,
+            extension_context,
+            clap_plugin_track_info: clap_plugin_track_info {
+                changed: Some(Self::ext_track_info_changed),
+            },
+            host_track_info: AtomicRefCell::new(None),
 
             clap_plugin_note_ports: clap_plugin_note_ports {
                 count: Some(Self::ext_note_ports_count),
@@ -1739,7 +1771,8 @@ impl<P: ClapPlugin> Wrapper<P> {
         // XXX: For CLAP we could move this handling to the Plugin struct, but it may be worthwhile
         //      to keep doing it this way to stay consistent with VST3.
         let old_latency = self.current_latency.swap(samples, Ordering::SeqCst);
-        if old_latency != samples {
+        // During `activate()` the change is reported there, synchronously, as CLAP requires.
+        if old_latency != samples && !self.is_activating.load(Ordering::SeqCst) {
             let task_posted = self.schedule_gui(Task::LatencyChanged);
             nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
         }
@@ -1855,8 +1888,59 @@ impl<P: ClapPlugin> Wrapper<P> {
             &wrapper.host_callback,
             CLAP_EXT_THREAD_CHECK,
         );
+        if wrapper.track_info_listener.is_some() {
+            *wrapper.host_track_info.borrow_mut() =
+                query_host_extension::<clap_host_track_info>(
+                    &wrapper.host_callback,
+                    CLAP_EXT_TRACK_INFO,
+                )
+                .or_else(|| {
+                    query_host_extension::<clap_host_track_info>(
+                        &wrapper.host_callback,
+                        CLAP_EXT_TRACK_INFO_COMPAT,
+                    )
+                });
+            wrapper.report_track_info();
+        }
 
         true
+    }
+
+    /// Asks the host for the track's name and colour and gives them to the plugin's listener.
+    /// Main thread only.
+    fn report_track_info(&self) {
+        let (Some(listener), Some(host_track_info)) =
+            (&self.track_info_listener, &*self.host_track_info.borrow())
+        else {
+            return;
+        };
+        // SAFETY: a zeroed `clap_track_info` is a valid empty one (null port type, no flags).
+        let mut info: clap_track_info = unsafe { std::mem::zeroed() };
+        let ok = unsafe_clap_call! {
+            host_track_info=>get(&*self.host_callback, &mut info)
+        };
+        if !ok {
+            return;
+        }
+        let name = (info.flags & CLAP_TRACK_INFO_HAS_TRACK_NAME != 0).then(|| {
+            let bytes: Vec<u8> = info
+                .name
+                .iter()
+                .take_while(|c| **c != 0)
+                .map(|c| *c as u8)
+                .collect();
+            String::from_utf8_lossy(&bytes).into_owned()
+        });
+        let color = (info.flags & CLAP_TRACK_INFO_HAS_TRACK_COLOR != 0)
+            .then_some([info.color.red, info.color.green, info.color.blue]);
+        listener(&crate::prelude::TrackInfo { name, color });
+    }
+
+    unsafe extern "C" fn ext_track_info_changed(plugin: *const clap_plugin) {
+        check_null_ptr!((), plugin, (*plugin).plugin_data);
+        let wrapper = &*((*plugin).plugin_data as *const Self);
+
+        wrapper.report_track_info();
     }
 
     unsafe extern "C" fn destroy(plugin: *const clap_plugin) {
@@ -1876,6 +1960,9 @@ impl<P: ClapPlugin> Wrapper<P> {
         check_null_ptr!(false, plugin, (*plugin).plugin_data);
         let wrapper = &*((*plugin).plugin_data as *const Self);
 
+        // Hosts that knew nothing of the track at `init()` know it by now.
+        wrapper.report_track_info();
+
         let audio_io_layout = wrapper.current_audio_io_layout.load();
         let buffer_config = BufferConfig {
             sample_rate: sample_rate as f32,
@@ -1892,7 +1979,25 @@ impl<P: ClapPlugin> Wrapper<P> {
         // NOTE: This needs to be dropped after the `plugin` lock to avoid deadlocks
         let mut init_context = wrapper.make_init_context();
         let mut plugin = wrapper.plugin.lock();
-        if plugin.initialize(&audio_io_layout, &buffer_config, &mut init_context) {
+        wrapper.is_activating.store(true, Ordering::SeqCst);
+        let initialized = plugin.initialize(&audio_io_layout, &buffer_config, &mut init_context);
+        wrapper.is_activating.store(false, Ordering::SeqCst);
+        if initialized {
+            // Report a latency that differs from the last activation, from within `activate()`
+            // (the only place CLAP allows it). This also covers a restart requested because the
+            // latency changed while active. The init context only records the latency, so take
+            // it here rather than letting its `Drop` schedule a needless restart.
+            if let Some(samples) = init_context.pending_requests.latency_changed.take() {
+                wrapper.current_latency.store(samples, Ordering::SeqCst);
+            }
+            let latency = wrapper.current_latency.load(Ordering::SeqCst);
+            if wrapper.activated_latency.swap(latency, Ordering::SeqCst) != latency {
+                if let Some(host_latency) = &*wrapper.host_latency.borrow() {
+                    unsafe_clap_call! { host_latency=>changed(&*wrapper.host_callback) };
+                }
+            }
+            wrapper.is_active.store(true, Ordering::SeqCst);
+
             // NOTE: `Plugin::reset()` is called in `clap_plugin::start_processing()` instead of in
             //       this function
 
@@ -1914,6 +2019,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         check_null_ptr!((), plugin, (*plugin).plugin_data);
         let wrapper = &*((*plugin).plugin_data as *const Self);
 
+        wrapper.is_active.store(false, Ordering::SeqCst);
         wrapper.plugin.lock().deactivate();
     }
 
@@ -2321,6 +2427,10 @@ impl<P: ClapPlugin> Wrapper<P> {
             &wrapper.clap_plugin_gui as *const _ as *const c_void
         } else if id == CLAP_EXT_LATENCY {
             &wrapper.clap_plugin_latency as *const _ as *const c_void
+        } else if (id == CLAP_EXT_TRACK_INFO || id == CLAP_EXT_TRACK_INFO_COMPAT)
+            && wrapper.track_info_listener.is_some()
+        {
+            &wrapper.clap_plugin_track_info as *const _ as *const c_void
         } else if id == CLAP_EXT_NOTE_PORTS
             && (P::MIDI_INPUT >= MidiConfig::Basic || P::MIDI_OUTPUT >= MidiConfig::Basic)
         {
@@ -2338,8 +2448,11 @@ impl<P: ClapPlugin> Wrapper<P> {
         } else if id == CLAP_EXT_VOICE_INFO && P::CLAP_POLY_MODULATION_CONFIG.is_some() {
             &wrapper.clap_plugin_voice_info as *const _ as *const c_void
         } else {
-            nih_trace!("Host tried to query unknown extension {:?}", id);
-            std::ptr::null()
+            let ext = P::clap_extension(id);
+            if ext.is_null() {
+                nih_trace!("Host tried to query unknown extension {:?}", id);
+            }
+            ext
         }
     }
 
@@ -2711,26 +2824,67 @@ impl<P: ClapPlugin> Wrapper<P> {
         true
     }
 
-    unsafe extern "C" fn ext_gui_can_resize(_plugin: *const clap_plugin) -> bool {
-        // TODO: Implement Host->Plugin GUI resizing
-        false
+    unsafe extern "C" fn ext_gui_can_resize(plugin: *const clap_plugin) -> bool {
+        check_null_ptr!(false, plugin, (*plugin).plugin_data);
+        let wrapper = &*((*plugin).plugin_data as *const Self);
+
+        let editor = wrapper.editor.borrow();
+        editor.as_ref().is_some_and(|e| e.lock().can_resize())
     }
 
     unsafe extern "C" fn ext_gui_get_resize_hints(
-        _plugin: *const clap_plugin,
-        _hints: *mut clap_gui_resize_hints,
+        plugin: *const clap_plugin,
+        hints: *mut clap_gui_resize_hints,
     ) -> bool {
-        // TODO: Implement Host->Plugin GUI resizing
-        false
+        check_null_ptr!(false, plugin, (*plugin).plugin_data, hints);
+        let wrapper = &*((*plugin).plugin_data as *const Self);
+
+        let editor = wrapper.editor.borrow();
+        let Some(editor) = editor.as_ref().map(|e| e.lock()) else {
+            return false;
+        };
+        if !editor.can_resize() {
+            return false;
+        }
+        let aspect = editor.aspect_ratio();
+        *hints = clap_gui_resize_hints {
+            can_resize_horizontally: true,
+            can_resize_vertically: true,
+            preserve_aspect_ratio: aspect.is_some(),
+            aspect_ratio_width: aspect.map_or(0, |(w, _)| w),
+            aspect_ratio_height: aspect.map_or(0, |(_, h)| h),
+        };
+
+        true
     }
 
     unsafe extern "C" fn ext_gui_adjust_size(
-        _plugin: *const clap_plugin,
-        _width: *mut u32,
-        _height: *mut u32,
+        plugin: *const clap_plugin,
+        width: *mut u32,
+        height: *mut u32,
     ) -> bool {
-        // TODO: Implement Host->Plugin GUI resizing
-        false
+        check_null_ptr!(false, plugin, (*plugin).plugin_data, width, height);
+        let wrapper = &*((*plugin).plugin_data as *const Self);
+
+        let editor = wrapper.editor.borrow();
+        let Some(editor) = editor.as_ref().map(|e| e.lock()) else {
+            return false;
+        };
+        if !editor.can_resize() {
+            return false;
+        }
+        // CLAP sizes are physical pixels except on macOS; the editor works in logical pixels
+        let scaling_factor = wrapper.editor_scaling_factor.load(Ordering::Relaxed);
+        let (w, h) = editor.constrain_size(
+            (*width as f32 / scaling_factor).round() as u32,
+            (*height as f32 / scaling_factor).round() as u32,
+        );
+        (*width, *height) = (
+            (w as f32 * scaling_factor).round() as u32,
+            (h as f32 * scaling_factor).round() as u32,
+        );
+
+        true
     }
 
     unsafe extern "C" fn ext_gui_set_size(
@@ -2738,20 +2892,32 @@ impl<P: ClapPlugin> Wrapper<P> {
         width: u32,
         height: u32,
     ) -> bool {
-        // TODO: Implement Host->Plugin GUI resizing
-        // TODO: The host will also call this if an asynchronous (on Linux) resize request fails
+        // The host also calls this if an asynchronous (on Linux) resize request fails
         check_null_ptr!(false, plugin, (*plugin).plugin_data);
         let wrapper = &*((*plugin).plugin_data as *const Self);
 
-        let (unscaled_width, unscaled_height) =
-            wrapper.editor.borrow().as_ref().unwrap().lock().size();
+        let editor = wrapper.editor.borrow();
+        let Some(editor) = editor.as_ref().map(|e| e.lock()) else {
+            return false;
+        };
         let scaling_factor = wrapper.editor_scaling_factor.load(Ordering::Relaxed);
+        let (unscaled_width, unscaled_height) = editor.size();
         let (editor_width, editor_height) = (
             (unscaled_width as f32 * scaling_factor).round() as u32,
             (unscaled_height as f32 * scaling_factor).round() as u32,
         );
+        if width == editor_width && height == editor_height {
+            return true;
+        }
+        if !editor.can_resize() {
+            return false;
+        }
 
-        width == editor_width && height == editor_height
+        let (w, h) = (
+            (width as f32 / scaling_factor).round() as u32,
+            (height as f32 / scaling_factor).round() as u32,
+        );
+        editor.set_size(w, h)
     }
 
     unsafe extern "C" fn ext_gui_set_parent(
@@ -3153,20 +3319,46 @@ impl<P: ClapPlugin> Wrapper<P> {
         }
         let length = u64::from_le_bytes(length_bytes);
 
-        let mut read_buffer: Vec<u8> = Vec::with_capacity(length as usize);
-        if !read_stream(&*stream, read_buffer.spare_capacity_mut()) {
+        // The length prefix comes from untrusted data (a corrupt or foreign project file), so it
+        // must not drive a single up-front allocation: a random length used to abort the host
+        // process. Reject absurd sizes and grow the buffer as data actually arrives.
+        const MAX_STATE_BYTES: u64 = 256 * 1024 * 1024;
+        if length > MAX_STATE_BYTES {
             nih_debug_assert_failure!(
-                "Error or end of stream while reading the state buffer from the stream."
+                "Refusing to load a {} byte state, the limit is {} bytes.",
+                length,
+                MAX_STATE_BYTES
             );
             return false;
         }
-        read_buffer.set_len(length as usize);
+
+        const CHUNK_BYTES: usize = 64 * 1024;
+        let length = length as usize;
+        let mut read_buffer: Vec<u8> = Vec::new();
+        while read_buffer.len() < length {
+            let start = read_buffer.len();
+            let chunk = CHUNK_BYTES.min(length - start);
+            read_buffer.resize(start + chunk, 0);
+            if !read_stream(&*stream, &mut read_buffer[start..]) {
+                nih_debug_assert_failure!(
+                    "Error or end of stream while reading the state buffer from the stream."
+                );
+                return false;
+            }
+        }
 
         match state::deserialize_json(&read_buffer) {
             Some(mut state) => {
                 let success = wrapper.set_state_inner(&mut state);
                 if success {
                     nih_trace!("Loaded state ({} bytes)", read_buffer.len());
+
+                    // CLAP requires the plugin to ask the host to re-read parameter values after
+                    // a state load. Without it hosts keep showing the pre-load values
+                    // (clap-validator `state-reproducibility-*`). The GUI-initiated path in
+                    // `set_state_object_from_gui()` already does this.
+                    let task_posted = wrapper.schedule_gui(Task::RescanParamValues);
+                    nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
                 }
 
                 success

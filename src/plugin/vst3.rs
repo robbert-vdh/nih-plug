@@ -17,6 +17,38 @@ pub trait Vst3Plugin: Plugin {
     /// [`VST3_CLASS_ID`][Self::VST3_CLASS_ID`] in the correct order for the current platform so
     /// projects and presets can be shared between platforms. This should not be overridden.
     const PLATFORM_VST3_CLASS_ID: [u8; 16] = swap_vst3_uid_byte_order(Self::VST3_CLASS_ID);
+
+    /// ARA 2: the plugin's `ARAFactory` (a pointer it keeps alive for the program's life), or null
+    /// for a plugin without ARA. When set, the factory also lists an "ARA Main Factory Class" and
+    /// the component answers `ARA::IPlugInEntryPoint` and `IPlugInEntryPoint2`.
+    fn vst3_ara_factory() -> *const std::ffi::c_void {
+        std::ptr::null()
+    }
+
+    /// ARA 2: binds the instance whose [`Self::vst3_extension_context()`] is `context` to the
+    /// host's document controller; returns its `ARAPlugInExtensionInstance` (kept alive by the
+    /// plugin), or null.
+    fn vst3_ara_bind(context: *const std::ffi::c_void, document_controller: *mut std::ffi::c_void, known_roles: i32, assigned_roles: i32) -> *const std::ffi::c_void {
+        let _ = (context, document_controller, known_roles, assigned_roles);
+        std::ptr::null()
+    }
+
+    /// Asked once when the wrapper is made: what [`Self::vst3_ara_bind()`] gets as `context` for
+    /// this instance (typically `Arc::as_ptr` of state the plugin keeps alive).
+    fn vst3_extension_context(&self) -> *const std::ffi::c_void {
+        std::ptr::null()
+    }
+}
+
+/// The ARA main factory class's ID for a plugin: its class ID with every byte inverted.
+pub const fn vst3_ara_class_id(cid: [u8; 16]) -> [u8; 16] {
+    let mut out = [0u8; 16];
+    let mut i = 0;
+    while i < 16 {
+        out[i] = !cid[i];
+        i += 1;
+    }
+    out
 }
 
 #[cfg(not(target_os = "windows"))]

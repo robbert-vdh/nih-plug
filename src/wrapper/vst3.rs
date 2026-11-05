@@ -1,6 +1,7 @@
 #[macro_use]
 mod util;
 
+pub mod ara;
 mod context;
 mod factory;
 mod inner;
@@ -68,6 +69,12 @@ macro_rules! nih_export_vst3 {
 
                     Self::allocate(plugin_infos)
                 }
+
+                /// The plugins (indices) that list an ARA main factory class, in class order after
+                /// the plugins.
+                fn ara_classes(&self) -> Vec<usize> {
+                    self.plugin_infos.iter().enumerate().filter(|(_, p)| p.ara_cid.is_some()).map(|(i, _)| i).collect()
+                }
             }
 
             impl IPluginFactory for Factory {
@@ -83,15 +90,21 @@ macro_rules! nih_export_vst3 {
                 }
 
                 unsafe fn count_classes(&self) -> i32 {
-                    self.plugin_infos.len() as i32
+                    (self.plugin_infos.len() + self.ara_classes().len()) as i32
                 }
 
                 unsafe fn get_class_info(&self, index: i32, info: *mut PClassInfo) -> tresult {
-                    if index < 0 || index >= self.plugin_infos.len() as i32 {
+                    if index < 0 || info.is_null() {
                         return kInvalidArgument;
                     }
-
-                    *info = self.plugin_infos[index as usize].create_class_info();
+                    let n = self.plugin_infos.len();
+                    if (index as usize) < n {
+                        *info = self.plugin_infos[index as usize].create_class_info();
+                    } else if let Some(&k) = self.ara_classes().get(index as usize - n) {
+                        *info = self.plugin_infos[k].create_ara_class_info();
+                    } else {
+                        return kInvalidArgument;
+                    }
 
                     kResultOk
                 }
@@ -107,6 +120,23 @@ macro_rules! nih_export_vst3 {
                     if cid.is_null() || obj.is_null() {
                         return kInvalidArgument;
                     }
+
+                    // ARA main factory classes.
+                    let mut ara_idx = 0;
+                    $({
+                        let plugin_info = &self.plugin_infos[ara_idx];
+                        if plugin_info.ara_cid == Some((*cid).data) {
+                            let factory = $crate::wrapper::vst3::ara::MainFactory::new(<$plugin_ty as $crate::prelude::Vst3Plugin>::vst3_ara_factory());
+                            let result = factory.query_interface(iid, obj);
+                            if result == kResultOk {
+                                factory.release();
+                                Box::leak(factory);
+                                return kResultOk;
+                            }
+                            return result;
+                        }
+                        ara_idx += 1;
+                    })+
 
                     // This is a poor man's way of treating `$plugin_ty` like an indexable array.
                     // Assuming `self.plugin_infos` is in the same order, we can simply check all of
@@ -149,11 +179,17 @@ macro_rules! nih_export_vst3 {
 
             impl IPluginFactory2 for Factory {
                 unsafe fn get_class_info2(&self, index: i32, info: *mut PClassInfo2) -> tresult {
-                    if index < 0 || index >= self.plugin_infos.len() as i32 {
+                    if index < 0 || info.is_null() {
                         return kInvalidArgument;
                     }
-
-                    *info = self.plugin_infos[index as usize].create_class_info_2();
+                    let n = self.plugin_infos.len();
+                    if (index as usize) < n {
+                        *info = self.plugin_infos[index as usize].create_class_info_2();
+                    } else if let Some(&k) = self.ara_classes().get(index as usize - n) {
+                        *info = self.plugin_infos[k].create_ara_class_info_2();
+                    } else {
+                        return kInvalidArgument;
+                    }
 
                     kResultOk
                 }
@@ -165,11 +201,17 @@ macro_rules! nih_export_vst3 {
                     index: i32,
                     info: *mut PClassInfoW,
                 ) -> tresult {
-                    if index < 0 || index >= self.plugin_infos.len() as i32 {
+                    if index < 0 || info.is_null() {
                         return kInvalidArgument;
                     }
-
-                    *info = self.plugin_infos[index as usize].create_class_info_unicode();
+                    let n = self.plugin_infos.len();
+                    if (index as usize) < n {
+                        *info = self.plugin_infos[index as usize].create_class_info_unicode();
+                    } else if let Some(&k) = self.ara_classes().get(index as usize - n) {
+                        *info = self.plugin_infos[k].create_ara_class_info_unicode();
+                    } else {
+                        return kInvalidArgument;
+                    }
 
                     kResultOk
                 }

@@ -11,6 +11,21 @@ pub use self::descriptor::PluginDescriptor;
 pub use self::wrapper::Wrapper;
 pub use clap_sys::entry::clap_plugin_entry;
 pub use clap_sys::factory::plugin_factory::{clap_plugin_factory, CLAP_PLUGIN_FACTORY_ID};
+
+/// The [`crate::prelude::ClapPlugin::clap_extension_context()`] of the instance behind a
+/// `clap_plugin` pointer the host passed to one of the plugin's extra extensions.
+///
+/// # Safety
+/// `plugin` must be a `clap_plugin` made by this wrapper for plugin type `P`, still alive.
+pub unsafe fn extension_context<P: crate::prelude::ClapPlugin>(plugin: *const std::ffi::c_void) -> *const std::ffi::c_void {
+    let plugin = plugin as *const clap_plugin;
+    if plugin.is_null() || unsafe { (*plugin).plugin_data.is_null() } {
+        return std::ptr::null();
+    }
+    // SAFETY: as the caller promises, `plugin_data` is our `Wrapper<P>`.
+    let wrapper = unsafe { &*((*plugin).plugin_data as *const Wrapper<P>) };
+    wrapper.extension_context as *const std::ffi::c_void
+}
 pub use clap_sys::host::clap_host;
 pub use clap_sys::plugin::{clap_plugin, clap_plugin_descriptor};
 pub use clap_sys::version::CLAP_VERSION;
@@ -121,11 +136,20 @@ macro_rules! nih_export_clap {
             pub extern "C" fn deinit() {}
 
             pub extern "C" fn get_factory(factory_id: *const c_char) -> *const c_void {
-                if !factory_id.is_null() && unsafe { CStr::from_ptr(factory_id) } == CLAP_PLUGIN_FACTORY_ID {
-                    &CLAP_PLUGIN_FACTORY as *const _ as *const c_void
-                } else {
-                    ::std::ptr::null()
+                if factory_id.is_null() {
+                    return ::std::ptr::null();
                 }
+                let id = unsafe { CStr::from_ptr(factory_id) };
+                if id == CLAP_PLUGIN_FACTORY_ID {
+                    return &CLAP_PLUGIN_FACTORY as *const _ as *const c_void;
+                }
+                $({
+                    let f = <$plugin_ty as $crate::prelude::ClapPlugin>::clap_factory(id);
+                    if !f.is_null() {
+                        return f;
+                    }
+                })+
+                ::std::ptr::null()
             }
         }
 
