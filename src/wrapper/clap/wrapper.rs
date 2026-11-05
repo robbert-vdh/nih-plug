@@ -199,6 +199,8 @@ pub struct Wrapper<P: ClapPlugin> {
     /// The plugin's track-info listener ([`Plugin::track_info_listener()`]), and the host's
     /// track-info extension (queried in `init()`).
     track_info_listener: Option<Arc<dyn Fn(&crate::prelude::TrackInfo) + Send + Sync>>,
+    /// [`ClapPlugin::clap_extension_context()`], asked once at creation.
+    pub(crate) extension_context: usize,
     clap_plugin_track_info: clap_plugin_track_info,
     host_track_info: AtomicRefCell<Option<ClapPtr<clap_host_track_info>>>,
 
@@ -468,6 +470,7 @@ impl<P: ClapPlugin> Wrapper<P> {
         // remain in the same order as the one returned by the plugin.
         let params = plugin.params();
         let track_info_listener = plugin.track_info_listener();
+        let extension_context = plugin.clap_extension_context() as usize;
         let param_id_hashes_ptrs_groups: Vec<_> = params
             .param_map()
             .into_iter()
@@ -643,6 +646,7 @@ impl<P: ClapPlugin> Wrapper<P> {
             host_latency: AtomicRefCell::new(None),
 
             track_info_listener,
+            extension_context,
             clap_plugin_track_info: clap_plugin_track_info {
                 changed: Some(Self::ext_track_info_changed),
             },
@@ -2444,8 +2448,11 @@ impl<P: ClapPlugin> Wrapper<P> {
         } else if id == CLAP_EXT_VOICE_INFO && P::CLAP_POLY_MODULATION_CONFIG.is_some() {
             &wrapper.clap_plugin_voice_info as *const _ as *const c_void
         } else {
-            nih_trace!("Host tried to query unknown extension {:?}", id);
-            std::ptr::null()
+            let ext = P::clap_extension(id);
+            if ext.is_null() {
+                nih_trace!("Host tried to query unknown extension {:?}", id);
+            }
+            ext
         }
     }
 

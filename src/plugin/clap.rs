@@ -25,6 +25,29 @@ pub trait ClapPlugin: Plugin {
     /// that the host can use to provide better hardware mapping for a plugin. See the linked
     /// extension for more information.
     fn remote_controls(&self, context: &mut impl RemoteControlsContext) {}
+
+    /// Extra factories on the CLAP entry (for instance ARA's `org.ara-audio.ara.factory/2`):
+    /// a pointer to a `#[repr(C)]` factory the plugin keeps alive for the program's life, or null.
+    fn clap_factory(id: &std::ffi::CStr) -> *const std::ffi::c_void {
+        let _ = id;
+        std::ptr::null()
+    }
+
+    /// Extra plugin extensions the wrapper does not know (for instance ARA's plugin extension):
+    /// a pointer to a `#[repr(C)]` extension struct the plugin keeps alive for the program's
+    /// life, or null. Its functions get the `clap_plugin` pointer; reach this instance from it
+    /// with [`crate::wrapper::clap::extension_context()`].
+    fn clap_extension(id: &std::ffi::CStr) -> *const std::ffi::c_void {
+        let _ = id;
+        std::ptr::null()
+    }
+
+    /// Called once, when the wrapper is made: what [`crate::wrapper::clap::extension_context()`]
+    /// returns for this instance (typically `Arc::as_ptr` of state the plugin keeps alive for its
+    /// own life).
+    fn clap_extension_context(&self) -> *const std::ffi::c_void {
+        std::ptr::null()
+    }
 }
 
 /// Configuration for the plugin's polyphonic modulation options, if it supports .
