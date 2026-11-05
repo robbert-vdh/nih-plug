@@ -34,6 +34,8 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     pub task_executor: Mutex<TaskExecutor<P>>,
     /// The plugin's track-info listener ([`Plugin::track_info_listener()`][crate::prelude::Plugin::track_info_listener()]).
     pub track_info_listener: Option<Arc<dyn Fn(&crate::prelude::TrackInfo) + Send + Sync>>,
+    /// [`Vst3Plugin::vst3_extension_context()`], asked once at creation.
+    pub extension_context: usize,
     /// The plugin's parameters. These are fetched once during initialization. That way the
     /// `ParamPtr`s are guaranteed to live at least as long as this object and we can interact with
     /// the `Params` object without having to acquire a lock on `plugin`.
@@ -204,6 +206,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
         // remain in the same order as the one returned by the plugin.
         let params = plugin.params();
         let track_info_listener = plugin.track_info_listener();
+        let extension_context = plugin.vst3_extension_context() as usize;
         let param_id_hashes_ptrs_groups: Vec<_> = params
             .param_map()
             .into_iter()
@@ -286,6 +289,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
 
             component_handler: AtomicRefCell::new(None),
             track_info_listener,
+            extension_context,
 
             plug_view: RwLock::new(None),
 

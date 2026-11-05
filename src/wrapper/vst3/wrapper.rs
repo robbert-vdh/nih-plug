@@ -17,6 +17,7 @@ use vst3_sys::vst::{
     NoteOnEvent, ParameterFlags, PolyPressureEvent, ProgramListInfo, TChar, UnitInfo,
 };
 use vst3_sys::vst::{IAttributeList, IInfoListener};
+use super::ara::{IPlugInEntryPoint, IPlugInEntryPoint2};
 use vst3_sys::VST3;
 use widestring::U16CStr;
 
@@ -47,7 +48,9 @@ use vst3_sys as vst3_com;
     INoteExpressionController,
     IProcessContextRequirements,
     IUnitInfo,
-    IInfoListener
+    IInfoListener,
+    IPlugInEntryPoint,
+    IPlugInEntryPoint2
 ))]
 pub struct Wrapper<P: Vst3Plugin> {
     inner: Arc<WrapperInner<P>>,
@@ -1932,5 +1935,22 @@ impl<P: Vst3Plugin> IInfoListener for Wrapper<P> {
         listener(&crate::prelude::TrackInfo { name, color });
 
         kResultOk
+    }
+}
+
+impl<P: Vst3Plugin> IPlugInEntryPoint for Wrapper<P> {
+    unsafe fn get_factory(&self) -> *const c_void {
+        P::vst3_ara_factory()
+    }
+
+    unsafe fn bind_to_document_controller(&self, document_controller: *mut c_void) -> *const c_void {
+        // ARA 1's binding: every role (the host knows no others).
+        P::vst3_ara_bind(self.inner.extension_context as *const c_void, document_controller, 7, 7)
+    }
+}
+
+impl<P: Vst3Plugin> IPlugInEntryPoint2 for Wrapper<P> {
+    unsafe fn bind_to_document_controller_with_roles(&self, document_controller: *mut c_void, known_roles: i32, assigned_roles: i32) -> *const c_void {
+        P::vst3_ara_bind(self.inner.extension_context as *const c_void, document_controller, known_roles, assigned_roles)
     }
 }
