@@ -3152,6 +3152,10 @@ impl<P: ClapPlugin> Wrapper<P> {
             return false;
         }
         let length = u64::from_le_bytes(length_bytes);
+        if length > 64 << 20 {
+            nih_debug_assert_failure!("Implausible state length {}, refusing to load it.", length);
+            return false;
+        }
 
         let mut read_buffer: Vec<u8> = Vec::with_capacity(length as usize);
         if !read_stream(&*stream, read_buffer.spare_capacity_mut()) {
@@ -3167,6 +3171,8 @@ impl<P: ClapPlugin> Wrapper<P> {
                 let success = wrapper.set_state_inner(&mut state);
                 if success {
                     nih_trace!("Loaded state ({} bytes)", read_buffer.len());
+                    let task_posted = wrapper.schedule_gui(Task::RescanParamValues);
+                    nih_debug_assert!(task_posted, "The task queue is full, dropping task...");
                 }
 
                 success
