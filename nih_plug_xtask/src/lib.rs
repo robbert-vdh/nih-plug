@@ -719,7 +719,7 @@ fn vst3_bundle_library_name(package: &str, target: CompilationTarget) -> String 
             format!("{package}.vst3/Contents/x86_64-win/{package}.vst3")
         }
         CompilationTarget::Windows(Architecture::AArch64) => {
-            format!("{package}.vst3/Contents/arm_64-win/{package}.vst3")
+            format!("{package}.vst3/Contents/arm64-win/{package}.vst3")
         }
         CompilationTarget::Windows(Architecture::RISCV64) => {
             panic!("riscv64 are not supported by windows currently!")
@@ -820,5 +820,18 @@ pub fn maybe_codesign(bundle_home: &Path, target: CompilationTarget) {
             "WARNING: Could not self-sign '{}', it may fail to run depending on the environment",
             bundle_home.display()
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{vst3_bundle_library_name, Architecture, CompilationTarget};
+
+    #[test]
+    fn windows_arm64_vst3_bundle_uses_the_sdk_directory_name() {
+        assert_eq!(
+            vst3_bundle_library_name("MyPlugin", CompilationTarget::Windows(Architecture::AArch64)),
+            "MyPlugin.vst3/Contents/arm64-win/MyPlugin.vst3"
+        );
     }
 }
